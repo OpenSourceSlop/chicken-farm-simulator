@@ -1,7 +1,6 @@
 // Flock state: typed arrays per bird, feeder/drinker spots, placement. Owner: flock agent.
 import {
-  BIRD_BOUNDS, BROOD_BOUNDS, DRINKER_LINES_Z, FEEDER_LINES_Z, FEEDER_PAN_SPACING, LINE_X,
-  NIPPLE_SPACING,
+  BIRD_BOUNDS, BROOD_BOUNDS, DRINKER_LINES_Z, FEEDER_LINES_Z, FEEDER_PAN_X, NIPPLE_X,
 } from './config.js';
 
 // Activities
@@ -51,16 +50,13 @@ export function createState(n) {
   return S;
 }
 
-// Feeder pans and drinker nipples over the full line length. Each bird may hold one spot (S.res).
+// Feeder pans and drinker nipples exactly where house.js draws them (config FEEDER_PAN_X and
+// NIPPLE_X, evenly spaced). Each bird may hold one spot (S.res).
 function buildResources(S) {
   const pans = [];
-  for (const z of FEEDER_LINES_Z) {
-    for (let x = LINE_X.start; x <= LINE_X.end + 1e-6; x += FEEDER_PAN_SPACING) pans.push(x, z);
-  }
+  for (const z of FEEDER_LINES_Z) for (const x of FEEDER_PAN_X) pans.push(x, z);
   const nips = [];
-  for (const z of DRINKER_LINES_Z) {
-    for (let x = LINE_X.start; x <= LINE_X.end + 1e-6; x += NIPPLE_SPACING) nips.push(x, z);
-  }
+  for (const z of DRINKER_LINES_Z) for (const x of NIPPLE_X) nips.push(x, z);
   S.pans = Float32Array.from(pans);
   S.nPans = pans.length / 2;
   S.panPerLine = S.nPans / FEEDER_LINES_Z.length;

@@ -26,11 +26,17 @@ export const FEEDER_LINES_Z = [-3.9, 0, 3.9];
 export const DRINKER_LINES_Z = [-4.9, -1.95, 1.95, 4.9];
 export const LINE_X = { start: -22.5, end: 22.5 };
 export const FEEDER_PAN_SPACING = 0.76;
+export const NIPPLE_SPACING = 0.3;
+// Exact x of every feeder pan and drinker nipple along each line. house.js draws them here and the
+// flock eats and drinks here (the pans start 0.6 m in from the hopper end, the nipples 0.45 m).
+export const FEEDER_PAN_X = [];
+for (let x = LINE_X.start + 0.6; x <= LINE_X.end - 0.45; x += FEEDER_PAN_SPACING) FEEDER_PAN_X.push(+x.toFixed(3));
+export const NIPPLE_X = [];
+for (let x = LINE_X.start + 0.45; x <= LINE_X.end - 0.2; x += NIPPLE_SPACING) NIPPLE_X.push(+x.toFixed(3));
 // Where the feed auger from the silos passes through the north wall into the house: the house's
 // cross auger runs from here over the feeder-line hoppers (at LINE_X.start - 0.25); the world's
 // feed auger rises from the silo boots to meet it at the outside face of the wall.
 export const FEED_INLET = { x: LINE_X.start - 0.25, y: 2.42 };
-export const NIPPLE_SPACING = 0.3;
 
 export const FAN_COUNT = 6;            // tunnel fans in the east end wall (x = +24), 2 rows of 3
 export const FAN_DIAMETER = 1.27;      // 50-inch fans

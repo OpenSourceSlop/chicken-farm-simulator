@@ -4,7 +4,7 @@
 // FEED_INLET over the hoppers; outside the wall the world's silo auger (world-silos.js) feeds it.
 // Owner: house agent.
 import * as THREE from 'three';
-import { COLORS, FEEDER_LINES_Z, LINE_X, FEEDER_PAN_SPACING, FEED_INLET, HOUSE_BOUNDS } from './config.js';
+import { COLORS, FEEDER_LINES_Z, LINE_X, FEEDER_PAN_X, FEED_INLET, HOUSE_BOUNDS } from './config.js';
 import { Batch, mat, lathe, cone, disc, table } from './house-kit.js';
 import { FRAME_X, TRUSS_Y, T } from './house-shell.js';
 
@@ -20,8 +20,7 @@ const GALV = 0xb4bcc2, MOTOR = 0x4e6a80, FEED = 0xb8945a;
 const RIM = [[1, 0.05], [7, 0.09], [14, 0.15], [21, 0.22], [28, 0.28], [35, 0.33], [42, 0.35]];
 export const feederRim = (day) => table(RIM, day);
 
-export const PAN_X = [];
-for (let x = LINE_X.start + 0.6; x <= LINE_X.end - 0.45; x += FEEDER_PAN_SPACING) PAN_X.push(+x.toFixed(3));
+export const PAN_X = FEEDER_PAN_X;      // shared with the flock (config.js)
 
 function addPan(b, x, z, ctrl = false) {
   const pan = COLORS.feederPan, grill = 0xc84a24;

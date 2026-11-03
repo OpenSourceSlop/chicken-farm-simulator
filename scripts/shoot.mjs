@@ -13,6 +13,9 @@
 //   {"wait": 500}            let the page run in real time for 500 ms
 //   {"key": "w", "hold": 800}   hold a key;  {"press": "e"}  tap a key
 //   {"click": [640, 400]}    left click at canvas pixel;  {"click": [x,y], "button": "right"}
+//   {"clickOn": "css"}       real mouse click on the centre of a page element (e.g. a HUD button)
+//   {"holdKey": "w", "for": 0.6}  hold a key while the game advances 0.6 s at a fixed step
+//                            (for steps files that stopped the render loop with __game.stop())
 //   {"drag": {"from": [x,y], "to": [x,y], "button": "right"}}
 //   {"wheel": 400}           mouse wheel at the canvas centre
 //   {"eval": "js expression"}  evaluated in the page, result printed
@@ -136,7 +139,12 @@ async function main() {
 
   const center = () => [page.viewportSize().width / 2, page.viewportSize().height / 2];
   for (const step of loadSteps()) {
-    if (step.state) await page.evaluate((s) => window.__game.setState(s), step.state);
+    if (step.holdKey) {
+      await page.keyboard.down(step.holdKey);
+      await page.evaluate((s) => window.__game.advance(s), step.for ?? 0.5);
+      await page.keyboard.up(step.holdKey);
+    } else if (step.clickOn) await page.click(step.clickOn);
+    else if (step.state) await page.evaluate((s) => window.__game.setState(s), step.state);
     else if (step.settle != null) await page.evaluate((s) => window.__game.settle(s), step.settle);
     else if (step.advance != null) await page.evaluate((s) => window.__game.advance(s), step.advance);
     else if (step.wait != null) await page.waitForTimeout(step.wait);

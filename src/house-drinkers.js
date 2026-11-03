@@ -3,7 +3,7 @@
 // sight tube at the east end; blue PVC supply with water meter and medicator on the west wall.
 // Raised with flock age (nipples at chick head height). Owner: house agent.
 import * as THREE from 'three';
-import { COLORS, DRINKER_LINES_Z, LINE_X, NIPPLE_SPACING, HOUSE_BOUNDS } from './config.js';
+import { COLORS, DRINKER_LINES_Z, LINE_X, NIPPLE_X as SHARED_NIPPLE_X, HOUSE_BOUNDS } from './config.js';
 import { Batch, mat, table, cone } from './house-kit.js';
 import { FRAME_X, TRUSS_Y } from './house-shell.js';
 
@@ -18,8 +18,7 @@ const PVC = 0x3a78b5, STEEL = 0x9ea6ac, GALV = 0xb4bcc2;
 const NIP = [[1, 0.12], [7, 0.17], [14, 0.24], [21, 0.31], [28, 0.37], [35, 0.42], [42, 0.45]];
 export const nippleHeight = (day) => table(NIP, day);
 
-export const NIPPLE_X = [];
-for (let x = LINE_X.start + 0.45; x <= LINE_X.end - 0.2; x += NIPPLE_SPACING) NIPPLE_X.push(+x.toFixed(3));
+export const NIPPLE_X = SHARED_NIPPLE_X; // shared with the flock (config.js)
 
 export function buildDrinkers(kit) {
   const { stat, group, mats } = kit;

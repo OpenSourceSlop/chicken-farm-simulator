@@ -1,6 +1,6 @@
 // Bird decisions: thermal state, activity and target. Owner: flock agent.
 // Called for each bird every ~0.5 s (staggered), so the cost stays small and flat.
-import { DRINKER_LINES_Z, FEEDER_LINES_Z, FEEDER_PAN_SPACING, HEATERS, LINE_X, NIPPLE_SPACING } from './config.js';
+import { DRINKER_LINES_Z, FEEDER_LINES_Z, FEEDER_PAN_SPACING, FEEDER_PAN_X, HEATERS, NIPPLE_SPACING, NIPPLE_X } from './config.js';
 import { ACT, COLD, HOT, PAN_RADIUS, RIGHT, releaseRes } from './flock-state.js';
 
 // Hysteresis (°C from target): enter cold below -1.5, leave above -1.0; enter hot above +1.5,
@@ -172,7 +172,7 @@ function feederSpot(S, i, ctx) {
   const { rand } = S;
   const line = nearestLine(FEEDER_LINES_Z, S.pz[i], rand);
   const per = S.panPerLine, cap = S.L < 0.3 ? 7 : 5;
-  const j0 = Math.round((S.px[i] - LINE_X.start) / FEEDER_PAN_SPACING);
+  const j0 = Math.round((S.px[i] - FEEDER_PAN_X[0]) / FEEDER_PAN_SPACING);
   const spread = 8 + 16 * Math.max(0, ctx.grid.crowd(S.px[i], S.pz[i]) - 1); // crowded: look further
   const ok = okComfort(S, i, ctx);
   let best = -1, use = 255;
@@ -200,7 +200,7 @@ function drinkerSpot(S, i, ctx) {
   const { rand } = S;
   const line = nearestLine(DRINKER_LINES_Z, S.pz[i], rand);
   const per = S.nipPerLine;
-  const j0 = Math.round((S.px[i] - LINE_X.start) / NIPPLE_SPACING);
+  const j0 = Math.round((S.px[i] - NIPPLE_X[0]) / NIPPLE_SPACING);
   const spread = 12 + 30 * Math.max(0, ctx.grid.crowd(S.px[i], S.pz[i]) - 1);
   const ok = ctx.anyTemp ? 1e9 : okComfort(S, i, ctx);
   let best = -1, use = 255;
