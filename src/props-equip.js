@@ -181,8 +181,8 @@ export function buildEquipment(stat, pool, group) {
         const y0 = (lineY ? lineY[i] : 0.3) + PIPE_Y;
         if (open) {
           const wob = 1 + 0.08 * Math.sin(t * 23 + i * 2);
-          pool.set(slots.streams[i], LINE_X.end + 0.1, y0 / 2, z, 0.035 * wob, y0, 0.035 * wob, _c.getHex());
-          pool.set(slots.splash[i], LINE_X.end + 0.12, 0.035, z, 0.32 * wob, 0.01, 0.26, _c.clone().multiplyScalar(0.8).getHex(), t * 0.5);
+          pool.set(slots.streams[i], LINE_X.end + 0.1, y0 / 2, z, 0.05 * wob, y0, 0.05 * wob, _c.getHex());
+          pool.set(slots.splash[i], LINE_X.end + 0.12, 0.035, z, 0.5 * wob, 0.012, 0.4, _c.clone().multiplyScalar(0.8).getHex(), t * 0.5);
         } else { pool.hide(slots.streams[i]); pool.hide(slots.splash[i]); }
         // regulator float: the sight-tube column shows the pressure (cm of water)
         const cm = ln.pressureCm ?? 10;

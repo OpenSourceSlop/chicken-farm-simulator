@@ -11,7 +11,7 @@ import { Batch, canvasTexture, roundRect, FONT, instancedParts } from './props-k
 
 const { zMin } = HOUSE_BOUNDS;
 const FACE_Z = zMin + 0.12;              // front of the north-wall columns (as house-fittings.js)
-export const BOARD_W = 1.24, BOARD_H = 0.86;
+export const BOARD_W = 1.5, BOARD_H = 1.04;
 const PX_W = 1024, PX_H = 710;
 const OUT_TILT = 0.3;                    // outdoor boards lean back toward the high camera
 
@@ -186,7 +186,7 @@ export function buildBoards(stat) {
       stat.box(0.125, 2.72, 0.125, s.x, 1.36, zMin + 0.06, 0x8f989f);
       tabSpots.set(s.id, { x: s.x + BOARD_W / 2 - 0.12, y: y + BOARD_H / 2 + 0.08, z: z + 0.01, ry: 0, rx: 0 });
     } else {
-      const y = 0.82, z = s.z;
+      const y = 0.74, z = s.z;
       const R = new THREE.Matrix4().makeRotationX(-OUT_TILT);
       M.makeTranslation(s.x, y, z).multiply(R);
       // two posts and a frame, leaning back a little

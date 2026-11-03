@@ -238,8 +238,8 @@ export function buildTrucks(mats, group) {
     const c = st.chicks;
     driver.visible = c.state === 'parked' && c.time > 1.2;
     if (driver.visible) {
-      driver.position.set(STOP.x - 4.3, 0, STOP.z - 1.7);
-      driver.rotation.y = -2.4;
+      driver.position.set(STOP.x - 4.1, 0, STOP.z + 1.75);
+      driver.rotation.y = -0.9;
     }
   }
 

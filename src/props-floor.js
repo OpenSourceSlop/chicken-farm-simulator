@@ -45,7 +45,7 @@ ${NOISE}`)
     // rice husk: the Phase 1 litter without the baked damp lines under the drinkers
     vec3 husk = diffuse * tex.rgb * vColorDry;
     // bare concrete: grey, slightly mottled, with saw-cut joints every 4 m and along the centre
-    float mott = 0.9 + 0.12 * pfNoise(xz * 0.7) + 0.06 * (tex.r - 0.85);
+    float mott = 0.9 + 0.1 * pfNoise(xz * 0.7) + 0.05 * pfNoise(xz * 3.1 + 5.0);
     vec3 conc = vec3(0.50, 0.49, 0.46) * mott;
     vec2 jd = abs(fract((xz + vec2(0.0, 0.0)) / vec2(4.0, 6.0) + 0.5) - 0.5) * vec2(4.0, 6.0);
     conc *= 1.0 - 0.28 * (1.0 - smoothstep(0.012, 0.03, min(jd.x, jd.y)));
@@ -78,7 +78,7 @@ ${NOISE}`)
 }
 
 // Blue (cool) -> orange (warm), continuous, no good / bad colours.
-const RAMP = [[24, [0.18, 0.37, 0.82]], [27, [0.42, 0.66, 0.92]], [30, [0.93, 0.9, 0.8]], [33, [0.96, 0.69, 0.4]], [36, [0.91, 0.44, 0.12]]];
+const RAMP = [[24, [0.18, 0.37, 0.82]], [27, [0.42, 0.66, 0.92]], [30, [0.95, 0.85, 0.58]], [33, [0.95, 0.62, 0.3]], [36, [0.86, 0.36, 0.1]]];
 export function tempColor(t, out) {
   if (t <= RAMP[0][0]) { out[0] = RAMP[0][1][0]; out[1] = RAMP[0][1][1]; out[2] = RAMP[0][1][2]; return out; }
   for (let i = 1; i < RAMP.length; i++) {
@@ -109,7 +109,7 @@ export function buildFloorStates(ctx, house, group) {
   const ow = b.xMax - b.xMin, oh = b.zMax - b.zMin;
   const og = new THREE.PlaneGeometry(ow, oh);
   og.rotateX(-Math.PI / 2);
-  const omat = new THREE.MeshBasicMaterial({ map: otex, transparent: true, opacity: 0.78, depthWrite: false, toneMapped: false });
+  const omat = new THREE.MeshBasicMaterial({ map: otex, transparent: true, opacity: 0.68, depthWrite: false, toneMapped: false });
   const overlay = new THREE.Mesh(og, omat);
   overlay.position.set((b.xMin + b.xMax) / 2, 0.05, (b.zMin + b.zMax) / 2);
   overlay.renderOrder = 3;

@@ -28,10 +28,10 @@ function build(kind) {
   if (kind === 'barrow') {
     // pivot at the wheel axle; the group tilts the handles up into his hands
     const w = new Batch(); wheelbarrow(w, { full: true });
-    b.add(w.geometry(), 0xffffff, mat(0, -0.2, 0));
+    b.add(w.geometry(), null, mat(0, -0.2, 0));
   } else if (kind === 'sack') {
     const s = new Batch(); sack(s);
-    b.add(s.geometry(), 0xffffff, mat(0, 0, 0, 0.15, Math.PI / 2, 0.25));
+    b.add(s.geometry(), null, mat(0, 0, 0, 0.15, Math.PI / 2, 0.25));
   } else if (kind === 'boxes') {
     handTruck(b, { tilt: -0.45 });
     boxesOnTruck(b, 10, -0.45);

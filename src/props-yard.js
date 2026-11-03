@@ -63,7 +63,7 @@ export function buildYard(stat, mats, group) {
   const sackB = new Batch();
   for (const [x, y, z, ry] of [[0, 0.17, 0, 0.1], [0.05, 0.17, 0.5, -0.15], [0.02, 0.45, 0.25, 0.05]]) {
     const s = new Batch(); sack(s);
-    sackB.add(s.geometry(), 0xffffff, mat(x, y, z, 0, ry, 0));
+    sackB.add(s.geometry(), null, mat(x, y, z, 0, ry, 0));
   }
   const sacks = sackB.mesh(mats.vc, { cast: true });
   sacks.position.set(H.x - 1.95, 0.04, H.z - 0.3);
@@ -84,13 +84,13 @@ export function buildYard(stat, mats, group) {
   tp.box(0.012, 0.012, 0.15, -0.02, 0.768, 0.08, 0x2d5f9a, 0.12 + 0.6);
   {
     const cb = new Batch(); bucket(cb);
-    stat.add(cb.geometry(), 0xffffff, mat(T.x + 0.45, 0, T.z + 0.05, 0, 0.3, 0, 0.9));
+    stat.add(cb.geometry(), null, mat(T.x + 0.45, 0, T.z + 0.05, 0, 0.3, 0, 0.9));
   }
   colliders.push({ type: 'box', minX: T.x - 0.7, maxX: T.x + 0.7, minZ: T.z - 0.36, maxZ: T.z + 0.36 });
   // the open sample box with ten chicks (shown once the chicks came)
   const sb = new Batch();
   const boxGeo = chickBoxGeometry();
-  sb.add(boxGeo, 0xffffff, mat(-0.32, 0.755, -0.08, 0, 0.05, 0, 1, 0.9, 1));
+  sb.add(boxGeo, null, mat(-0.32, 0.755, -0.08, 0, 0.05, 0, 1, 0.9, 1));
   sb.box(0.56, 0.005, 0.41, -0.32, 0.755 + BOX.h * 0.9 - 0.004, -0.08, 0x8a6a40, 0.05);   // dark inside under the lid
   sb.box(0.6, 0.008, 0.45, -0.32, 0.92, -0.33, C.kraft, 0.05, -1.1);                      // lid propped open
   for (let i = 0; i < 10; i++) chick(sb, -0.52 + (i % 5) * 0.1, 0.755 + BOX.h * 0.9 - 0.01, -0.16 + Math.floor(i / 5) * 0.15, i * 1.3, 1.05);
@@ -144,9 +144,9 @@ export function buildYard(stat, mats, group) {
   const kit = new Batch();
   {
     const hs = new Batch(); handScale(hs);
-    kit.add(hs.geometry(), 0xffffff, mat(S.x - 0.07, 1.42, S.z - 0.25));
+    kit.add(hs.geometry(), null, mat(S.x - 0.07, 1.42, S.z - 0.25));
     const cf = new Batch(); catchingFrame(cf, { folded: true });
-    kit.add(cf.geometry(), 0xffffff, mat(S.x - 0.3, 0.02, S.z - 0.08, -0.25, 0, 0, 0.9));
+    kit.add(cf.geometry(), null, mat(S.x - 0.3, 0.02, S.z - 0.08, -0.25, 0, 0, 0.9));
   }
   const scaleKit = kit.mesh(mats.vc, { cast: false });
   scaleKit.name = 'props-scale-kit';

@@ -71,7 +71,7 @@ export function boxesOnTruck(b, n = 10, tilt = 0) {
   const c = Math.cos(tilt), s = Math.sin(tilt);
   for (let i = 0; i < n; i++) {
     const y = 0.02 + i * BOX.h, z = -0.12;
-    b.add(g, 0xffffff, mat(0, y * c + z * s, -y * s + z * c, -tilt, (i % 2) * 0.02, 0));
+    b.add(g, null, mat(0, y * c + z * s, -y * s + z * c, -tilt, (i % 2) * 0.02, 0));
   }
 }
 
