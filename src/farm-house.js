@@ -9,7 +9,7 @@
 // farm-heat.heatState does) + humidityTerm(house RH, house °C) + the litter term (Phase 2's wet chill
 // and thin litter). e = felt - target. The birds spread evenly over the floor in use.
 import { HEATERS, BIRD_BOUNDS, FAN_COUNT, BROOD_BOUNDS } from './config.js';
-import { pantingAt, heatDeathRate, heatIntake, humidityTerm, hotFrom, deathFrom, ZONES, dustIndex } from './farm-heat.js';
+import { HEAT_MODEL, humidityTerm, hotFrom, deathFrom, ZONES, dustIndex } from './farm-heat.js';
 import { BROOD_CELLS, ALL_CELLS, cellCentre, usedCells } from './farm-litter.js';
 import { LITTER_FEEL, comfortNow } from './farm-comfort.js';
 
@@ -39,7 +39,7 @@ for (let i = 0; i < N; i++) {
 for (const i of BROOD_CELLS) IN_BROOD[i] = 1;
 /** The 6 m strip (0 = pad end, west .. 7 = fan end) of a cell. */
 export const zoneOfCell = (i) => ZONE[i];
-const E = new Float64Array(N), SORT = new Float64Array(N);
+const E = new Float64Array(N), SORT = new Float64Array(N), NZ = new Int32Array(ZONES);
 
 /** Felt temperature at every cell in `cells` into E (minus the target: e). */
 function fillFelt(env, farm, cells, age) {
@@ -82,15 +82,20 @@ export function houseComfort(env, farm, out, age, weightG) {
   fillFelt(env, farm, cells, age);
   const eZ = out.eZ && out.eZ.length === ZONES ? out.eZ : (out.eZ = new Float64Array(ZONES));
   const wZ = out.wZ && out.wZ.length === ZONES ? out.wZ : (out.wZ = new Float64Array(ZONES));
-  const nZ = [0, 0, 0, 0, 0, 0, 0, 0];
+  const nZ = NZ; nZ.fill(0);
   eZ.fill(0);
   let sum = 0, cold = 0, pant = 0, death = 0, fh = 0;
-  const hf = hotFrom(age), df = deathFrom(age, weightG);
+  // farm-heat's pantingAt / heatDeathRate / heatIntake, with the age's thresholds read once per call
+  const hf = hotFrom(age), df = deathFrom(age, weightG), M = HEAT_MODEL;
   for (let k = 0; k < cells.length; k++) {
     const i = cells[k], e = E[i];
     sum += e; SORT[k] = e; eZ[ZONE[i]] += e; nZ[ZONE[i]]++;
     if (e < -2) cold++;
-    pant += pantingAt(e, age); death += heatDeathRate(e, age, weightG); fh += heatIntake(e, age);
+    const pv = 0.5 + (e - hf) / M.pantRamp;
+    pant += pv < 0 ? 0 : pv > 1 ? 1 : pv;
+    const dd = e - df;
+    if (dd > 0) death += Math.min(M.deathMax, M.deathK * dd * dd);
+    fh += Math.max(M.intakeMin, 1 - M.intakeK * Math.max(0, e - hf));
   }
   const n = cells.length;
   let ok = 0;

@@ -244,7 +244,16 @@ function stepFarm(farm, env, hrs, spill) {
     // when the brooders that are out change)
     farm.comfortH += hrs;
     if (farm.comfortH >= SLOW_H - 1e-9 || C.out !== env.brooderOut.length || C.e == null || (X && !C.eZ)) {
-      if (X) cycleComfort(farm, env, C, age); else comfortNow(env, C, { litter: farm.litter, age });
+      if (X) cycleComfort(farm, env, C, age);
+      else {
+        comfortNow(env, C, { litter: farm.litter, age });
+        // the 6 m strips for the scene (farm.comfort.eZ, PHASE3.md §13.5) on a scratch object, every third update (15 game
+        // minutes): Phase 2's figures stay as they are
+        if (!((farm.zoneTick = (farm.zoneTick || 0) + 1) % 3) || !C.eZ || !Number.isFinite(C.eZ[0])) {
+          const Z = cycleComfort(farm, env, farm.zoneScratch || (farm.zoneScratch = {}), age);
+          C.eZ = Z.eZ; C.wZ = Z.wZ; C.hotFrom = Z.hotFrom;
+        }
+      }
       C.out = env.brooderOut.length; farm.comfortH = 0;
     }
     const io = { feedAccess: feedAccess(feed, age, env.dayNumber), eat: (kg) => eat(feed, kg), waterPerKg: waterPerKg(env.houseTemp) };

@@ -62,7 +62,7 @@ export function cyclePost(farm, env, hrs, r) {
   const plan = farm.plan;
   if (farm.cycleLevel && farm.cycleLevel.id === 'plan' && !st.contractLetter) { st.contractLetter = env.dayNumber; farm.emit(EV.LETTER, { kind: 'contract', day: env.dayNumber }); }
   if (plan && plan.replyAt != null && !plan.replyLetter && env.day >= plan.replyAt - 1e-9) { plan.replyLetter = env.day; farm.emit(EV.LETTER, { kind: 'reply', day: env.dayNumber }); }
-  if (!X.on) { reconcileSilos(feed); dailyStats(farm, env, hrs, age); return; }
+  if (!X.on) { if (feed.silos && Math.abs(feed.siloKg - feed.silos[0].kg - feed.silos[1].kg) > 1e-6) reconcileSilos(feed); slowStats(farm, env, hrs, age); return; }
   if (farm.health.mainClosed) farm.health.dryH = (farm.health.dryH || 0) + hrs;
   const L = farm.litter, C = farm.comfort;
   // feed: the withdrawal, the heat-wave feeder lift, the change shock, the birds' missed feed eaten back
@@ -86,7 +86,17 @@ export function cyclePost(farm, env, hrs, r) {
   stepHarvest(farm, env);
   stepClean(farm, env, hrs);
   if (farm.clean.lab && !farm.clean.labSeen) { farm.clean.labSeen = true; farm.onLabLetter && farm.onLabLetter(); }
-  dailyStats(farm, env, hrs, age);
+  slowStats(farm, env, hrs, age);
+}
+
+/** The day's stats every 5 game minutes (their integrals do not need the minute). */
+function slowStats(farm, env, hrs, age) {
+  const X = farm.cyc;
+  X.statH = (X.statH || 0) + hrs;
+  if (X.statH < 5 / 60 - 1e-9 && Math.floor(env.day * 288 + 1e-6) === X.statSlot) return;
+  X.statSlot = Math.floor(env.day * 288 + 1e-6);
+  dailyStats(farm, env, X.statH, age);
+  X.statH = 0;
 }
 
 function meterAt(fh, t) {

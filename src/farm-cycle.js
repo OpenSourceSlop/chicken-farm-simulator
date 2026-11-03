@@ -27,6 +27,7 @@ import { createHarvest } from './farm-harvest.js';
 import { createClean, serializeClean, restoreClean } from './farm-clean.js';
 import { ensureSilos } from './farm-silos.js';
 import { updateAccess } from './farm-water.js';
+import { houseComfort } from './farm-house.js';
 import { addLevelProblems, installCycleWeather, applyCycleEffects } from './farm-cycle-problems.js';
 import { cycleAct as act, onBus } from './farm-cycle-act.js';
 
@@ -119,6 +120,8 @@ export function installCycle(farm, env) {
     if (farm.cycleLevel && farm.cyc.on) { installCycleWeather(farm, env); }
     syncEnv(farm, env);
     env.setFanStages(c ? c.fanStages : null);
+    // the comfort the cycle model uses (Phase 2's restore computed the brooding floor's)
+    if (farm.cyc.on && farm.flock.placed > 0 && farm.flock.alive > 0) houseComfort(env, farm, farm.comfort, farm.age, farm.flock.meanWeightG);
   };
   /**
    * Enter a level of the run (PHASE3.md §2.2): its problems (pending) and weather, the recurring problems
