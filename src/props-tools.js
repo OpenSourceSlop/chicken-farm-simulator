@@ -48,7 +48,7 @@ export function createCycleTools(ctx, { props, pool, yard, lv }) {
   }
   const catchNight = () => { const d = day(), h = env()?.hour ?? 0, hv = farm()?.harvest || {}; return ((d === 41 && h >= 12) || (d === 42 && !hv.result)) && (farm()?.flock?.alive ?? 0) > 0; };
   reg({ id: 'catch-panels', label: SPOTS3.catchPanels.label.toLowerCase(), verb: 'Put up the', x: SPOTS3.catchPanels.x, z: SPOTS3.catchPanels.z, radius: 1.5, inside: true,
-    enabled: () => lv() && catchNight() && !(farm()?.harvest?.panels || st.panelsSeen),
+    enabled: () => lv() && catchNight() && !farm()?.harvest?.panels,
     use() { farm()?.act('catch.panels', {}); st.panelsSeen = true; pose('crouch', 1.2); } });
   reg({ id: 'house-door', label: 'house for the rest', verb: 'Close the', x: SPOTS.houseDoor.x, z: SPOTS.houseDoor.z, radius: 1.6,
     enabled: () => lv() && clean() && (farm()?.clean?.swabs?.length ?? 0) >= CLEAN.swabs && !farm()?.house?.closed,

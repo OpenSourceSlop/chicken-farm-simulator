@@ -163,8 +163,8 @@ export function buildBrooders(kit) {
       const lv = isLevel();
       // Phase 1 (sandbox): winched up once brooding is over (same day test as the curtain). In a level
       // the brooders stay down after the curtain lifts and go up with env.broodersUp (Phase 3, the
-      // farmer's "Brooders off and up"; the farm's house.broodersUp while the env has no such field).
-      const up = lv ? !!(env.broodersUp ?? kit.farm.house?.broodersUp) : !env.broodCurtain;
+      // farmer's "Brooders off and up").
+      const up = lv ? !!env.broodersUp : !env.broodCurtain;
       const wT = up ? 1 : 0;
       winch = winch < 0 || dt <= 0 ? wT : smooth(winch, wT, 1.5, dt);
       lift.position.y = LIFT * winch;

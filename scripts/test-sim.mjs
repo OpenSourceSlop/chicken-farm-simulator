@@ -10,7 +10,7 @@
 import { createSim } from '../src/sim.js';
 import { createFarm } from '../src/farm.js';
 import { createRecords } from '../src/records.js';
-import { createSkills, MILESTONES } from '../src/skills.js';
+import { createSkills, MILESTONES, ALL_MILESTONES } from '../src/skills.js';
 import { createSaveStore } from '../src/save.js';
 import { createEvents, EV } from '../src/events.js';
 import { LEVEL1, SKILL_BRANCHES } from '../src/config.js';
@@ -86,9 +86,9 @@ test('contract: steppers run during skipHours, prep day reachable', () => {
   assert(env.dayNumber === 0 && Math.abs(secs - 25 * 3600) < 1, `skip integrated ${secs} s, day ${env.dayNumber}`);
 });
 
-test('contract: skills table covers both earnable branches', () => {
+test('contract: skills table covers every earnable branch', () => {
   const { skills } = makeFarm();
-  for (const b of SKILL_BRANCHES.filter((x) => x.earnable)) assert(MILESTONES.some((m) => m.branch === b.id), `no milestones for ${b.id}`);
+  for (const b of SKILL_BRANCHES.filter((x) => x.earnable)) assert(ALL_MILESTONES.some((m) => m.branch === b.id), `no milestones for ${b.id}`);
   assert(skills.branches().length === 11, '11 branches');
   skills.award('day7-weight', 1);
   assert(skills.points('brooding') === 3 && skills.level('brooding') === 0, 'points and level');

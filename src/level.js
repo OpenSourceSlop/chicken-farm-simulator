@@ -48,9 +48,7 @@ import { FARM, LEVEL1, CYCLE, PLAN_LEVEL, WEEKS45, FINISH, CLEANOUT, HARVEST, PL
 import { EV } from './events.js';
 import { createJobEngine, LEVEL_END_DAY } from './job-engine.js';
 import { applyRound } from './farm-profiles.js';
-// the cycle profiles (package "sim"): applyCycleRound at the rounds cycleStops lists. The stub's
-// climateCare (a fan thermostat) is used only while that module is the stub (STUB), and only for
-// automated play (goto auto, free runs): no named import, so the merge that drops it builds as is.
+// the cycle profiles (package "sim"): applyCycleRound at the rounds cycleStops lists (goto auto, free runs)
 import * as cycleProfiles from './farm-profiles-cycle.js';
 import { planSums } from './farm-plan.js';
 import { ALL_MILESTONES } from './skills.js';
@@ -82,8 +80,6 @@ export function createLevel(ctx, deps = {}) {
   let signedEnd = false, ended = null, lastDay = null, tickAcc = 0;
   let saveIn = null, lastSaveDay = null;
   let failAt = null;                // { day, pct } the first day close with the level deaths over the limit
-  let ownStart = null;              // level-start counters when the farm keeps none (farm.stats.levelStart)
-  let ownScale = {};                // the automatic scale at 08:00 of each weigh day when the farm keeps none
   let startAt = null;               // env.day this level started
   const details = new Map();        // milestone -> measured detail (profile)
   let free = null;                  // { def, off } while debug.freeRun runs the farm (tools)
@@ -140,25 +136,15 @@ export function createLevel(ctx, deps = {}) {
       if (max != null && levelDeaths().pct > max) { failAt = failAt || { day: p.day, pct: levelDeaths().pct }; end('mortality'); }
     });
   }
-  // the automatic bird scale at 08:00 of a weigh day (the farm's farm.stats.scaleAt[day]; a mirror of
-  // it here while the farm keeps none), read in farm time so a skip over 08:00 still reads it then
-  env.addStepper?.((e) => {
-    if (!inLevel() || def === LEVEL1 || free) return;
-    const d = e.dayNumber;
-    if (e.hour >= 8 && weighDays().includes(d) && ownScale[d] == null && farm.stats?.scaleAt?.[d] == null && farm.flock.alive > 0) ownScale[d] = Math.round(farm.flock.meanWeightG * 1.02);
-  });
-
   function placedCount() { return farm.flock.placed || farm.flock.delivered || 0; }
   function mortalityPct() {
     const placed = placedCount();
     if (!placed) return 0;
     return (((farm.flock.deadTotal || 0) + (farm.flock.culls || 0)) / placed) * 100;
   }
-  /** The level's start counters: the farm's (farm.stats.levelStart, set by farm.enterLevel), else ours. */
+  /** The level's start counters: the farm's own (farm.stats.levelStart, set by farm.enterLevel; PHASE3.md §13.9). */
   function startCounts() {
-    const s = farm.stats?.levelStart;
-    if (s && s.level === def.id) return s;
-    return ownStart || { level: def.id, day: def.startDay, alive: farm.flock.alive || 0, deaths: farm.flock.deadTotal || 0, culls: farm.flock.culls || 0, doa: 0 };
+    return farm.stats.levelStart || { level: def.id, day: def.startDay, alive: 0, deaths: 0, culls: 0, doa: 0 };
   }
   const doaNow = () => farm.harvest?.result?.doa ?? 0;
   /** Deaths and culls (and dead on arrival in the last week) since the level's start, as % of the birds alive then. */
@@ -277,7 +263,7 @@ export function createLevel(ctx, deps = {}) {
   function weekResult(ld) {
     const day = def.target.day, targetG = weightAt(day);
     const wr = weighResult(day);
-    const scale = farm.stats?.scaleAt?.[day] ?? ownScale[day] ?? null;
+    const scale = farm.stats.scaleAt?.[day] ?? null;
     const weightG = wr && wr.n >= 10 ? wr.mean : scale;
     const share = weightG != null ? weightG / targetG : null;
     const max = def.fail.mortalityMaxPct;
@@ -402,11 +388,11 @@ export function createLevel(ctx, deps = {}) {
   /** Everything of one level (a new level, a replay, a resume). */
   function resetLevelState() {
     fired = new Set(); points = []; weighs = []; signedEnd = false; ended = null; pending = null; failAt = null;
-    ownStart = null; ownScale = {}; startAt = null; reached.clear();
+    startAt = null; reached.clear();
     fast = false; userPaused = false; saveIn = null; lastSaveDay = null; tickAcc = 0;
   }
   function resetRun() {
-    if (free) { free.off?.(); env.setMaxDay?.(42); free = null; }
+    if (free) { env.setMaxDay?.(42); free = null; }
     resetLevelState();
   }
   function enterMode(phase) {
@@ -491,11 +477,6 @@ export function createLevel(ctx, deps = {}) {
     pickDead();
   }
 
-  /** The stub's fan thermostat while farm-profiles-cycle.js is the stub (automated play only). */
-  function stubCare() {
-    if (!cycleProfiles.STUB || typeof cycleProfiles.climateCare !== 'function' || def === LEVEL1 || def === PLAN_LEVEL) return null;
-    return env.addStepper(cycleProfiles.climateCare(farm, env));
-  }
   let prevDay = null;
 
   const level = {
@@ -567,7 +548,7 @@ export function createLevel(ctx, deps = {}) {
     enter(next, opts = {}) {
       if (typeof next === 'string') next = levelById(next);
       if (!next || next === LEVEL1 || next === PLAN_LEVEL) return false;
-      if (free) { free.off?.(); free = null; }
+      if (free) free = null;
       if (opts.run != null) inRun = !!opts.run;
       resetLevelState();
       ui?.closePanel?.();
@@ -575,9 +556,7 @@ export function createLevel(ctx, deps = {}) {
       const t = next.startDay + next.startHour * H;
       if (t > env.day + 1e-9) { const h = (t - env.day) * 24; env.skipHours(h); flock?.afterSkip?.(h); } // the night, with the farmer's settings
       def = next;
-      farm.enterLevel?.(next);
-      const s = farm.stats?.levelStart;
-      if (!(s && s.level === next.id)) ownStart = { level: next.id, day: env.dayNumber, alive: farm.flock.alive || 0, deaths: farm.flock.deadTotal || 0, culls: farm.flock.culls || 0, doa: doaNow() };
+      farm.enterLevel(next);
       startAt = env.day;
       reached.add(`${next.id}@${next.startDay}`);
       engine.start(next.startDay, next);
@@ -635,7 +614,7 @@ export function createLevel(ctx, deps = {}) {
       inRun = !!lv.inRun;
       engine.restore(lv.jobs, d);
       fired = new Set(lv.fired || []); points = lv.points || []; weighs = lv.weighs || []; signedEnd = !!(lv.signedEnd ?? lv.signed7); fast = !!lv.fast;
-      failAt = lv.failAt ?? null; ownStart = lv.ownStart ?? null; ownScale = lv.ownScale || {}; startAt = lv.startAt ?? env.day;
+      failAt = lv.failAt ?? null; startAt = lv.startAt ?? env.day;
       for (const k of lv.reached || []) reached.add(k);
       if (inRun && lv.run && runApi) runApi.adopt(lv.run);
       if (data.player && player) player.teleport(data.player.x, data.player.z, data.player.yaw);
@@ -741,7 +720,7 @@ export function createLevel(ctx, deps = {}) {
     startCounts,
     serialize() {
       return { v: 1, mode: level.mode, seed, levelId: def.id, inRun, jobs: engine.serialize(), fired: [...fired], points, weighs,
-        signed7: signedEnd, signedEnd, fast, failAt, ownStart, ownScale, startAt, reached: [...reached], ended: ended ? ended.reason : null,
+        signed7: signedEnd, signedEnd, fast, failAt, startAt, reached: [...reached], ended: ended ? ended.reason : null,
         ...(inRun && runApi ? { run: runApi.serialize() } : {}) };
     },
     saveBlob() {
@@ -772,8 +751,7 @@ export function createLevel(ctx, deps = {}) {
         const target = day + hour * H;
         if (target <= env.day + 1e-9) return false;
         if (auto) {
-          const off = stubCare();
-          try {
+          {
             for (const s of autoStops(target)) {
               if (s.t > env.day + 1e-9) skip((s.t - env.day) * 24);
               if (ended) return true;
@@ -784,7 +762,7 @@ export function createLevel(ctx, deps = {}) {
               engine.tick(); checks();
               if (ended) return true;
             }
-          } finally { off?.(); }
+          }
         }
         if (ended) return true;
         // a later level stops at its end (Next job never skips past it); the brooding week as Phase 2
@@ -807,8 +785,7 @@ export function createLevel(ctx, deps = {}) {
           if (ended) return false;
           engine.finish();
           env.setMaxDay?.(CYCLE.lastDay);
-          const care = cycleProfiles.STUB && typeof cycleProfiles.climateCare === 'function' ? env.addStepper(cycleProfiles.climateCare(farm, env)) : null;
-          free = { def: levelOfDay(day), off: care };
+          free = { def: levelOfDay(day) };
         }
         free.def = levelOfDay(day);
         if (target <= env.day + 1e-9) return true;

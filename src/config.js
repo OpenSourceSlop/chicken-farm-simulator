@@ -315,22 +315,21 @@ export const SPOTS2 = {
   truckStop: { x: -9.5, z: 14.0, yaw: 0 },  // chick truck parks on the farm road, tail at the path
 };
 
-// Skill tree: the 11 branches from the plan doc. Phase 2 made two earnable. Phase 3 makes all eleven
-// earnable (milestones: skills.js ALL_MILESTONES = Phase 2's + skills-cycle.js, PHASE3.md §9); `earnable`
-// keeps Phase 2's meaning (the cards the current skill tree shows as earnable) until package "run"'s
-// skill tree for all branches is merged, then the integrator sets it true for every branch.
+// Skill tree: the 11 branches from the plan doc. Phase 2 made two earnable; Phase 3 makes all eleven
+// earnable (milestones: skills.js ALL_MILESTONES = Phase 2's + skills-cycle.js, PHASE3.md §9). `earnable`
+// is what the skill tree reads (a card that is not earnable shows a preview of its first unlock).
 export const SKILL_BRANCHES = [
-  { id: 'planning', name: 'Farm Planning', earnable: false },
-  { id: 'biosecurity', name: 'Biosecurity & Health', earnable: false },
+  { id: 'planning', name: 'Farm Planning', earnable: true },
+  { id: 'biosecurity', name: 'Biosecurity & Health', earnable: true },
   { id: 'brooding', name: 'Chick Arrival & Brooding', earnable: true },
-  { id: 'comfort', name: 'Body Temperature & Comfort', earnable: false },
-  { id: 'ventilation', name: 'Heat & Ventilation', earnable: false },
-  { id: 'moisture', name: 'Moisture & Minimum Ventilation', earnable: false },
-  { id: 'heating', name: 'Heating', earnable: false },
+  { id: 'comfort', name: 'Body Temperature & Comfort', earnable: true },
+  { id: 'ventilation', name: 'Heat & Ventilation', earnable: true },
+  { id: 'moisture', name: 'Moisture & Minimum Ventilation', earnable: true },
+  { id: 'heating', name: 'Heating', earnable: true },
   { id: 'water', name: 'Water', earnable: true },
-  { id: 'feed', name: 'Feed & Digestion', earnable: false },
-  { id: 'lighting', name: 'Lighting', earnable: false },
-  { id: 'growth', name: 'Growth & Performance', earnable: false },
+  { id: 'feed', name: 'Feed & Digestion', earnable: true },
+  { id: 'lighting', name: 'Lighting', earnable: true },
+  { id: 'growth', name: 'Growth & Performance', earnable: true },
 ];
 // Points needed for branch levels 1, 2, 3 (level 3 is not reachable in Level 1).
 export const SKILL_LEVEL_POINTS = [4, 9, 15];
@@ -573,6 +572,9 @@ export const PLAN_CONTRACT = {
 };
 
 // Finishing and harvest (general; model where PHASE3.md §6.9 says so).
+/** The LPG tank at the start of the flock, kg (model: the gas tank's gauge reads farm.stats.gasKg against it). */
+export const GAS_TANK_KG = 500;
+
 export const HARVEST = {
   catchDefault: { day: 42, hour: 2 }, bookFrom: { day: 41, hour: 18 }, bookTo: { day: 42, hour: 6 },
   sections: 8, sectionMin: 22, sectionOrder: [1, 0, 2, 3, 4, 5, 6, 7], crew: 4, trucks: 2,

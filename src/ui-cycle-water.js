@@ -21,7 +21,7 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
   // ---------- main valve (Lines and Vaccine tabs show the same valve) ----------
   const foldAll = () => { foldPlates(); vacPlate.fold(); medPlate.fold(); };
   const valveToggle = () => {
-    const shut = !mainShut(farm, memo);
+    const shut = !mainShut(farm);
     if (shut) foldAll();
     L.act('water.main', { open: !shut });
     memo.shut = shut; memo.at = env.day;
@@ -58,12 +58,11 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
     h('div', { class: 'cyc-box cyc-sec' }, h('p', { class: 'cyc-k' }, 'Header tank'), h('div', { class: 'equip-btns', style: 'margin-top: 0; align-items: center' }, h('label', { class: 'cyc-check', for: stabId }, stab, 'Skim milk powder stabiliser'), mixBtn), tank),
     vacState, vacPlate.el);
   // ---------- Medicine ----------
-  // the farm's medication state when it answers the action (sim); else what the farmer set here (the stub)
-  const medNow = () => (memo.med ? memo.med.on : !!farm.health?.medication?.on);
+  // the farm's medication state (farm.health.medication)
+  const medNow = () => !!farm.health.medication.on;
   const med = toggleKey('Medicator on', 'Medicator off', () => {
     const on = !medNow();
     L.act('water.medicate', { on });
-    memo.med = farm.health?.medication?.on === on ? null : { on, at: env.day };
     sync();
   });
   const medRow = machineRow('Medicator', 'medicine into the water at the vet’s dose', med.el);
@@ -97,7 +96,7 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
     if (!on && tabs.current !== 0) tabs.show(0);
     mainLines.el.hidden = !on;
     testBox.hidden = !on || !skills?.unlocked?.('waterTest');
-    const shut = mainShut(farm, memo);
+    const shut = mainShut(farm);
     for (const m of [mainLines, mainVac]) { m.t.set(shut); m.led.classList.toggle('is-on', !shut); }
     for (const m of [mainLines, mainVac]) setText(m.small, shut ? `shut${memo.at != null ? ` since ${whenText(memo.at)}` : ''}: no water reaches the lines` : 'water to the header tank and the lines');
     const v = farm.health?.vaccine || { state: 'none' };
@@ -117,7 +116,7 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
     const m = farm.health?.medication || {};
     const medOn = medNow();
     med.set(medOn); medRow.led.classList.toggle('is-on', medOn);
-    const from = memo.med ? memo.med.at : m.from;
+    const from = m.from;
     setText(medState, medOn ? `Medicine in the water since ${whenText(from)} (${hoursText((env.day - from) * 24)}).` : m.days ? `Off. The last course ran ${one(m.days)} days.` : 'Off.');
     dis.set(!!farm.clean?.disinfectant); disRow.led.classList.toggle('is-on', !!farm.clean?.disinfectant);
     flushes.forEach((f, i) => {

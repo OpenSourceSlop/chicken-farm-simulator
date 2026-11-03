@@ -1,15 +1,11 @@
 // Shared parts of the Phase 3 panels (package "panels"): the 24-hour climate memory the charts draw
 // from, small SVG charts, tabs, a machine job that needs farm time, and the readers that turn a farm
-// action's result into what the machine shows. The readers accept the result shapes of PHASE3.md §13.3;
-// where the farm (the Phase 3 stub) answers only `true`, they read the same figures off the farm state
-// so the panel still shows the machine (PHASE3.md §13.8; noted for the integrator).
-import { AIR, HEATERS, HARVEST, FAN_COUNT } from './config.js';
-import { wetBulbOf } from './sim.js';
+// action's result into what the machine shows (the result shapes of PHASE3.md §13.3).
+import { FAN_COUNT } from './config.js';
 import { h, button, setText } from './ui-dom.js';
 import { hhmm, splitDay } from './ui-format.js';
 
 export const GAME_MIN = 1 / 1440;
-const HEAT_RATE = 6.5; // °C per hour from 8 brooders at full output (sim.js; the fallback heat budget only)
 
 // ---------------- the climate memory (one per env, kept in farm time, skips included) ----------------
 const HIST = new WeakMap();
@@ -117,54 +113,20 @@ export function whenText(t) {
 export const hoursText = (hrs) => (hrs == null || !Number.isFinite(hrs) ? '—' : hrs < 1 ? `${Math.max(0, Math.round(hrs * 60))} min` : `${(Math.round(hrs * 10) / 10).toFixed(1)} h`);
 export const setOnce = (el, s) => setText(el, s);
 
-// ---------------- readers of the farm's answers (stub-tolerant) ----------------
-const obj = (r) => (r && typeof r === 'object' ? r : null);
-
-/** The house's heat terms, °C per hour (env.heatBudget, PHASE3.md §14.1; else the same terms worked out here). */
-export function heatBudgetOf(env) {
-  const b = typeof env.heatBudget === 'function' ? obj(env.heatBudget()) : null;
-  if (b && Number.isFinite(b.wallsCh)) return { ...b, fallback: false };
-  const tunnel = env.fanMean > 0 ? Math.min(1, (env.fansEffective ?? env.fansOn) / env.fanMean) : 0;
-  const padDrop = !env.padOn ? 0 : env.cycleClimate
-    ? 0.8 * Math.max(0, env.outsideTemp - wetBulbOf(env.outsideTemp, env.outsideRH)) * tunnel * Math.max(0, Math.min(1, env.padWorking ?? 1))
-    : Math.min(9, (100 - env.outsideRH) / 5) * 0.85 * tunnel;
-  const inlet = env.outsideTemp - padDrop;
-  const lit = HEATERS.length - (env.brooderOut?.length || 0);
-  return {
-    brooderCh: env.broodersUp ? 0 : (HEAT_RATE * (env.heaterLevel || 0) * lit) / HEATERS.length,
-    birdsCh: env.flockHeatPerH || 0,
-    sunCh: env.sunHeatPerH || 0,
-    wallsCh: -AIR.wallLossPerH * (env.houseTemp - inlet),
-    airCh: -((env.airflowM3h ?? AIR.infiltrationM3h) / AIR.thermalM3) * (env.houseTemp - inlet),
-    slabCh: -0.3 * (env.houseTemp - (env.slabTemp ?? env.houseTemp)),
-    fallback: true,
-  };
-}
+// ---------------- readers of the farm's answers (PHASE3.md §13.3 result shapes) ----------------
+/** The house's heat terms, °C per hour (env.heatBudget(), PHASE3.md §14.1). */
+export const heatBudgetOf = (env) => env.heatBudget();
 
 /** pad.check -> { dry: [6 bools], flowing, overflow }. */
-export function padCheckOf(r, farm, env) {
-  const o = obj(r);
-  if (o && Array.isArray(o.dry)) return { dry: o.dry.slice(0, 6), flowing: !!o.flowing, overflow: !!(o.overflow ?? farm.house?.padFloatStuck) };
-  const dryN = Math.round((1 - Math.max(0, Math.min(1, farm.house?.padWorking ?? env.padWorking ?? 1))) * 6);
-  return { dry: Array.from({ length: 6 }, (_, k) => k < dryN), flowing: !!env.padOn, overflow: !!farm.house?.padFloatStuck };
+export function padCheckOf(r) {
+  return { dry: r.dry.slice(0, 6), flowing: !!r.flowing, overflow: !!r.overflow };
 }
 
-/** load.ticket -> { crates, birds, grossKg, tareKg, netKg, doa } (the truck's figures when the farm answers true). */
-export function ticketOf(r, farm, truck) {
-  const o = obj(r);
-  if (o && Number.isFinite(o.grossKg)) return o;
-  const t = farm.harvest?.trucks?.[truck] || {};
-  const net = Math.round(t.netKg || 0), tare = HARVEST.tareKg;
-  return { crates: t.crates || 0, birds: t.birds || 0, grossKg: Math.round(t.grossKg ?? net + tare), tareKg: tare, netKg: net, doa: t.doa ?? 0 };
-}
+/** load.ticket -> { crates, birds, grossKg, tareKg, netKg, doa } (the farm's ticket as printed). */
+export const ticketOf = (r) => r;
 
-/** gas.meter -> { kgLeft, kgUsed } or null when the farm keeps no gas figure. */
-export function gasOf(r, farm, tankKg = 500) {
-  const o = obj(r);
-  if (o && Number.isFinite(o.kgLeft)) return o;
-  const used = farm.stats?.gasKg;
-  return Number.isFinite(used) ? { kgLeft: Math.max(0, Math.round(tankKg - used)), kgUsed: Math.round(used) } : null;
-}
+/** gas.meter -> { kgLeft, kgUsed }. */
+export const gasOf = (r) => r;
 
 /** Birds by the farmer's own counts: placed − dead counted at the bin − culls. */
 export function knownBirds(farm) {
@@ -172,12 +134,8 @@ export function knownBirds(farm) {
   return Math.max(0, (f.placed || 0) - (f.countedDead || 0) - (f.culls || 0));
 }
 
-/** The main water valve: shut by water.main { open: false } (sim keeps farm.water.mainClosed). */
-export function mainShut(farm, memo) {
-  if (typeof farm.water?.mainClosed === 'boolean') return farm.water.mainClosed;
-  if (typeof farm.health?.mainClosed === 'boolean') return farm.health.mainClosed;
-  return !!memo.shut;
-}
+/** The main water valve: shut by water.main { open: false } (the farm keeps farm.health.mainClosed). */
+export const mainShut = (farm) => !!farm.health.mainClosed;
 
 // ---------------- small pictures ----------------
 /** A fan rotor (the air vane: turns while the fan moves air). */

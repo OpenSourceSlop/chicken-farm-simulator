@@ -39,7 +39,7 @@ export function buildLoadingBay(api) {
     const b = button({ class: 'btn btn--machine' }, h('span', { html: ICONS.eye, 'aria-hidden': 'true' }), `Read the ticket of truck ${i + 1}`);
     const el = h('div', { class: 'cyc-ticket', 'data-truck': String(i) }, h('h4', null, `Truck ${i + 1} · weight ticket`), body, b);
     const t = { i, el, body, b, read: null };
-    b.addEventListener('click', () => { t.read = { ...ticketOf(L.act('load.ticket', { truck: i }), farm, i), at: env.timeLabel }; drawTicket(t); refresh(); });
+    b.addEventListener('click', () => { t.read = { ...ticketOf(L.act('load.ticket', { truck: i })), at: env.timeLabel }; drawTicket(t); refresh(); });
     return t;
   });
   shell.main.append(plan, crew, h('div', { class: 'cyc-tickets' }, tickets.map((t) => t.el)));

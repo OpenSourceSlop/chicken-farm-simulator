@@ -2,7 +2,7 @@
 // its result shape; undefined = Phase 2's doAct answers (its default for a ui-only id is `true`). onBus
 // handles what the farm hears on the bus (listen stops, walking, a bird in the hand, the dips of the
 // planning day, dead birds picked up, the vet on the phone). Pure logic, package "sim".
-import { HOUSE_BOUNDS, PLAN_CONTRACT, FAN_COUNT, BIRD_BOUNDS } from './config.js';
+import { HOUSE_BOUNDS, PLAN_CONTRACT, FAN_COUNT, BIRD_BOUNDS, GAS_TANK_KG } from './config.js';
 import { EV } from './events.js';
 import { planSums, cleanPlan, planOutcome } from './farm-plan.js';
 import { doAct } from './farm-act.js';
@@ -16,7 +16,6 @@ import { cycleListen } from './farm-cycle-problems.js';
 
 const r1 = (v) => Math.round(v * 10) / 10;
 const planOf = (farm) => farm.plan || (farm.plan = { measured: {}, decisions: null, sums: null, sheet: null, sentAt: null, replyAt: null, outcome: null });
-export const GAS_TANK_KG = 500;     // the LPG tank at the start of the flock (model)
 /** air.probe reads +-15 % along the house: slower at the pad end, faster near the fans. */
 export const probeFactor = (x) => 0.85 + 0.3 * Math.max(0, Math.min(1, (x - BIRD_BOUNDS.xMin) / (BIRD_BOUNDS.xMax - BIRD_BOUNDS.xMin)));
 const day = (farm, env) => { const d = farm.stats.daily || (farm.stats.daily = {}); return d[env.dayNumber] || (d[env.dayNumber] = {}); };

@@ -35,6 +35,7 @@ export function createHealth() {
     zoneDays: [],                  // [{ day, e: [8], m: [8] }] daily means of each 6 m strip (last 8 days)
     zoneAcc: null,
     mainClosed: false,
+    droppings: 'normal',           // the flock's main droppings look (the scene's floor, PHASE3.md §13.5)
   };
 }
 
@@ -109,6 +110,7 @@ export function stepHealth(farm, env, hrs, age, drunkL) {
   X.fx.fHealth = Math.max(0.5, fh);
   X.droppings = coc > 0.3 ? 'bloody' : gum > 0.25 ? 'white' : X.shockUntil != null && env.day < X.shockUntil ? 'undigested'
     : farm.comfort.pantShare > 0.3 || (X.waterPerKg ?? 0) > 2.0 ? 'watery' : 'normal';
+  h.droppings = X.droppings;
   // ---- daily means of each 6 m strip (feathers, feet at the bird check) ----
   const C = farm.comfort, za = h.zoneAcc || (h.zoneAcc = { day: env.dayNumber, e: new Array(8).fill(0), m: new Array(8).fill(0), n: new Array(8).fill(0) });
   if (za.day !== env.dayNumber) {

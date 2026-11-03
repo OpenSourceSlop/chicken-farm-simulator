@@ -21,7 +21,6 @@
 //   points: { [branch: string]: number } }} CycleSummary
 import { LEVELS, weightAt, HARVEST } from './config.js';
 
-export const STUB = false;
 const r1 = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10) / 10);
 const r2 = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 100) / 100);
 const FLOCK_LEVELS = LEVELS.filter((l) => ['level1', 'week2', 'week3', 'weeks45', 'finish'].includes(l.id));

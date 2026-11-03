@@ -159,7 +159,7 @@ export function buildPadPump(api) {
   // each job takes farm time (a walk along the pad, a flush, the float valve): the plate folds first
   const job = (min, fn) => machineJob(env, min, () => { fn(); bar.set(0); refresh(); });
   const jobs = {
-    check: job(2, () => { check = { ...padCheckOf(L.act('pad.check', {}), farm, env), at: env.timeLabel, day: env.dayNumber }; }),
+    check: job(2, () => { check = { ...padCheckOf(L.act('pad.check', {})), at: env.timeLabel, day: env.dayNumber }; }),
     flush: job(10, () => { L.act('pad.flush', {}); last.push(`Distribution pipe flushed ${env.timeLabel}.`); check = null; }),
     float: job(3, () => { L.act('pad.fixFloat', {}); last.push(`Float valve freed ${env.timeLabel}.`); check = null; }),
   };

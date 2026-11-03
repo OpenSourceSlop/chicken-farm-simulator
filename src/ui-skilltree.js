@@ -57,8 +57,8 @@ export function buildSkillTreePanel(L) {
         h('span', { class: 'pbar-fill', style: `width:${Math.min(100, (b.points / max) * 100).toFixed(1)}%` }),
         SKILL_LEVEL_POINTS.map((p, i) => h('span', { class: 'pbar-mark', style: `left:${((p / max) * 100).toFixed(1)}%` }, h('small', null, `L${i + 1}`))));
       const next = unlockOf(b.id, Math.min(3, b.level + 1));
-      // config SKILL_BRANCHES[i].earnable: Phase 2 made two earnable; the integrator sets all eleven at the
-      // run merge (PHASE3.md §9). A branch not yet earnable keeps Phase 2's preview of its first unlock.
+      // config SKILL_BRANCHES[i].earnable (all eleven from Phase 3, PHASE3.md §9); a branch that is not
+      // earnable would show a preview of its first unlock.
       const card = b.earnable
         ? button({ class: `branch branch--earn branch--pick${b.id === picked ? ' is-picked' : ''}`, 'aria-pressed': String(b.id === picked) },
           h('div', { class: 'branch-top' }, h('span', { html: badge(b.id, b.level) }), h('div', null, h('h3', null, b.name), pips)),

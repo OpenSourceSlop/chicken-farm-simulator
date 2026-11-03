@@ -93,7 +93,7 @@ export function buildGasTank(api) {
   const reads = []; // { t, kgUsed }
   let share = null;
   read.addEventListener('click', () => {
-    const g = gasOf(L.act('gas.meter', {}), farm);
+    const g = gasOf(L.act('gas.meter', {}));
     if (!g) { reading.set('—', `read ${env.timeLabel}: the gauge shows no figure`); return; }
     const prev = reads[reads.length - 1];
     reads.push({ t: env.day, kgUsed: g.kgUsed });

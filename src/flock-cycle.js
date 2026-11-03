@@ -102,14 +102,14 @@ export function thinkLame(S, i, ctx) {
 }
 
 /**
- * The vaccination in the drinking water (farm.health.vaccine, farm.water.mainClosed): while the main
+ * The vaccination in the drinking water (farm.health.vaccine, farm.health.mainClosed): while the main
  * valve is shut the lines are dry (lv.thirst: the birds walk to the lines and peck at dry nipples);
  * when it opens with the vaccine in the tank they rush to drink (lv.rush 1 -> 0 over about 40 s of play).
  * Returns 'opened' on the frame the lines open, else null.
  */
 export function water(lv, farm, env, dt) {
   const v = farm?.health?.vaccine, st = v?.state;
-  const closed = !!farm?.water?.mainClosed || st === 'thirst' || st === 'mixed';
+  const closed = !!farm?.health?.mainClosed || st === 'thirst' || st === 'mixed';
   const was = lv.thirst;
   lv.thirst = closed;
   if (closed) for (let k = 0; k < lv.acc.length; k++) { lv.acc[k] = 0; lv.waterPull[k] = 0.01; }

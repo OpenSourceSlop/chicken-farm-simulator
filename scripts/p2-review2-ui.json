@@ -54,7 +54,7 @@
   {"eval": "__game.ui.openPanel('skilltree')"},
   {"advance": 0.3},
   {"shot": "ui-11-skilltree"},
-  {"expect": "(() => { const later = [...document.querySelectorAll('.branch-later--unlock')].map((p) => p.textContent); return later.length === 9 && 'later branches show: ' + later.slice(0, 3).join(' | '); })()", "label": "skill tree: each later branch shows what its first level unlocks"},
+  {"expect": "(() => { const next = [...document.querySelectorAll('.branch-next')].map((p) => p.textContent); return next.length === 11 && document.querySelectorAll('.branch-later--unlock').length === 0 && 'every branch earnable, next unlocks: ' + next.slice(0, 3).join(' | '); })()", "label": "skill tree: all eleven branches are earnable and show their next level's unlock"},
   {"press": "Escape"},
   {"eval": "(() => { __game.ui.closePanel(); return 'press F (floor view): unlocked ' + __game.skills.unlocked('floorOverlay'); })()"},
   {"press": "f"},

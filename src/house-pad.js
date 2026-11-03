@@ -135,7 +135,7 @@ export function buildPad(kit) {
       // Phase 3, level only: the share of the pad with water on it (env.padWorking): the sections the
       // farm's pad.check calls dry are the first ones from the north side
       const level = kit.farm && kit.farm.mode === 'level';
-      const working = level ? Math.max(0, Math.min(1, env.padWorking ?? kit.farm.house?.padWorking ?? 1)) : 1;
+      const working = level ? Math.max(0, Math.min(1, env.padWorking)) : 1;
       const dryN = Math.round((1 - working) * PAD_SECTIONS);
       for (let k = 0; k < PAD_SECTIONS; k++) dry6[k] = padU.uDry.value[k] = sheenU.uDry.value[k] = k < dryN ? 1 : 0;
       // the colour stays the dry one: the shader darkens the wet sections (wetness x 0.75, as Phase 1's

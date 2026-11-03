@@ -4,7 +4,6 @@
 // (plan.send). The company's reply is the run's letter. Unlocks: planningCalc (his sums live, worked by
 // planSums for his decisions), planCarry (the sheet starts from the last cycle's numbers).
 import { PLAN_CONTRACT, CYCLE } from './config.js';
-import { EV } from './events.js';
 import { planSums, PLAN_FIELDS } from './farm-plan.js';
 import { h, button, setText, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
@@ -29,21 +28,10 @@ const TERMS = [
   'the company’s drawings show the standard house, 50 × 12 m',
 ];
 
-/** Remember the last cycle's numbers for planCarry (the run keeps the plan and the summary until a new run). */
-const LAST = new WeakMap();
-export function watchCycleEnd(L) {
-  if (!L.events || LAST.has(L.events)) return;
-  LAST.set(L.events, null);
-  L.events.on(EV.RUN, (p) => {
-    if (p?.phase !== 'cycle-end') return;
-    const st = L.ctx?.run?.state?.();
-    if (st) LAST.set(L.events, { plan: st.plan ?? null, summary: st.summary ?? null });
-  });
-}
-/** The decisions a planCarry sheet starts from: last plan's houses / chicks / days, the flock's losses and weight. */
+/** The decisions a planCarry sheet starts from (the run's lastCycle, kept across a new run and saved): last plan's houses / chicks / days, the flock's losses and weight. */
 function carried(L) {
   const st = L.ctx?.run?.state?.() || {};
-  const last = (L.events && LAST.get(L.events)) || (st.summary ? { plan: st.plan, summary: st.summary } : null) || st.lastCycle || null;
+  const last = st.lastCycle || null;
   if (!last) return null;
   const d = last.plan?.decisions || {}, a = last.summary?.actual || {};
   return {

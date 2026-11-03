@@ -19,7 +19,7 @@ const TYPE_NAME = Object.fromEntries(FEED_TYPES.map((t) => [t.id, t.label]));
 export function cycleFeederParts(L, { foldPlates }) {
   const { env, farm } = L;
   const memo = { withdrawn: null };
-  const withdrawnNow = () => (typeof farm.feed.withdrawn === 'boolean' ? farm.feed.withdrawn : !!memo.withdrawn);
+  const withdrawnNow = () => !!farm.feed.withdrawn;
   const wd = toggleKey('Feed taken away', 'Take the feed away', () => {
     const on = !withdrawnNow();
     foldPlates();
@@ -32,7 +32,7 @@ export function cycleFeederParts(L, { foldPlates }) {
   wdRow.el.hidden = true;
   const bar = progressBar();
   let busy = null;
-  const washed = []; // pans washed here (the farm's clean.pans is the record; the stub keeps none)
+  const washed = []; // when the farmer washed each line's pans here (the farm's clean.pans is the record)
   const pans = FEEDER_LINES_Z.map((z, i) => {
     const job = machineJob(env, 4, () => { L.act('feed.wash', { line: i }); washed[i] = env.timeLabel; busy = null; bar.set(0); sync(); });
     const b = button({ class: 'key key--wide', 'aria-label': `Wash the pans of line ${i + 1}` }, 'Wash the pans');
@@ -51,7 +51,7 @@ export function cycleFeederParts(L, { foldPlates }) {
     setText(wdRow.small, w ? `the lines stopped${memo.at != null ? ` ${whenText(memo.at)}` : ''}${empty != null ? ` · pans empty ${whenText(empty)}` : ''} · water stays on` : 'stop the lines before the catch; the pans winch up once empty');
     wash.hidden = !on || d < CYCLE.cleanFrom;
     pans.forEach((p, i) => {
-      const done = !!farm.clean?.pans?.[i] || !!washed[i];
+      const done = !!farm.clean.pans[i];
       setText(p.row.small, p.job.running ? 'washing…' : done ? `washed${washed[i] ? ` ${washed[i]}` : ''}` : 'not washed');
       p.row.led.classList.toggle('is-on', p.job.running);
       p.b.disabled = !!busy;
@@ -84,7 +84,7 @@ function silosSvg(silos) {
 export function cycleSiloParts(L) {
   const { env, farm, skills } = L;
   const memo = { valves: [1, 0] };
-  const valvesNow = () => (Array.isArray(farm.feed.valves) ? farm.feed.valves : memo.valves);
+  const valvesNow = () => farm.feed.valves;
   const strip = h('div', { class: 'silo-strip', 'aria-hidden': 'true' });
   const legend = h('p', { class: 'equip-note' }, FEED_TYPES.map((t) => h('span', { style: 'margin-right: 10px; white-space: nowrap' },
     h('span', { style: `display: inline-block; width: 10px; height: 10px; margin-right: 4px; border-radius: 2px; background: ${TYPE_FILL[t.id]}` }), t.label)));
@@ -112,11 +112,8 @@ export function cycleSiloParts(L) {
     h('div', { class: 'silo-wrap' }, strip, h('div', { class: 'equip-reads equip-reads--col' }, reading.el, readBtn, legend)),
     h('div', { class: 'ctrl-rows' }, valves.map((v) => v.row.el)), daysBox, where);
   function sync() {
-    // the silos as the farm keeps them (their sum is feed.siloKg); a farm whose silos do not add up (the
-    // Phase 3 stub) shows Phase 2's figure in silo 1
-    const kept = farm.feed.silos, sum = kept ? kept.reduce((a, s) => a + (s.kg || 0), 0) : NaN;
-    const silos = kept && Math.abs(sum - (farm.feed.siloKg ?? sum)) < 50 ? kept
-      : [{ type: 'starter', kg: farm.feed.siloKg || 0, layers: farm.feed.siloKg > 0 ? [{ type: 'starter', kg: farm.feed.siloKg }] : [] }, { type: 'grower', kg: 0, layers: [] }];
+    // the silos as the farm keeps them (their sum is feed.siloKg)
+    const silos = farm.feed.silos;
     const vs = valvesNow();
     valves.forEach((v, i) => {
       for (const o of v.opts) o.b.setAttribute('aria-pressed', String(Math.abs((vs[i] ?? 0) - o.v) < 0.01));

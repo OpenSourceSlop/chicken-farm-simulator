@@ -4,7 +4,7 @@
 // its gauge, the two silo slide valves on the boots. Static parts go into the props' static batch; lamps,
 // handles and needles into the shared box pool. Owner: package "scene".
 import * as THREE from 'three';
-import { FARM, SPOTS2, SPOTS3, HOUSE, HOUSE_BOUNDS, FAN_COUNT } from './config.js';
+import { FARM, SPOTS2, SPOTS3, HOUSE, HOUSE_BOUNDS, FAN_COUNT, GAS_TANK_KG } from './config.js';
 import { WATER } from './props-equip.js';
 import { Batch, mat, placer, canvasTexture, FONT, clamp01, lerp } from './props-kit.js';
 import { hutRack, lpgTank } from './props-cycle-models.js';
@@ -12,7 +12,6 @@ import { hutRack, lpgTank } from './props-cycle-models.js';
 const STEEL = 0x8f989f, BOX = 0x9da3a8, BOX_FACE = 0xb3b9bd, GAS = 0xe2b33c;
 const { xMin, zMin } = HOUSE_BOUNDS;
 const T = HOUSE.wallThickness;
-const GAS_TANK_KG = 500;   // the farm's tank at the start of the flock (model; the gauge reads gasKg against it)
 
 function lcd() {
   const c = document.createElement('canvas');
@@ -163,7 +162,7 @@ export function buildCycleEquipment(stat, pool, group) {
       const k = clamp01(1 - used / GAS_TANK_KG), a = lerp(-2.2, 2.2, k);
       pool.set(gasNeedle, gaugeAt.x + Math.sin(a) * 0.03, gaugeAt.y + Math.cos(a) * 0.03, gaugeAt.z, 0.008, 0.065, 0.004, 0x1e1e1e, 0, 0, -a);
       // silo slide valves: the plate slides out of the boot as the valve opens (0, half, full)
-      const vs = farm.feed?.valves || [1, 0];
+      const vs = farm.feed.valves;
       valves.forEach((v, i) => {
         const o = clamp01(vs[i] ?? 0);
         pool.set(v.plate, v.x - 0.12 + 0.24 * o, 0.86, v.z, 0.3, 0.03, 0.05, 0xb4bcc2);

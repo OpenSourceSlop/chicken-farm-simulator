@@ -10,8 +10,6 @@
 //     'tickets', 'clean1'..'clean4', 'dry', 'swabs', 'close', 'lab', 'book'). 'sign' is the level's part
 //     (the run signs the record); every other round is applyCycleRound's.
 //   applyCycleRound(farm, env, day, round, profile = 'ideal') -> [{ id, args, result }]
-//   climateCare(farm, env) -> stepper   kept for level.js until the run package's merge: a no-op now (the
-//     ideal runs the fans itself at its stops)
 //   runCycle (farm-profiles-cycle-run.js): the trace scripts/test-cycle.mjs checkCycle measures.
 // The ideal's fans and pads follow scripts/cycle-refs.mjs idealFans / idealPad (re-stated below: the
 // browser cannot import a script) at its stops, base controls only (no vent.stages).
@@ -403,9 +401,6 @@ function rewash(farm, env, act, P, day) {
   }
   void day; void P;
 }
-
-/** Kept for level.js (PHASE3.md §13.8) until the run package's merge: the ideal runs the fans at its stops now. */
-export function climateCare() { return () => {}; }
 
 export { runCycle, cycleWorld, saveBlob, ENV_SAVE } from './farm-profiles-cycle-run.js';
 void EQUIP; void feedTypeForDay;

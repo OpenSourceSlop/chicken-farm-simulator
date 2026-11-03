@@ -4,7 +4,7 @@
 //
 // createRun({ level, save, events, farm, env, records }) -> run
 //   stub                  false
-//   state()               { levelId, seed, plan, levels: { [id]: { state, key, attempts, starts, carried } },
+//   state()               { levelId, seed, plan, lastCycle, levels: { [id]: { state, key, attempts, starts, carried } },
 //                         summary, conditions }
 //   startRun({ seed, at })   a new run: Level 1 (plan) or, with at: 'level1', the brooding week (no plan)
 //   startLevel(id, { from: 'saved' | 'standard', seed })   start one level of the run: its saved start,
@@ -20,17 +20,15 @@
 //
 // Saves (config RUN_SAVE): the run key { version 3, savedAt, run, blob } at the level's autosave moments
 // and at each level start and end; the level starts `<startPrefix><id>[.<day>]` (weeks 4-5: .22 and .29).
-// The store is save.js createRunStore() (package "sim") when it exists, else the local one below with
-// the same contract; every start is also kept in memory (node, storage blocked: replays still work).
-import { LEVEL1, LEVELS, PLAN_LEVEL, RUN_SAVE, SAVE, CONDITIONS, levelById, weightAt } from './config.js';
+// The store is save.js createRunStore() (package "sim"); every start is also kept in memory (node,
+// storage blocked: replays still work).
+import { LEVEL1, LEVELS, PLAN_LEVEL, RUN_SAVE, CONDITIONS, levelById, weightAt } from './config.js';
 import { EV } from './events.js';
-import * as saveModule from './save.js';
+import { createRunStore } from './save.js';
 import { RUN_CARD } from './content.js';
-import { cycleSummary as cycleSummaryOf } from './records-cycle.js';
 import { int, one, two } from './ui-format.js';
 
 const H = 1 / 24;
-const RUN_STORE_FN = 'createRunStore';
 export const RUN_ORDER = LEVELS.map((l) => l.id);
 export const nextLevelId = (id) => RUN_ORDER[RUN_ORDER.indexOf(id) + 1] ?? null;
 export const prevLevelId = (id) => { const i = RUN_ORDER.indexOf(id); return i > 0 ? RUN_ORDER[i - 1] : null; };
@@ -38,67 +36,6 @@ const clone = (o) => (o == null ? o : JSON.parse(JSON.stringify(o)));
 /** A level's short name inside a sentence: "the brooding week", "Week 2", "Plan the farm". */
 const inText = (def) => (def?.short || '').replace(/^The /, 'the ');
 const startKey = (id, day, def = levelById(id)) => `${RUN_SAVE.startPrefix}${id}${def && def.starts.length > 1 ? `.${day}` : ''}`;
-
-function storage() {
-  try {
-    const s = globalThis.localStorage;
-    if (!s) return null;
-    s.setItem('__cf_probe__', '1'); s.removeItem('__cf_probe__');
-    return s;
-  } catch { return null; }
-}
-
-/** The run store of PHASE3.md §11 over localStorage (every access in try/catch), used while save.js has
- *  no createRunStore: { available, load(), save(run, blob), loadStart(id, day?), saveStart(id, day, run,
- *  blob), clearStarts(fromId), info(), migratePhase2() }. A failed write (quota) deletes the oldest level
- *  start that is not the one being written and tries again. */
-export function createLocalRunStore() {
-  const read = (k) => { try { const raw = storage()?.getItem(k); return raw ? JSON.parse(raw) : null; } catch { return null; } };
-  const remove = (k) => { try { storage()?.removeItem(k); } catch { /* ignore */ } };
-  const startKeys = () => { const s = storage(); const out = []; try { for (let i = 0; s && i < s.length; i++) { const k = s.key(i); if (k && k.startsWith(RUN_SAVE.startPrefix)) out.push(k); } } catch { /* ignore */ } return out; };
-  function write(k, v) {
-    const s = storage();
-    if (!s) return false;
-    const text = JSON.stringify(v);
-    for (let tries = 0; tries < 8; tries++) {
-      try { s.setItem(k, text); return true; } catch {
-        // quota: drop the oldest level start (not this one) and try again
-        const old = startKeys().filter((x) => x !== k).map((x) => ({ x, t: read(x)?.savedAt ?? 0 })).sort((a, b) => a.t - b.t)[0];
-        if (!old) return false;
-        remove(old.x);
-      }
-    }
-    return false;
-  }
-  return {
-    get available() { return !!storage(); },
-    load() { const d = read(RUN_SAVE.key); return d && d.version === RUN_SAVE.version ? d : null; },
-    save(run, blob) { return write(RUN_SAVE.key, { version: RUN_SAVE.version, savedAt: Date.now(), run, blob }); },
-    loadStart(id, day) {
-      const def = levelById(id);
-      const days = day != null ? [day] : [...(def?.starts || [])].reverse();
-      for (const d of days) { const s = read(startKey(id, d, def)); if (s && s.version === RUN_SAVE.version && s.levelId === id) return s; }
-      return null;
-    },
-    saveStart(id, day, run, blob) { return write(startKey(id, day), { version: RUN_SAVE.version, levelId: id, day, savedAt: Date.now(), run, blob }); },
-    /** Delete the starts of level `fromId` and every later level. */
-    clearStarts(fromId) {
-      const from = fromId == null ? 0 : RUN_ORDER.indexOf(fromId);
-      if (from < 0) return;
-      for (const id of RUN_ORDER.slice(from)) for (const d of levelById(id).starts) remove(startKey(id, d));
-    },
-    clear() { remove(RUN_SAVE.key); },
-    info() {
-      const d = this.load();
-      const e = d?.blob?.env;
-      if (!e || typeof e.day !== 'number') return null;
-      const hour = e.hour ?? 0;
-      return { levelId: d.blob.level?.levelId ?? d.run?.levelId ?? null, day: Math.round(e.day - hour / 24), hour, savedAt: d.savedAt };
-    },
-    /** The Phase 2 save (chickenFarm.level1.v1), read once: its blob, or null. */
-    migratePhase2() { const d = read(SAVE.key); return d && d.version === SAVE.version ? d : null; },
-  };
-}
 
 /** The level's key number for the run card and the run state (what was measured, PHASE3.md §10). */
 export function keyOf(res) {
@@ -149,20 +86,20 @@ function carriedLines({ def, farm, levels }) {
 
 export function createRun({ level, save, events, farm, env, records } = {}) {
   let seed = 1, levelId = null, plan = null, summary = null;
+  let lastCycle = null;             // { plan, summary } of the last finished cycle (planCarry; kept across startRun)
   let conditions = [];
   const levels = {};
   const mem = new Map();            // level starts in memory: key -> { version, levelId, day, savedAt, run, blob }
   let memRun = null;                // the run save in memory (node, storage blocked)
-  // save.js createRunStore (package "sim") when it exists: looked up by name, so the build is the same before and after it lands
-  const makeStore = saveModule[RUN_STORE_FN];
-  const store = typeof makeStore === 'function' ? makeStore() : createLocalRunStore();
+  const store = createRunStore();     // save.js (package "sim"): the run key and the level starts
   const emit = (p) => events?.emit(EV.RUN, p);
   const entry = (id) => levels[id] || (levels[id] = { state: 'reached', key: null, attempts: 0, starts: [], carried: [] });
 
-  function serialize() { return { v: 1, seed, levelId, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions] }; }
+  function serialize() { return { v: 1, seed, levelId, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], lastCycle: clone(lastCycle) }; }
   function adopt(d) {
     if (!d) return;
     seed = d.seed ?? 1; levelId = d.levelId ?? null; plan = clone(d.plan) ?? null; summary = clone(d.summary) ?? null; conditions = [...(d.conditions || [])];
+    lastCycle = clone(d.lastCycle) ?? lastCycle;
     for (const k of Object.keys(levels)) delete levels[k];
     Object.assign(levels, clone(d.levels) || {});
   }
@@ -220,7 +157,8 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       if (id === 'plan') plan = farm.plan ? clone({ decisions: farm.plan.decisions, sums: farm.plan.sums, outcome: farm.plan.outcome, measured: farm.plan.measured, sentAt: farm.plan.sentAt }) : null;
       emit({ phase: 'level-end', level: id, pass: !!res.pass });
       if (res.pass && !nextLevelId(id)) {
-        summary = (typeof records?.cycleSummary === 'function' ? records.cycleSummary({ plan, levels: clone(levels) }) : cycleSummaryOf(records, farm, { plan, levels: clone(levels) })) ?? null;
+        summary = records.cycleSummary({ plan, levels: clone(levels) }) ?? null;
+        lastCycle = { plan: clone(plan), summary: clone(summary) };
         emit({ phase: 'cycle-end', level: id, pass: true });
       }
       api.decorate(res);
@@ -272,7 +210,7 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     stub: false,
     store,
     get available() { return !!store.available; },
-    state() { return { levelId, seed, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions] }; },
+    state() { return { levelId, seed, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], lastCycle: clone(lastCycle) }; },
     startRun(opts = {}) {
       seed = opts.seed ?? 1; plan = null; summary = null; conditions = []; levelId = null;
       clearStarts(RUN_ORDER[0]);
@@ -324,7 +262,7 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       const d = memRun || store.load();
       if (d?.blob && level.resume(d.blob)) { adopt(d.run); return true; }
       // a Phase 2 save (chickenFarm.level1.v1) continues as a run at the brooding week, with no plan
-      const p2 = save?.load?.() ?? store.migratePhase2?.();
+      const p2 = save?.load?.() ?? store.migratePhase2()?.blob;
       if (!p2 || !level.resume(p2)) return false;
       level.joinRun();
       plan = null; summary = null; seed = p2.level?.seed ?? 1;

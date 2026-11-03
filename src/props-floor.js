@@ -107,7 +107,7 @@ ${NOISE}`)
 /** Blue (cool) -> orange (warm), continuous (config FLOOR_TEMP_RAMP; the ui legend uses it too). */
 export const tempColor = (t, out) => rampColor(FLOOR_TEMP_RAMP, t, out);
 
-// Droppings colour by the flock's main droppings look (farm.cyc.droppings in the sim; general looks).
+// Droppings colour by the flock's main droppings look (farm.health.droppings; general looks).
 const DROP = { normal: [0.5, 0.41, 0.28], watery: [0.42, 0.36, 0.25], undigested: [0.66, 0.56, 0.34], bloody: [0.5, 0.33, 0.22], white: [0.88, 0.87, 0.82] };
 
 export function buildFloorStates(ctx, house, group) {
@@ -163,7 +163,7 @@ export function buildFloorStates(ctx, house, group) {
     const C = farm.clean || {}, wash = C.wash, wet = C.wet, spray = C.spray;
     const moist = farm.litter?.moistureGrid;
     let bloodyStrip = -1;
-    const look = farm.cyc?.droppings ?? (farm.health?.disease?.cocci > 0.3 ? 'bloody' : null);
+    const look = farm.health?.droppings;
     if (look === 'bloody' && moist) {
       let best = -1, bm = -1;
       for (let s = 0; s < 8; s++) {
@@ -196,7 +196,7 @@ export function buildFloorStates(ctx, house, group) {
     const day = env?.dayNumber ?? 0, age = Math.max(0, farm.age ?? 0);
     const birds = (farm.flock?.placed ?? 0) > 0;
     uniforms.uDrop.value = birds && day <= CYCLE.harvestDay + 1 ? Math.min(1, Math.max(0, (age - 6) / 30)) : day > CYCLE.harvestDay ? Math.min(1, 0.85) : 0;
-    const look = farm.cyc?.droppings || 'normal';
+    const look = farm.health?.droppings || 'normal';
     if (look !== dropKey) { dropKey = look; uniforms.uDropCol.value.setRGB(...(DROP[look] || DROP.normal), THREE.SRGBColorSpace); }
     const secs = farm.harvest?.sections;
     for (let k = 0; k < HARVEST.sections; k++) uniforms.uFeather.value[k] = secs && secs[k] && secs[k].state === 'done' ? 1 : 0;

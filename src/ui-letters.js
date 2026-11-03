@@ -10,7 +10,6 @@ import { PLAN_CONTRACT, HARVEST, CLEAN, HOUSE_BOUNDS, LEVELS, PLACEMENT_DAY, wei
 import { h, button } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { int, one, two, num, hhmm, dayTime } from './ui-format.js';
-import { harvestPage as harvestData, cleanPage as cleanData } from './records-cycle.js';
 
 const C = PLAN_CONTRACT;
 /** The contract letter's terms, as plain lines (PHASE3.md §1 Level 1). */
@@ -78,7 +77,7 @@ export function harvestPage(L) {
   const hv = farm.harvest, r = hv?.result;
   const out = [h('h3', { class: 'book-h' }, 'Harvest')];
   if (!hv?.started) { out.push(h('p', { class: 'book-note' }, `The catch: ${dayTime(hv?.catchAt ?? HARVEST.catchDefault.day + HARVEST.catchDefault.hour / 24)}${hv?.bookedAt != null ? ' (booked)' : ' (the company’s default)'}. Nothing caught yet.`)); return out; }
-  const page = (typeof records.harvestPage === 'function' ? records.harvestPage() : harvestData(records, farm)) || {};
+  const page = records.harvestPage() || {};
   const tickets = page.tickets || (hv.trucks || []).map((t, i) => ({ truck: i, crates: t.crates, birds: t.birds, grossKg: t.netKg + HARVEST.tareKg, tareKg: HARVEST.tareKg, netKg: t.netKg, doa: t.doa ?? null }));
   out.push(h('div', { class: 'ledger-scroll', tabindex: '0', role: 'region', 'aria-label': 'Weight tickets' }, h('table', { class: 'ledger ledger--week' },
     h('thead', null, h('tr', null, ['Truck', 'Crates', 'Birds', 'Gross kg', 'Empty kg', 'Net kg', 'Dead on arrival'].map((t) => h('th', { scope: 'col' }, t)))),
@@ -107,7 +106,7 @@ export function harvestPage(L) {
 export function cleanPage(L) {
   const { farm, records } = L;
   const c = farm.clean || {};
-  const page = (typeof records.cleanPage === 'function' ? records.cleanPage() : cleanData(records, farm)) || {};
+  const page = records.cleanPage() || {};
   const g = farm.litter?.coverGrid;
   const cover = g ? Array.from(g).reduce((a, v) => a + Math.min(1, v), 0) / g.length : null;
   const pct = (v) => (v != null ? `${int(v * 100)} %` : '—');
@@ -148,6 +147,15 @@ function labLetter(L, lab) {
 }
 
 /** The letters on the office desk. Opening one is reading it (the jobs that ask for it count it). */
+/** The vet's letter: what the farmer told on the phone and the advice (farm.health.vet). */
+function vetLetter(v) {
+  const told = v.reason ? h('p', null, `You told the vet: ${String(v.reason).replace(/-/g, ' ')}.`) : null;
+  const advice = /medicine/.test(v.advice || '')
+    ? 'Medicine in the water for 3 days: the dose on the label, mixed fresh each day, for the full course (the Medicine tab at the water supply).'
+    : 'Keep the daily records and call again if the deaths rise.';
+  return [told, h('p', null, advice)];
+}
+
 export function lettersPage(L, again) {
   const { env, farm } = L;
   const out = [];
@@ -163,10 +171,8 @@ export function lettersPage(L, again) {
   const p = farm.plan;
   if (p?.replyAt != null && env.day >= p.replyAt - 1e-9 && (p.outcome || plan?.outcome)) out.push(letter('reply', 'The company’s reply to your plan', () => h('ul', { class: 'letter-lines' }, replyLines(p.outcome ? p : plan).map((l) => h('li', null, l))), 'plan.reply'));
   else if (plan?.outcome && env.dayNumber > -2) out.push(letter('reply', 'The company’s reply to your plan', () => h('ul', { class: 'letter-lines' }, replyLines(plan).map((l) => h('li', null, l)))));
-  for (const v of L.letters || []) {
-    if (v.kind !== 'vet') continue;
-    out.push(letter(`vet@${v.day}@${v.hour}`, `The vet’s letter, day ${v.day}`, () => h('p', null, v.text || 'Medicine in the water at the dose on the label, mixed fresh each day, for the full course (the Medicine tab at the water supply).')));
-  }
+  // the vet's answers are the farm's (farm.health.vet, saved with the farm): { day, hour, reason, advice }
+  for (const v of farm.health?.vet || []) out.push(letter(`vet@${v.day}@${v.hour}`, `The vet’s letter, day ${v.day}`, () => vetLetter(v)));
   const lab = farm.clean?.lab;
   if (lab) out.push(letter(`lab@${farm.clean.labDay ?? ''}@${farm.clean.pass ?? 1}`, `The lab’s letter: the swabs of day ${(farm.clean.labDay ?? env.dayNumber) - CLEAN.labDays}`, () => labLetter(L, lab), 'swab.read'));
   if (!out.length) out.push(h('p', { class: 'book-note' }, 'No letters on the desk.'));

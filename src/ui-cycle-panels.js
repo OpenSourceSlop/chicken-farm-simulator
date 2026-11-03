@@ -22,7 +22,7 @@
 // It also starts the climate memory the charts draw from (ui-cycle-kit installHistory).
 import { injectCycleStyle } from './ui-cycle-style.js';
 import { installHistory } from './ui-cycle-kit.js';
-import { buildPlanSheet, watchCycleEnd } from './ui-cycle-plan.js';
+import { buildPlanSheet } from './ui-cycle-plan.js';
 import { buildBirdCheck } from './ui-cycle-birdcheck.js';
 import { buildFanPanel, buildPadPump } from './ui-cycle-fans.js';
 import { buildCurtainWinch, buildGasTank } from './ui-cycle-house.js';
@@ -42,7 +42,6 @@ export const CYCLE_PANELS = {
   'dead-bin': { title: 'Dead bird bin', plate: null, kind: 'panel', build: buildDeadBin },
 };
 
-export const STUB = false;
 
 /** Today's bird-check readings (cleared when the clock goes back: a new run or a replay). */
 function sampleLog() {
@@ -62,7 +61,6 @@ export function registerCyclePanels(api) {
   injectCycleStyle();
   const L = api.L;
   installHistory(L);
-  watchCycleEnd(L);
   const built = {};
   L.cycle = { panel: (id) => built[id] ?? null, samples: sampleLog() };
   for (const [id, p] of Object.entries(CYCLE_PANELS)) {

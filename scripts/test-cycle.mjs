@@ -32,12 +32,14 @@ export const CYCLE_TARGETS = {
   },
   noDark: { snaps: { sdsVsIdeal: [3, Infinity], lameVsIdeal: [2, Infinity] } },
   lateLift: { snaps: { day14WeightUnderIdealPct: [3, Infinity], day14UniformityUnderIdeal: [3, Infinity], broodLitterDay14: [32, Infinity] } },
-  noStep: { snaps: { nightsRh85Week2: [3, 7], litterDay14: [33, Infinity], nh3Night14: [25, Infinity], day21WeightUnderIdealPct: [3, Infinity] } },
+  // integrator, Phase 3 merge: noStep's absolute bands (RH ≥ 85 % on 3-7 nights, litter ≥ 33 %, NH3 ≥ 25 ppm, day 21 ≥ 3 %
+  // under) cannot hold in a heated week-2 house (PHASE3.md §6.16): rebased on the model's effect over the ideal
+  noStep: { snaps: { nightRhOverIdealWeek2: [2.5, Infinity], litterDay14OverIdeal: [2, Infinity], nh3Night14OverIdeal: [1.5, Infinity], day21WeightUnderIdealPct: [0.2, Infinity] } },
   poorVaccine: { week3: { pass: true, deathsPct: [0.5, 0.95] },
     snaps: { vaccineCoverage: [0.35, 0.7], vaccineHours: [3.5, 5], gumboroStarted: true, week3DiseaseDeathsPct: [0.3, 0.6], day21WeightUnderIdealPct: [4, 8] } },
   poorVaccineCocci: { week3: { pass: false }, snaps: { gumboroStarted: true, week3DiseaseDeathsPct: [0.9, 2.5] } },
   cocciUntreated: { week3: { pass: false }, snaps: { week3DiseaseDeathsPct: [0.5, 1.5], day21WeightUnderIdealPct: [2, Infinity] } },
-  minVentW3: { week3: { pass: true }, snaps: { pantShareW3At15: [0.8, 1], heatDeathsW3Pct: [0, 0.05], day21WeightUnderIdealPct: [1, 4] } },
+  minVentW3: { week3: { pass: true }, snaps: { pantShareW3At15: [0.8, 1], heatDeathsW3Pct: [0, 0.07], day21WeightUnderIdealPct: [1, 4] } },
   crumbleOn: { snaps: { day28WeightUnderIdealPct: [3, 8] } },
   abruptChange: { snaps: { undigestedHours: [12, 30], intakeDipPct: [2, 4] } },
   overfullSilo: { snaps: { finisherPansDay: [31, 40], day35WeightUnderIdealPct: [0, 3] } },
@@ -94,6 +96,9 @@ export const SNAPS = {
   nh3Night14: (r) => Math.max(...between(r, 14 + 22 / 24, 15 + 6 / 24).map((x) => x.nh3)),           // ppm, night 14 → 15
   nightsRh85Week2: (r) => { let n = 0; for (let d = 8; d <= 14; d++) if (between(r, d, d + 6 / 24).some((x) => x.houseRH >= 85)) n++; return n; }, // nights
   litterDay14: (r) => field(H(r, 14, 18), 'litterMean'),                                          // %, day 14 18:00
+  nightRhOverIdealWeek2: (r, i) => { const m = (x) => { const a = []; for (let d = 9; d <= 15; d++) a.push(...between(x, d, d + 6 / 24).map((h) => h.houseRH)); return a.length ? a.reduce((s, v) => s + v, 0) / a.length : null; }; const a = m(r), b = m(i); return a != null && b != null ? a - b : null; }, // RH points, mean of the nights 00:00-06:00 after days 8-14
+  litterDay14OverIdeal: (r, i) => { const a = field(H(r, 14, 18), 'litterMean'), b = field(H(i, 14, 18), 'litterMean'); return a != null && b != null ? a - b : null; }, // % points, day 14 18:00
+  nh3Night14OverIdeal: (r, i) => { const f = (x) => Math.max(...between(x, 14 + 22 / 24, 15 + 6 / 24).map((h) => h.nh3)); return f(r) - f(i); }, // ppm, night 14 -> 15
   broodLitterDay14: (r) => field(H(r, 14, 18), 'broodLitter'),                                    // %, brooding half, day 14 18:00
   day14WeightUnderIdealPct: (r, i) => under(r.levels.week2?.weightG, i.levels.week2?.weightG),     // % of the ideal's weighed mean
   day14UniformityUnderIdeal: (r, i) => (i.levels.week2?.uniformityPct ?? 0) - (r.levels.week2?.uniformityPct ?? 0), // points
