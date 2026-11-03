@@ -1,6 +1,18 @@
 // Instanced flock: growth, behaviour and animation of FLOCK_COUNT birds. Owner: flock agent.
 //
 // createFlock(ctx, { house }) -> { count, object3d, update(dt, env, farmerPos), metrics() }
+//   extras for the test tools: meshes, renderStats {near, far, culled}, setCulling(bool),
+//   debugIgnoreFarmer (bool), debugCounts(), profile {on, grid, think, steer, pose}, _state.
+//
+// Behaviour in one paragraph: every ~0.5 s each bird samples the felt comfort (see
+// flock-field.js) here and 2 m around and keeps a thermal state with hysteresis. Cold birds
+// (< -1.5 °C) go to the warmest floor (under the brooders) and sit packed; comfortable birds
+// eat at pans, drink at nipples, stroll toward emptier comfortable floor and rest; hot birds
+// (> +1.5 °C) move away from the brooders to the side walls (and toward the pad when fans run),
+// sit or stand with wings out and pant. Everyone steps away from the farmer. Birds stay in
+// BROOD_BOUNDS while env.broodCurtain, then spread over BIRD_BOUNDS. A day jump (> 3.5 days
+// forward, > 1 day back, or the curtain closing) re-places the flock as a fresh flock of that age.
+// ctx.camera is used to cull birds and pick near/far models just before each render.
 //
 // Pieces:
 //   flock-geometry.js  one low-poly bird holding both the chick and the broiler shape
