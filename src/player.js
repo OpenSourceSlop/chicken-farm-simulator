@@ -29,6 +29,9 @@ const WAYPOINT_REACH = 0.4;
 const ARRIVE_DECEL = 14; // m/s^2 used to ease into the target
 const GIVE_UP = 1.0; // s blocked before a click walk is abandoned
 
+const MAIN_DT_CAP = 0.05; // main.js caps each frame at this many seconds
+const MAX_REAL_DT = 0.25;
+
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 export function createPlayer(ctx, { colliders = [] } = {}) {
@@ -89,8 +92,22 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
   const pos = { x: 0, z: 0 };
   const foot = new THREE.Vector3();
 
+  // main.js caps dt at 0.05 s, so below 20 fps (a slow laptop, or the headless test browser)
+  // the game runs in slow motion. Only in that case use the real frame time, so the farmer
+  // still walks at true speed and the controls stay responsive. Fixed steps (advance/settle at
+  // 1/30 s, renderNow at 0) are untouched and stay deterministic.
+  let lastNow = -1;
+  function frameDt(dtIn) {
+    const dt = Math.max(0, Math.min(dtIn || 0, MAX_REAL_DT));
+    const now = performance.now() / 1000;
+    const real = lastNow < 0 ? dt : now - lastNow;
+    lastNow = now;
+    if (dt >= MAIN_DT_CAP * 0.95 && real > dt) return Math.min(real, MAX_REAL_DT);
+    return dt;
+  }
+
   function update(dtIn) {
-    const dt = Math.max(0, Math.min(dtIn || 0, 0.1));
+    const dt = frameDt(dtIn);
 
     // Camera input
     const orbit = input.takeOrbit();
@@ -136,7 +153,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
         dx = (wp.x - p.x) / dist;
         dz = (wp.z - p.z) / dist;
         speed = running || st.clickRun ? RUN : WALK;
-        if (last) speed = Math.min(speed, Math.sqrt(2 * ARRIVE_DECEL * dist));
+        if (last) speed = Math.min(speed, Math.sqrt(2 * ARRIVE_DECEL * dist), dt > 0 ? dist / dt : Infinity);
       }
     }
 
