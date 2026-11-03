@@ -17,7 +17,7 @@ const CSS = `
 .cyc-row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .cyc-row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .cyc-check { display: inline-flex; align-items: center; gap: 8px; font: 600 13px/1.2 var(--font-display); letter-spacing: 0.04em; color: var(--key-ink); cursor: pointer; }
-.cyc-check input { width: 18px; height: 18px; accent-color: var(--key-on-hi); }
+.cyc-check input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--key-on-hi); }
 .cyc-num { width: 92px; box-sizing: border-box; padding: 5px 7px; border: 0; border-radius: 4px; background: var(--lcd); color: var(--lcd-ink); font: 700 15px/1.1 var(--font-display); text-align: right; box-shadow: inset 0 0 0 2px var(--plate-edge); }
 .cyc-num:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .cyc-progress { height: 4px; margin-top: 6px; border-radius: 2px; background: rgba(0, 0, 0, 0.35); overflow: hidden; }

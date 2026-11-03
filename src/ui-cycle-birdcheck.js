@@ -29,7 +29,7 @@ const LOOKS = [
 ];
 // the sampleCard's short words for the same readings
 const SHORT = {
-  gait: { 0: 'gait 0', 1: 'gait 1', 2: 'gait 2', 3: 'gait 3', 4: 'gait 4', 5: 'gait 5' },
+  gait: { 0: '0', 1: '1', 2: '2', 3: '3', 4: '4', 5: '5' },
   feathers: { good: 'feathered', patchy: 'patchy', poor: 'few feathers' },
   feet: { 0: 'clean pads', 1: 'dark spots', 2: 'sores' },
   breathing: { quiet: 'quiet', snick: 'snick', rattle: 'rattle' },
@@ -96,7 +96,7 @@ export function buildBirdCheck(api) {
     if (!on || guide.__drawn) return;
     guide.__drawn = true;
     const b = api.boards('sign-droppings');
-    const items = (b?.items || []).filter((it) => /normal|watery|blood|white/i.test(it.text));
+    const items = (b?.items || []).filter((it) => /read the droppings|normal|watery|blood|white/i.test(it.text));
     guide.replaceChildren(
       ...['normal', 'caecal', 'watery', 'undigested', 'bloody', 'white'].flatMap((k) => [h('span', { html: dropPic(k) }), h('span', null, WORDS.droppings(k))]),
       ...items.flatMap((it) => [h('span', { html: ICONS.facts, 'aria-hidden': 'true' }), h('span', null, it.text), h('p', { class: 'src' }, api.sourceLabel(it.source))]));

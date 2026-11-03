@@ -37,10 +37,11 @@ export const historyOf = (env) => (HIST.get(env)?.rows) || [];
 
 // ---------------- SVG charts (LCD ink on the LCD green, no good / bad colours) ----------------
 /**
- * lineChart({ rows, t1, series: [{ key, dash?, width?, step? }], lo, hi, unit, W, H, label })
- * The last 24 hours up to t1; lo / hi fix the scale (else from the data).
+ * lineChart({ rows, series: [{ key, dash?, width?, step? }], lo, hi, unit, W, H, bands: [{ key }] })
+ * The last 24 hours up to the newest row; lo / hi fix the scale (else from the data); a band shades the
+ * hours its key is true (the pad on). Returns { svg, lo, hi, unit } or null without two rows.
  */
-export function lineChart({ rows, series, lo, hi, unit = '', W = 300, H = 80, bands = [] }) {
+export function lineChart({ rows, series, lo, hi, unit = '', W = 520, H = 80, bands = [] }) {
   if (!rows || rows.length < 2) return null;
   const t1 = rows[rows.length - 1].t, t0 = t1 - 1;
   const vals = series.flatMap((s) => rows.map((r) => r[s.key])).filter((v) => Number.isFinite(v));
@@ -48,15 +49,13 @@ export function lineChart({ rows, series, lo, hi, unit = '', W = 300, H = 80, ba
   const a = lo ?? Math.floor(Math.min(...vals) - 1), b = hi ?? Math.ceil(Math.max(...vals) + 1);
   const X = (t) => ((t - t0) / (t1 - t0)) * W, Y = (v) => H - ((Math.max(a, Math.min(b, v)) - a) / Math.max(1e-6, b - a)) * H;
   const path = (s) => {
-    let d = '', prev = null;
+    let d = '';
     for (const r of rows) {
       if (r.t < t0 || !Number.isFinite(r[s.key])) continue;
       const x = X(r.t).toFixed(1), y = Y(r[s.key]).toFixed(1);
       if (!d) d = `M${x} ${y}`;
       else d += s.step ? `H${x}V${y}` : `L${x} ${y}`;
-      prev = r;
     }
-    void prev;
     return d ? `<path d="${d}" fill="none" stroke="currentColor" stroke-width="${s.width ?? 2}"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''} vector-effect="non-scaling-stroke"/>` : '';
   };
   const bandSvg = bands.map((bd) => {
@@ -66,7 +65,7 @@ export function lineChart({ rows, series, lo, hi, unit = '', W = 300, H = 80, ba
   }).join('');
   const ticks = [0, 6, 12, 18, 24].map((k) => {
     const t = t0 + k / 24, x = X(t);
-    return `<text x="${Math.max(0, Math.min(W - 24, x - 12)).toFixed(1)}" y="${H + 11}" font-size="9">${hhmm(splitDay(t).hour)}</text>`;
+    return `<text x="${x.toFixed(1)}" y="${H + 11}" font-size="9" text-anchor="${k === 0 ? 'start' : k === 24 ? 'end' : 'middle'}">${hhmm(splitDay(t).hour)}</text>`;
   }).join('');
   return { svg: `<svg viewBox="0 -2 ${W} ${H + 14}" preserveAspectRatio="none" height="${H + 14}" aria-hidden="true">${bandSvg}${series.map(path).join('')}${ticks}</svg>`, lo: a, hi: b, unit };
 }
@@ -214,9 +213,9 @@ export function spreadChart(weights) {
   const bins = new Array(12).fill(0); // -30 .. +30 % of the mean in 5 % steps
   for (const x of w) bins[Math.max(0, Math.min(11, Math.floor(((x / mean - 1) * 100 + 30) / 5)))]++;
   const inside = w.filter((x) => Math.abs(x / mean - 1) <= 0.1).length;
-  const W = 300, Hh = 70, bw = W / 12, top = Math.max(...bins);
+  const W = 520, Hh = 70, bw = W / 12, top = Math.max(...bins);
   const bars = bins.map((n, i) => (n ? `<rect x="${(i * bw + 1).toFixed(1)}" y="${(Hh - (n / top) * (Hh - 4)).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${((n / top) * (Hh - 4)).toFixed(1)}" fill="currentColor"/>` : '')).join('');
   const band = `<rect x="${(4 * bw).toFixed(1)}" y="0" width="${(4 * bw).toFixed(1)}" height="${Hh}" fill="currentColor" opacity="0.12"/>`;
-  const ticks = [-30, -10, 0, 10, 30].map((p) => `<text x="${(((p + 30) / 60) * W - (p === 30 ? 22 : p === -30 ? 0 : 9)).toFixed(1)}" y="${Hh + 11}" font-size="9">${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p)} %</text>`).join('');
+  const ticks = [-30, -10, 0, 10, 30].map((p) => `<text x="${(((p + 30) / 60) * W).toFixed(1)}" y="${Hh + 11}" font-size="9" text-anchor="${p === -30 ? 'start' : p === 30 ? 'end' : 'middle'}">${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p)} %</text>`).join('');
   return { svg: `<svg viewBox="0 0 ${W} ${Hh + 14}" height="${Hh + 14}" preserveAspectRatio="none" aria-hidden="true">${band}${bars}${ticks}</svg>`, n: w.length, inside, mean };
 }

@@ -13,11 +13,11 @@ import { ROTOR, FAN_INDEXES, lineChart, historyOf, machineJob, progressBar, padC
 const READ_AFTER = 2; // real seconds open before the panel counts as read (as the controller)
 
 /** House °C and humidity side by side (+ more cells). */
-function climateLcd(env, extra = []) {
+function climateLcd(env, extra = [], label = 'Fan panel display') {
   const house = lcdCell('House', '°C'), rh = lcdCell('Humidity in', '%');
   const cells = [house, rh, ...extra.map(([k, u]) => lcdCell(k, u))];
   const clock = h('span', { class: 'lcd-clock' }), flags = h('span', { class: 'lcd-foot-flags' });
-  const el = h('div', { class: 'lcd cyc-lcd', role: 'group', 'aria-label': 'Fan panel display' }, h('div', { class: 'lcd-grid' }, cells.map((c) => c.el)), h('div', { class: 'lcd-foot' }, flags, clock));
+  const el = h('div', { class: 'lcd cyc-lcd', role: 'group', 'aria-label': label }, h('div', { class: 'lcd-grid' }, cells.map((c) => c.el)), h('div', { class: 'lcd-foot' }, flags, clock));
   return { el, cells, flags, set(values) { cells.forEach((c, i) => setText(c.value, values[i] ?? '--')); setText(clock, `DAY ${fmt0(env.dayNumber)}  ${env.timeLabel}`); } };
 }
 
@@ -132,12 +132,12 @@ export function buildFanPanel(api) {
 // ---------------- cooling pad pump ----------------
 const padSvg = (c) => {
   // the pad seen from outside: six sections, water running down the wet ones (after a check)
-  const W = 360, Hh = 92, sw = W / 6;
+  const W = 360, Hh = 100, sw = W / 6;
   const secs = Array.from({ length: 6 }, (_, k) => {
     const x = k * sw + 3, dry = c ? c.dry[k] : false, wet = c && c.flowing && !dry;
     return `<rect x="${x}" y="8" width="${sw - 6}" height="64" rx="2" fill="${!c ? 'var(--panel-raised)' : dry ? '#d9c79c' : '#8a7550'}" stroke="var(--plate-edge)"/>
       ${wet ? [0.2, 0.45, 0.7].map((f) => `<path d="M${(x + (sw - 6) * f).toFixed(1)} 10v60" stroke="var(--led-pad)" stroke-width="2" stroke-dasharray="5 4" opacity="0.9"/>`).join('') : ''}
-      <text x="${x + (sw - 6) / 2}" y="86" font-size="10" text-anchor="middle" fill="var(--key-sub)" font-family="var(--font-display)">${k + 1}${c && dry ? ' dry' : ''}</text>`;
+      <text x="${x + (sw - 6) / 2}" y="96" font-size="10" text-anchor="middle" fill="var(--key-sub)" font-family="var(--font-display)">${k + 1}${c && dry ? ' dry' : ''}</text>`;
   }).join('');
   const sump = `<rect x="2" y="72" width="${W - 4}" height="5" rx="2" fill="${c?.overflow ? 'var(--led-pad)' : 'var(--key)'}"/>${c?.overflow ? `<path d="M10 77q8 6 16 0t16 0t16 0" stroke="var(--led-pad)" fill="none" stroke-width="2"/>` : ''}`;
   return `<svg viewBox="0 0 ${W} ${Hh}" aria-hidden="true">${secs}${sump}</svg>`;
@@ -147,7 +147,7 @@ export function buildPadPump(api) {
   const { L } = api;
   const { env, farm } = L;
   const shell = equipShell({ cls: 'equip--pad', icon: ICONS.pad, title: 'Cooling pad pump', sub: 'West end · pump, distribution pipe, float valve', plates: ['pad-pump'], signLinks: ['sign-heat'], onClose: L.close });
-  const lcd = climateLcd(env, [['Outside', '°C'], ['Humidity out', '%']]);
+  const lcd = climateLcd(env, [['Outside', '°C'], ['Humidity out', '%']], 'Pad pump display');
   const pump = toggleKey('Pump on', 'Pump off', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); refresh(); });
   const pumpRow = machineRow('Pad pump', 'water over the pad while the tunnel fans run', pump.el);
   pumpRow.led.classList.add('led--pad');
