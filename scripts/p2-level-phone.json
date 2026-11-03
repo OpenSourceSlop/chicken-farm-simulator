@@ -1,0 +1,23 @@
+[
+  {"wait": 600},
+  {"eval": "__game.stop(), window.__w = () => { const vals = [document.documentElement.scrollWidth, document.body.scrollWidth, document.getElementById('hud').scrollWidth]; return vals.every((v) => v <= innerWidth) ? 'no sideways scroll (' + vals.join('/') + ' <= ' + innerWidth + ')' : 'SIDEWAYS SCROLL ' + vals.join('/') + ' > ' + innerWidth; }, 'helpers'"},
+  {"viewport": [400, 820]},
+  {"eval": "__game.level.toTitle(), 'title'"},
+  {"advance": 0.2},
+  {"eval": "[...document.querySelectorAll('.narrow .btn')][0].click(), 'title: ' + __w()"},
+  {"advance": 0.1},
+  {"shot": "phone-title"},
+  {"eval": "__game.startLevel({ seed: 1 }), 'level HUD: ' + __w()"},
+  {"advance": 0.4},
+  {"shot": "phone-level-hud"},
+  {"eval": "['controller', 'sign-water', 'sign-brooder', 'drinker-0', 'water-supply', 'feeder-box', 'silo', 'litter-heap', 'bird-scale', 'chick-table', 'office-desk', 'notebook', 'skilltree'].map((id) => { __game.ui.openPanel(id); __game.advance(0.05); const r = id + ': ' + __w(); __game.ui.closePanel(); return r; }).join(' | ')"},
+  {"eval": "__game.ui.openPanel('drinker-0'), 'drinker'"},
+  {"advance": 0.2},
+  {"shot": "phone-drinker"},
+  {"eval": "__game.ui.closePanel(), __game.ui.openPanel('office-desk'), [...document.querySelectorAll('.book-tab')][1].click(), 'week: ' + __w()"},
+  {"advance": 0.2},
+  {"shot": "phone-book-week"},
+  {"eval": "__game.ui.closePanel(), __game.level.debug.result(true), 'result: ' + __w()"},
+  {"advance": 0.2},
+  {"shot": "phone-result"}
+]

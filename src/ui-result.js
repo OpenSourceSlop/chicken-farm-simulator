@@ -13,9 +13,9 @@ import { weekTable } from './ui-records.js';
 function bandSvg(ratio) {
   const lo = 3, hi = 6, W = 300, X = (v) => 10 + ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * (W - 20);
   const ticks = [3, 3.5, 4, 4.5, 5, 5.5, 6].map((v) => `<path d="M${X(v)} 30v6" stroke="var(--ink-faint)"/><text x="${X(v)}" y="48" font-size="10" text-anchor="middle" fill="var(--ink-dim)">${v}</text>`).join('');
-  const mark = ratio == null ? '' : `<path d="M${X(ratio)} 8v26" stroke="var(--ink)" stroke-width="3"/><circle cx="${X(ratio)}" cy="8" r="4" fill="var(--ink)"/>`;
+  const mark = ratio == null ? '' : `<path d="M${X(ratio)} 15v20" stroke="var(--ink)" stroke-width="3"/><path d="M${X(ratio) - 5} 14h10l-5 6z" fill="var(--ink)"/>`;
   return `<svg viewBox="0 0 ${W} 54" width="100%" style="max-width:${W}px" aria-hidden="true"><rect x="${X(4)}" y="16" width="${X(5) - X(4)}" height="14" rx="2" fill="var(--panel-raised-hi)" stroke="var(--ink-faint)" stroke-dasharray="3 2"/>
-    <path d="M10 30H${W - 10}" stroke="var(--ink-faint)"/>${ticks}${mark}<text x="${(X(4) + X(5)) / 2}" y="12" font-size="9" text-anchor="middle" fill="var(--ink-dim)">Week 1 guide 4–5 ×</text></svg>`;
+    <path d="M10 30H${W - 10}" stroke="var(--ink-faint)"/>${ticks}${mark}<text x="10" y="10" font-size="9" fill="var(--ink-dim)">Week 1 guide: 4–5 × (dashed band)</text></svg>`;
 }
 
 /** "Your week": per day what was set and read, beside the sign value. Plain numbers. */

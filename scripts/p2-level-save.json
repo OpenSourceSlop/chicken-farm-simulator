@@ -1,0 +1,21 @@
+[
+  {"wait": 600},
+  {"clearStorage": true},
+  {"eval": "__game.stop(), 'loop stopped; save available ' + __game.save.available"},
+  {"eval": "__game.startLevel({ seed: 1 }), __game.level.debug.goto(3, 10 + 40 / 60), __game.events.emit('footdip', { where: 'gate' }), [0, 1].map((line) => __game.farm.act('water.flowtest', { line })).length + ' flow tests; day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel"},
+  {"advance": 2.6},
+  {"eval": "window.__before = JSON.stringify({ day: __game.env.dayNumber, time: __game.env.timeLabel, jobs: __game.jobs() }), localStorage.setItem('__p2test', window.__before), 'saved: ' + JSON.stringify(__game.save.info()) + '; ' + __game.jobs().length + ' jobs'"},
+  {"reload": true},
+  {"eval": "__game.stop(), 'after reload: mode ' + __game.level.mode + ', save info ' + JSON.stringify(__game.save.info())"},
+  {"eval": "__game.level.toTitle(), 'title: continue button ' + [...document.querySelectorAll('.title .btn')].map((b) => b.hidden ? '' : b.textContent).filter(Boolean).join(' | ')"},
+  {"advance": 0.2},
+  {"shot": "save-1-title-continue"},
+  {"eval": "[...document.querySelectorAll('.title .btn')].find((b) => b.textContent.startsWith('Continue')).click(), 'continued: mode ' + __game.level.mode"},
+  {"eval": "const a = JSON.parse(localStorage.getItem('__p2test')), b = { day: __game.env.dayNumber, time: __game.env.timeLabel, jobs: __game.jobs() }; 'same day ' + (a.day === b.day) + ', same time ' + (a.time === b.time) + ' (' + b.time + '), same jobs ' + (JSON.stringify(a.jobs) === JSON.stringify(b.jobs)) + ' (' + b.jobs.length + ')'"},
+  {"advance": 0.6},
+  {"shot": "save-2-continued"},
+  {"eval": "__game.level.toTitle(), [...document.querySelectorAll('.title .btn')].find((b) => b.textContent.startsWith('Start')).click(), 'first press: ' + document.querySelector('.title .btn--accent').textContent + ', mode ' + __game.level.mode"},
+  {"advance": 0.2},
+  {"shot": "save-3-start-again"},
+  {"eval": "localStorage.removeItem('__p2test'), 'done'"}
+]

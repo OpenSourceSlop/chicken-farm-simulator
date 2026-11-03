@@ -28,10 +28,11 @@ export function buildSkillTreePanel(L) {
   const titleId = uniqueId('tree-title');
   const { el, closeBtn } = dialogShell('tree', titleId, L.close);
   const grid = h('div', { class: 'tree-grid' });
+  const miles = h('div', { class: 'tree-miles' });
   el.append(h('div', { class: 'tree-case card' },
     h('header', { class: 'tree-head' }, h('span', { html: ICONS.tree, 'aria-hidden': 'true' }), h('div', null, h('h2', { id: titleId }, 'Skill tree'),
       h('p', null, 'Points come from what happens on your farm: the floor at arrival, the flock at day 7, a leak found in time. Each level unlocks a tool.'))),
-    grid), closeBtn);
+    grid, miles), closeBtn);
 
   function unlockText(branch, lvl) {
     const u = Object.values(UNLOCKS).find((x) => x.branch === branch && x.level === lvl);
@@ -41,6 +42,7 @@ export function buildSkillTreePanel(L) {
   function render() {
     const skills = L.skills;
     const branches = skills.branches();
+    const detailCards = [];
     grid.replaceChildren(...branches.map((b) => {
       const pips = h('span', { class: 'pips3', 'aria-label': `Level ${b.level} of 3` }, [1, 2, 3].map((i) => h('span', { class: `pip3${b.level >= i ? ' is-on' : ''}` })));
       const card = h('article', { class: `branch${b.earnable ? ' branch--earn' : ' branch--later'}` },
@@ -59,9 +61,11 @@ export function buildSkillTreePanel(L) {
           h('span', { class: 'mile-pts' }, m.tier != null ? `${m.points}` : `0`, h('small', null, `/${best}`)),
           h('span', null, m.text, m.tier != null && detail ? h('small', { class: 'mile-detail' }, detail) : null));
       }));
-      card.append(h('div', { class: 'branch-pts' }, h('b', null, String(b.points)), ' points'), bar, levels, list);
+      card.append(h('div', { class: 'branch-pts' }, h('b', null, String(b.points)), ' points'), bar);
+      detailCards.push(h('section', { class: 'branch-detail' }, h('h3', null, b.name), levels, h('p', { class: 'miles-k' }, 'Milestones · points'), list));
       return card;
     }));
+    miles.replaceChildren(...detailCards);
   }
   return { el, kind: 'paused', onOpen: render, update(dt, force) { if (force) render(); } };
 }

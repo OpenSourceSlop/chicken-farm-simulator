@@ -661,7 +661,12 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .tree-head p { margin: 4px 0 0; font-size: 13px; line-height: 1.4; color: var(--ink-dim); }
 .tree-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .branch { padding: 10px 12px 12px; border-radius: 8px; background: var(--panel-sunk); border: 1px solid var(--panel-edge); min-width: 0; }
-.branch--earn { grid-row: span 2; background: var(--panel-raised); }
+.branch--earn { background: var(--panel-raised); border-color: rgba(242, 140, 40, 0.45); }
+.tree-miles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.branch-detail { padding: 12px 14px; border-radius: 8px; background: var(--panel-raised); border: 1px solid var(--panel-edge); min-width: 0; }
+.branch-detail h3 { margin: 0 0 8px; font: 700 14px/1.2 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--sign-yellow); }
+.miles-k { margin: 10px 0 6px; font: 600 10.5px/1 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
+.tree-case, .result-case { background-color: var(--panel-solid); }
 .branch-top { display: flex; align-items: center; gap: 10px; }
 .branch-top h3 { margin: 0 0 5px; font: 700 13.5px/1.2 var(--font-display); letter-spacing: 0.03em; }
 .badge { display: block; flex: none; }
@@ -712,6 +717,9 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .ledger--dark thead th { font: 700 10.5px/1.2 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-dim); white-space: normal; vertical-align: bottom; border-bottom: 2px solid var(--panel-edge); }
 .ledger--dark tbody th { width: auto; }
 .ledger--dark small { color: var(--ink-faint); }
+.ledger--dark tr.is-empty td { color: var(--ink-faint); }
+.ledger--dark tr.is-draft td, .ledger--dark tr.is-draft th { color: var(--sky); }
+.tree-grid { align-items: start; }
 .result .week .book-note { color: var(--ink-faint); }
 .result .ledger--week td.notes { white-space: normal; }
 
@@ -776,7 +784,7 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
   .equip-grid, .ctrl-lights, .grade-grid { grid-template-columns: minmax(0, 1fr); }
   .sign--wide .board-items { grid-template-columns: minmax(0, 1fr); }
   .tree-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .branch--earn { grid-column: 1 / -1; grid-row: auto; }
+  .tree-miles { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 699px) {
   .title-card { padding: 20px 18px 18px; }
