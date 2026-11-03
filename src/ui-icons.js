@@ -42,6 +42,25 @@ export const ICONS = {
   plus: wrap('<path d="M6 12h12M12 6v12"/>', ' stroke-width="2.6"'),
   keyboard: wrap('<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 9.5h.01M9 9.5h.01M12 9.5h.01M15 9.5h.01M18 9.5h.01M6 12.5h.01M9 12.5h.01M12 12.5h.01M15 12.5h.01M18 12.5h.01M8 15.5h8"/>'),
   monitor: wrap('<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16v4"/>'),
+  // Phase 2
+  next: wrap('<path d="M5 5.5l8 6.5-8 6.5z"/><path d="M15 5.5v13"/><path d="M19 9l2 3-2 3"/>'),
+  notebook: wrap('<path d="M6 3.5h11a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5H6z"/><path d="M6 3.5v17M3.8 7.5H8M3.8 12H8M3.8 16.5H8"/><path d="M10.5 8h5M10.5 11.5h5"/>'),
+  tree: wrap('<circle cx="12" cy="4.8" r="2"/><circle cx="5.5" cy="12" r="2"/><circle cx="18.5" cy="12" r="2"/><circle cx="8.5" cy="19.2" r="2"/><circle cx="15.5" cy="19.2" r="2"/><path d="M11 6.6L6.6 10.4M13 6.6l4.4 3.8M6.4 13.8l1.4 3.6M17.6 13.8l-1.4 3.6"/>'),
+  book: wrap('<path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5z"/><path d="M12 6.5v13"/>'),
+  phone: wrap('<path d="M6.5 3.5h3l1.5 4-2 1.3a10 10 0 0 0 5.7 5.7l1.3-2 4 1.5v3a2 2 0 0 1-2 2A15.5 15.5 0 0 1 4.5 5.5a2 2 0 0 1 2-2z"/>'),
+  radio: wrap('<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M7 8l9-4.5"/><circle cx="15.5" cy="14" r="3"/><path d="M6.5 12h3M6.5 15h3M6.5 18h3"/>'),
+  scale: wrap('<path d="M12 3v3"/><circle cx="12" cy="13" r="7"/><path d="M12 13l3-3.5"/><path d="M8.5 20.5h7"/>'),
+  chick: wrap('<path d="M7 13.5a5 5 0 0 0 10 0c0-1.2-.4-2.3-1.1-3.2A3.6 3.6 0 1 0 9.1 8.6 5 5 0 0 0 7 13.5z"/><path d="M15.6 6.6l2.4.6-2 1.2"/><circle cx="13.4" cy="6.4" r=".8" fill="currentColor" stroke="none"/><path d="M10 18.5l-.8 2M14 18.5l.8 2"/>'),
+  lock: wrap('<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>'),
+  facts: wrap('<rect x="4" y="3.5" width="16" height="17" rx="1.5"/><path d="M8 8h8M8 11.5h8M8 15h5"/>'),
+  eye: wrap('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>'),
+  hand: wrap('<path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5M14 10.5V5.5a1.5 1.5 0 0 1 3 0V13c0 4.2-2.5 7.5-6.5 7.5-2.6 0-4-1.3-5.4-3.4L3.4 14a1.5 1.5 0 0 1 2.4-1.7L8 14.5"/>'),
+  bulb: wrap('<path d="M9 17.5h6M10 20.5h4"/><path d="M8.5 14.5a6 6 0 1 1 7 0c-.9.7-1.5 1.7-1.5 3H10c0-1.3-.6-2.3-1.5-3z"/>'),
+  timer: wrap('<circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M9.5 2.5h5M19 6.5l1.5-1.5"/>'),
+  valve: wrap('<path d="M3 15h18M3 19h18"/><path d="M12 15V9"/><path d="M7 7h10"/><circle cx="12" cy="7" r="1.6"/>'),
+  truck: wrap('<path d="M2.5 6.5h11v10h-11zM13.5 10h4l3.5 3.5v3h-7.5"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'),
+  up: wrap('<path d="M6 14.5l6-6 6 6"/>', ' stroke-width="2.4"'),
+  down: wrap('<path d="M6 9.5l6 6 6-6"/>', ' stroke-width="2.4"'),
 };
 
 export const weatherIcon = (w) => (w === 'rainy' ? ICONS.rain : w === 'hot' ? ICONS.hot : ICONS.sun);

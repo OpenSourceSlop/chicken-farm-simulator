@@ -56,8 +56,52 @@ export const SIGNS = {
 
 // What the prompt pill says for an interactable: "Read the Brooder heaters sign".
 export function promptVerb(id) {
-  return id.startsWith('sign') ? 'Read the' : 'Use the';
+  if (id.startsWith('sign')) return 'Read the';
+  if (id === 'silo') return 'Read the gauge:';
+  if (id.startsWith('box-stack')) return 'Pick up';
+  if (id === 'office-desk') return 'Open the record book:';
+  return 'Use the';
 }
+
+// ---------------- Level 1 ----------------
+export const LEVEL_TEXT = {
+  title: 'Level 1 – The brooding week',
+  kicker: 'Chicken Farm',
+  line: 'Get the house ready, take in 6,000 chicks and bring them to day 7.',
+  start: 'Start Level 1',
+  startAgain: (dayLabel) => `Start again — replaces your ${dayLabel} save`,
+  continueLabel: (dayLabel, time) => `Continue — ${dayLabel}, ${time}`,
+  sandbox: 'Walk the Phase 1 farm (sandbox)',
+  skills: 'Skill tree',
+  noSave: 'Saving is off in this browser: the game plays the same, but closing the page ends the week.',
+  saveNote: 'The game saves by itself as you play.',
+};
+
+/** "Prep day" for day −1, else "Day N". */
+export const dayLabel = (d) => (d < 0 ? 'Prep day' : `Day ${d}`);
+
+// Keys of a level (title card and the help card). Physical keys, as in Phase 1.
+export const LEVEL_KEYS = [
+  { key: 'E', what: 'use' }, { key: 'Q', what: 'squeeze litter' }, { key: 'T', what: 'floor thermometer' },
+  { key: 'N', what: 'notebook' }, { key: 'K', what: 'skill tree' }, { key: 'H', what: 'help' },
+];
+export const LEVEL_HELP_KEYS = [
+  { keys: ['W', 'A', 'S', 'D'], what: 'Walk, or click the ground' },
+  { keys: ['Shift'], what: 'Run (hold)' },
+  { keys: ['←', '→'], what: 'Turn, or right-drag' },
+  { keys: ['Wheel', '+', '−'], what: 'Zoom in and out' },
+  { keys: ['E'], what: 'Use, pick up, read a sign' },
+  { keys: ['Q'], what: 'Squeeze a handful of litter' },
+  { keys: ['T'], what: 'Floor thermometer at your feet' },
+  { keys: ['N'], what: 'Notebook: your readings' },
+  { keys: ['K'], what: 'Skill tree' },
+  { keys: ['F'], what: 'Floor temperature view (once unlocked)' },
+  { keys: ['Esc'], what: 'Close a panel' },
+  { keys: ['H'], what: 'Show or hide this help' },
+];
+
+// What the farmer sees and hears on a listen stop, as the caption shows it (neutral words).
+export const lookCaption = (o) => `You see: chicks ${o.spread}; droppings ${o.droppings}. You hear: ${o.sounds}.`;
 
 // Today's jobs. `where` tells the player where to go; ui-tasks.js decides when each is done.
 export const TASKS = [
