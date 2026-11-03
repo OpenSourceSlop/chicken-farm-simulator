@@ -1,12 +1,13 @@
-// HUD, panels and keys. Owner: package "level" (Phase 1: systems/UI agent).
+// HUD, panels and keys. Owner: package "run" (Phase 2: "level"; Phase 1: systems/UI agent).
 // createUI(ctx, deps) -> ui. Owns all DOM inside #hud. Two modes share the clock, gauges and the
 // panel host:
 //   sandbox  the Phase 1 farm exactly as before: four tutorial jobs, Phase 1 boards and controller,
 //            test tools, Skip 1 hour / Next morning
 //   level    Level 1 (PHASE2.md): the job card, Next job, the boards and plates of content-signs.js,
 //            every equipment and inspection panel, records, notebook, skill tree, result; E through
-//            ctx.interact.nearest(), Q squeeze, T floor thermometer, N notebook, K skill tree, F floor view
-// plus the title card (level.js decides the mode and calls setMode).
+//            ctx.interact.nearest(), Q squeeze, T floor thermometer, N notebook, K skill tree, F floor view;
+//            Phase 3: L light meter, V air meter, C comfort view, M litter moisture view (PHASE3.md §13.6)
+// plus the title card and the run card (level.js decides the mode and calls setMode; ctx.run the run).
 import { FARM, HOUSE_BOUNDS } from './config.js';
 import { SIGNS, LEVEL_HELP_KEYS, lookCaption } from './content.js';
 import { BOARDS } from './content-signs.js';
@@ -32,7 +33,11 @@ import { createTitle } from './ui-title.js';
 import { createJobCard } from './ui-jobs.js';
 import { createCaption, createFloatLabel } from './ui-caption.js';
 import { int, one, feelWords } from './ui-format.js';
-import { broodSector, FLOOR_TEMP_RAMP } from './config.js';
+import { broodSector, FLOOR_TEMP_RAMP, COMFORT_RAMP, MOISTURE_RAMP, levelById } from './config.js';
+import { BOARDS_CYCLE } from './content-signs-cycle.js';
+import { RUN_CARD } from './content.js';
+import { createBusyCard } from './ui-run.js';
+import { buildSummaryPanel } from './ui-summary.js';
 // Phase 3 (PHASE3.md §13.8): the panels package registers its panels here
 import { registerCyclePanels } from './ui-cycle-panels.js';
 import { boardsForDay } from './content-signs-cycle.js';
@@ -111,7 +116,7 @@ export function createUI(ctx, deps) {
       tasks.notify(`open:${id}`); prompt.show(null); root.classList.add('has-panel');
       if (mode !== 'sandbox') {
         events.emit(EV.PANEL_OPEN, { id });
-        if (BOARDS[id] && id.startsWith('sign-')) uiAct('sign.read', { board: id });
+        if ((BOARDS[id] || BOARDS_CYCLE[id]) && id.startsWith('sign-')) uiAct('sign.read', { board: id });
       }
     },
     onClose: () => {
@@ -134,6 +139,21 @@ export function createUI(ctx, deps) {
     h('div', { class: 'floor-legend-bar', style: `background: linear-gradient(90deg, ${rampCss})` }),
     h('div', { class: 'floor-legend-ticks' }, FLOOR_TEMP_RAMP.map(([t], i) => h('span', null, i === FLOOR_TEMP_RAMP.length - 1 ? `${t} °C` : `${t}`))));
   root.appendChild(floorLegend);
+  // Phase 3 views (C comfort, M litter moisture; PHASE3.md §9.1): continuous ramps, a legend in °C or %
+  const rampLegend = (title, key, ramp, unit, label) => {
+    const lo = ramp[0][0], hi = ramp[ramp.length - 1][0];
+    const css = ramp.map(([t, c]) => `rgb(${c.map((v) => Math.round(v * 255)).join(' ')}) ${(((t - lo) / (hi - lo)) * 100).toFixed(0)}%`).join(', ');
+    const el = h('div', { class: 'floor-legend', hidden: true, role: 'img', 'aria-label': label },
+      h('p', { class: 'floor-legend-k' }, h('span', null, title), h('kbd', { class: 'kbd' }, key)),
+      h('div', { class: 'floor-legend-bar', style: `background: linear-gradient(90deg, ${css})` }),
+      h('div', { class: 'floor-legend-ticks' }, ramp.map(([t], i) => h('span', null, i === ramp.length - 1 ? `${t > 0 && unit === '°C' ? '+' : ''}${t} ${unit}` : `${t > 0 && unit === '°C' ? '+' : ''}${t}`))));
+    root.appendChild(el);
+    return el;
+  };
+  const comfortLegend = rampLegend('Comfort view: felt °C from the target', 'C', COMFORT_RAMP, '°C', 'Comfort view: each bird by what it feels, blue 6 °C under the target, white at the target, orange 6 °C over it');
+  const moistureLegend = rampLegend('Litter moisture view', 'M', MOISTURE_RAMP, '%', 'Litter moisture view: light sand 10 % to dark brown 50 %');
+  const views = { comfort: false };
+  const busy = createBusyCard(root);
   const floatRead = createFloatLabel(root, ctx);
   const narrow = createNarrowNotice(root);
 
@@ -173,7 +193,20 @@ export function createUI(ctx, deps) {
     },
     skillDetail: (id) => ctx.level?.skillDetail?.(id) || details.get(id) || '',
     squeeze: () => squeeze(),
+    // Phase 3: the run, the letters that came to the desk, a level replay (saved start, else a standard start)
+    run: () => ctx.run ?? null,
+    letters: [],
+    lettersRead: new Set(),
+    replayLevel: (id, day) => replayLevel(id, day),
   };
+  /** Back to a level of the run: its saved start, else a standard start behind the card (PHASE3.md §2.2). */
+  function replayLevel(id, day) {
+    const run = ctx.run, def = levelById(id);
+    if (!run || !def) return false;
+    if (run.replay(id, { day })) return true;
+    busy.run(RUN_CARD.standard(def.startDay), () => run.startLevel(id, { from: 'standard' }));
+    return true;
+  }
   // the controller's memory and chart: tracked in farm time, skips included
   env.addStepper((e, s) => {
     if (mode !== 'level') return;
@@ -199,9 +232,17 @@ export function createUI(ctx, deps) {
   events.on(EV.LISTEN, (p) => { if (mode === 'level') caption.show(lookCaption(farm.observe(p.x, p.z)), 6); });
   events.on(EV.FARM_DELIVERY, (p) => { if (mode === 'level' && p.kind === 'feed' && p.phase === 'arrive') caption.show('The feed truck is filling the silos.'); });
   events.on(EV.SKILL_POINTS, (p) => { if (p.detail) details.set(p.milestone, p.detail); });
+  // a bird in the hand: from day 8 the bird check (panels' bird-check), in week 1 Phase 2's chick in hand
   events.on(EV.BIRD_PICK, (p) => {
     if (mode !== 'level') return;
-    if (openPanel('chick-in-hand')) panels.openPanel?.take?.(p);
+    const id = env.dayNumber >= 8 && panels.has('bird-check') ? 'bird-check' : 'chick-in-hand';
+    if (openPanel(id)) panels.openPanel?.take?.(p);
+  });
+  // something new on the office desk (the farm: contract, reply, vet, lab)
+  events.on(EV.LETTER, (p) => {
+    if (mode !== 'level') return;
+    L.letters.push({ kind: p.kind, day: p.day ?? env.dayNumber, hour: Math.round(env.hour * 100) / 100, text: p.text ?? null });
+    caption.show(p.kind === 'lab' ? 'The lab’s letter lies on the office desk.' : p.kind === 'vet' ? 'The vet’s letter lies on the office desk.' : 'A letter lies on the office desk.');
   });
   events.on(EV.FRAME_SET, (p) => {
     if (mode !== 'level') return;
@@ -212,6 +253,8 @@ export function createUI(ctx, deps) {
   const lvl = (build, sandboxBuild) => () => (mode === 'sandbox' && sandboxBuild ? sandboxBuild() : build());
   for (const id of Object.keys(SIGNS)) panels.register(id, lvl(() => buildBoardPanel(id, env, closePanel), () => buildSignPanel(id, env, closePanel)), { kind: 'sign' });
   for (const id of Object.keys(BOARDS)) if (id.startsWith('sign-') && !SIGNS[id]) panels.register(id, () => buildBoardPanel(id, env, closePanel), { kind: 'sign' });
+  // Phase 3 boards (scene paints them at SPOTS3; the panel reads the merged boards of the day)
+  for (const id of Object.keys(BOARDS_CYCLE)) if (id.startsWith('sign-')) panels.register(id, () => buildBoardPanel(id, env, closePanel), { kind: 'sign' });
   panels.register('controller', lvl(() => buildLevelControllerPanel(L), () => buildControllerPanel(env, { onClose: closePanel, onSetpoint: () => tasks.notify('setpoint') })));
   panels.register('feeder-box', () => buildFeederPanel(L));
   panels.register('silo', () => buildSiloPanel(L));
@@ -226,6 +269,7 @@ export function createUI(ctx, deps) {
   panels.register('notebook', () => buildNotebookPanel(L), { kind: 'paused' });
   panels.register('skilltree', () => buildSkillTreePanel(L), { kind: 'paused' });
   panels.register('result', () => buildResultPanel(L), { kind: 'paused' });
+  panels.register('summary', () => buildSummaryPanel(L), { kind: 'paused' });
   // Phase 3 panels (package "panels"; placeholders until it builds them)
   try {
     setPlateDay(() => env.dayNumber);
@@ -238,12 +282,15 @@ export function createUI(ctx, deps) {
 
   // ---- title card and the job card ----
   const title = createTitle(root, {
-    onStart: () => ctx.level?.start({ seed: 1 }),
-    onContinue: () => ctx.level?.continueSave(),
+    onStart: () => (ctx.run ? ctx.run.startRun({ seed: 1 }) : ctx.level?.start({ seed: 1 })),
+    onStartBrooding: () => (ctx.run ? ctx.run.startRun({ seed: 1, at: 'level1' }) : ctx.level?.start({ seed: 1 })),
+    onContinue: () => (ctx.run ? ctx.run.continueSave() : ctx.level?.continueSave()),
     onSandbox: () => ctx.level?.toSandbox(),
     onSkills: () => openPanel('skilltree'),
-    saveInfo: () => deps.save?.info?.() ?? null,
-    saveAvailable: () => !!deps.save?.available,
+    onReplay: (id, day) => replayLevel(id, day),
+    saveInfo: () => (ctx.run ? ctx.run.info() : deps.save?.info?.() ?? null),
+    saveAvailable: () => (ctx.run ? !!ctx.run.available : !!deps.save?.available),
+    run: () => ctx.run ?? null,
   });
   const jobCard = createJobCard(trL, ctx, L, {
     root, avoid,
@@ -293,6 +340,34 @@ export function createUI(ctx, deps) {
     events.emit(EV.PROBE, { kind: 'floor', x: p.x, z: p.z, value: r.tempC });
     floatRead.show(`Floor ${one(r.tempC)} °C`);
   }
+  // L: the light meter at bird level (lux at your feet); V: the air meter at bird height (PHASE3.md §6.12)
+  function luxMeter() {
+    const p = player.position;
+    if (!player.isInside && !inHouse(p)) { caption.show('The light meter is for the light at bird level inside the house.'); return; }
+    player.pose?.('reach', 2);
+    const r = farm.act('light.lux', { x: p.x, z: p.z }) || {};
+    floatRead.show(r.lux != null ? `${int(r.lux)} lux` : 'Light meter');
+  }
+  function airMeter() {
+    const p = player.position;
+    if (!player.isInside && !inHouse(p)) { caption.show('The air meter is for the air at bird height inside the house.'); return; }
+    player.pose?.('reach', 2);
+    const r = farm.act('air.probe', { x: p.x, z: p.z }) || {};
+    floatRead.show(r.speedMs != null ? `${one(r.speedMs)} m/s · ${one(r.tempC)} °C · ${int(r.rh)} %` : 'Air meter');
+  }
+  // C / M: the views that come with a branch level (one floor overlay at a time)
+  function toggleView(key) {
+    if (key === 'comfort') {
+      if (!skills?.unlocked?.('comfortOverlay')) { caption.show('The comfort view comes with Body Temperature & Comfort level 1 on the skill tree.'); return; }
+      views.comfort = !views.comfort;
+      flock?.setOverlay?.('comfort', views.comfort);
+      return;
+    }
+    if (!skills?.unlocked?.('moistureOverlay')) { caption.show('The litter moisture view comes with Moisture & Minimum Ventilation level 1 on the skill tree.'); return; }
+    const on = !props?.overlay?.moisture;
+    if (on && props?.overlay?.floorTemp) props.setOverlay?.('floorTemp', false);
+    props?.setOverlay?.('moisture', on);
+  }
 
   function reset() {
     panels.close(false);
@@ -331,7 +406,11 @@ export function createUI(ctx, deps) {
       else if (isCode(e, k, 'KeyT', 't')) { e.preventDefault(); probe(); }
       else if (isCode(e, k, 'KeyN', 'n')) { e.preventDefault(); openPanel('notebook'); }
       else if (isCode(e, k, 'KeyK', 'k')) { e.preventDefault(); openPanel('skilltree'); }
-      else if (isCode(e, k, 'KeyF', 'f') && skills?.unlocked?.('floorOverlay')) { e.preventDefault(); props?.setOverlay?.('floorTemp', !props.overlay?.floorTemp); }
+      else if (isCode(e, k, 'KeyF', 'f') && skills?.unlocked?.('floorOverlay')) { e.preventDefault(); const on = !props.overlay?.floorTemp; if (on && props.overlay?.moisture) props.setOverlay?.('moisture', false); props?.setOverlay?.('floorTemp', on); }
+      else if (isCode(e, k, 'KeyL', 'l')) { e.preventDefault(); luxMeter(); }
+      else if (isCode(e, k, 'KeyV', 'v')) { e.preventDefault(); airMeter(); }
+      else if (isCode(e, k, 'KeyC', 'c')) { e.preventDefault(); toggleView('comfort'); }
+      else if (isCode(e, k, 'KeyM', 'm')) { e.preventDefault(); toggleView('moisture'); }
     }
   }, true);
 
@@ -360,6 +439,8 @@ export function createUI(ctx, deps) {
     panels.close(false);
     panels.clearBuilt();
     jobCard.reset(); caption.clear();
+    L.letters.length = 0; L.lettersRead.clear();
+    if (views.comfort) { views.comfort = false; flock?.setOverlay?.('comfort', false); }
     mm.min = mm.max = null; hist.length = 0; histAcc = 0; lastFlows.length = 0; weigh = { day: null, list: [] };
   }
 
@@ -383,9 +464,11 @@ export function createUI(ctx, deps) {
       }
       panels.update(dt);
       floorLegend.hidden = !(mode === 'level' && props?.overlay?.floorTemp);
+      comfortLegend.hidden = !(mode === 'level' && views.comfort);
+      moistureLegend.hidden = !(mode === 'level' && props?.overlay?.moisture);
       caption.update(dt);
       floatRead.update(dt);
-      prompt.show(panels.openId || narrow.open || title.open ? null : nearestTarget());
+      prompt.show(panels.openId || narrow.open || title.open || busy.open ? null : nearestTarget());
     },
     // hooks for level.js, the integrator and tests
     openPanel,
@@ -398,7 +481,13 @@ export function createUI(ctx, deps) {
     setMode,
     newRun,
     showResult(res) { if (openPanel('result')) panels.openPanel?.show?.(res); },
+    showSummary(sum) { if (openPanel('summary')) panels.openPanel?.show?.(sum); },
+    luxMeter,
+    airMeter,
+    toggleView,
+    replayLevel,
     caption: (msg, s) => caption.show(msg, s),
+    clearCaptions: () => caption.clear(),
     jobCard,
     squeeze,
     probe,

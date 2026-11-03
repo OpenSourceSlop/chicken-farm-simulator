@@ -1,5 +1,5 @@
-// Level 1 sign boards and equipment plates, drawn from content-signs.js (the same data props paints
-// the 3D boards from). Every fact shows its source in small text. Owner: package "level".
+// Sign boards and equipment plates, drawn from content-signs.js and content-signs-cycle.js (the same data props paints
+// the 3D boards from). Every fact shows its source in small text. Owner: package "run" (Phase 2: "level").
 //   buildBoardPanel(id, env, onClose)  a painted sign board as a dialog (the clock stands still)
 //   buildPlate(id, { open })           an engraved plate column for an equipment panel; while it is
 //                                      open the clock stands still (reading is free), so a machine
@@ -45,9 +45,11 @@ export const PICS = {
     ${chickSide(18, 46, 0.9, 10)}`),
 };
 
-/** A painted sign board (sign-*) from content-signs.js BOARDS. */
+/** A painted sign board (sign-*): Phase 2's BOARDS and Phase 3's BOARDS_CYCLE, merged for the day
+ *  (boardsForDay: the extra lines from their fromDay; the brooding week reads exactly Phase 2's). */
 export function buildBoardPanel(id, env, onClose) {
-  const b = BOARDS[id];
+  const boardOf = () => boardsForDay(env.dayNumber)[id] || BOARDS[id];
+  let b = boardOf(), itemsDay = env.dayNumber;
   const titleId = uniqueId('board-title');
   const many = b.items.length > 5 || !!b.table;
   const { el, closeBtn } = dialogShell(`sign sign--board${many ? ' sign--wide' : ''}`, titleId, onClose);
@@ -55,9 +57,10 @@ export function buildBoardPanel(id, env, onClose) {
     b.kicker ? h('p', { class: 'sign-kicker' }, b.kicker) : null,
     h('h2', { class: 'sign-title', id: titleId }, b.title),
     h('p', { class: 'sign-where' }, h('span', { html: ICONS.pin, 'aria-hidden': 'true' }), b.where));
-  const items = h('ul', { class: 'board-items' }, b.items.map((it) => h('li', { class: `board-item${it.pic ? ' has-pic' : ''}` },
+  const itemsOf = (bd) => bd.items.map((it) => h('li', { class: `board-item${it.pic ? ' has-pic' : ''}` },
     it.pic && PICS[it.pic] ? h('span', { class: 'board-pic', html: PICS[it.pic] }) : null,
-    h('div', null, h('p', { class: 'sign-text' }, it.text), src(it.source)))));
+    h('div', null, h('p', { class: 'sign-text' }, it.text), src(it.source))));
+  const items = h('ul', { class: 'board-items' }, itemsOf(b));
 
   let todayRow = null, todayDay = null;
   const rows = [];
@@ -89,6 +92,8 @@ export function buildBoardPanel(id, env, onClose) {
     el,
     kind: 'sign',
     update() {
+      // a board read on a later day shows the lines added from that day (PHASE3.md §5.4)
+      if (env.dayNumber !== itemsDay) { itemsDay = env.dayNumber; const nb = boardOf(); if (nb.items.length !== b.items.length) { b = nb; items.replaceChildren(...itemsOf(b)); } }
       if (!todayRow) return;
       const d = env.dayNumber;
       if (d === todayDay) return;

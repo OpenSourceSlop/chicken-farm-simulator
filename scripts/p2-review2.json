@@ -24,7 +24,7 @@
   {"eval": "__game.ui.closePanel(), 'run 1 controller history ' + __game.ui.L.history().length + ' points, to t ' + (__game.ui.L.history().slice(-1)[0]?.t ?? 0).toFixed(2)"},
   {"eval": "__game.level.debug.result(false), 'result shown: ' + __game.level.mode"},
   {"advance": 0.2},
-  {"clickText": "Replay Level 1"},
+  {"clickText": "Replay the brooding week"},
   {"advance": 0.2},
   {"expect": "__game.level.mode === 'level' && __game.env.dayNumber === -1 && __game.ui.L.history().every((p) => p.t <= __game.env.day + 1e-9) && 'history ' + __game.ui.L.history().length + ' points, none after now'", "label": "Replay: no controller chart point from the run before"},
   {"eval": "__game.level.debug.goto(0, 8.12, { auto: true }), 'run 2 at the truck ' + __game.env.timeLabel"},

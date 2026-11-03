@@ -64,25 +64,59 @@ export function promptVerb(id) {
 }
 
 // ---------------- Level 1 ----------------
+// The title card (PHASE3.md §1 "Title card and run screen"): one flock, from the plan to the clean house.
 export const LEVEL_TEXT = {
-  title: 'Level 1 – The brooding week',
-  kicker: 'Chicken Farm',
-  line: 'Get the house ready, take in 6,000 chicks and bring them to day 7.',
-  start: 'Start Level 1',
-  startAgain: (dayLabel) => `Start again — replaces your ${dayLabel} save`,
-  continueLabel: (dayLabel, time) => `Continue — ${dayLabel}, ${time}`,
+  title: 'Chicken Farm — one flock, from the plan to the clean house',
+  kicker: 'House 1 · 6,000 broiler chicks',
+  line: 'Plan the farm, take in 6,000 chicks, grow them to the harvest and rest the clean house: seven levels on one flock.',
+  start: 'Start a new flock',
+  startBrooding: 'Start at the brooding week',
+  startAgain: (what) => `Start again — replaces your save (${what})`,
+  continueLabel: (where, time) => `Continue — ${where}, ${time}`,
   sandbox: 'Walk the Phase 1 farm (sandbox)',
   skills: 'Skill tree',
-  noSave: 'Saving is off in this browser: the game plays the same, but closing the page ends the week.',
-  saveNote: 'The game saves by itself as you play.',
+  noSave: 'Saving is off in this browser: replays start from a standard flock, and closing the page ends the run.',
+  saveNote: 'The game saves by itself as you play, and keeps the start of every level for a replay.',
 };
 
-/** "Prep day" for day −1, else "Day N". */
-export const dayLabel = (d) => (d < 0 ? 'Prep day' : `Day ${d}`);
+/** HUD day label (PHASE3.md §2.3): "Planning day", "Prep day", "Day N", "Day 42 · catching", "Clean-out
+ *  day k", "Rest day k". `o.bookedDay`: while resting, the booked chick day. */
+export function dayLabel(d, o = {}) {
+  if (d <= -2) return 'Planning day';
+  if (d < 0) return 'Prep day';
+  if (d < 42) return `Day ${d}`;
+  if (d === 42) return 'Day 42 · catching';
+  if (d <= 46) return `Clean-out day ${d - 42}`;
+  return o.bookedDay != null ? `Rest day ${d - 46} · chicks booked: day ${o.bookedDay}` : `Rest day ${d - 46}`;
+}
+
+// The run card on the title screen and the run's result buttons (PHASE3.md §1, §10).
+export const RUN_CARD = {
+  heading: 'The run: one flock, seven levels',
+  continueTo: 'Continue to',
+  replay: 'Replay',
+  fromDay: (d) => (d <= -2 ? 'from the planning day' : d === -1 ? 'from the prep day' : `from day ${d}`),
+  days: (def) => (def.id === 'plan' ? 'Planning day' : def.id === 'level1' ? 'Prep day – day 7' : def.id === 'cleanout' ? 'Day 43 – the next chicks' : `Days ${def.startDay}–${def.endDay}`),
+  target: {
+    plan: 'Every term of the contract in the company’s reply',
+    level1: 'Day 7: weigh 50 birds',
+    week2: 'Day 14: weigh 50 birds',
+    week3: 'Day 21: weigh 50 birds',
+    weeks45: 'Day 35: weigh 50 birds',
+    finish: 'Day 42: the weight tickets',
+    cleanout: 'The lab’s swabs and 3 weeks of rest',
+  },
+  states: { 'not reached': 'not reached', playing: 'playing', reached: 'reached', passed: 'passed', 'not passed': 'not passed' },
+  confirm: (short, d) => `Replay ${short} — your run goes back to ${d <= -2 ? 'the planning day' : d === -1 ? 'the prep day' : `day ${d}`}`,
+  harder: 'Harder flocks (hot season, rainy season, a bad batch of chicks, a water problem) come in the next build.',
+  noStorage: 'Saving is off in this browser: replays start from a standard flock.',
+  standard: (d) => `Getting the flock to day ${d} …`,
+};
 
 // Keys of a level (title card and the help card). Physical keys, as in Phase 1.
 export const LEVEL_KEYS = [
   { key: 'E', what: 'use' }, { key: 'Q', what: 'squeeze litter' }, { key: 'T', what: 'floor thermometer' },
+  { key: 'L', what: 'light meter' }, { key: 'V', what: 'air meter' },
   { key: 'N', what: 'notebook' }, { key: 'K', what: 'skill tree' }, { key: 'H', what: 'help' },
 ];
 export const LEVEL_HELP_KEYS = [
@@ -93,9 +127,13 @@ export const LEVEL_HELP_KEYS = [
   { keys: ['E'], what: 'Use, pick up, read a sign' },
   { keys: ['Q'], what: 'Squeeze a handful of litter' },
   { keys: ['T'], what: 'Floor thermometer at your feet' },
+  { keys: ['L'], what: 'Light meter: lux at bird height' },
+  { keys: ['V'], what: 'Air meter: air speed, °C and humidity at bird height' },
   { keys: ['N'], what: 'Notebook: your readings' },
   { keys: ['K'], what: 'Skill tree' },
   { keys: ['F'], what: 'Floor temperature view (once unlocked)' },
+  { keys: ['C'], what: 'Comfort view of the flock (once unlocked)' },
+  { keys: ['M'], what: 'Litter moisture view (once unlocked)' },
   { keys: ['Esc'], what: 'Close a panel' },
   { keys: ['H'], what: 'Show or hide this help' },
 ];
