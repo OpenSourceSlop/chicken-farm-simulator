@@ -89,11 +89,11 @@ export const TASKS_DONE_LINE =
   'Morning jobs done. Walk around the farm, try the climate controller, and open the test tools (bottom right) to change the flock’s age, the weather and the time of day.';
 
 export const HELP_KEYS = [
-  { keys: ['W', 'A', 'S', 'D'], or: 'click', what: 'Walk' },
-  { keys: ['Shift'], what: 'Run' },
-  { keys: ['←', '→'], or: 'right-drag', what: 'Turn' },
-  { keys: ['Wheel'], what: 'Zoom' },
-  { keys: ['E'], what: 'Read a sign / use' },
-  { keys: ['Esc'], what: 'Close' },
+  { keys: ['W', 'A', 'S', 'D'], what: 'Walk, or click the ground' },
+  { keys: ['Shift'], what: 'Run (hold)' },
+  { keys: ['←', '→'], what: 'Turn, or right-drag' },
+  { keys: ['Wheel'], what: 'Zoom in and out' },
+  { keys: ['E'], what: 'Read a sign, use a machine' },
+  { keys: ['Esc'], what: 'Close a sign or panel' },
   { keys: ['H'], what: 'Show or hide this help' },
 ];

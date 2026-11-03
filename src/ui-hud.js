@@ -11,7 +11,7 @@ const SPEEDS = [
 function gauge(cls, icon, label, extra) {
   const value = h('div', { class: 'gauge-value' });
   const el = h('div', { class: `gauge ${cls}`, role: 'group', 'aria-label': label },
-    h('div', { class: 'label', html: `${icon}<span>${label}</span>` }), value, extra);
+    h('div', { class: 'label', html: `${icon || ''}<span>${label}</span>` }), value, extra);
   return { el, value };
 }
 
@@ -38,7 +38,7 @@ export function createHud(parent, env) {
   const pips = [];
   for (let i = 0; i < FAN_COUNT; i++) { const p = h('span', { class: 'pip' }); pips.push(p); pipWrap.appendChild(p); }
   const fans = gauge('', ICONS.fan, 'Fans', pipWrap);
-  const burner = gauge('gauge--burner', ICONS.flame, 'Brooders');
+  const burner = gauge('gauge--burner', null, 'Brooders');
   const flame = h('span', { class: 'flame', html: ICONS.flame, 'aria-hidden': 'true' });
   const burnerText = h('span');
   burner.value.append(flame, burnerText);
@@ -76,10 +76,13 @@ export function createHud(parent, env) {
   let lastNight = null;
   let lastWeather = null;
 
-  function refresh() {
+  let lastDay = -1;
+  // `gauges` false: only the clock (every frame). Gauges and buttons refresh about 10 times a second.
+  function refresh(gauges = true) {
     // clock
-    setText(day, `Day ${env.dayNumber}`);
+    if (env.dayNumber !== lastDay) { lastDay = env.dayNumber; setText(day, `Day ${lastDay}`); }
     setText(time, env.timeLabel);
+    if (!gauges) return;
     if (env.isNight !== lastNight) {
       lastNight = env.isNight;
       sky.innerHTML = lastNight ? ICONS.moon : ICONS.sun;
@@ -90,7 +93,8 @@ export function createHud(parent, env) {
       wIcon.innerHTML = weatherIcon(env.weather);
       setText(wText, WEATHER[env.weather]?.label ?? env.weather);
     }
-    const speed = SPEEDS.find((s) => s.scale === env.timeScale);
+    let speed = null;
+    for (const s of SPEEDS) if (s.scale === env.timeScale) speed = s;
     setText(rate, env.paused ? 'Paused' : speed ? speed.label : `${fmt1(env.timeScale / TIME.gameSecondsPerRealSecond)}×`);
     rate.classList.toggle('is-paused', env.paused);
 
