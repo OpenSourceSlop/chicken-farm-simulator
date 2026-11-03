@@ -29,15 +29,6 @@ const WAYPOINT_REACH = 0.4;
 const ARRIVE_DECEL = 14; // m/s^2 used to ease into the target
 const GIVE_UP = 1.0; // s blocked before a click walk is abandoned
 
-// Plain-language control list the UI may show as help (E and Esc belong to the UI itself).
-export const CONTROLS = [
-  { keys: 'W A S D', action: 'Walk' },
-  { keys: 'Shift', action: 'Run' },
-  { keys: 'Click the ground', action: 'Walk there (double-click to run)' },
-  { keys: 'Right-drag or ← →', action: 'Turn the view' },
-  { keys: 'Mouse wheel or + −', action: 'Zoom' },
-];
-
 const MAIN_DT_CAP = 0.05; // main.js caps each frame at this many seconds
 const MAX_REAL_DT = 0.25;
 
