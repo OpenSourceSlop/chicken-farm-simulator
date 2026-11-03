@@ -149,7 +149,7 @@ export function createFarmerAnimator(model, rand = Math.random) {
     );
 
     // Lean into turns (pivot at the feet)
-    const rollT = clamp(turnRate * speed * 0.03, -0.2, 0.2);
+    const rollT = clamp(turnRate * speed * 0.02, -0.12, 0.12);
     st.roll = damp(st.roll, rollT, 8, dt);
     model.rig.rotation.z = st.roll;
     return step;

@@ -73,7 +73,7 @@ export function createInput(canvas) {
 
   function onPointerDown(e) {
     if (e.pointerType === 'touch') return;
-    if (st.drag) return;
+    if (st.drag) endDrag(); // a drag whose release we never saw must not block new clicks
     if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
     if (e.button === 1) e.preventDefault();
     try { canvas.focus({ preventScroll: true }); } catch { /* focus is optional */ }
@@ -84,6 +84,7 @@ export function createInput(canvas) {
   function onPointerMove(e) {
     const d = st.drag;
     if (!d || e.pointerId !== d.id) return;
+    if (e.buttons === 0) { endDrag(); return; } // released somewhere we did not hear about
     if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > DRAG_PX) d.moved = true;
     // Right or middle drag turns the view; a left drag (beyond the click threshold) does too,
     // which helps on laptop touchpads where a right-drag is awkward.
