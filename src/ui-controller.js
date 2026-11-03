@@ -7,7 +7,7 @@ import { dialogShell } from './ui-panels.js';
 
 const STEP = 0.5;
 
-function lcdCell(label, unitText) {
+export function lcdCell(label, unitText) {
   const value = h('span', { class: 'lcd-v' });
   const unit = h('span', { class: 'lcd-u' }, unitText);
   const el = h('div', { class: 'lcd-cell' }, h('span', { class: 'lcd-k' }, label), h('span', { class: 'lcd-num' }, value, unit));
@@ -16,7 +16,7 @@ function lcdCell(label, unitText) {
 
 // A membrane key. Press and hold repeats (after 400 ms, every 120 ms). The mouse press acts on
 // pointerdown; the click that follows it is then ignored, so Enter / Space still work for keyboards.
-function key(label, icon, onPress) {
+export function key(label, icon, onPress) {
   const b = button({ class: 'key', 'aria-label': label, title: label });
   b.innerHTML = icon;
   let wait = 0, rep = 0, fromPointer = false;

@@ -48,10 +48,16 @@ export function createHud(parent, env) {
 
   // ---- time controls ----
   const playBtn = button({ class: 'btn btn--icon', 'aria-label': 'Pause the farm clock' });
-  playBtn.addEventListener('click', () => { env.paused = !env.paused; refresh(); });
-  const speedBtns = SPEEDS.map((s) => {
+  // In a level the level owns the clock (PHASE2.md §2): the buttons ask it instead of setting env.
+  let level = null;
+  playBtn.addEventListener('click', () => { if (level) level.togglePause(); else env.paused = !env.paused; refresh(); });
+  const speedBtns = SPEEDS.map((s, i) => {
     const b = button({ class: 'btn', title: s.title, 'aria-pressed': 'false' }, s.label);
-    b.addEventListener('click', () => { env.timeScale = s.scale; env.paused = false; refresh(); });
+    b.addEventListener('click', () => {
+      if (level) level.setFast(i === 1);
+      else { env.timeScale = s.scale; env.paused = false; }
+      refresh();
+    });
     return b;
   });
   const skipBtn = button({ class: 'btn', title: 'Move the farm clock on by one hour', 'aria-label': 'Skip 1 hour' });
@@ -83,7 +89,7 @@ export function createHud(parent, env) {
   // `gauges` false: only the clock (every frame). Gauges and buttons refresh about 10 times a second.
   function refresh(gauges = true) {
     // clock
-    if (env.dayNumber !== lastDay) { lastDay = env.dayNumber; setText(day, `Day ${lastDay}`); }
+    if (env.dayNumber !== lastDay) { lastDay = env.dayNumber; setText(day, level && lastDay < 0 ? 'Prep day' : `Day ${fmt0(lastDay)}`); }
     setText(time, env.timeLabel);
     if (!gauges) return;
     if (env.isNight !== lastNight) {
@@ -98,8 +104,9 @@ export function createHud(parent, env) {
     }
     let speed = null;
     for (const s of SPEEDS) if (s.scale === env.timeScale) speed = s;
-    setText(rate, env.paused ? 'Paused' : speed ? speed.label : `${fmt1(env.timeScale / TIME.gameSecondsPerRealSecond)}×`);
-    rate.classList.toggle('is-paused', env.paused);
+    const rateText = level ? level.rateLabel() : env.paused ? 'Paused' : speed ? speed.label : `${fmt1(env.timeScale / TIME.gameSecondsPerRealSecond)}×`;
+    setText(rate, rateText);
+    rate.classList.toggle('is-paused', env.paused || (!!level && env.timeScale === 0));
 
     // gauges: measured values only
     setGauge(house.value, fmt1(env.houseTemp), '°C');
@@ -121,19 +128,30 @@ export function createHud(parent, env) {
       skipBtn.disabled = endSkip;
       setAttr(skipBtn, 'title', endSkip ? `End of the flock (day ${MAX_DAY})` : 'Move the farm clock on by one hour');
     }
-    if (env.paused !== lastPaused) {
-      lastPaused = env.paused;
-      playBtn.innerHTML = env.paused ? ICONS.play : ICONS.pause;
-      setAttr(playBtn, 'aria-label', env.paused ? 'Start the farm clock' : 'Pause the farm clock');
+    const shownPaused = level ? level.userPaused : env.paused;
+    if (shownPaused !== lastPaused) {
+      lastPaused = shownPaused;
+      playBtn.innerHTML = shownPaused ? ICONS.play : ICONS.pause;
+      setAttr(playBtn, 'aria-label', shownPaused ? 'Start the farm clock' : 'Pause the farm clock');
     }
-    const speedKey = `${env.paused}|${env.timeScale}`;
+    const userPaused = level ? level.userPaused : env.paused;
+    const speedKey = `${userPaused}|${env.timeScale}|${level ? level.fast : ''}`;
     if (speedKey !== lastScale) {
       lastScale = speedKey;
-      SPEEDS.forEach((s, i) => setAttr(speedBtns[i], 'aria-pressed', !env.paused && s.scale === env.timeScale));
+      SPEEDS.forEach((s, i) => setAttr(speedBtns[i], 'aria-pressed', level ? !userPaused && level.fast === (i === 1) : !env.paused && s.scale === env.timeScale));
     }
   }
 
-  return { timebar, refresh };
+  // hooks = { togglePause(), setFast(on), fast, userPaused, rateLabel() } in a level; null = sandbox
+  function setLevel(hooks) {
+    level = hooks;
+    skipBtn.hidden = morningBtn.hidden = !!hooks;
+    SPEEDS.forEach((s, i) => setAttr(speedBtns[i], 'title', hooks ? (i ? 'Four times faster while you walk' : 'Normal speed while you walk: a farm hour takes 30 s') : s.title));
+    lastDay = null; lastScale = null; lastPaused = null;
+    refresh();
+  }
+
+  return { timebar, refresh, setLevel };
 }
 
 // Number plus a smaller unit, written only when it changed.

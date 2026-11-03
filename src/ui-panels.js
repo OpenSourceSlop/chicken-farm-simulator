@@ -16,7 +16,16 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
 
   scrim.addEventListener('click', () => close());
 
-  function register(id, factory) { factories.set(id, factory); }
+  // opts.kind: 'sign' (the clock stands still), 'paused' (records, notebook, skill tree, result),
+  // 'panel' (equipment and inspection: the slow panel clock). A built panel may set its own .kind.
+  const kinds = new Map();
+  function register(id, factory, opts = {}) { factories.set(id, factory); kinds.set(id, opts.kind || 'panel'); }
+  // Forget every built panel (a mode change: sandbox and level panels share ids).
+  function clearBuilt() {
+    if (current) close(false);
+    for (const p of built.values()) { p.dispose?.(); p.el.remove(); }
+    built.clear();
+  }
 
   function open(id) {
     if (!factories.has(id)) return false;
@@ -34,6 +43,7 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
     player.inputEnabled = false;
     scrim.hidden = false;
     panel.el.hidden = false;
+    panel.onOpen?.();
     panel.update?.(0, true);
     panel.el.focus({ preventScroll: true });
     onOpen?.(id);
@@ -44,6 +54,7 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
     if (!current) return;
     const { panel, returnFocus } = current;
     current = null;
+    panel.onClose?.();
     panel.el.hidden = true;
     scrim.hidden = true;
     player.inputEnabled = true;
@@ -67,10 +78,19 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
 
   return {
     register,
+    clearBuilt,
     open,
     close,
     has: (id) => factories.has(id),
     get openId() { return current ? current.id : null; },
+    /** 'sign' | 'paused' | 'panel' | null for the open panel; an open plate inside makes it 'sign'. */
+    get openKind() {
+      if (!current) return null;
+      const k = current.panel.kind || kinds.get(current.id) || 'panel';
+      if (k === 'panel' && [...current.panel.el.querySelectorAll('.plate.is-open')].some((p) => p.offsetParent !== null)) return 'sign';
+      return k;
+    },
+    get openPanel() { return current ? current.panel : null; },
     update(dt) { current?.panel.update?.(dt, false); },
   };
 }

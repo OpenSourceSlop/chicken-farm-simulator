@@ -1,7 +1,6 @@
 // Level flow: title card (start / continue / sandbox), the job engine over the day's rounds,
-// "Next job" time skips, the clock speeds of the level, day changes, the level result (pass or
-// replay) and autosave. Owner: package "level" (phase2/level). STUB: stays in the Phase 1
-// sandbox; start() only records the request so the hooks and the harness can be built now.
+// "Next job" time skips, the clock speeds of the level, day changes, checkpoints for the skill
+// tree, the level result (pass or replay) and autosave. Owner: package "level" (phase2/level).
 //
 // createLevel(ctx, deps) -> level
 //   deps = { farm, records, skills, save, player, flock, props, ui, interact, events }
@@ -10,70 +9,424 @@
 //                   in a real browser; under automation (navigator.webdriver) stays in the sandbox
 //                   so the Phase 1 harness scenarios keep working
 //   start({ seed })     fresh Level 1 from the prep day (clears the level save, keeps the profile)
-//   resume(data)        continue from a save (save.load())
-//   toSandbox()         leave the level for the Phase 1 farm
+//   resume(data)        continue from a save (save.load()) or a hot-reload blob; continueSave()
+//   toSandbox(), toTitle(), replay(), keepWalking()
 //   update(dt)          every frame after the ui (real seconds): job engine, clock speed, autosave
 //   nextJob()           the "Next job" button: point at the next open job, or skip the clock to
-//                       when the next job opens (leaving open jobs as missed if the player chose to)
-//   jobs                { list(): JobInstance[], open(): JobInstance[], current(): JobInstance|null,
-//                         complete(key) (debug), byKey(key) }
-//   serialize()         JSON-safe state of the level itself (jobs, anchors, clock mode)
+//                       when the next job opens (a second press within 3 s skips anyway; jobs whose
+//                       window passes are missed)
+//   jobs                { list(), open(), current(), complete(key) (debug), byKey(key) }
+//   engine              the job engine itself (job-engine.js)
+//   serialize()         JSON-safe state of the level itself (jobs, anchors, checkpoints, points)
 //   saveBlob()          the whole save object of PHASE2.md §11 ({ level, env, farm, records, props,
 //                       flock, player }); autosave and the artifact hot reload both use it, and
 //                       resume(blob) takes it back
-//   checkpoint events   emits EV.LEVEL { phase: 'checkpoint', name } for 'placed' (last stack
-//                       tipped), 'vent' / 'crop' (their windows closed), 'weighin', 'level-end';
-//                       skills.js listens (the level never calls skills.evaluate itself)
+//   checkpoint events   EV.LEVEL { phase: 'checkpoint', name } for 'placed' (last stack tipped),
+//                       'vent' / 'crop' (their windows closed), 'weighin', 'level-end'; skills.js
+//                       listens (the level never calls skills.evaluate itself)
 //   sampling            null | 'vent' | 'crop' | 'weigh' (catching chicks is possible only then)
-//   debug               { goto(day, hour, { auto }) jump; auto: farm-profiles.applyRound(farm, env,
-//                         day, round, 'ideal') acts on the farm for every round passed, then the
-//                         jobs still open are completed and logged, so records and skills match,
-//                         trigger(problemId), result(forcePass?) } for test tools and harness
+//   hudHooks            what the HUD's pause / 1x / 4x buttons call in a level
+//   debug               { goto(day, hour, { auto }), trigger(problemId), result(forcePass?) }
 //
 // JobInstance: { key, id, def, day, status: 'waiting'|'open'|'done'|'missed', opensAt, closesAt,
 //   doneAt, progress (0..1), result }  (times as env.day floats)
+import { FARM, LEVEL1 } from './config.js';
+import { EV } from './events.js';
+import { createJobEngine, LEVEL_END_DAY } from './job-engine.js';
+import { applyRound } from './farm-profiles.js';
+import { MILESTONES } from './skills.js';
+import { hhmm, splitDay, two } from './ui-format.js';
+
+const H = 1 / 24;
+const CARRY_KINDS = new Set(['boxes', 'barrow', 'sack', 'frame']);
+const NEXT_CONFIRM_MS = 3000;
 
 export function createLevel(ctx, deps = {}) {
-  void deps;
-  const empty = [];
+  const { farm, records, skills, save, player, flock, props, ui, events } = deps;
+  const env = ctx.env;
+  const engine = createJobEngine({ events, env, farm, props, records });
+  const C = LEVEL1.clock;
+  let fast = false, userPaused = false, seed = 1;
+  let pending = null;               // { at: ms, label } after a first Next job press with jobs open
+  let fired = new Set();            // checkpoints emitted this level
+  let points = [];                  // skill points earned this level
+  let weighs = [];                  // day 7 hand weighings [{ w, x, z }]
+  let signed7 = false, ended = null, lastDay = null, tickAcc = 0;
+  let saveIn = null, lastSaveDay = null;
+  const details = new Map();        // milestone -> measured detail (profile)
+
+  const emitLevel = (p) => events?.emit(EV.LEVEL, { day: env.dayNumber, ...p });
+  const checkpoint = (name) => { if (fired.has(name)) return; fired.add(name); emitLevel({ phase: 'checkpoint', name }); };
+  const inLevel = () => level.mode === 'level' && !ended;
+
+  // ---------------- profile (skills kept across replays) ----------------
+  function loadProfile() {
+    const p = save?.loadProfile?.();
+    if (p?.skills) skills?.restore?.(p.skills);
+    for (const [k, v] of p?.details || []) details.set(k, v);
+  }
+  function saveProfile() { save?.saveProfile?.({ skills: skills?.serialize?.(), details: [...details] }); }
+
+  // ---------------- autosave ----------------
+  function saveNow() {
+    if (!inLevel() || !save) return false;
+    lastSaveDay = env.day;
+    saveIn = null;
+    return save.save(level.saveBlob());
+  }
+  const scheduleSave = (sec) => { if (saveIn == null || sec < saveIn) saveIn = sec; };
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
+    window.addEventListener('pagehide', () => saveNow());
+  }
+
+  // ---------------- bus ----------------
+  if (events) {
+    events.on(EV.JOB_DONE, () => { if (inLevel()) scheduleSave(2); });
+    events.on(EV.SKILL_POINTS, (p) => {
+      if (p.detail) details.set(p.milestone, p.detail);
+      if (level.mode === 'level' || level.mode === 'result') points.push({ branch: p.branch, milestone: p.milestone, points: p.points, detail: p.detail || '', text: MILESTONES.find((m) => m.id === p.milestone)?.text || p.milestone });
+      saveProfile();
+    });
+    events.on(EV.ACTION, (p) => { if (inLevel() && p.id === 'sample.weigh' && env.dayNumber === LEVEL1.endDay) weighs.push({ w: p.result?.weightG, x: p.x, z: p.z }); });
+    events.on(EV.RECORD_CLOSED, (p) => {
+      if (!inLevel()) return;
+      if (p.day === LEVEL1.endDay && p.signed) signed7 = true;
+      saveNow();
+      // fail early: deaths and culls past the limit at any day's close
+      if (mortalityPct() > LEVEL1.fail.mortalityMaxPct) end('mortality');
+    });
+  }
+
+  function placedCount() { return farm.flock.placed || farm.flock.delivered || 0; }
+  function mortalityPct() {
+    const placed = placedCount();
+    if (!placed) return 0;
+    return (((farm.flock.deadTotal || 0) + (farm.flock.culls || 0)) / placed) * 100;
+  }
+
+  // ---------------- clock speed (PHASE2.md §2): paused > sign > panel > carry > fast > work ----------------
+  function clock() {
+    const kind = ui?.panelKind;
+    if (userPaused || kind === 'paused') { env.paused = true; return; }
+    env.paused = false;
+    const placing = engine.anchors.truck != null && !fired.has('placed') && env.dayNumber === LEVEL1.arrivalDay;
+    if (kind === 'sign') env.timeScale = C.sign;
+    else if (kind === 'panel') env.timeScale = C.panel;
+    else if (CARRY_KINDS.has(props?.carrying) || placing) env.timeScale = C.carry;
+    else env.timeScale = fast ? C.fast : C.work;
+  }
+
+  // ---------------- checkpoints, the end ----------------
+  function checks() {
+    if (!inLevel()) return;
+    const f = farm.flock;
+    if (!fired.has('placed') && engine.anchors.placed != null && f.placed > 0 && f.inBoxes === 0) checkpoint('placed');
+    const closed = (key) => { const i = engine.byKey(key); return i && i.closesAt != null && env.day >= i.closesAt - 1e-7; };
+    if (closed('d0-vent@0')) checkpoint('vent');
+    if (closed('d1-crop@1')) checkpoint('crop');
+    const w = engine.byKey(`d7-weigh@${LEVEL1.endDay}`);
+    if (w && (w.status === 'done' || closed(w.key))) checkpoint('weighin');
+    if (env.day >= LEVEL_END_DAY - 1e-7) end('time');
+    else if (signed7 && fired.has('weighin')) end('signed');
+  }
+
+  function weighResult() {
+    const ok = weighs.filter((x) => Number.isFinite(x.w));
+    if (!ok.length) return null;
+    const mean = ok.reduce((a, b) => a + b.w, 0) / ok.length;
+    const within = ok.filter((x) => Math.abs(x.w - mean) <= 0.1 * mean).length;
+    return { n: ok.length, mean, uniformityPct: (within / ok.length) * 100 };
+  }
+
+  /** The result screen's numbers, from what was measured (PHASE2.md §10). */
+  function computeResult(reason) {
+    const placed = placedCount() || LEVEL1.chicksPlaced;
+    const deaths = (farm.flock.deadTotal || 0) + (farm.flock.culls || 0);
+    const deathsPct = (deaths / placed) * 100;
+    const measured = farm.stats?.chickWeightMeasuredG;
+    const chick = measured ?? farm.flock.chickWeightG ?? LEVEL1.chickWeightG;
+    const wr = weighResult();
+    const weightG = wr ? wr.mean : (farm.flock.meanWeightG || 0) * 1.02; // automatic scale reads about 2 % high
+    const ratio = chick ? weightG / chick : null;
+    const pass = ratio != null && ratio >= LEVEL1.fail.weightRatioMin && deathsPct <= LEVEL1.fail.mortalityMaxPct;
+    const failText = deathsPct > LEVEL1.fail.mortalityMaxPct ? `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}` : `day 7 weight ${two(ratio)} × chick weight`;
+    const floor = records?.timeline?.()?.find?.((e) => e.day === 0)?.floorAtArrival ?? null;
+    const { day, hour } = splitDay(env.day);
+    return { pass, reason, early: reason === 'mortality', endedAt: `day ${day}, ${hhmm(hour)}`, day, hour,
+      ratio, weightG, weighedByHand: !!wr, chickWeightG: chick, chickSource: measured != null ? 'box' : 'delivery',
+      deaths, placed, deathsPct, uniformityPct: wr && wr.n >= 10 ? wr.uniformityPct : farm.flock.uniformityPct ?? null,
+      fcr: farm.flock.fcr || records?.row?.(LEVEL1.endDay)?.fcr || null, failText, floorAtArrival: floor, points: points.slice() };
+  }
+
+  function end(reason) {
+    if (ended) return;
+    checkpoint('level-end');
+    engine.finish();
+    ended = computeResult(reason);
+    emitLevel({ phase: 'end', result: ended });
+    save?.clear?.();
+    showResult(ended);
+  }
+  function showResult(res) {
+    level.mode = 'result';
+    ui?.setMode?.('result');
+    ui?.closePanel?.();
+    ui?.showResult?.(res);
+  }
+
+  // ---------------- skips ----------------
+  function skip(hours) {
+    if (hours <= 0) return;
+    const d0 = env.dayNumber;
+    ui?.closePanel?.();
+    env.skipHours(hours);
+    engine.tick();
+    checks();
+    if (env.dayNumber !== d0 && env.hour >= 5.9 && env.hour < 12) player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw); // each morning at the gate
+    scheduleSave(0.5);
+  }
+  function nextLabel() {
+    if (!inLevel()) return 'Next job';
+    if (pending && performance.now() - pending.at < NEXT_CONFIRM_MS) return pending.label;
+    if (engine.open().length) return 'Next job';
+    const t = engine.nextOpening();
+    const s = splitDay(t);
+    return s.day !== env.dayNumber ? `Skip to ${hhmm(s.hour)}, day ${s.day}` : `Skip to ${hhmm(s.hour)}`;
+  }
+
+  // ---------------- env for a fresh prep day ----------------
+  function prepEnv() {
+    env.reset();
+    env.setWeather(LEVEL1.weather);
+    env.setDay(LEVEL1.startDay);
+    env.setHour(LEVEL1.startHour);
+    env.forceHouseTemp(null);
+    env.clearWeatherEvents?.();
+    env.setFans(0); env.setPad(false); env.setVentTimer(null);
+    env.setLightProgram({ darkStart: 2, darkHours: 1, dimmer: 1 });
+    env.houseTemp = env.outsideTemp + 1; // an empty, cold house
+    env.setHeaterSetpoint(20);            // brooders cold until the farmer pre-heats
+    env.settleHeaters();
+  }
+  function resetRun() {
+    fired = new Set(); points = []; weighs = []; signed7 = false; ended = null; pending = null;
+    fast = false; userPaused = false; saveIn = null; lastSaveDay = null; tickAcc = 0;
+  }
+  function enterLevel(phase) {
+    level.mode = 'level';
+    lastDay = env.dayNumber;
+    ui?.setMode?.('level');
+    emitLevel({ phase });
+  }
+
   const level = {
     mode: 'sandbox',
-    requested: null,
+    engine,
     /** null, or the sample the open job wants: 'vent' | 'crop' | 'weigh'. The flock's `chick`
      *  interact provider only answers while this is set. */
     sampling: null,
-    boot() { /* STUB: the title card comes with package "level" */ },
-    start(opts = {}) { level.requested = { kind: 'start', ...opts }; return false; },
-    resume(data) { level.requested = { kind: 'resume', data }; return false; },
-    toSandbox() { level.mode = 'sandbox'; },
-    update(dt) { void dt; },
-    nextJob() { return null; },
-    jobs: {
-      list: () => empty,
-      open: () => empty,
-      current: () => null,
-      complete: () => false,
-      byKey: () => null,
+    get fast() { return fast; },
+    hudHooks: {
+      togglePause() { userPaused = !userPaused; },
+      setFast(on) { fast = !!on; userPaused = false; },
+      get fast() { return fast; },
+      get userPaused() { return userPaused; },
+      rateLabel() {
+        if (env.paused) return userPaused ? 'Paused' : 'Stopped';
+        if (env.timeScale === 0) return 'Stopped';
+        if (env.timeScale === C.fast) return '4×';
+        if (env.timeScale === C.work) return '1×';
+        return `${env.timeScale / C.work}×`.replace('0.25×', '¼ speed');
+      },
     },
-    serialize() { return { v: 1, mode: level.mode }; },
+    boot() {
+      loadProfile();
+      if (typeof navigator !== 'undefined' && navigator.webdriver) { level.mode = 'sandbox'; ui?.setMode?.('sandbox'); return; }
+      level.toTitle();
+    },
+    start(opts = {}) {
+      seed = opts.seed ?? 1;
+      if (level.mode === 'sandbox' || level.mode === 'title') loadProfile();
+      resetRun();
+      save?.clear?.();
+      ui?.closePanel?.();
+      prepEnv();
+      records?.reset?.();
+      props?.reset?.();
+      flock?.resetLevel?.();
+      farm.start(LEVEL1, { seed });
+      engine.start(LEVEL1.startDay);
+      player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw);
+      enterLevel('start');
+      scheduleSave(1);
+      return true;
+    },
+    resume(data) {
+      if (!data || !data.level || !data.env) return false;
+      resetRun();
+      ui?.closePanel?.();
+      const e = data.env;
+      // restore order (PHASE2.md §11): env -> farm -> records -> props -> flock -> level
+      env.reset();
+      env.setWeather(e.weather || LEVEL1.weather);
+      env.setDay(Math.floor(e.day - (e.hour ?? 0) * H + 1e-6));
+      env.setHour(e.hour ?? 0);
+      env.setFans(e.fansOn ?? 0); env.setPad(!!e.padOn);
+      env.setVentTimer(e.ventTimer ?? null);
+      env.setLightProgram(e.lightProgram || { darkStart: 2, darkHours: 1, dimmer: 1 });
+      env.setHeaterSetpoint(e.heaterSetpoint ?? 20);
+      if (e.houseTemp != null) env.houseTemp = e.houseTemp;
+      if (e.slabTemp != null) env.slabTemp = e.slabTemp;
+      if (e.heaterLevel != null) { env.heaterLevel = e.heaterLevel; env.heatersOn = e.heaterLevel > 0.02; }
+      farm.start(LEVEL1, { seed: data.level.seed ?? 1 });
+      farm.restore(data.farm);
+      if (farm.mode !== 'level') { farm.mode = 'level'; farm.level = LEVEL1; }
+      records?.restore?.(data.records);
+      props?.restore?.(data.props);
+      flock?.restore?.(data.flock);
+      const lv = data.level;
+      seed = lv.seed ?? 1;
+      engine.restore(lv.jobs);
+      fired = new Set(lv.fired || []); points = lv.points || []; weighs = lv.weighs || []; signed7 = !!lv.signed7; fast = !!lv.fast;
+      if (data.player && player) player.teleport(data.player.x, data.player.z, data.player.yaw);
+      enterLevel('resume');
+      engine.tick();
+      return true;
+    },
+    continueSave() { const d = save?.load?.(); return d ? level.resume(d) : false; },
+    toSandbox() {
+      saveNow();
+      resetRun();
+      ui?.closePanel?.();
+      farm.stop?.();
+      props?.reset?.();
+      flock?.resetLevel?.();
+      env.reset();
+      env.clearWeatherEvents?.();
+      env.setVentTimer(null);
+      player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw);
+      level.mode = 'sandbox';
+      level.sampling = null;
+      ui?.setMode?.('sandbox');
+    },
+    toTitle() {
+      saveNow();
+      ui?.closePanel?.();
+      if (level.mode !== 'level') {
+        // over the farm at dawn
+        env.setHour(6.4);
+        player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw);
+      }
+      level.mode = 'title';
+      env.paused = true;
+      ui?.setMode?.('title');
+    },
+    replay() { return level.start({ seed }); },
+    keepWalking() { if (!ended) return; level.mode = 'level'; ui?.closePanel?.(); ui?.setMode?.('level'); },
+    update(dt) {
+      if (level.mode === 'title' || level.mode === 'result') { env.paused = true; return; }
+      if (level.mode !== 'level') return;
+      if (ended) { // keep walking on day 7: the clock runs, the level is over
+        env.paused = !!userPaused || ui?.panelKind === 'paused';
+        env.timeScale = C.work;
+        if (env.dayNumber > LEVEL1.endDay) env.setDay(LEVEL1.endDay);
+        return;
+      }
+      clock();
+      tickAcc += dt;
+      if (tickAcc >= 0.5) { tickAcc = 0; engine.tick(); checks(); }
+      if (env.dayNumber !== lastDay) { lastDay = env.dayNumber; emitLevel({ phase: 'day' }); }
+      const open = (id) => engine.list().some((i) => i.id === id && i.status === 'open');
+      level.sampling = open('d0-vent') ? 'vent' : open('d1-crop') ? 'crop' : open('d7-weigh') ? 'weigh' : null;
+      if (saveIn != null && (saveIn -= dt) <= 0) saveNow();
+      if (lastSaveDay == null) lastSaveDay = env.day;
+      else if (env.day - lastSaveDay >= 2 * H) saveNow();
+      if (pending && performance.now() - pending.at > NEXT_CONFIRM_MS) pending = null;
+    },
+    nextJob() {
+      if (!inLevel()) return null;
+      const open = engine.open();
+      const now = performance.now();
+      if (open.length && !(pending && now - pending.at < NEXT_CONFIRM_MS)) {
+        const c = engine.cycle();
+        const s = splitDay(engine.nextOpening());
+        pending = { at: now, label: `Skip to ${hhmm(s.hour)} — ${open.length} job${open.length === 1 ? '' : 's'} open` };
+        ui?.jobCard?.refresh?.();
+        return { pointed: c?.key ?? null };
+      }
+      pending = null;
+      const target = engine.nextOpening();
+      const hrs = (target - env.day) * 24;
+      skip(hrs);
+      return { skipped: hrs };
+    },
+    nextLabel,
+    jobs: {
+      list: () => engine.list(),
+      open: () => engine.open(),
+      current: () => engine.current(),
+      complete: (key) => engine.complete(key),
+      byKey: (key) => engine.byKey(key),
+    },
+    skillDetail: (id) => details.get(id) || '',
+    get result() { return ended; },
+    serialize() {
+      return { v: 1, mode: level.mode, seed, jobs: engine.serialize(), fired: [...fired], points, weighs, signed7, fast };
+    },
     saveBlob() {
-      const env = ctx.env, p = deps.player;
+      const p = player;
       return {
         level: level.serialize(),
-        env: env ? { day: env.day, hour: env.hour, weather: env.weather, houseTemp: env.houseTemp, slabTemp: env.slabTemp,
+        env: { day: env.day, hour: env.hour, weather: env.weather, houseTemp: env.houseTemp, slabTemp: env.slabTemp,
           heaterSetpoint: env.heaterSetpoint, heaterLevel: env.heaterLevel, fansOn: env.fansOn, padOn: env.padOn,
-          ventTimer: env.ventTimer, lightProgram: env.lightProgram } : null,  // weatherEvents: rebuilt by the farm
-        farm: deps.farm?.serialize() ?? null,
-        records: deps.records?.serialize() ?? null,
-        props: deps.props?.serialize() ?? null,
-        flock: deps.flock?.serialize?.() ?? null,
+          ventTimer: env.ventTimer, lightProgram: env.lightProgram },  // weatherEvents: rebuilt by the farm
+        farm: farm?.serialize() ?? null,
+        records: records?.serialize() ?? null,
+        props: props?.serialize() ?? null,
+        flock: flock?.serialize?.() ?? null,
         player: p ? { x: p.position.x, z: p.position.z, yaw: p.yaw } : null,
       };
     },
     debug: {
-      goto() { return false; },
-      trigger(id) { deps.farm?.debug?.trigger(id); },
-      result() { return null; },
+      /** Jump to day + hour. auto: the ideal farmer's management (farm-profiles.applyRound) for every
+       *  round passed, then the jobs still open are completed and logged, the evening record signed. */
+      goto(day, hour, { auto = false } = {}) {
+        if (level.mode !== 'level') level.start({ seed });
+        const target = day + hour * H;
+        if (target <= env.day + 1e-9) return false;
+        if (auto) {
+          const stops = [];
+          for (let d = env.dayNumber; d <= Math.min(day, LEVEL1.endDay); d++) {
+            const rounds = d < LEVEL1.arrivalDay ? [['prep', 7.25], ['eve', 20]] : [['am', d === LEVEL1.arrivalDay ? 8.1 : 6.25], ['pm', 13.25], ['eve', 20]];
+            for (const [r, hr] of rounds) { const t = d + hr * H; if (t > env.day + 1e-9 && t < target) stops.push({ d, r, t }); }
+          }
+          for (const s of stops) {
+            skip((s.t - env.day) * 24);
+            try { applyRound(farm, env, s.d, s.r, 'ideal'); } catch (err) { console.error('applyRound failed', err); }
+            engine.tick(); checks();
+            if (ended) return true;
+            if (s.r === 'eve' && !records?.row?.(s.d)?.signed) records?.sign?.(s.d);
+            for (const i of engine.open()) engine.complete(i.key, { auto: true });
+            if (ended) return true;
+          }
+        }
+        skip((target - env.day) * 24);
+        return true;
+      },
+      trigger(id) {
+        farm.debug?.trigger?.(id);
+        // the contract stub never decides a symptom: say it was met, so the problem job opens
+        if (farm.stub) events?.emit(EV.FARM_PROBLEM, { id, phase: 'symptom' });
+      },
+      /** Show the result screen now. forcePass true / false makes a passing / failing week for the harness. */
+      result(forcePass) {
+        const r = computeResult('debug');
+        if (forcePass === false) { r.pass = false; r.ratio = 3.8; r.weightG = r.chickWeightG * 3.8; r.failText = `day 7 weight ${two(r.ratio)} × chick weight`; }
+        else if (forcePass === true && !r.pass) { r.pass = true; }
+        showResult(r);
+        return r;
+      },
     },
   };
   return level;

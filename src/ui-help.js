@@ -6,10 +6,10 @@ import { ICONS } from './ui-icons.js';
 
 const HELP_SEEN_KEY = 'chicken-farm.help-dismissed';
 
-export function createHelp() {
+export function createHelp(keys = HELP_KEYS, seenKey = HELP_SEEN_KEY) {
   const titleId = uniqueId('help-title');
   const list = h('dl', { class: 'help-list' });
-  for (const row of HELP_KEYS) {
+  for (const row of keys) {
     const keys = row.keys.map((k) => h('kbd', { class: 'kbd' }, k));
     list.append(h('dt', null, keys), h('dd', null, row.what));
   }
@@ -27,11 +27,11 @@ export function createHelp() {
     toggleBtn.setAttribute('aria-expanded', String(show));
     toggleBtn.setAttribute('aria-label', show ? 'Hide the controls (H)' : 'Show the controls (H)');
   }
-  closeBtn.addEventListener('click', () => { set(false); store.set(HELP_SEEN_KEY, '1'); });
+  closeBtn.addEventListener('click', () => { set(false); store.set(seenKey, '1'); });
   toggleBtn.addEventListener('click', () => toggle());
-  function toggle() { set(card.hidden); if (card.hidden) store.set(HELP_SEEN_KEY, '1'); }
+  function toggle() { set(card.hidden); if (card.hidden) store.set(seenKey, '1'); }
 
-  set(store.get(HELP_SEEN_KEY) !== '1'); // shown on first load
+  set(store.get(seenKey) !== '1'); // shown on first load
   return { card, toggleBtn, toggle, get visible() { return !card.hidden; }, hide: () => set(false) };
 }
 
@@ -67,16 +67,17 @@ export function createPrompt(parent, onUse) {
   const pill = button({ class: 'prompt', hidden: true }, h('kbd', { class: 'kbd', 'aria-hidden': 'true' }, 'E'), text);
   const wrap = h('div', { class: 'hud-bc' }, pill);
   parent.appendChild(wrap);
-  let currentId = null;
-  pill.addEventListener('click', () => { if (currentId) onUse(currentId); });
+  let currentId = null, currentTarget = null;
+  pill.addEventListener('click', () => { if (currentId) onUse(currentId, currentTarget); });
   return {
     show(target) {
+      currentTarget = target;
       const id = target ? target.id : null;
       if (id === currentId) return;
       currentId = id;
       pill.hidden = !target;
       if (target) {
-        const verb = promptVerb(target.id);
+        const verb = target.verb || promptVerb(target.id);
         text.textContent = '';
         text.append(`${verb} `, h('b', null, target.label));
         pill.setAttribute('aria-label', `${verb} ${target.label} (E)`);
