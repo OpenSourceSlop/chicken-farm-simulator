@@ -150,9 +150,10 @@ export const COLORS = {
 // numbers marked "model" are tuning constants of the simulation, never shown as facts.
 // ================================================================================================
 
-// Flock days: day 0 = placement day (the chicks arrive at LEVEL1.arrivalHour), day -1 = prep day.
-// sim.js clamps env.dayNumber to MIN_DAY..MAX_DAY. Phase 1 (sandbox) keeps using days 1..42.
-export const MIN_DAY = -1;
+// Flock days: day 0 = placement day (the chicks arrive at LEVEL1.arrivalHour), day -1 = prep day,
+// day -2 = the planning day of Phase 3 (PHASE3.md §2.1). sim.js clamps env.dayNumber to
+// MIN_DAY..env.maxDay (42; 70 in the clean-out level). Phase 1 (sandbox) keeps using days 1..42.
+export const MIN_DAY = -2;
 // Two clocks in a level (PHASE2.md §2):
 //   calendar day N = env.dayNumber (the HUD's "Day N", changes at midnight). Job windows, record
 //     rows and everything the farmer reads off a sign by day ("day 3: 33 °C", "age + 20 ml/min")
@@ -177,6 +178,7 @@ export const GUIDES = {
 // Level 1: from the prep day to the day 7 weigh-in.
 export const LEVEL1 = {
   id: 'level1',
+  n: 2, short: 'The brooding week',  // Phase 3: the second level of the run (PHASE3.md §2.1)
   title: 'Level 1 – The brooding week',
   startDay: -1, startHour: 7,         // prep day, 07:00 at the farm gate
   arrivalDay: 0, arrivalHour: 8,      // chick truck at the house door
@@ -246,7 +248,8 @@ export const AIR = { infiltrationM3h: 300, thermalM3: 40000, wallLossPerH: 0.25 
 
 // Minimum ventilation: fresh air needed per 1,000 birds by body weight (general practice; the
 // numbers on sign-vent). [body weight g, m3/h per 1,000 birds]; straight line between, flat outside.
-export const MIN_VENT_PER_1000 = [[40, 150], [100, 290], [200, 480]];
+// Phase 3 extends the table to 3 kg (PHASE3.md §6.4); up to 200 g it is Phase 2's.
+export const MIN_VENT_PER_1000 = [[40, 150], [100, 290], [200, 480], [500, 950], [1000, 1600], [1500, 2150], [2000, 2700], [3000, 3650]];
 export function minVentM3hPer1000(weightG) {
   const t = MIN_VENT_PER_1000;
   if (weightG <= t[0][0]) return t[0][1];
@@ -259,7 +262,19 @@ export function minVentM3hPer1000(weightG) {
 
 // Standard feed intake, g per bird per day at flock age a (general practice). The feeder plate
 // shows it per HUD day: 14, 18, 22, 26, 30, 34, 38, 42 g on days 0-7 (the value at mid-day).
-export const feedStdGAt = (age) => (age < 0 ? 0 : 12 + 4 * age);
+// Phase 3 (PHASE3.md §6.1): 12 + 4a up to age 7 exactly as Phase 2, then FEED_STD_TABLE (straight
+// lines, flat after day 42); the feed sign shows about 75 / 120 / 155 / 185 / 200 g on days 14-42.
+export const FEED_STD_TABLE = [[7, 40], [14, 75], [21, 118], [28, 156], [35, 184], [42, 200]];
+export function feedStdGAt(age) {
+  if (age < 0) return 0;
+  if (age <= 7) return 12 + 4 * age;
+  const t = FEED_STD_TABLE;
+  for (let i = 1; i < t.length; i++) {
+    const [a1, f1] = t[i], [a0, f0] = t[i - 1];
+    if (age <= a1) return f0 + ((f1 - f0) * (age - a0)) / (a1 - a0);
+  }
+  return t[t.length - 1][1];
+}
 
 // Interactive spots added in Phase 2. house/world/props build the objects here; ui/jobs read them.
 // Boards on the north wall face south like Phase 1's (stand at z ~ -4.6 and press E).
@@ -285,7 +300,10 @@ export const SPOTS2 = {
   truckStop: { x: -9.5, z: 14.0, yaw: 0 },  // chick truck parks on the farm road, tail at the path
 };
 
-// Skill tree: the 11 branches from the plan doc. Phase 2 makes two earnable; the rest show as "later levels".
+// Skill tree: the 11 branches from the plan doc. Phase 2 made two earnable. Phase 3 makes all eleven
+// earnable (milestones: skills.js ALL_MILESTONES = Phase 2's + skills-cycle.js, PHASE3.md §9); `earnable`
+// keeps Phase 2's meaning (the cards the current skill tree shows as earnable) until package "run"'s
+// skill tree for all branches is merged, then the integrator sets it true for every branch.
 export const SKILL_BRANCHES = [
   { id: 'planning', name: 'Farm Planning', earnable: false },
   { id: 'biosecurity', name: 'Biosecurity & Health', earnable: false },
@@ -302,11 +320,42 @@ export const SKILL_BRANCHES = [
 // Points needed for branch levels 1, 2, 3 (level 3 is not reachable in Level 1).
 export const SKILL_LEVEL_POINTS = [4, 9, 15];
 // What a branch level unlocks (tool or view). Keys are read by props (overlay) and ui (graphs).
+// Phase 3: every level of every branch unlocks one (PHASE3.md §9.1; `by` = the package that builds it).
 export const UNLOCKS = {
-  floorOverlay: { branch: 'brooding', level: 1, name: 'Floor thermometer view' },
-  brooderChart: { branch: 'brooding', level: 2, name: '24-hour temperature chart on the controller' },
-  waterTrend: { branch: 'water', level: 1, name: 'Water meter trend graph' },
-  lineOverview: { branch: 'water', level: 2, name: 'All-lines water overview' },
+  floorOverlay: { branch: 'brooding', level: 1, name: 'Floor thermometer view', by: 'scene' },
+  brooderChart: { branch: 'brooding', level: 2, name: '24-hour temperature chart on the controller', by: 'panels' },
+  waterTrend: { branch: 'water', level: 1, name: 'Water meter trend graph', by: 'run' },
+  lineOverview: { branch: 'water', level: 2, name: 'All-lines water overview', by: 'panels' },
+  // Phase 3 (the plan's examples are the level 1 unlocks)
+  planningCalc: { branch: 'planning', level: 1, name: 'Planning calculator at the office desk', by: 'panels' },
+  planVsCycle: { branch: 'planning', level: 2, name: 'Your plan beside the flock in the record book', by: 'run' },
+  planCarry: { branch: 'planning', level: 3, name: 'The next plan starts from this cycle\'s numbers', by: 'panels' },
+  symptomCheck: { branch: 'biosecurity', level: 1, name: 'Quick symptom check when you inspect a bird', by: 'panels' },
+  deadByLook: { branch: 'biosecurity', level: 2, name: 'Dead birds counted by how they look, at the bin', by: 'panels' },
+  swabMap: { branch: 'biosecurity', level: 3, name: 'Swab places on the lab letter', by: 'run' },
+  sampleCard: { branch: 'brooding', level: 3, name: 'The day\'s samples on one card when you hold a bird', by: 'panels' },
+  comfortOverlay: { branch: 'comfort', level: 1, name: 'Comfort colour overlay on the flock', by: 'scene' },
+  comfortGraph: { branch: 'comfort', level: 2, name: 'Comfort graph in the record book', by: 'run' },
+  birdTemp: { branch: 'comfort', level: 3, name: 'Body temperature in the bird check', by: 'panels' },
+  windChill: { branch: 'ventilation', level: 1, name: 'Wind chill readout on the fan panel', by: 'panels' },
+  tunnelStages: { branch: 'ventilation', level: 2, name: 'Tunnel fan stages on the fan panel', by: 'panels' },
+  fanChart: { branch: 'ventilation', level: 3, name: '24-hour fans, pad and house chart on the fan panel', by: 'panels' },
+  moistureOverlay: { branch: 'moisture', level: 1, name: 'Litter moisture overlay', by: 'scene' },
+  minVentCalc: { branch: 'moisture', level: 2, name: 'Minimum ventilation calculator on the controller', by: 'panels' },
+  humidityChart: { branch: 'moisture', level: 3, name: '24-hour humidity chart on the controller', by: 'panels' },
+  heatLoss: { branch: 'heating', level: 1, name: 'Heat loss readout for the house', by: 'panels' },
+  gasGraph: { branch: 'heating', level: 2, name: 'Gas use graph in the record book', by: 'run' },
+  brooderZones: { branch: 'heating', level: 3, name: 'Brooder heat zones on the floor view', by: 'scene' },
+  waterTest: { branch: 'water', level: 3, name: 'Water test kit at the water supply', by: 'panels' },
+  droppingsGuide: { branch: 'feed', level: 1, name: 'Droppings guide at the bird check', by: 'panels' },
+  feedGraph: { branch: 'feed', level: 2, name: 'Feed per bird graph against the plate', by: 'run' },
+  siloDays: { branch: 'feed', level: 3, name: 'Days of feed left on the silo gauge', by: 'panels' },
+  lightPresets: { branch: 'lighting', level: 1, name: 'Light program presets', by: 'panels' },
+  luxMap: { branch: 'lighting', level: 2, name: 'Light map on the floor view', by: 'scene' },
+  dimming: { branch: 'lighting', level: 3, name: 'Dawn and dusk dimming in the light program', by: 'panels' },
+  recordsTargets: { branch: 'growth', level: 1, name: 'Flock records screen with targets', by: 'run' },
+  weightGraph: { branch: 'growth', level: 2, name: 'Weight curve against the target in the record book', by: 'run' },
+  uniformityChart: { branch: 'growth', level: 3, name: 'Weight spread chart in the weigh panel', by: 'panels' },
 };
 // What the branches of later levels will unlock (the plan's examples; shown dimmed on the tree,
 // nothing here can be earned in Level 1).
@@ -366,3 +415,192 @@ export function feederRimCmAt(age) {
   }
   return 35;
 }
+
+// ================================================================================================
+// Phase 3 (the full flock cycle, PHASE3.md). Shared constants: every package reads these, nobody edits
+// them without the integrator. Figures a farmer reads off a sign are general practice unless
+// PHASE3.md §5.1 or PHASE2.md §6.1 name a guide; numbers marked "model" are simulation tuning values.
+// ================================================================================================
+
+// One calendar for the whole run (PHASE3.md §2.1): -2 planning day, -1 prep day, 0 chicks, 42 catch,
+// 43-46 clean-out, then the rest until the booked chick day. env.setMaxDay(lastDay) in the clean-out.
+export const CYCLE = { planDay: -2, prepDay: -1, placeDay: 0, harvestDay: 42, cleanFrom: 43, cleanDays: 4,
+  growDays: 42, restMinDays: 21, lastDay: 70 };
+
+// Rounds of every level: Phase 2's plus the planning day and the evening ventilation (weeks 4-6).
+export const ROUNDS = {
+  ...LEVEL1.rounds,
+  plan: { from: 7, to: 24, label: 'Planning day' },
+  night: { from: 18, to: 22, label: 'Evening ventilation' },
+  clean: { from: 6, to: 20, label: 'Clean-out day' },
+};
+const CLOCK = LEVEL1.clock; // every level runs on Phase 2's clock speeds
+
+// Key target of the brooding week in Phase 3 terms (its pass rule stays LEVEL1.fail, PHASE2.md §10).
+LEVEL1.target = { kind: 'ratio', day: LEVEL1.endDay, min: LEVEL1.fail.weightRatioMin };
+
+// The seven levels of a run. problems: same shape as LEVEL1.problems (the farm starts them silently;
+// `until` makes a weather event; `rh` = outside humidity during it; conditional ones start only when
+// their condition holds, PHASE3.md §7). anchors: job-engine anchors beyond truck / placed (§3.1).
+export const PLAN_LEVEL = {
+  id: 'plan', n: 1, title: 'Level 1 – Plan the farm', short: 'Plan the farm',
+  startDay: -2, startHour: 7, endDay: -2, weather: 'cool', rounds: ROUNDS, clock: CLOCK, chicksPlaced: 0,
+  anchors: { sent: { action: 'plan.send' } },
+  problems: [],
+  target: { kind: 'plan' }, fail: {},
+};
+export const WEEK2 = {
+  id: 'week2', n: 3, title: 'Level 3 – Week 2', short: 'Week 2',
+  startDay: 8, startHour: 6, endDay: 14, weather: 'cool', rounds: ROUNDS, clock: CLOCK, weighDays: [14],
+  anchors: { curtain: { action: 'house.curtain', match: { open: true } } },
+  problems: [
+    { id: 'rainy-spell', day: 9, hour: 7, outsideDrop: 2, rh: 92, until: { day: 10, hour: 18 }, forecastDay: 8 },
+    { id: 'lame-birds', day: 11, hour: 6 },
+    { id: 'sudden-deaths', day: 13, hour: 4 },
+  ],
+  target: { kind: 'weight', day: 14, minShare: 0.9 }, fail: { mortalityMaxPct: 1.0 },
+};
+export const WEEK3 = {
+  id: 'week3', n: 4, title: 'Level 4 – Week 3', short: 'Week 3',
+  startDay: 15, startHour: 6, endDay: 21, weather: 'normal', rounds: ROUNDS, clock: CLOCK, weighDays: [21],
+  anchors: {},
+  problems: [
+    { id: 'pad-overflow', day: 17, hour: 10, litresPerCellH: 0.8, columns: 2 },
+    { id: 'coccidiosis', day: 19, hour: 5 },
+    { id: 'gumboro', day: 20, hour: 6, conditional: 'vaccine', below: 0.85 },
+  ],
+  target: { kind: 'weight', day: 21, minShare: 0.9 }, fail: { mortalityMaxPct: 1.0 },
+};
+export const WEEKS45 = {
+  id: 'weeks45', n: 5, title: 'Level 5 – Weeks 4 and 5', short: 'Weeks 4 and 5',
+  startDay: 22, startHour: 6, endDay: 35, weather: 'normal', rounds: ROUNDS, clock: CLOCK, weighDays: [28, 35],
+  anchors: {},
+  problems: [
+    { id: 'dusty-air', day: 23, hour: 8, rhDrop: 25, until: { day: 24, hour: 18 } },
+    { id: 'hot-afternoon', day: 25, hour: 11, outsideRise: 3, sunPerH: 1.5, until: { day: 25, hour: 17 } },
+    { id: 'fan-belt', day: 27, hour: 9, fan: 3 },
+    { id: 'pad-clog', day: 29, hour: 10, share: 0.33 },
+    { id: 'heat-wave', day: 30, hour: 10, outsideRise: 6, sunPerH: 2, until: { day: 32, hour: 19 }, forecastDay: 29 },
+    { id: 'humid-heat', day: 33, hour: 10, rh: 85, until: { day: 33, hour: 18 } },
+  ],
+  target: { kind: 'weight', day: 35, minShare: 0.9 }, fail: { mortalityMaxPct: 2.0 },
+};
+export const FINISH = {
+  id: 'finish', n: 6, title: 'Level 6 – Finishing and harvest', short: 'Finishing and harvest',
+  startDay: 36, startHour: 6, endDay: 42, weather: 'normal', rounds: ROUNDS, clock: CLOCK, weighDays: [40],
+  anchors: { catch: { stat: 'catchAt' } },
+  problems: [
+    { id: 'hot-finish', day: 38, hour: 11, outsideRise: 4, sunPerH: 1.5, until: { day: 38, hour: 17 } },
+  ],
+  target: { kind: 'harvest', minShare: 0.9 }, fail: { mortalityMaxPct: 1.5, withDoa: true },
+};
+export const CLEANOUT = {
+  id: 'cleanout', n: 7, title: 'Level 7 – Clean-out and rest', short: 'Clean-out and rest',
+  startDay: 43, startHour: 6, endDay: CYCLE.lastDay, weather: 'normal', rounds: ROUNDS, clock: CLOCK,
+  anchors: {},
+  problems: [{ id: 'swab-positive', conditional: 'lab' }],
+  target: { kind: 'clean', maxPositive: 2, restMinDays: CYCLE.restMinDays }, fail: {},
+};
+export const LEVELS = [PLAN_LEVEL, LEVEL1, WEEK2, WEEK3, WEEKS45, FINISH, CLEANOUT];
+export const levelById = (id) => LEVELS.find((l) => l.id === id) || null;
+/** The flock level a calendar day belongs to (the plan level for day -2, the brooding week -1..7). */
+export function levelOfDay(day) {
+  if (day <= CYCLE.planDay) return PLAN_LEVEL;
+  for (const l of LEVELS.slice(1)) if (day <= l.endDay) return l;
+  return CLEANOUT;
+}
+
+// Feed program (general; PHASE3.md §6.6). silo: 0 = silo 1, 1 = silo 2 (each EQUIP.siloCapacityKg).
+export const FEED_TYPES = [
+  { id: 'starter', label: 'Starter crumble', form: 'crumble', fromDay: 0, toDay: 14, silo: 0 },
+  { id: 'grower', label: 'Grower pellets', form: 'pellet', fromDay: 15, toDay: 28, silo: 1 },
+  { id: 'finisher', label: 'Finisher pellets', form: 'pellet', fromDay: 29, toDay: 42, silo: 0 },
+];
+export const feedTypeForDay = (day) => FEED_TYPES.find((t) => day <= t.toDay) || FEED_TYPES[FEED_TYPES.length - 1];
+
+// Light program presets (general; unlock lightPresets). lux at birds = EQUIP.luxMax x dimmer.
+export const LIGHT_PRESETS = {
+  brooding: { label: 'Brooding (week 1)', darkStart: 2, darkHours: 1, dimmer: 0.6 },
+  growing: { label: 'Growing (from day 8)', darkStart: 22, darkHours: 6, dimmer: 0.35 },
+  finishing: { label: 'Finishing', darkStart: 0, darkHours: 4, dimmer: 0.35 },
+  catching: { label: 'Catching', darkStart: 0, darkHours: 0, dimmer: 0.1 },
+};
+
+// Heat and tunnel figures on the signs (general): air speed with all six fans, the °C + RH % rule,
+// the pad-off humidity, the heat-wave feeder hours.
+export const HEAT = { airSpeedAllFans: 2.5, sumLimit: 105, padOffAboveRH: 80, feedersOffHours: [11, 16] };
+
+// The planning day (general, PHASE3.md §6.11): the company's contract and the planning sign's figures.
+export const PLAN_CONTRACT = {
+  salePerWeek: 3600, saleKg: 2.8, densityMaxKgM2: 32, lossesHintPct: 4, growDays: 42, cleanDays: 4,
+  houseBirds: 6000, houseM2Drawings: 576,
+  houses: [1, 12], birdsPerHouse: [1000, 9000], cycleDays: [49, 100], sendBy: 22, replyAfterH: 1,
+};
+
+// Finishing and harvest (general; model where PHASE3.md §6.9 says so).
+export const HARVEST = {
+  catchDefault: { day: 42, hour: 2 }, bookFrom: { day: 41, hour: 18 }, bookTo: { day: 42, hour: 6 },
+  sections: 8, sectionMin: 22, sectionOrder: [1, 0, 2, 3, 4, 5, 6, 7], crew: 4, trucks: 2,
+  cratesPerTruck: 300, birdsPerCrate: 10, tareKg: 12000, withdrawalH: [8, 12],
+};
+
+// Clean-out and rest (general).
+export const CLEAN = {
+  restMinDays: CYCLE.restMinDays, bookMinDays: 14, swabs: 10, swabSectors: 5, labDays: 2, maxPositive: 2,
+  brushParts: ['lines', 'fans', 'pad', 'brooders', 'inlets'], washItems: ['boots', 'buckets', 'barrow', 'washer'],
+};
+
+// Interactive spots added in Phase 3 (scene builds the objects; run / panels read them).
+// North-wall boards hang on the columns at x = 4 m steps (house-shell FRAME_X), facing south.
+export const SPOTS3 = {
+  guardHut: { x: -45.4, z: 34.0, label: 'Guard hut: farm clothes and boots', inside: false },
+  signPlan: { x: -30.6, z: 26.0, label: 'Production planning sign', inside: false },
+  signLight: { x: -4.0, z: -5.8, label: 'Light program sign', inside: true },
+  curtainWinch: { x: 2.0, z: -5.6, label: 'Brooding curtain winch', inside: true },
+  signCurtain: { x: 4.0, z: -5.8, label: 'Opening up the house sign', inside: true },
+  signLegs: { x: 8.0, z: -5.8, label: 'Legs and feathers sign', inside: true },
+  signAir: { x: 12.0, z: -5.8, label: 'Air quality sign', inside: true },
+  signDroppings: { x: 16.0, z: -5.8, label: 'Droppings sign', inside: true },
+  signHeat: { x: 20.0, z: -5.8, label: 'Heat and tunnel fans sign', inside: true },
+  fanPanel: { x: 22.4, z: -5.8, label: 'Fan panel', inside: true },
+  padPump: { x: -25.4, z: -3.0, label: 'Cooling pad pump', inside: false },
+  gasTank: { x: -27.0, z: -9.0, label: 'Gas tank gauge', inside: false },
+  signFeed: { x: -14.6, z: -8.1, label: 'Feed program sign', inside: false },
+  washBay: { x: -27.0, z: 10.5, label: 'Wash bay', inside: false },
+  signClean: { x: -27.0, z: 13.4, label: 'Clean-out sign', inside: false },
+  loadingBay: { x: -12.0, z: 12.2, label: 'Loading bay: weight tickets', inside: false },
+  signCatch: { x: -7.0, z: 6.4, label: 'Catching and loading sign', inside: false },
+  catchPanels: { x: -12.6, z: 4.6, label: 'Catching panels', inside: true },
+  bait: [{ x: -25.2, z: -6.8 }, { x: 25.2, z: -6.8 }, { x: 25.2, z: 6.8 }, { x: -25.2, z: 6.8 }].map((p, i) => ({ ...p, label: `Bait station ${i + 1}`, inside: false })),
+  // clean-out: where E brushes each part of the house (enabled on clean-out days)
+  brush: {
+    lines: { x: 6.0, z: 0.0, label: 'Feeder and drinker lines', inside: true },
+    fans: { x: 22.8, z: 0.0, label: 'Tunnel fans', inside: true },
+    pad: { x: -23.4, z: -3.4, label: 'Cooling pad (inside)', inside: true },
+    brooders: { x: -13.0, z: -2.6, label: 'Brooders', inside: true },
+    inlets: { x: 10.0, z: 5.3, label: 'Side-wall inlets', inside: true },
+  },
+};
+
+// The whole house in 8 sample sectors (four along x, two across z), for counts after the curtain lift.
+export function houseSector(x, z) {
+  const b = BIRD_BOUNDS, t = (x - b.xMin) / (b.xMax - b.xMin);
+  const col = Math.max(0, Math.min(3, Math.floor(t * 4)));
+  return col * 2 + (z < 0 ? 0 : 1);
+}
+
+// Overlay ramps (sRGB, continuous, no good / bad colours): comfort = felt °C minus the target
+// (blue cooler, white at the target, orange warmer); litter moisture % (light sand to dark brown).
+export const COMFORT_RAMP = [[-6, [0.18, 0.37, 0.82]], [-3, [0.45, 0.66, 0.92]], [0, [0.96, 0.96, 0.94]], [3, [0.96, 0.66, 0.32]], [6, [0.86, 0.36, 0.1]]];
+export const MOISTURE_RAMP = [[10, [0.93, 0.86, 0.64]], [20, [0.84, 0.72, 0.45]], [30, [0.64, 0.5, 0.3]], [40, [0.42, 0.31, 0.19]], [50, [0.26, 0.19, 0.13]]];
+
+// Run saves (PHASE3.md §11). The skill profile stays SAVE.profileKey.
+export const RUN_SAVE = { key: 'chickenFarm.run.v3', startPrefix: 'chickenFarm.run.v3.start.', version: 3 };
+
+// Harder replay conditions: Phase 4 (shown dimmed on the run card after a full cycle).
+export const CONDITIONS = {
+  hot: { label: 'Hot season', available: false },
+  rainy: { label: 'Rainy season', available: false },
+  badChicks: { label: 'A bad batch of chicks', available: false },
+  water: { label: 'A water problem', available: false },
+};

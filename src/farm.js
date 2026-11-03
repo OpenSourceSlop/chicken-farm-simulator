@@ -34,6 +34,8 @@ import { createFlock, deliver, stepFlock, stepBoxes, updateWeights, makeQuantile
 import { createProblems, tickProblems, actionSymptoms, onNear, onListen, problemZones, forecast, observe,
   installWeather, applyEffects } from './farm-problems.js';
 import { doAct } from './farm-act.js';
+// Phase 3 (PHASE3.md §13.8): the cycle state and the Phase 3 actions; a stub until package "sim" builds it
+import { installCycle, cycleAct } from './farm-cycle.js';
 
 /**
  * @typedef {{ heightCm: number, pressureCm: number, flowMlMin: number, access: number,
@@ -140,7 +142,8 @@ export function createFarm(env, { events } = {}) {
      * Emits EV.ACTION { id, ...args, result } unless args.quiet.
      */
     act(id, args = {}) {
-      const result = doAct(farm, env, id, args);
+      const cyc = cycleAct(farm, env, id, args);
+      const result = cyc !== undefined ? cyc : doAct(farm, env, id, args);
       if (farm.mode === 'level') actionSymptoms(farm, env, id, args, result);
       if (!args.quiet) emit(EV.ACTION, { id, ...args, result });
       return result;
@@ -169,6 +172,7 @@ export function createFarm(env, { events } = {}) {
     restore(data) { restoreFarm(farm, env, data); },
   };
   farm.flock.weightQuantile = makeQuantile(farm.flock);
+  installCycle(farm, env);
 
   if (events) {
     // The farm is the only owner of deadOnFloor (flock.dead mirrors it).

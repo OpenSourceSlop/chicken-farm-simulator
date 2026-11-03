@@ -17,6 +17,8 @@
 import { SKILL_BRANCHES, SKILL_LEVEL_POINTS, UNLOCKS } from './config.js';
 import { EV } from './events.js';
 import { RULES } from './skills-rules.js';
+// Phase 3: the milestones of the whole cycle (contract data; rules come with package "sim", PHASE3.md §9)
+import { MILESTONES_CYCLE } from './skills-cycle.js';
 
 /**
  * @typedef {{ id: string, branch: string, checkpoint: string, text: string,
@@ -63,6 +65,10 @@ export const MILESTONES = [
   { id: 'ratio-steady', branch: 'water', checkpoint: 'level-end', text: 'Water to feed ratio steady all week',
     tiers: [{ points: 1, rule: 'recorded water:feed between 1.6 and 2.2 on >= 5 of days 1-7' }] },
 ];
+// Phase 3: Phase 2's milestones and the cycle's in one table. evaluate() and the current skill tree still
+// use MILESTONES (Phase 2) so the brooding week and its screens are unchanged; package "sim" switches
+// evaluate() to ALL_MILESTONES when the cycle rules exist, package "run" its skill tree.
+export const ALL_MILESTONES = [...MILESTONES, ...MILESTONES_CYCLE];
 
 export function createSkills({ events, records, farm } = {}) {
   /** milestone id -> best tier index earned (profile, kept across replays) */

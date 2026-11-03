@@ -4,7 +4,7 @@
 //   const off = events.on('footdip', (p) => ...);   events.emit('footdip', { where: 'gate' });
 //   events.on('*', (p, type) => ...)                  // every event (records, tests)
 //
-// Event names and payloads are listed in EV below and in PHASE2.md "Event catalogue".
+// Event names and payloads are listed in EV below and in PHASE2.md "Event catalogue" / PHASE3.md §13.2.
 // Handlers run synchronously in the order they were added; a throwing handler is logged and the
 // others still run (one bad listener must not stop the farm).
 
@@ -24,15 +24,16 @@ export const EV = {
   CARRY: 'carry',                   // { kind, opts } props.startCarry / props.drop (kind null = hands empty)
   FRAME_SET: 'frame:set',           // { x, z, birds: [index] } catching frame set down, birds held (props, after flock.catchGroup)
   // d: flock
-  BIRD_PICK: 'bird:pick',           // { index, x, z, purpose: 'vent'|'crop'|'sick' } a live bird in the hand
+  BIRD_PICK: 'bird:pick',           // { index, x, z, purpose: 'vent'|'crop'|'sick' (+ Phase 3 'lame'|'check') } a live bird in the hand
   BIRD_RELEASE: 'bird:release',     // { index, culled: boolean }
   DEAD_PICK: 'dead:pick',           // { n, causes: {cause: n}, carried } dead birds picked up (farm: deadOnFloor -= n)
   DEAD_DROP: 'dead:drop',           // { n, causes } carried dead birds put in the bin (counted)
   // a: farm model
-  FARM_DEATH: 'farm:death',         // { n, cause } n real birds died (cause: cold|heat|dehydration|weak|starveout|other|box)
+  FARM_DEATH: 'farm:death',         // { n, cause } n real birds died (cause: cold|heat|dehydration|weak|starveout|other|box;
+                                    //   Phase 3: sds|legs|disease|respiratory; 'doa' is counted at the plant, never on the floor)
   FARM_PLACED: 'farm:placed',       // { chicks, x, z, minutesInBox }
   FARM_PROBLEM: 'farm:problem',     // { id, phase: 'start' | 'symptom' | 'fixed' }
-  FARM_DELIVERY: 'farm:delivery',   // { kind: 'chicks' | 'feed', phase: 'arrive' | 'leave' }
+  FARM_DELIVERY: 'farm:delivery',   // { kind: 'chicks' | 'feed' | 'catch', phase: 'arrive' | 'leave', type? (feed), truck? (catch) }
   RECORD_CLOSED: 'record:closed',   // { day, row, signed } the daily record row is final (signed false = closed by itself at 06:00)
   SKILL_POINTS: 'skill:points',     // { branch, milestone, tier, points (this award's delta), total, level, detail }
   SKILL_UNLOCK: 'skill:unlock',     // { key } a key of config UNLOCKS became available
@@ -43,9 +44,35 @@ export const EV = {
   JOB_OPEN: 'job:open',             // { id, key }
   JOB_DONE: 'job:done',             // { id, key, result }
   JOB_MISSED: 'job:missed',         // { id, key }
-  LEVEL: 'level',                   // { phase: 'start'|'resume'|'day'|'checkpoint'|'end', day, name?, result? }
-                                    //   checkpoint names: 'placed', 'vent', 'crop', 'weighin', 'level-end' (skills listen)
+  LEVEL: 'level',                   // { phase: 'start'|'resume'|'day'|'checkpoint'|'end', day, name?, result?, level? }
+                                    //   checkpoint names: 'placed', 'vent', 'crop', 'weighin', 'level-end' (skills listen);
+                                    //   Phase 3 adds 'plan', 'curtain', 'vaccine', 'heatwave', 'catch', 'harvest',
+                                    //   'clean', 'swabs', 'rest' and the level id on every checkpoint (PHASE3.md §9)
+  // Phase 3 (PHASE3.md §13.2)
+  RUN: 'run',                       // { phase: 'start'|'level-start'|'level-end'|'cycle-end', level, pass? } (run.js)
+  CATCH: 'catch',                   // { phase: 'start'|'section'|'end', i, birds } the catching crew's progress (farm)
+  LETTER: 'letter',                 // { kind: 'contract'|'reply'|'vet'|'lab', day } something new on the office desk (farm)
 };
+
+/**
+ * Every action id of PHASE2.md §13.2 and PHASE3.md §13.3 (EV.ACTION payload `id`). Job rules may only
+ * name these (scripts/test-contracts.mjs checks content-jobs*.js against this list).
+ */
+export const ACTION_IDS = [
+  // Phase 2
+  'heat.setpoint', 'heat.relight', 'vent.timer', 'vent.fans', 'vent.pad', 'light.program', 'light.lux', 'controller.read',
+  'litter.depth', 'litter.spread', 'litter.patch', 'litter.squeeze', 'floor.probe', 'water.flush', 'water.pressure',
+  'water.height', 'water.flowtest', 'water.meter', 'water.filter', 'water.clearFilter', 'water.fixLeak', 'feed.line',
+  'feed.meter', 'feed.silo', 'feed.order', 'chicks.tip', 'chicks.cull', 'dead.count', 'sample.box', 'sample.grade',
+  'grade.submit', 'sample.vent', 'sample.crop', 'sample.weigh', 'radio.listen', 'phone.report', 'sign.read',
+  // Phase 3
+  'bio.change', 'plan.letter', 'plan.measure', 'plan.send', 'plan.reply', 'house.curtain', 'heat.brooders',
+  'light.preset', 'air.probe', 'fans.read', 'vent.stages', 'fan.fix', 'pad.check', 'pad.flush', 'pad.fixFloat',
+  'gas.meter', 'sample.bird', 'water.main', 'vaccine.mix', 'water.medicate', 'water.test', 'feed.valve',
+  'feed.withdraw', 'feed.wash', 'litter.fork', 'phone.vet', 'phone.bookCatch', 'phone.bookChicks', 'catch.panels',
+  'load.ticket', 'clean.scrape', 'clean.wash', 'clean.spray', 'clean.brush', 'clean.washbay', 'clean.bait',
+  'clean.swab', 'house.close', 'swab.read',
+];
 
 /**
  * Does `payload` contain `pattern`? Every key of the pattern must be equal in the payload; a

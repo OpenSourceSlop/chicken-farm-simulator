@@ -29,6 +29,13 @@ import {
 //   env.flockHeatPerH (°C/h from the birds) and env.vapourGh (g/h of water vapour: breath and
 //                   litter drying) are set by the farm each step; the climate uses them next step.
 //   env.dayNumber may be MIN_DAY (-1) on the prep day.
+//
+// Phase 3 (PHASE3.md §13.8; package "sim" owns the file, these two are the contract in code now):
+//   env.setMaxDay(n) / env.maxDay   last calendar day the clock may reach (MAX_DAY 42 by default; the
+//                   clean-out level sets 70). reset() goes back to 42.
+//   env.setBroodCurtain(closed | null)   true = the brooding curtain is down, false = lifted (the farm's
+//                   house.curtain action in a level); null = Phase 1's rule (down before day 10).
+//                   env.broodCurtain follows it.
 
 const HOUR = 3600;
 export const MAX_DAY = 42;  // the last day of the flock; after it the clock keeps day 42
@@ -90,6 +97,8 @@ function initialState() {
     feelsLike: 27,
     bodyWeight: weightAt(TIME.startDay),
     broodCurtain: true,
+    curtainForced: null,           // Phase 3: true / false from setBroodCurtain, null = the day-10 rule
+    maxDay: MAX_DAY,               // Phase 3: setMaxDay (the clean-out level runs to day 70)
     // Phase 2 (see the contract at the top)
     ventTimer: null,               // { fans, onSec, cycleSec } or null (manual fans only)
     ventDuty: 0,
@@ -109,9 +118,9 @@ function initialState() {
   };
 }
 
-// Calendar day number (0..MAX_DAY). Robust to float drift in `hour`.
+// Calendar day number (MIN_DAY..env.maxDay). Robust to float drift in `hour`.
 function dayNumberOf(env) {
-  return Math.max(MIN_DAY, Math.min(MAX_DAY, Math.round(env.day - env.hour / 24)));
+  return Math.max(MIN_DAY, Math.min(env.maxDay ?? MAX_DAY, Math.round(env.day - env.hour / 24)));
 }
 
 export function createSim() {
@@ -168,7 +177,7 @@ export function createSim() {
     },
 
     // setDay picks the calendar day (whole number, 0..42) and keeps the time of day.
-    setDay(d) { const n = Math.max(MIN_DAY, Math.min(MAX_DAY, Math.floor(d))); this.day = n + this.hour / 24; derive(this); emit('day'); },
+    setDay(d) { const n = Math.max(MIN_DAY, Math.min(this.maxDay ?? MAX_DAY, Math.floor(d))); this.day = n + this.hour / 24; derive(this); emit('day'); },
     setHour(h) { const n = dayNumberOf(this); this.hour = ((h % 24) + 24) % 24; this.day = n + this.hour / 24; derive(this); emit('time'); },
     setWeather(w) { if (WEATHER[w]) { this.weather = w; derive(this); emit('weather'); } },
     setHeaterSetpoint(t) {
@@ -187,7 +196,7 @@ export function createSim() {
       stepGame(this, h * HOUR, true);
       // land on a whole minute: float drift (05:59.99999) must not make the next jump to 06:00 a no-op
       let n = dayNumberOf(this), hr = Math.round(this.hour * 60) / 60;
-      if (hr >= 24) { hr -= 24; n = Math.min(MAX_DAY, n + 1); }
+      if (hr >= 24) { hr -= 24; n = Math.min(this.maxDay ?? MAX_DAY, n + 1); }
       this.hour = hr; this.day = n + hr / 24;
       derive(this);
       emit('time');
@@ -225,6 +234,9 @@ export function createSim() {
       derive(this); emit('controls');
     },
     setBrooderOut(list) { this.brooderOut = (list || []).slice(); emit('controls'); },
+    // Phase 3 contract (see the top of the file)
+    setMaxDay(n) { this.maxDay = Math.max(MAX_DAY, Math.min(99, Math.round(n))); },
+    setBroodCurtain(closed) { this.curtainForced = closed == null ? null : !!closed; derive(this); emit('controls'); },
     litterDepthAt: null,           // (x, z) -> cm, set by the farm in a level
     // Litter surface temperature (PHASE2.md §6.2): the slab under it plus a share k of the air and
     // brooder radiant above it, k = 0.1 + 0.02 x depth cm (model). Outside a level: the felt air.
@@ -279,7 +291,7 @@ function derive(env) {
   // The target follows the whole flock day (the brooder sign's table): day 1 is 34 °C all day.
   env.targetTemp = targetTempAt(dayNumberOf(env));
   env.bodyWeight = weightAt(env.day);
-  env.broodCurtain = env.day < HOUSE.broodUntilDay;
+  env.broodCurtain = env.curtainForced != null ? env.curtainForced : env.day < HOUSE.broodUntilDay;
   if (env.levelClimate) {
     // Level: manual fans plus the minimum ventilation timer. Air, heat and wind chill use the mean;
     // fansOn shows the timer fans during the on-part of each cycle (phase from the game clock).
@@ -349,7 +361,7 @@ function stepGame(env, gs, fast) {
     const hrs = s / HOUR;
     let n = dayNumberOf(env);
     env.hour += hrs;
-    if (env.hour >= 24) { env.hour -= 24; n = Math.min(MAX_DAY, n + 1); } // after day 42 the clock keeps day 42
+    if (env.hour >= 24) { env.hour -= 24; n = Math.min(env.maxDay ?? MAX_DAY, n + 1); } // after the last day the clock keeps it
     env.day = n + env.hour / 24;
     derive(env);
 

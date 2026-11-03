@@ -29,7 +29,10 @@
 //                                                nearDrinker: k of them within 1 m of a drinker line)
 //     { type: 'coverage', frac, sight, listen? } share of the brooding-floor cells SEEN this round:
 //                                                every cell within `sight` m of an EV.CELL position;
-//                                                listen: and one EV.LISTEN
+//                                                listen: and one EV.LISTEN. Phase 3 (PHASE3.md §3.1):
+//                                                area 'brood' (default) | 'house' | 'used', tool
+//     (Phase 3 also: onDays on routines, count sectorsOf / match, each has, action / stat anchors;
+//      the Phase 3 jobs themselves are in content-jobs-cycle.js)
 //     { type: 'state', test }                    named predicate (job-engine.js STATE_TESTS)
 //     { type: 'all', of: [rules] }               every rule (each one latches when met)
 //     { type: 'any', of: [rules] }               one of the rules
@@ -39,6 +42,9 @@ const R = (id, days, round, title, rest) => ({ id, kind: 'routine', days, round,
 const D = (id, day, round, title, rest) => ({ id, kind: 'dated', day, round, title, ...rest });
 const P = (id, title, rest) => ({ id, kind: 'problem', title, ...rest });
 const WEEK = [0, 7];
+// Phase 3 (PHASE3.md §3.3): the daily rounds go on to day 41 (the catch is on day 42); the record to
+// day 46 (the clean-out days). Level 1's engine only makes days -1..7, so the brooding week is unchanged.
+const ROUTINE = [0, 41], ROUTINE1 = [1, 41];
 const CONTROLLER_READ = { type: 'action', id: 'controller.read' }; // ui: controller open >= 2 s (all three tabs on one screen)
 const GATE_DIP = { type: 'event', event: EV.FOOTDIP, match: { where: 'gate' } };
 const HOUSE_DIP = { type: 'event', event: EV.HOUSE_ENTER, match: { dipped: true } };
@@ -104,38 +110,38 @@ export const JOBS = [
     done: { type: 'count', id: 'sample.weigh', n: 50, sectors: 5 } }),
 
   // ---------------- every day: morning round 06:00-12:00 ----------------
-  R('r-dips', WEEK, 'am', 'Enter through the foot dips', {
+  R('r-dips', ROUTINE, 'am', 'Enter through the foot dips', {
     preTruck: true, spot: 'houseDoor', signs: ['sign-gate'], branch: null, done: { type: 'all', of: [GATE_DIP, HOUSE_DIP] } }),
-  R('r-controller', WEEK, 'am', 'Read the climate controller: temperature, ventilation, lights', {
+  R('r-controller', ROUTINE, 'am', 'Read the climate controller: temperature, ventilation, lights', {
     preTruck: true, spot: 'controller', signs: ['sign-brooder', 'sign-vent', 'controller-lights'], branch: 'brooding', done: CONTROLLER_READ }),
-  R('r-meter', WEEK, 'am', 'Read the water meter', {
+  R('r-meter', ROUTINE, 'am', 'Read the water meter', {
     preTruck: true, spot: 'waterSupply', signs: ['sign-water'], branch: 'water', done: { type: 'action', id: 'water.meter' } }),
-  R('r-walk', [1, 7], 'am', 'Walk the house and look at the chicks', {
+  R('r-walk', ROUTINE1, 'am', 'Walk the house and look at the chicks', {
     spot: 'heater', signs: ['sign-health', 'sign-brooder'], branch: 'brooding',
-    done: { type: 'coverage', frac: 0.5, sight: 2, listen: true } }),
-  R('r-drinkers', WEEK, 'am', 'Check drinker flow and height', {
+    done: { type: 'coverage', frac: 0.5, sight: 2, listen: true, area: 'used' } }),
+  R('r-drinkers', ROUTINE, 'am', 'Check drinker flow and height', {
     spot: 'drinkers.0', signs: ['sign-water'], branch: 'water',
     done: { type: 'each', id: 'water.flowtest', key: 'line', values: [0, 1, 2, 3] } }),
-  R('r-feeders', WEEK, 'am', 'Check the feeders and the silo level', {
+  R('r-feeders', ROUTINE, 'am', 'Check the feeders and the silo level', {
     spot: 'feederBox', signs: ['feeder-box', 'silo'], branch: null,
     done: { type: 'all', of: [{ type: 'action', id: 'feed.meter' }, { type: 'action', id: 'feed.silo' }] } }),
-  R('r-dead-am', [1, 7], 'am', 'Pick up dead birds and count them at the bin', {
+  R('r-dead-am', ROUTINE1, 'am', 'Pick up dead birds and count them at the bin', {
     spot: 'dead', signs: ['sign-health'], branch: null, done: { type: 'state', test: 'dead-cleared' } }),
 
   // ---------------- afternoon round 13:00-18:00, evening 16:00-24:00 ----------------
-  R('r-dips-pm', WEEK, 'pm', 'Dip your boots at the house door', {
+  R('r-dips-pm', ROUTINE, 'pm', 'Dip your boots at the house door', {
     spot: 'houseDoor', signs: ['sign-gate'], branch: null, done: HOUSE_DIP }),
-  R('r-walk-pm', WEEK, 'pm', 'Walk the house again', {
+  R('r-walk-pm', ROUTINE, 'pm', 'Walk the house again', {
     spot: 'heater', signs: ['sign-health', 'sign-brooder'], branch: 'brooding',
-    done: { type: 'coverage', frac: 0.35, sight: 2, listen: true } }),
-  R('r-controller-pm', WEEK, 'pm', 'Read the afternoon temperature', {
+    done: { type: 'coverage', frac: 0.35, sight: 2, listen: true, area: 'used' } }),
+  R('r-controller-pm', [0, 21], 'pm', 'Read the afternoon temperature', {
     spot: 'controller', signs: ['sign-brooder'], branch: 'brooding', done: CONTROLLER_READ }),
-  R('r-litter', WEEK, 'pm', 'Check the litter (Q: squeeze a handful)', {
+  R('r-litter', ROUTINE, 'pm', 'Check the litter (Q: squeeze a handful)', {
     spot: 'signLitter', signs: ['sign-litter'], branch: null,
     done: { type: 'count', id: 'litter.squeeze', n: 3, sectors: 2, nearDrinker: 1 } }),
-  R('r-dead-pm', WEEK, 'pm', 'Pick up dead birds', {
+  R('r-dead-pm', ROUTINE, 'pm', 'Pick up dead birds', {
     spot: 'dead', signs: ['sign-health'], branch: null, done: { type: 'state', test: 'dead-cleared' } }),
-  R('r-record', WEEK, 'eve', 'Fill in the daily record at the office', {
+  R('r-record', [0, 46], 'eve', 'Fill in the daily record at the office', {
     spot: 'officeDesk', signs: [], branch: null, done: SIGNED }),
 
   // ---------------- problems: opened by a symptom the farmer met (PHASE2.md §7) ----------------

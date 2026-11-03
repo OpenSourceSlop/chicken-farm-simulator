@@ -33,6 +33,10 @@ import { createJobCard } from './ui-jobs.js';
 import { createCaption, createFloatLabel } from './ui-caption.js';
 import { int, one, feelWords } from './ui-format.js';
 import { broodSector, FLOOR_TEMP_RAMP } from './config.js';
+// Phase 3 (PHASE3.md §13.8): the panels package registers its panels here
+import { registerCyclePanels } from './ui-cycle-panels.js';
+import { boardsForDay } from './content-signs-cycle.js';
+import { sourceLabel } from './content-signs.js';
 
 const MOVE_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
 const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift']);
@@ -222,6 +226,13 @@ export function createUI(ctx, deps) {
   panels.register('notebook', () => buildNotebookPanel(L), { kind: 'paused' });
   panels.register('skilltree', () => buildSkillTreePanel(L), { kind: 'paused' });
   panels.register('result', () => buildResultPanel(L), { kind: 'paused' });
+  // Phase 3 panels (package "panels"; placeholders until it builds them)
+  try {
+    registerCyclePanels({
+      register: (id, build, opts) => panels.register(id, build, opts),
+      L, boards: (id) => boardsForDay(env.dayNumber)[id] || null, sourceLabel,
+    });
+  } catch (err) { console.error('Phase 3 panels failed to register', err); }
 
   // ---- title card and the job card ----
   const title = createTitle(root, {

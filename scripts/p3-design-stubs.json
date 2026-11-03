@@ -1,0 +1,19 @@
+[
+  {"wait": 800},
+  {"clearStorage": true},
+  {"eval": "__game.stop(), 'stopped: Phase 3 design check of the contract stubs (PHASE3.md §13.8)'"},
+  {"expect": "typeof __game.run === 'object' && typeof __game.cycleAt === 'function' && typeof __game.startRun === 'function' && 'hooks: run, startRun, cycleAt'", "label": "the Phase 3 __game hooks exist"},
+  {"eval": "__game.startLevel({ seed: 1 }), 'brooding week start: day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ', mode ' + __game.level.mode"},
+  {"expect": "__game.env.dayNumber === -1 && __game.level.def.id === 'level1' && 'startLevel without a level is Phase 2\\'s prep day'", "label": "startLevel({ seed }) is still the brooding week"},
+  {"eval": "__game.startLevel({ level: 'weeks45', from: 'standard', seed: 1 }), 'standard start (stub): day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ', level ' + __game.level.def.id"},
+  {"expect": "__game.env.dayNumber === 22 && __game.level.mode === 'level' && !__game.level.result && 'day 22, ' + __game.farm.flock.alive + ' birds of ' + Math.round(__game.farm.flock.meanWeightG) + ' g'", "label": "a later level starts in level mode at its first morning"},
+  {"eval": "__game.cycleAt(31, 15), 'free run to ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ', fans ' + __game.env.fansManual + ', house ' + __game.env.houseTemp.toFixed(1)"},
+  {"state": {"farmer": {"x": 8, "z": 0, "yaw": 0}, "cameraYaw": 0.4, "zoom": 22}},
+  {"advance": 3},
+  {"expect": "__game.env.dayNumber === 31 && __game.env.broodCurtain === false && __game.flock.metrics().count > 1500 && 'flock of ' + __game.flock.metrics().count + ' drawn birds over the whole house'", "label": "day 31: the curtain is up and the flock is drawn"},
+  {"shot": "p3-day31"},
+  {"eval": "__game.ui.openPanel('fan-panel')"},
+  {"expect": "__game.ui.openPanelId === 'fan-panel' && document.querySelector('.panel:not([hidden])')?.textContent.includes('general practice') && 'placeholder fan panel with its plate'", "label": "a Phase 3 panel id opens its placeholder with the plate's sources"},
+  {"shot": "p3-fan-panel"},
+  {"eval": "__game.ui.closePanel(), __game.level.start({ seed: 1 }), 'back to the prep day: maxDay ' + __game.env.maxDay"}
+]

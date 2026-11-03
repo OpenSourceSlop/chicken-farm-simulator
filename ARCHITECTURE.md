@@ -7,8 +7,10 @@ vertical slice (the prep day and the brooding week, days −1..7), specified in 
 integrated on main: title card, job list and daily rounds, signs and equipment plates, the farm
 model, flock records, the skill tree (11 branches, two earnable), problem events, pass / fail at the
 day 7 weigh-in, autosave. The Phase 1 sections below are still valid; **"Phase 2 (Level 1)"** at the
-end lists the modules, the contracts as integrated, and the tests. Not in scope yet: levels 2–9,
-sound, settings, farm overview map.
+end lists the modules, the contracts as integrated, and the tests. **Phase 3** (the full flock cycle:
+seven levels on one flock from the plan to the rested house, all eleven skill branches) is specified in
+`PHASE3.md`; its shared contracts and stubs are on main (see "Phase 3 — contracts on main" at the end).
+Not in scope yet: sound, settings, farm overview map (Phase 5), harder replays (Phase 4).
 
 ## Decisions already made (from the plan doc)
 
@@ -328,3 +330,25 @@ feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
   `farmMode`, `ui.openPanel(id)`, `level.debug.goto / trigger / result`, `farm.debug.trigger /
   truth()`. Steps files start a level with `{"eval": "__game.startLevel({ seed: 1 })"}` or from the
   title (`__game.level.toTitle()` then `{"clickText": "Start Level 1"}`).
+
+## Phase 3 — contracts on main (before the packages branch)
+
+`PHASE3.md` is the spec and §14 the four packages (`sim`, `run`, `panels`, `scene`). Committed now:
+- `src/config.js` Phase 3 section: `CYCLE`, `ROUNDS`, the level defs `PLAN_LEVEL`, `WEEK2`, `WEEK3`,
+  `WEEKS45`, `FINISH`, `CLEANOUT` and `LEVELS` (with `LEVEL1`), `levelById`, `levelOfDay`, `FEED_STD_TABLE`
+  (`feedStdGAt` unchanged to age 7), `MIN_VENT_PER_1000` to 3 kg (unchanged to 200 g), `FEED_TYPES`,
+  `LIGHT_PRESETS`, `HEAT`, `PLAN_CONTRACT`, `HARVEST`, `CLEAN`, `SPOTS3`, `houseSector`, `COMFORT_RAMP`,
+  `MOISTURE_RAMP`, 33 `UNLOCKS`, `RUN_SAVE`, `CONDITIONS`; `MIN_DAY` is −2 (the planning day).
+- `src/events.js`: `EV.RUN`, `EV.CATCH`, `EV.LETTER`, `ACTION_IDS` (every action id of both phases).
+- `src/sim.js`: `env.setMaxDay(n)` / `env.maxDay` (42 by default), `env.setBroodCurtain(closed | null)`.
+- Contract data: `src/content-jobs-cycle.js` (72 jobs), `src/content-signs-cycle.js` (new boards, plates,
+  extra lines by day, `boardsForDay`), `src/skills-cycle.js` (95 milestones; `skills.js ALL_MILESTONES`),
+  `src/farm-plan.js` (the planning sums, complete), `scripts/test-cycle.mjs CYCLE_TARGETS`.
+- Stubs: `src/farm-cycle.js` (the Phase 3 farm state, `enterLevel`, the actions it answers),
+  `src/farm-profiles-cycle.js` (placeholder care), `src/records-cycle.js`, `src/run.js`,
+  `level.debug.freeRun(day, hour)` (a level-mode farm at any age, no jobs), `src/ui-cycle-panels.js`
+  (placeholder panels, registered from `ui.js`), `__game.run / startRun / startLevel({ level }) / cycleAt`.
+- Tests: `npm test` adds `test-cycle.mjs` and `test-run.mjs` (their model and chaining parts skip on the
+  stubs); `test-contracts.mjs` checks the Phase 3 content; `scripts/p3-design-stubs.json` checks the stubs
+  in the browser. The brooding week plays and measures exactly as before (`test-level.mjs`, `test-sim.mjs`).
+

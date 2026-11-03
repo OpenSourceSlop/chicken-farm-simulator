@@ -1,0 +1,209 @@
+// Every fact on the Phase 3 signs and equipment plates, with its source (PHASE3.md §5) — contract
+// data, committed by the integrator. Owner: package "run" (may reword texts; never moves a fact to a
+// guide that PHASE3.md §5.1 / PHASE2.md §6.1 do not list). Same shape as content-signs.js BOARDS:
+//   BOARDS_CYCLE: id -> { title, kicker?, where, items: [{ text, source, pic? }] }
+//     sign-*  3D boards (scene paints them at config SPOTS3, run opens them as a sign panel)
+//     others  plates: a fact column inside that equipment panel (panels builds them)
+//   BOARD_EXTRA_ITEMS: id of a Phase 2 board or plate -> [{ text, source, fromDay }]: lines added from that
+//     calendar day on, so the brooding week reads exactly as before
+//   boardsForDay(day) -> every board (Phase 2 + Phase 3) with the extra lines of that day merged in
+// source: a key of config GUIDES, an array of keys, or 'week1-4' (sourceLabel in content-signs.js).
+// 'general' = general broiler practice. No page numbers anywhere (scripts/test-contracts.mjs checks).
+import { BOARDS } from './content-signs.js';
+
+const g = 'general';
+const it = (text, source = g, pic) => (pic ? { text, source, pic } : { text, source });
+
+export const BOARDS_CYCLE = {
+  // ---------------- 3D boards ----------------
+  'sign-plan': {
+    title: 'Production planning', kicker: 'The planning sums', where: 'Office porch, beside the desk',
+    items: [
+      it('Chicks to place per week = birds for sale per week ÷ (1 − losses).'),
+      it('Plan for about 4 % losses from chick to catching.'),
+      it('Birds per m² at catching = kg of live bird allowed per m² ÷ sale weight.'),
+      it('Allow about 32 kg of live bird per m² at catching in a tunnel (EVAP) house.'),
+      it('Floor for one week’s chicks = chicks per week ÷ birds per m².'),
+      it('Days a house is used per flock = 42 growing days + about 4 clean-out days + the rest days.'),
+      it('Rest the clean, empty house at least 3 weeks before the next chicks.'),
+      it('Houses needed = floor for one week’s chicks × weeks a house is used per flock ÷ floor of one house.'),
+      it('Example: 1,000 birds for sale a week at 4 % losses = about 1,042 chicks a week.'),
+      it('House 1 has drinkers and feeders for 6,000 birds.'),
+    ],
+  },
+  'sign-light': {
+    title: 'Light program for growing birds', kicker: 'From week 2', where: 'Inside, north wall, east of the minimum ventilation sign',
+    items: [
+      it('From the second week give the birds a dark period every night: rest in the dark lowers sudden deaths and leg problems.', 'week2'),
+      it('About 4–6 hours of darkness in one block from day 7–8, kept until the last days before catching.'),
+      it('Light at bird level about 20 lux from week 2 (30–40 lux in week 1).'),
+      it('Measure the light at bird height (L), under the lamps and between them.'),
+      it('Sudden death: big, well-grown birds found dead on their backs, legs up, often near the feeders.'),
+      it('Dim the lights for catching: birds stay calm in low light.'),
+    ],
+  },
+  'sign-curtain': {
+    title: 'Opening up the house', kicker: 'The brooding curtain', where: 'Inside, north wall, beside the winch at the brooding curtain',
+    items: [
+      it('The brooding curtain lifts about day 10: then the birds spread over the whole house.', 'week2'),
+      it('The day before, spread litter over the rest of the floor so it is dry and warm when the birds come.'),
+      it('Lift the curtain in the morning when the house is warm, and walk through the birds so they spread out.'),
+      it('The lines feed the whole house: check flow and height at the far end too.'),
+      it('Before the lift the birds have half the floor: the litter there gets wetter and the birds more crowded every day.'),
+    ],
+  },
+  'sign-legs': {
+    title: 'Legs and feathers', kicker: 'Week 2', where: 'Inside, north wall, east of the curtain',
+    items: [
+      it('Watch the feathering and the legs in week 2.', 'week2'),
+      it('Gait score: 0 walks well, 1–2 small faults, 3 walks with difficulty, 4–5 can hardly walk or not at all.'),
+      it('Cull birds that cannot reach feed and water (gait 4–5) the day you find them.'),
+      it('Back and wings feathered by about day 21; slow or patchy feathering points to a house too hot or too cold, crowding or a feed problem.'),
+      it('Dark spots and sores on the footpads come from wet litter.'),
+      it('A dark period every night and dry litter give stronger legs.'),
+    ],
+  },
+  'sign-air': {
+    title: 'Air quality', kicker: 'Breathing and dust', where: 'Inside, north wall, middle of the east half',
+    items: [
+      it('In weeks 4–5 watch the breathing and the dust.', 'week4'),
+      it('What the breathing sounds tell you: snicking or a rattle means too much ammonia or dust in the air.', 'week1-4'),
+      it('Ammonia: if your eyes sting at bird height it is above about 20 ppm.'),
+      it('Dust rises with dry litter, low humidity and busy birds; more minimum ventilation carries it out.'),
+      it('Minimum ventilation brings fresh air in, moisture and ammonia out, even on cold days.', 'vent'),
+      it('Ventilate for moisture: step the minimum ventilation up as the birds grow.', 'week2'),
+    ],
+  },
+  'sign-droppings': {
+    title: 'Droppings', kicker: 'At the bird check', where: 'Inside, north wall, east end',
+    items: [
+      it('Read the droppings at the bird check: they tell you about the gut and the feed.', 'week3', 'droppings'),
+      it('Normal: firm, brown with a white cap. About one in ten is a soft, frothy, mustard-brown caecal dropping: also normal.'),
+      it('Watery: heat or too much water. Undigested feed: a feed change or a gut upset.'),
+      it('Blood or orange-red: call the vet. White and watery with hunched, sleepy birds: call the vet.'),
+      it('Keep the litter dry: wet, caked litter spreads gut disease and burns the feet.', 'week3'),
+    ],
+  },
+  'sign-heat': {
+    title: 'Heat and tunnel fans', kicker: 'Weeks 4 and 5', where: 'Inside, north wall, beside the fan panel',
+    items: [
+      it('From week 4 use the tunnel fans against heat stress: moving air cools big birds.', 'week4'),
+      it('Wind chill: moving air feels cooler to the birds; young birds feel it far more than big birds.'),
+      it('All six fans give about 2.5 m/s at bird height, each fan about 0.4 m/s.'),
+      it('At 2.5 m/s birds of 5 weeks feel about 3–4 °C cooler, birds of 2 weeks 6–7 °C.'),
+      it('Big birds make more heat: each week the same afternoon needs more air.'),
+      it('Heat stress: panting, wings out, lying along the walls; deaths start in the hottest hours.'),
+      it('Switch fans on as the house warms through the day; at night go back to minimum ventilation.'),
+    ],
+  },
+  'sign-feed': {
+    title: 'Feed program', kicker: 'Silos and feeder lines', where: 'Outside, beside the silo gauge',
+    items: [
+      it('Change the feed from crumble to pellets as the birds grow.', 'week3'),
+      it('Starter crumble days 0–14, grower pellets days 15–28, finisher pellets from day 29.'),
+      it('Change over a day: half from each silo for 24 hours, then the new feed only.'),
+      it('Feed per bird per day: about 75 g on day 14, 120 g on day 21, 155 g on day 28, 185 g on day 35, 200 g by day 42.'),
+      it('Feed ordered before 16:00 comes the next morning at 09:00; each silo holds 6 tonnes.'),
+      it('In a heat wave lift the feeders in the hottest hours (about 11:00–16:00): digesting feed makes heat.'),
+      it('Before catching take the feed away 8–12 hours before; keep the water on until catching starts.'),
+    ],
+  },
+  'sign-catch': {
+    title: 'Catching and loading', kicker: 'Harvest night', where: 'Outside the house, south wall, east of the flock health sign',
+    items: [
+      it('Book the catching crew and the trucks a few days ahead.'),
+      it('Take the feed away 8–12 hours before catching; keep the water on until catching starts.'),
+      it('Dim the lights and catch in the cool of the night.'),
+      it('Keep the fans running for the birds still in the house and for the crates on the trucks.'),
+      it('Lift the drinker and feeder lines out of the way just before the crew starts.'),
+      it('Pen small groups with catching panels: fewer birds pile up.'),
+      it('About 10 birds of 2.8 kg to a crate; fewer in hot weather.'),
+      it('Read each truck’s weight ticket: crates, birds, gross, empty and net weight.'),
+    ],
+  },
+  'sign-clean': {
+    title: 'Clean-out', kicker: 'Between flocks', where: 'At the wash bay, west of the house',
+    items: [
+      it('1. Lift all lines and brooders; take out all the old litter.'),
+      it('2. Brush the dust off the lines, fans, pad, brooders and inlets.'),
+      it('3. Wash everything with detergent and the pressure washer, from the far end to the door.'),
+      it('4. Let the house dry: disinfectant on a wet floor is too weak.'),
+      it('5. Disinfect every surface.'),
+      it('6. Clean the drinker lines with disinfectant and wash the feeder pans.'),
+      it('7. Wash and disinfect boots, buckets, the barrow and the washer at the wash bay.'),
+      it('8. Set rodent bait; close the house.'),
+      it('9. Take swabs from the clean house: the lab shows what still grows.'),
+      it('Rest the clean house at least 3 weeks before the next chicks.'),
+    ],
+  },
+  // ---------------- plates inside equipment panels ----------------
+  'guard-hut': { title: 'Farm clothes', where: 'Guard hut inside the gate',
+    items: [it('Change into farm clothes and boots before you go near the houses.'), it('Wash your hands; visitors sign the visitor book.')] },
+  'plan-sheet': { title: 'Planning figures', where: 'Planning sheet, office desk',
+    items: [it('Plan for about 4 % losses from chick to catching.'), it('At most about 32 kg of live bird per m² at catching.'),
+      it('A house is used 42 growing days + about 4 clean-out days + the rest days (at least 21) per flock.')] },
+  vaccine: { title: 'Vaccination', where: 'Water supply, Vaccine tab',
+    items: [it('Vaccinate the flock in week 2 by the vet’s schedule.', 'week2'), it('Here: day 12, Gumboro vaccine in the drinking water.'),
+      it('Stop chlorine and medicine in the water 2 days before.'), it('Turn the water off 1–2 hours before so the birds are thirsty.'),
+      it('Mix the vaccine with skim milk powder in the header tank, enough for the birds to drink in about 2 hours.'),
+      it('Walk slowly through the house while they drink so every bird gets up.')] },
+  medicator: { title: 'Medicine in the water', where: 'Water supply, Medicine tab',
+    items: [it('Give medicine in the drinking water at the vet’s dose for the full course; mix fresh each day.'),
+      it('Bloody or orange droppings with hunched birds: call the vet the same day.')] },
+  'pad-pump': { title: 'Cooling pad', where: 'Pad pump, outside the west end',
+    items: [it('Cooling pads work with the fans; keep inside the temperature + humidity limit.', 'week4'),
+      it('Each 5 % of humidity the air can still take up gives about 1 °C of pad cooling.', 'vent'),
+      it('Add the house temperature (°C) and humidity (%): above about 105 big birds struggle to lose heat.'),
+      it('With the house humidity above about 80 % the pads add more damp than cool: pump off, keep the air moving.'),
+      it('Water should run down every part of the pad; a dry stripe lets hot air in.'),
+      it('Run the pad pump only while the tunnel fans run.')] },
+  'fan-panel': { title: 'Tunnel fans', where: 'Fan panel, east end, north wall',
+    items: [it('Lamp on and the blade still: the motor runs but the belt is broken or slipping.'),
+      it('All six fans give about 2.5 m/s at bird height.'),
+      it('Big birds in the heat: all fans and the pads; young birds: as few tunnel fans as the heat allows.')] },
+  'gas-tank': { title: 'Gas tank', where: 'Outside, north-west of the house',
+    items: [it('Read the gas gauge every morning while the brooders run.'), it('Brooders burn most on cold nights and with too much minimum ventilation.')] },
+  'bird-check': { title: 'Bird in the hand', where: 'Any bird you pick up from day 8',
+    items: [it('Look at how it walks, the feathers, the feet, the breathing, the vent and droppings, the crop.'),
+      it('What huddling, panting, droppings and breathing sounds tell you.', 'week1-4')] },
+  'loading-bay': { title: 'Weight tickets', where: 'Loading bay by the door path',
+    items: [it('Net weight = gross − empty truck. Mean live weight = net ÷ birds loaded.'),
+      it('Dead on arrival is counted at the plant and comes back on the ticket.')] },
+  'wash-bay': { title: 'Wash bay', where: 'West of the house',
+    items: [it('Washer first with detergent, rinse, then the sprayer with disinfectant once the house is dry.'), it('Mix the disinfectant as its label says.')] },
+};
+
+export const BOARD_EXTRA_ITEMS = {
+  'sign-vent': [
+    { text: 'Fresh air per 1,000 birds as they grow: 950 m³/h at 500 g, 1,600 at 1 kg, 2,150 at 1.5 kg, 2,700 at 2 kg, 3,650 at 3 kg.', source: g, fromDay: 8 },
+    { text: 'Ventilate for moisture: step the timer up every day or two as the birds gain weight.', source: 'week2', fromDay: 8 },
+  ],
+  'controller-lights': [{ text: 'From week 2: a dark period every night (see the light program sign).', source: 'week2', fromDay: 8 }],
+  'sign-litter': [
+    { text: 'Keep the litter dry.', source: 'week3', fromDay: 15 },
+    { text: 'Fork over caked patches and top up with fresh husk, most of all under the drinker lines.', source: g, fromDay: 15 },
+  ],
+  'feeder-box': [
+    { text: 'Raise the pans every few days to the height of the birds’ backs.', source: g, fromDay: 8 },
+    { text: 'Before catching: stop the lines and winch the pans up once they are empty.', source: g, fromDay: 36 },
+  ],
+  silo: [{ text: 'Silo 1: starter crumble, later finisher pellets. Silo 2: grower pellets. Each holds 6 tonnes.', source: g, fromDay: 13 }],
+  'bird-scale': [
+    { text: 'Weigh 50 birds from 5 places every week: days 14, 21, 28, 35 and before catching.', source: g, fromDay: 8 },
+    { text: 'Target weights: 480 g on day 14, 950 g on day 21, 1,550 g on day 28, 2,200 g on day 35, 2,850 g on day 42.', source: g, fromDay: 8 },
+  ],
+  'water-supply': [{ text: 'Vaccine and medicine go in through the header tank (Vaccine and Medicine tabs).', source: g, fromDay: 12 }],
+  'sign-health': [{ text: 'Abnormal after week 1: more than about 0.15 % of the flock dying in one day (9 birds of 6,000).', source: g, fromDay: 8 }],
+};
+
+/** Every board of the game for calendar day `day`: Phase 2's, Phase 3's, and the extra lines due. */
+export function boardsForDay(day) {
+  const out = {};
+  for (const [id, b] of Object.entries({ ...BOARDS, ...BOARDS_CYCLE })) {
+    const extra = (BOARD_EXTRA_ITEMS[id] || []).filter((x) => day >= x.fromDay).map(({ text, source }) => ({ text, source }));
+    out[id] = extra.length ? { ...b, items: [...b.items, ...extra] } : b;
+  }
+  return out;
+}
+
+export const BOARD_IDS_CYCLE = Object.keys(BOARDS_CYCLE);

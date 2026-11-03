@@ -17,6 +17,8 @@ import { createSkills } from './skills.js';
 import { createSaveStore } from './save.js';
 import { buildProps } from './props.js';
 import { createLevel } from './level.js';
+// Phase 3 (PHASE3.md): the run of seven levels on one flock (a stub until package "run" builds it)
+import { createRun } from './run.js';
 
 function webglAvailable() {
   try {
@@ -102,6 +104,8 @@ function start(saved = {}) {
   const ui = createUI(ctx, { ...deps, house, world, interactables });
   const level = createLevel(ctx, { ...deps, ui });
   ctx.level = level;
+  const run = createRun({ level, save, events, farm, env, records });
+  ctx.run = run;
 
   if (saved.player) player.teleport(saved.player.x, saved.player.z, saved.player.yaw);
 
@@ -195,7 +199,12 @@ function start(saved = {}) {
     THREE, scene, camera, renderer, env, world, house, player, flock, ui,
     // Phase 2 (PHASE2.md "Test hooks")
     events, farm, records, skills, save, props, interact, level,
-    startLevel(opts = {}) { return level.start(opts); },
+    // Phase 3 (PHASE3.md §15): the run; startLevel({ level }) for a later level is a standard start
+    // (stub: level.debug.freeRun to its start); cycleAt(day, hour) = a level-mode farm at any age
+    run,
+    startRun(opts = {}) { return run.startRun(opts); },
+    startLevel(opts = {}) { return opts.level && opts.level !== 'level1' ? run.startLevel(opts.level, opts) : level.start(opts); },
+    cycleAt(day, hour = 6) { return level.debug.freeRun(day, hour); },
     nextJob() { return level.nextJob(); },
     jobs() { return level.jobs.list().map((j) => ({ key: j.key, status: j.status, progress: j.progress })); },
     get frames() { return frames; },
@@ -237,6 +246,9 @@ function start(saved = {}) {
       out.player = { x: player.position.x, z: player.position.z, inside: player.isInside };
       out.mode = level.mode;
       out.farmMode = farm.mode;
+      out.levelId = level.def?.id ?? null;
+      out.maxDay = env.maxDay;
+      out.fansBroken = env.fansBroken ?? [];
       return out;
     },
     stop() { running = false; },
