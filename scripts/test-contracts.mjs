@@ -197,9 +197,11 @@ test('cycle skills: every branch can reach level 3, three unlocks each, mileston
 test('plan sums: the planning sign\'s reference plan', () => {
   const s = planSums({ houses: 6, birdsPerHouse: 6000, cycleDays: 67, lossesPct: 4, saleKg: 2.8 }, 576);
   assert(Math.abs(s.chicksPerWeek - 3761.2) < 0.1 && Math.abs(s.salePerWeek - 3610.7) < 0.1 && s.densityKgM2 === 28 && s.restDays === 21, JSON.stringify(s));
-  assert(planOutcome(s).pass, 'reference plan meets the contract');
-  assert(!planOutcome(planSums({ houses: 5, birdsPerHouse: 6000, cycleDays: 67, lossesPct: 4, saleKg: 2.8 }, 576)).pass, '5 houses short');
-  assert(!planOutcome(planSums({ houses: 6, birdsPerHouse: 7000, cycleDays: 67, lossesPct: 4, saleKg: 2.8 }, 576)).pass, '7,000 a house over density');
+  assert(planOutcome({ houses: 6, birdsPerHouse: 6000, cycleDays: 67, lossesPct: 4, saleKg: 2.8 }, 576).pass, 'reference plan meets the contract');
+  assert(!planOutcome({ houses: 5, birdsPerHouse: 6000, cycleDays: 67, lossesPct: 4, saleKg: 2.8 }, 576).pass, '5 houses short');
+  assert(!planOutcome({ houses: 6, birdsPerHouse: 7000, cycleDays: 67, lossesPct: 4, saleKg: 2.8 }, 576).pass, '7,000 a house over density');
+  assert(!planOutcome({ houses: 5, birdsPerHouse: 6000, cycleDays: 49, lossesPct: 0, saleKg: 2.8 }, 576).pass, '49 days at 0 % losses');
+  assert(!planOutcome({ houses: 4, birdsPerHouse: 6500, cycleDays: 49, lossesPct: 0, saleKg: 2.8 }, 576).pass, '4 x 6,500 x 49 days at 0 %');
 });
 
 let failed = 0;

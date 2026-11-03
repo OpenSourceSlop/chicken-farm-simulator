@@ -2,6 +2,7 @@
 // Owner: systems/UI agent. Other modules read `env`; only ui.js and test hooks call the setters.
 import {
   HEATERS, HOUSE, BIRD_BOUNDS, BROOD_BOUNDS, FAN_COUNT, TIME, WEATHER, MIN_DAY, AIR, EQUIP, targetTempAt, weightAt,
+  OUTSIDE_WATER_GM3, PAD_EFF,
 } from './config.js';
 //
 // Phase 2 additions (package "sim", PHASE2.md §6.2). The level climate runs only while
@@ -36,6 +37,20 @@ import {
 //   env.setBroodCurtain(closed | null)   true = the brooding curtain is down, false = lifted (the farm's
 //                   house.curtain action in a level); null = Phase 1's rule (down before day 10).
 //                   env.broodCurtain follows it.
+//   env.setCycleClimate(on) / env.cycleClimate   the Phase 3 outside air and pad (PHASE3.md §6.3), on
+//                   from Week 2 (farm.enterLevel sets it; the brooding week and the sandbox keep it
+//                   off, so every Phase 1 and Phase 2 number is unchanged):
+//                   - outside air keeps the day's water content OUTSIDE_WATER_GM3[weather] (g/m3), so
+//                     the RH falls as the afternoon warms (normal: about 89 % at 05:00, 54 % at 15:00);
+//                     a weather event with `rh` sets the outside RH during it, `rhDrop` takes points
+//                     off it (2 h ramps)
+//                   - the pad cools by PAD_EFF x (outside - wet bulb) x tunnel share x env.padWorking
+//                     and adds 0.49 g/m3 of water per °C it cools (Phase 2's figure)
+//   env.setFansBroken([i]) / env.fansBroken   tunnel fans (0-based) whose belt is broken: inside the
+//                   first fansManual their lamp is on (fansOn counts them) but they move no air;
+//                   env.fansEffective = fansManual - broken among them (air, heat, wind chill use it)
+//   env.padWorking  0..1 share of the pad with water on it (the farm sets it; 1 by default)
+//   env.wetBulb()   outside wet-bulb °C (the pad's limit)
 
 const HOUR = 3600;
 export const MAX_DAY = 42;  // the last day of the flock; after it the clock keeps day 42
@@ -99,6 +114,10 @@ function initialState() {
     broodCurtain: true,
     curtainForced: null,           // Phase 3: true / false from setBroodCurtain, null = the day-10 rule
     maxDay: MAX_DAY,               // Phase 3: setMaxDay (the clean-out level runs to day 70)
+    cycleClimate: false,           // Phase 3: outside water content, wet-bulb pad (setCycleClimate)
+    fansBroken: [],                // Phase 3: tunnel fans with a broken belt (setFansBroken)
+    fansEffective: 0,              // Phase 3: manual fans that move air
+    padWorking: 1,                 // Phase 3: share of the pad with water on it (farm sets it)
     // Phase 2 (see the contract at the top)
     ventTimer: null,               // { fans, onSec, cycleSec } or null (manual fans only)
     ventDuty: 0,
@@ -142,7 +161,7 @@ export function createSim() {
       if (this.levelClimate && this.brooderOut.length) t += this.outAirDev(x, z);
       const wallDist = Math.min(z - BIRD_BOUNDS.zMin, BIRD_BOUNDS.zMax - z);
       if (wallDist < 1.5) t -= 1.0 * (1 - wallDist / 1.5);
-      const fans = this.levelClimate ? this.fansManual : this.fansOn; // tunnel air: pad (west) to fans (east)
+      const fans = this.levelClimate ? this.fansEffective : this.fansOn; // tunnel air: pad (west) to fans (east)
       if (fans > 0) {
         // air warms as it travels from the pad (west) to the fans (east)
         const along = (x - BIRD_BOUNDS.xMin) / (BIRD_BOUNDS.xMax - BIRD_BOUNDS.xMin);
@@ -237,6 +256,9 @@ export function createSim() {
     // Phase 3 contract (see the top of the file)
     setMaxDay(n) { this.maxDay = Math.max(MAX_DAY, Math.min(99, Math.round(n))); },
     setBroodCurtain(closed) { this.curtainForced = closed == null ? null : !!closed; derive(this); emit('controls'); },
+    setCycleClimate(on) { this.cycleClimate = !!on; derive(this); emit('weather'); },
+    setFansBroken(list) { this.fansBroken = (list || []).filter((i) => i >= 0 && i < FAN_COUNT); derive(this); emit('controls'); },
+    wetBulb() { return wetBulbOf(this.outsideTemp, this.outsideRH); },
     litterDepthAt: null,           // (x, z) -> cm, set by the farm in a level
     // Litter surface temperature (PHASE2.md §6.2): the slab under it plus a share k of the air and
     // brooder radiant above it, k = 0.1 + 0.02 x depth cm (model). Outside a level: the felt air.
@@ -288,6 +310,15 @@ function derive(env) {
   env.sunHeatPerH = 0;
   if (env.weatherEvents.length) { env.outsideTemp -= weatherDrop(env); env.sunHeatPerH = weatherHeat(env); }
   env.outsideRH = WEATHER[env.weather].rh;
+  if (env.cycleClimate) {
+    // Phase 3: the day's water content stays, the RH follows the temperature; an event's rh overrides it
+    let rh = Math.max(20, Math.min(100, (100 * (OUTSIDE_WATER_GM3[env.weather] ?? 18)) / absHumSat(env.outsideTemp)));
+    for (const ev of env.weatherEvents) {
+      if (Number.isFinite(ev.rh)) rh += (ev.rh - rh) * weatherRamp(env, ev);
+      if (Number.isFinite(ev.rhDrop)) rh = Math.max(15, rh - ev.rhDrop * weatherRamp(env, ev));
+    }
+    env.outsideRH = rh;
+  }
   // The target follows the whole flock day (the brooder sign's table): day 1 is 34 °C all day.
   env.targetTemp = targetTempAt(dayNumberOf(env));
   env.bodyWeight = weightAt(env.day);
@@ -295,14 +326,17 @@ function derive(env) {
   if (env.levelClimate) {
     // Level: manual fans plus the minimum ventilation timer. Air, heat and wind chill use the mean;
     // fansOn shows the timer fans during the on-part of each cycle (phase from the game clock).
-    const t = env.ventTimer;
-    env.fanMean = Math.min(FAN_COUNT, env.fansManual + (t ? t.fans * env.ventDuty : 0));
+    // Phase 3: a broken fan inside the first fansManual shows its lamp (fansOn) but moves no air
+    const t = env.ventTimer, broken = env.fansBroken.length ? env.fansBroken.filter((i) => i < env.fansManual).length : 0;
+    env.fansEffective = Math.max(0, Math.min(FAN_COUNT, env.fansManual) - broken);
+    env.fanMean = Math.min(FAN_COUNT, env.fansEffective + (t ? t.fans * env.ventDuty : 0));
     const onPart = !!t && ((env.hour * HOUR) % t.cycleSec) < t.onSec;
     env.fansOn = Math.min(FAN_COUNT, env.fansManual + (onPart ? t.fans : 0));
-    const timerMean = env.fanMean - Math.min(FAN_COUNT, env.fansManual);
-    env.airSpeed = (Math.min(FAN_COUNT, env.fansManual) + timerMean * INLET_SPEED_SHARE) * (2.5 / FAN_COUNT);
+    const timerMean = env.fanMean - env.fansEffective;
+    env.airSpeed = (env.fansEffective + timerMean * INLET_SPEED_SHARE) * (2.5 / FAN_COUNT);
   } else {
     env.fanMean = env.fansOn;
+    env.fansEffective = env.fansOn;
     env.airSpeed = env.fansOn * (2.5 / FAN_COUNT);
   }
   env.airflowM3h = AIR.infiltrationM3h + env.fanMean * EQUIP.fanM3h;
@@ -326,6 +360,15 @@ function thermostat(env) {
 
 // Saturation water content of air, g/m3, at t °C (polynomial fit, good for 0-45 °C).
 export function absHumSat(t) { return 5.018 + 0.32321 * t + 8.1847e-3 * t * t + 3.1243e-4 * t * t * t; }
+// Wet-bulb °C of air at t °C and rh %: the temperature where evaporating water (0.49 g/m3 per °C of
+// cooling, the pad's figure) saturates the air. Bisection on absHumSat, so a pad at 100 % efficiency
+// would give exactly 100 % RH.
+export function wetBulbOf(t, rh) {
+  const x = (absHumSat(t) * Math.max(0, Math.min(100, rh))) / 100;
+  let lo = Math.min(t, 0), hi = t;
+  for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (absHumSat(m) - x - 0.49 * (t - m) > 0) hi = m; else lo = m; }
+  return (lo + hi) / 2;
+}
 
 // Level 1 climate step (PHASE2.md §6.2): one airflow figure for heat, humidity (and, in the farm,
 // ammonia); brooders with some out; the concrete slab as a slow heat store under the litter; the
@@ -333,8 +376,12 @@ export function absHumSat(t) { return 5.018 + 0.32321 * t + 8.1847e-3 * t * t + 
 function levelClimate(env, hrs) {
   // the pad cools only the air the tunnel fans pull through it (the timer air comes in at the side
   // inlets): the mixed inlet air is cooler by padDrop x the tunnel share of the air
-  const tunnelShare = env.fanMean > 0 ? Math.min(1, env.fansManual / env.fanMean) : 0;
-  const padDrop = env.padOn ? Math.min(9, (100 - env.outsideRH) / 5) * 0.85 * tunnelShare : 0;
+  const tunnelShare = env.fanMean > 0 ? Math.min(1, env.fansEffective / env.fanMean) : 0;
+  // Phase 2: about 1 °C per 5 % of humidity the air can still take up (Broiler Ventilation), 85 % of it.
+  // Phase 3 (cycle climate): PAD_EFF of the way to the outside wet bulb, on the share of the pad that is wet.
+  const padDrop = !env.padOn ? 0 : env.cycleClimate
+    ? PAD_EFF * Math.max(0, env.outsideTemp - wetBulbOf(env.outsideTemp, env.outsideRH)) * tunnelShare * Math.max(0, Math.min(1, env.padWorking))
+    : Math.min(9, (100 - env.outsideRH) / 5) * 0.85 * tunnelShare;
   const inlet = env.outsideTemp - padDrop;
   const lit = HEATERS.length - env.brooderOut.length;
   const heat = (HEAT_RATE * env.heaterLevel * lit) / HEATERS.length + (env.sunHeatPerH || 0);

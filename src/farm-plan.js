@@ -3,9 +3,11 @@
 // planningCalc, package "panels") shows them live, and the cycle summary compares the plan with the
 // flock. Owner: package "sim" (committed by the integrator as contract code).
 //
-// Nothing here judges the plan: it turns the farmer's decisions into the numbers the contract talks
-// about (birds for sale per week, density at catching, rest days). Whether that meets the contract is
-// the level's key target (PHASE3.md §10), shown as those numbers.
+// Nothing here judges the plan: planSums turns the farmer's decisions into the numbers the contract talks
+// about (birds for sale per week, density at catching, rest days) with his own losses figure; planOutcome
+// runs them through the contract's terms (at least 4 % losses counted, 21 rest days, 6,000 chicks a house)
+// as the company's reply. Whether that meets the contract is the level's key target (PHASE3.md §10),
+// shown as those numbers.
 import { PLAN_CONTRACT } from './config.js';
 
 /** The farmer's decisions on the sheet (the inputs the sums use), with their ranges. */
@@ -62,14 +64,31 @@ export function planSums(plan = {}, houseM2 = plan.houseM2 ?? PLAN_CONTRACT.hous
 }
 
 /**
- * The level's key target in numbers (PHASE3.md §10): the plan gives at least the contract's birds for
- * sale per week and keeps the density at catching at or under the limit. Returns the measurements
- * and `pass`; the result screen shows the numbers, never a verdict word.
+ * The company's reply (PHASE3.md §6.11, the level's key target): the plan run through the contract's terms,
+ * as plain lines. The terms (on the contract letter, general): the company counts at least
+ * PLAN_CONTRACT.lossesMinPct losses (or the farmer's own figure if it is higher); at least
+ * PLAN_CONTRACT.restMinDays days of rest between flocks; at most PLAN_CONTRACT.houseBirds chicks a house
+ * (its drinkers and feeders); at most densityMaxKgM2 kg/m² at catching; and at least salePerWeek birds for
+ * sale every week. `pass` = every term met. Accepts the decisions (planSums runs on them) or a sent plan's
+ * `{ decisions, sums }`. Nothing here is a verdict: the reply shows each number beside its term.
+ * @returns {{ pass: boolean, lossesCountedPct: number, salePerWeek: number, contractPerWeek: number,
+ *   densityKgM2: number, densityMaxKgM2: number, restDays: number, restMinDays: number, birdsPerHouse: number,
+ *   houseBirds: number, chicksPerWeek: number, overPct: number,
+ *   terms: { key: 'salePerWeek'|'density'|'rest'|'houseBirds', value: number, limit: number, met: boolean }[] }}
  */
-export function planOutcome(sums, contract = PLAN_CONTRACT) {
-  const enough = sums.salePerWeek >= contract.salePerWeek - 1e-9;
-  const roomy = sums.densityKgM2 <= contract.densityMaxKgM2 + 1e-9;
-  return { pass: enough && roomy, salePerWeek: sums.salePerWeek, contractPerWeek: contract.salePerWeek,
-    densityKgM2: sums.densityKgM2, densityMaxKgM2: contract.densityMaxKgM2, restDays: sums.restDays,
-    overPct: Math.round((sums.salePerWeek / contract.salePerWeek - 1) * 1000) / 10 };
+export function planOutcome(plan, houseM2, contract = PLAN_CONTRACT) {
+  const decisions = cleanPlan(plan && plan.decisions ? plan.decisions : plan);
+  const m2 = houseM2 ?? (plan && plan.sums ? plan.sums.houseM2 : undefined) ?? plan?.houseM2 ?? contract.houseM2Drawings;
+  const lossesCountedPct = Math.max(decisions.lossesPct, contract.lossesMinPct);
+  const s = planSums({ ...decisions, lossesPct: lossesCountedPct }, m2);
+  const terms = [
+    { key: 'salePerWeek', value: s.salePerWeek, limit: contract.salePerWeek, met: s.salePerWeek >= contract.salePerWeek - 1e-9 },
+    { key: 'density', value: s.densityKgM2, limit: contract.densityMaxKgM2, met: s.densityKgM2 <= contract.densityMaxKgM2 + 1e-9 },
+    { key: 'rest', value: s.restDays, limit: contract.restMinDays, met: s.restDays >= contract.restMinDays },
+    { key: 'houseBirds', value: decisions.birdsPerHouse, limit: contract.houseBirds, met: decisions.birdsPerHouse <= contract.houseBirds },
+  ];
+  return { pass: terms.every((t) => t.met), lossesCountedPct, salePerWeek: s.salePerWeek, contractPerWeek: contract.salePerWeek,
+    densityKgM2: s.densityKgM2, densityMaxKgM2: contract.densityMaxKgM2, restDays: s.restDays, restMinDays: contract.restMinDays,
+    birdsPerHouse: decisions.birdsPerHouse, houseBirds: contract.houseBirds, chicksPerWeek: s.chicksPerWeek,
+    overPct: Math.round((s.salePerWeek / contract.salePerWeek - 1) * 1000) / 10, terms };
 }

@@ -263,8 +263,23 @@ export function minVentM3hPer1000(weightG) {
 // Standard feed intake, g per bird per day at flock age a (general practice). The feeder plate
 // shows it per HUD day: 14, 18, 22, 26, 30, 34, 38, 42 g on days 0-7 (the value at mid-day).
 // Phase 3 (PHASE3.md §6.1): 12 + 4a up to age 7 exactly as Phase 2, then FEED_STD_TABLE (straight
-// lines, flat after day 42); the feed sign shows about 75 / 120 / 155 / 185 / 200 g on days 14-42.
-export const FEED_STD_TABLE = [[7, 40], [14, 75], [21, 118], [28, 156], [35, 184], [42, 200]];
+// lines, flat after day 42); the feed sign shows about 75 / 130 / 160 / 185 / 200 g on days 14-42.
+export const FEED_STD_TABLE = [[7, 40], [14, 75], [21, 128], [28, 160], [35, 185], [42, 200]];
+// Feed per gram of gain by flock age (model, PHASE3.md §6.1): Phase 2's 0.97 + 0.03a up to age 14
+// (identical through the brooding week), then FPG_TABLE. With every intake factor at 0.97 (the ideal
+// farmer) the flock weighs about 5 % over weightAt on every weigh day (203 / 505 / 993 / 1,632 /
+// 2,320 g on days 7-35, 2,985 g at the catch); scripts/test-cycle.mjs holds it.
+export const FPG_TABLE = [[14, 1.39], [21, 1.43], [28, 1.63], [35, 1.77], [42, 2.03]];
+export function feedPerGainAt(age) {
+  const a = Math.max(0, age);
+  if (a <= 14) return 0.97 + 0.03 * a;
+  const t = FPG_TABLE;
+  for (let i = 1; i < t.length; i++) {
+    const [a1, f1] = t[i], [a0, f0] = t[i - 1];
+    if (a <= a1) return f0 + ((f1 - f0) * (a - a0)) / (a1 - a0);
+  }
+  return t[t.length - 1][1];
+}
 export function feedStdGAt(age) {
   if (age < 0) return 0;
   if (age <= 7) return 12 + 4 * age;
@@ -526,15 +541,26 @@ export const LIGHT_PRESETS = {
   catching: { label: 'Catching', darkStart: 0, darkHours: 0, dimmer: 0.1 },
 };
 
-// Heat and tunnel figures on the signs (general): air speed with all six fans, the °C + RH % rule,
-// the pad-off humidity, the heat-wave feeder hours.
-export const HEAT = { airSpeedAllFans: 2.5, sumLimit: 105, padOffAboveRH: 80, feedersOffHours: [11, 16] };
+// Outside air in the Phase 3 levels (env.cycleClimate, PHASE3.md §6.3; model): the day's water content
+// in g/m3 by weather. The RH follows the temperature: 'normal' about 89 % at 05:00 (24 °C) and 54 % at
+// 15:00 (33 °C); 'cool' about 86 % / 48 %. A weather event with `rh` sets the outside RH during it.
+export const OUTSIDE_WATER_GM3 = { cool: 14, normal: 19.5, hot: 24, rainy: 21 };
+// Cooling pad efficiency (model): the pad takes the air this share of the way to its wet bulb.
+export const PAD_EFF = 0.8;
+
+// Heat and tunnel figures on the signs (general): air speed with all six fans; the temperature +
+// humidity limit as one rule (PHASE3.md §6.3): the pads help while the house humidity they make stays
+// at or under padOffAboveRH; above it they add more damp than cool. The heat-wave feeder hours.
+export const HEAT = { airSpeedAllFans: 2.5, padOffAboveRH: 90, feedersOffHours: [11, 16] };
 
 // The planning day (general, PHASE3.md §6.11): the company's contract and the planning sign's figures.
+// The contract letter's terms (PHASE3.md §6.11): the company counts at least lossesMinPct losses (the
+// farmer's own figure when higher), wants restMinDays of rest between flocks and at most houseBirds chicks a
+// house (the drinkers and feeders of house 1). sendBy: the plan goes out by this hour of the planning day.
 export const PLAN_CONTRACT = {
-  salePerWeek: 3600, saleKg: 2.8, densityMaxKgM2: 32, lossesHintPct: 4, growDays: 42, cleanDays: 4,
-  houseBirds: 6000, houseM2Drawings: 576,
-  houses: [1, 12], birdsPerHouse: [1000, 9000], cycleDays: [49, 100], sendBy: 22, replyAfterH: 1,
+  salePerWeek: 3600, saleKg: 2.8, densityMaxKgM2: 32, lossesHintPct: 4, lossesMinPct: 4, restMinDays: 21, growDays: 42, cleanDays: 4,
+  houseBirds: 6000, houseM2Drawings: 600,  // the company's drawings show the standard house, 50 x 12 m; house 1 measures 48 x 12
+  houses: [1, 12], birdsPerHouse: [1000, 9000], cycleDays: [49, 100], sendBy: 16, replyAfterH: 1,
 };
 
 // Finishing and harvest (general; model where PHASE3.md §6.9 says so).

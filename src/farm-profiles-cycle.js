@@ -12,17 +12,21 @@
 //     13:15 'pm', 20:00 'sign' each day)
 //   climateCare(farm, env) -> stepper   STUB only: a fan and pad thermostat for free runs (tunnel fans
 //     by the house temperature over the target, pads with four fans or more), so a placeholder flock
-//     lives through weeks 4-6 until the real profiles exist
-//   runCycle(name, { seed, from, to }) -> { farm, env, records, skills, snaps, result }   (not built yet)
+//     lives through weeks 4-6 until the real profiles exist. Stays exported (a no-op once the ideal
+//     profile runs the fans itself) until the run package's merge drops level.js's import of it.
+//   runCycle(name, { seed, from, to }) -> { farm, env, records, skills, levels, levelEnds, hourly, points }
+//     (not built yet): the trace scripts/test-cycle.mjs checkCycle measures (its header lists the fields).
+//     The ideal's fans and pads follow scripts/cycle-refs.mjs idealFans / idealPad at its stops; it uses
+//     the base controls only (no vent.stages: a first-cycle farmer has no stage table).
 import { EQUIP, FAN_COUNT, feedStdGAt } from './config.js';
 import { applyRound } from './farm-profiles.js';
 
 export const STUB = true;
 
 /** Profile names (keys of CYCLE_TARGETS in scripts/test-cycle.mjs). */
-export const CYCLE_PROFILES = ['ideal', 'noDark', 'lateLift', 'noStep', 'poorVaccine', 'cocciUntreated', 'crumbleOn',
-  'abruptChange', 'noTunnel', 'fansNoPad', 'padInHumid', 'fanUnfixed', 'noWithdrawal', 'longWithdrawal', 'brightCatch',
-  'wetDisinfect', 'litterLeft', 'shortRest'];
+export const CYCLE_PROFILES = ['ideal', 'noDark', 'lateLift', 'noStep', 'poorVaccine', 'poorVaccineCocci', 'cocciUntreated', 'minVentW3',
+  'crumbleOn', 'abruptChange', 'overfullSilo', 'dustOn', 'noTunnel', 'fansNoPad', 'padInHumid', 'fanUnfixed', 'noWithdrawal',
+  'longWithdrawal', 'brightCatch', 'wetDisinfect', 'litterLeft', 'shortRest', 'determinism'];
 
 /** STUB: the rounds of each day from fromDay to toDay (inclusive). */
 export function cycleStops(fromDay, toDay) {

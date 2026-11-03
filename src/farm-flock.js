@@ -1,7 +1,7 @@
 // Farm model, the flock as numbers (PHASE2.md §6.3, §6.5, §6.6): delivery, boxes, placement and
 // late starters, intake and growth per cohort (good / late / weak), uniformity, deaths by cause,
 // culls, sick birds and droppings. Pure logic, package "sim".
-import { LEVEL1, broodSector, feedStdGAt } from './config.js';
+import { LEVEL1, broodSector, feedStdGAt, feedPerGainAt } from './config.js';
 import { mixtureStats, mixtureQuantile } from './farm-rng.js';
 import { EV } from './events.js';
 import { feedAccess } from './farm-feed.js';
@@ -53,7 +53,8 @@ export function createFlock() {
   };
 }
 
-const fpg = (age) => FLOCK.fpg0 + FLOCK.fpgPerDay * Math.max(0, age);
+// Phase 2's 0.97 + 0.03a to age 14 (FLOCK.fpg0 / fpgPerDay), then config FPG_TABLE (PHASE3.md §6.1)
+const fpg = (age) => (age <= 14 ? FLOCK.fpg0 + FLOCK.fpgPerDay * Math.max(0, age) : feedPerGainAt(age));
 const cohortList = (fl) => [fl.cohorts.good, fl.cohorts.late, fl.cohorts.weak];
 
 /** The chick truck: 6,000 chicks in 6 stacks of 10 boxes (weak chicks spread over the stacks). */
