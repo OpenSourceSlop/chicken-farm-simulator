@@ -88,6 +88,7 @@ export function createFarm(env, { events } = {}) {
     stats: freshStats(),
     comfort: { e: 0, meanOver: 0, coldShare: 0, pantShare: 0 },
     truckLeft: false,
+    drinkLh: 0,               // drinking smoothed over ~6 h, L/h (breath vapour)
     emit,
     /** Flock age in days (env.day - PLACEMENT_DAY), negative before 08:00 on day 0. */
     get age() { return flockAgeAt(env.day); },
@@ -100,7 +101,7 @@ export function createFarm(env, { events } = {}) {
     /** Start Level 1 from the prep day (bare floor, empty house, lines high, no chicks). */
     start(level = LEVEL1, { seed = 1, keepClock = false } = {}) {
       Object.assign(farm, { mode: 'level', level, seed, rng: createRng(seed), flock: createFlock(), water: createWater(),
-        feed: createFeed(), litter: createLitter(), problems: createProblems(level), stats: freshStats(), truckLeft: false,
+        feed: createFeed(), litter: createLitter(), problems: createProblems(level), stats: freshStats(), truckLeft: false, drinkLh: 0,
         light: { darkStart: 2, darkHours: 1, dimmer: 1, luxAtBirds: EQUIP.luxMax }, vent: { fans: 0, onSec: 0, cycleSec: 300 } });
       farm.flock.weightQuantile = makeQuantile(farm.flock);
       if (!keepClock) { env.setDay(level.startDay); env.setHour(level.startHour); }
@@ -111,7 +112,7 @@ export function createFarm(env, { events } = {}) {
       env.setLightProgram({ darkStart: 2, darkHours: 1, dimmer: 1 });
       env.clearWeatherEvents(); installWeather(farm, env); env.setBrooderOut([]);
       env.litterDepthAt = (x, z) => { const i = litterCell(x, z); return farm.litter.depthGrid[i] * farm.litter.coverGrid[i]; };
-      env.litterDepthCm = 0; env.flockHeatPerH = 0; env.vapourGh = 0;
+      env.litterDepthCm = 0; env.flockHeatPerH = 0; env.vapourGh = 0; env.dryPotentialGh = 0;
       env.setLevelClimate(true);
       emit(EV.LEVEL, { phase: 'farm-start', day: level.startDay });
     },
@@ -119,7 +120,7 @@ export function createFarm(env, { events } = {}) {
     stop() {
       farm.mode = 'off'; farm.level = null; farm.flock.present = true;
       env.setLevelClimate(false); env.clearWeatherEvents(); env.setBrooderOut([]); env.setVentTimer(null);
-      env.litterDepthAt = null; env.flockHeatPerH = 0; env.vapourGh = 0;
+      env.litterDepthAt = null; env.flockHeatPerH = 0; env.vapourGh = 0; env.dryPotentialGh = 0;
     },
 
     /** env stepper: integrate gameSeconds (<= 60). fast = inside skipHours. */
@@ -200,13 +201,13 @@ function stepFarm(farm, env, hrs, spill) {
   updateAccess(water, age);
   recordMeter(water, env);
   // flock
-  let drunkL = 0;
+  let drunkL = 0, breathL = 0;
   const C = farm.comfort;
   if (fl.placed > 0 && fl.alive > 0) {
     comfortNow(env, C);
     const io = { feedAccess: feedAccess(feed, age, env.dayNumber), eat: (kg) => eat(feed, kg), waterPerKg: waterPerKg(env.houseTemp) };
     const r = stepFlock(farm, env, hrs, C, io);
-    drunkL = r.drunkL;
+    drunkL = r.drunkL; breathL = r.breathL;
     drink(water, drunkL, age, spill);
   } else spill.fill(0);
   if (st.pansEmptyAt == null && fl.placed > 0 && meanPanFill(feed) < 0.05) st.pansEmptyAt = env.day;
@@ -214,7 +215,10 @@ function stepFarm(farm, env, hrs, spill) {
   const L = farm.litter;
   stepLitter(L, { hrs, droppingsL: 0.5 * drunkL, spill, leakL, leakCell: water.leak ? water.leak.cell : null,
     rh: env.houseRH, feedKg: feed.meterKg, airflow: env.airflowM3h });
-  env.vapourGh = (0.4 * drunkL * 1000) / hrs + L.vapourGh;
+  // breath follows the day's drinking (smoothed over ~6 h: the birds breathe in the dark hour too)
+  farm.drinkLh += (breathL / hrs - farm.drinkLh) * (1 - Math.exp(-hrs / 6));
+  env.vapourGh = 0.4 * farm.drinkLh * 1000;
+  env.dryPotentialGh = L.dryPotentialGh;
   const birds = fl.alive, w = fl.meanWeightG;
   env.flockHeatPerH = birds > 0 ? (0.2 * birds) / 6000 + (1.3 * birds * w) / (6000 * 2850) : 0;
   env.litterDepthCm = meanDepth(L);
@@ -226,7 +230,7 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 function serializeFarm(farm, env) {
   const fl = { ...farm.flock }; delete fl.weightQuantile; delete fl.qVersion;
   return {
-    v: 1, mode: farm.mode, seed: farm.seed, rng: farm.rng.state, truckLeft: farm.truckLeft,
+    v: 1, mode: farm.mode, seed: farm.seed, rng: farm.rng.state, truckLeft: farm.truckLeft, drinkLh: farm.drinkLh,
     flock: clone(fl),
     water: clone({ ...farm.water, hist: farm.water.hist.map((v) => Math.round(v * 100) / 100) }),
     feed: clone(farm.feed), litter: serializeLitter(farm.litter),
@@ -241,7 +245,7 @@ function restoreFarm(farm, env, d) {
   if (farm.mode !== 'level') { farm.stop(); return; }
   farm.level = LEVEL1; farm.seed = d.seed ?? 1;
   farm.rng = createRng(1); farm.rng.state = d.rng ?? 1;
-  farm.truckLeft = !!d.truckLeft;
+  farm.truckLeft = !!d.truckLeft; farm.drinkLh = d.drinkLh || 0;
   farm.flock = Object.assign(createFlock(), clone(d.flock));
   farm.flock.weightQuantile = makeQuantile(farm.flock);
   farm.water = Object.assign(createWater(), clone(d.water));

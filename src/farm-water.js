@@ -7,11 +7,11 @@ export const WATER = {
   startHeightCm: 50,      // lines winched up on the prep day
   startPressureCm: 10,
   flowPerCm: 2, flowBase: 4,           // f = (2 x pressure cm + 4) x filterFactor, ml/min per nipple
-  accessFull: 0.8, accessExp: 0.88,     // a_i = min(1, (f / need) / 0.8)^0.88 x hf (tuned, see report)
+  accessFull: 0.75, accessExp: 0.88,     // a_i = min(1, (f / need) / 0.8)^0.88 x hf (tuned, see report)
   highPerCm: 0.12, highMin: 0.05,       // nipple above the birds: hf = 1 - 0.12 x cm, >= 0.05
   lowPerCm: 0.03, lowMin: 0.7,          // nipple below the birds: hf = 1 - 0.03 x cm, >= 0.7
   spillBase: 0.02, spillOverflow: 0.15, spillPerCmLow: 0.02,
-  leakLh: 0.6,
+  leakLh: 0.5,
   flushMin: 10,                         // minutes until a flushed line runs clear
   flushLPerLine: 28,                    // litres through the meter while a line flushes (10 min)
   ratioBase: 1.75, ratioPerC: 0.03,     // water drunk = feed x (1.75 + 0.03 x max(0, house - 30)) L/kg

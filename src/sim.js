@@ -99,7 +99,8 @@ function initialState() {
     fanMean: 0,                    // mean running fans (manual + timer x duty)
     brooderOut: [],                // HEATERS indices that are out
     flockHeatPerH: 0,              // set by the farm (level mode)
-    vapourGh: 0,                   // set by the farm (level mode)
+    vapourGh: 0,                   // set by the farm (level mode): breath, g/h
+    dryPotentialGh: 0,             // set by the farm: litter drying at 0 % RH, g/h
   };
 }
 
@@ -314,9 +315,12 @@ function levelClimate(env, hrs) {
   env.houseTemp += dT * hrs;
   env.slabTemp += ((env.houseTemp + SLAB.brooderC * env.heaterLevel - env.slabTemp) / SLAB.tauH) * hrs;
   // Absolute-humidity balance: inlet air (outside, plus what the pad adds: about 0.49 g/m3 per °C
-  // of evaporative cooling) plus the flock's vapour spread through the air that passes.
-  const xIn = (absHumSat(env.outsideTemp) * env.outsideRH) / 100 + 0.49 * padDrop + env.vapourGh / env.airflowM3h;
-  env.houseRH = Math.max(20, Math.min(98, (100 * xIn) / absHumSat(env.houseTemp)));
+  // of evaporative cooling) plus the flock's vapour spread through the air that passes. Breath is
+  // env.vapourGh; the litter dries in proportion to (1 - RH) (env.dryPotentialGh = drying at 0 %
+  // RH), solved together with the balance so humidity and drying agree in every step.
+  const q = env.airflowM3h, d0 = env.dryPotentialGh || 0, xs = absHumSat(env.houseTemp);
+  const x0 = (absHumSat(env.outsideTemp) * env.outsideRH) / 100 + 0.49 * padDrop;
+  env.houseRH = Math.max(20, Math.min(98, (100 * (x0 + (env.vapourGh + d0) / q)) / (xs + d0 / q)));
 }
 
 // Advance the farm by `gs` game seconds in steps of at most one game minute.

@@ -14,11 +14,11 @@ export const FLOCK = {
     sectors: 0.03, coldH: 0.01, min: 0.02, max: 0.6 },
   lateIntakeEarly: 0.55, lateIntakeAfter: 0.8, lateEarlyAge: 3, weakIntake: 0.6,
   fpg0: 0.97, fpgPerDay: 0.03, coldGain: 0.04,
-  cvBase: 0.0002, cvTemp: 0.02, cvWater: 0.01, cvFeed: 0.015,  // tuned (PHASE2.md: 0.001 / 0.01 / 0.02 / 0.015)
+  cvBase: 0.0002, cvTemp: 0.04, cvWater: 0.01, cvFeed: 0.015,  // tuned (PHASE2.md: 0.001 / 0.01 / 0.02 / 0.015)
   // deaths per bird per hour
   weakRate: [[2, 0.006], [4, 0.0025], [Infinity, 0.0005]],
   starveRate: 0.001, starveFrom: 2, starveTo: 6,
-  coldRate: 0.0002, coldFrom: -4, heatRate: 0.0003, heatFrom: 4,
+  coldRate: 0.0004, coldFrom: -4, heatRate: 0.0003, heatFrom: 4,
   dehydRate: 0.0005, dehydBelow: 0.5,
   otherRate: 0.00001, otherFromDay: 3, otherPerLapse: 0.3, otherBadWater: 2.0,
 };
@@ -267,7 +267,8 @@ export function stepFlock(farm, env, hrs, C, io) {
     s.comfortShareByDay[d] = +(row[0] / row[1]).toFixed(4);
   }
   updateWeights(fl);
-  return { eatenKg: gotKg, drunkL };
+  // breath: the water the birds turn over at their intake, also when the lines limit them (they dry out)
+  return { eatenKg: gotKg, drunkL, breathL: drunkL / Math.max(0.3, fW) };
 }
 
 /** Flock mean, CV and uniformity from the cohort mixture. */

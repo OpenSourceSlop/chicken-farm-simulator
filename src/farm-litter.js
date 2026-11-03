@@ -4,10 +4,10 @@ import { FLOOR_GRID, BROOD_BOUNDS, DRINKER_LINES_Z } from './config.js';
 
 // model constants
 export const LITTER = {
-  dryKgPerCm: 1,           // husk ~100 kg/m3: 1 kg per cm per m2 cell
+  dryKgPerCm: 0.8,         // husk ~80 kg/m3 (tuned from 100): 0.8 kg per cm per m2 cell
   freshPct: 12,
   bareReadsPct: 60,        // water stands on bare concrete
-  dryRate: 0.028,          // kg/h per kg dry husk per unit of (m - 12)/100 at 50 % RH (tuned from 0.034)
+  dryRate: 0.045,         // kg/h per kg dry husk per unit of (m - 12)/100 at 50 % RH (tuned from 0.034)
   underLine: 1.5,          // droppings x 1.5 under the drinker lines
   cakeAbovePct: 40, cakeAfterH: 6,
   patchPct: 15,
@@ -105,8 +105,8 @@ export function meanDepth(L) {
 export function stepLitter(L, { hrs, droppingsL, spill, leakL, leakCell, rh, feedKg, airflow }) {
   const wSum = W_SUM;
   const per = droppingsL / wSum;
-  const dryK = (LITTER.dryRate * Math.max(0, 1 - rh / 100)) / 0.5;
-  let vap = 0, sumM = 0, nM = 0;
+  const dry0 = LITTER.dryRate / 0.5, dryK = dry0 * Math.max(0, 1 - rh / 100);
+  let vap = 0, pot = 0, sumM = 0, nM = 0;
   for (let k = 0; k < BROOD_CELLS.length; k++) {
     const i = BROOD_CELLS[k];
     L.waterGrid[i] += per * (UNDER_LINE[i] ? LITTER.underLine : 1);
@@ -122,8 +122,9 @@ export function stepLitter(L, { hrs, droppingsL, spill, leakL, leakCell, rh, fee
     const dry = dryOf(L, i);
     if (dry > 0 && L.coverGrid[i] >= 0.5) {
       const m = (100 * L.waterGrid[i]) / (dry + L.waterGrid[i]);
-      const d = Math.min(L.waterGrid[i], dryK * dry * (Math.max(0, m - LITTER.freshPct) / 100) * hrs);
-      L.waterGrid[i] -= d; vap += d;
+      const p = dry * (Math.max(0, m - LITTER.freshPct) / 100);
+      const d = Math.min(L.waterGrid[i], dryK * p * hrs);
+      L.waterGrid[i] -= d; vap += d; pot += dry0 * p;
     } else {
       L.waterGrid[i] = Math.max(0, L.waterGrid[i] * (1 - 0.05 * hrs)); // standing water seeps away
     }
@@ -141,6 +142,7 @@ export function stepLitter(L, { hrs, droppingsL, spill, leakL, leakCell, rh, fee
   }
   L.meanMoisturePct = nM ? sumM / nM : LITTER.freshPct;
   L.vapourGh = (vap * 1000) / hrs;
+  L.dryPotentialGh = pot * 1000; // drying at 0 % RH (the climate solves RH with it)
   L.ammoniaPpm = (LITTER.nh3K * feedKg * (0.4 + L.meanMoisturePct / 20)) / Math.sqrt(Math.max(1, airflow));
   if (changed) L.version++;
   return vap;

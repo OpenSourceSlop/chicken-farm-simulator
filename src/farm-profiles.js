@@ -50,6 +50,8 @@ export const profileOf = (name) => ({ ...IDEAL, ...(MODS[name] || {}) });
 
 // Places on the brooding floor (one per sector) for tips, probes and samples.
 const SECTOR_SPOTS = [[-19, -2.6], [-19, 2.6], [-11, -2.6], [-11, 2.6], [-3, -2.6], [-3, 2.6]];
+// tips: where the farmer stands in each sector, between the brooders (x midway, z between the lines)
+const TIP_SPOTS = [[-16, -1], [-16, 1], [-10, -1], [-10, 1], [-4, -1], [-4, 1]];
 const near = (i, dx = 0.8, dz = 0.6) => { const [x, z] = SECTOR_SPOTS[i % 6]; return { x: x + dx * ((i * 7) % 3 - 1), z: z + dz * ((i * 5) % 3 - 1) }; };
 
 /** The sign's minimum ventilation timer for the birds now (1 fan, 300 s cycle). */
@@ -123,7 +125,7 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
     }
     for (let s = 0; s < LEVEL1.stacks; s++) {
       if (s > 0) env.skipHours(7 / 60);
-      const [x, z] = SECTOR_SPOTS[s];
+      const [x, z] = TIP_SPOTS[s];
       act('chicks.tip', { stack: s, chicks: LEVEL1.chicksPlaced / LEVEL1.stacks, x, z });
     }
     return done;

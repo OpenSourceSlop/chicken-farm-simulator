@@ -5,7 +5,7 @@ import { FEEDER_LINES_Z, EQUIP, LEVEL1, feederRimCmAt } from './config.js';
 // model constants
 export const FEED = {
   startHeightCm: 40,       // pans winched up on the prep day
-  panKgNormal: 22,         // feed in one line's pans, normal fill (3 lines drain in ~7 h on day 6)
+  panKgNormal: 18,         // feed in one line's pans, normal fill (3 lines drain in ~7 h on day 6)
   panKgFlood: 66,          // flooded (heaped) pans; flooding all three takes ~200 kg
   augerKgH: 150,           // one line's auger
   accessFill: 0.3,         // birds eat freely down to 30 % pan fill, less below
