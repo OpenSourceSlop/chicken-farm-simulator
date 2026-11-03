@@ -10,7 +10,7 @@ const PAN_X0 = FEEDER_PAN_X[0], PAN_LAST = FEEDER_PAN_X.length - 1;
 // Personal space for this frame (metres, centre to centre). Returns the largest, which sets the
 // spatial hash cell size: dense huddles get small cells, so neighbour loops stay short.
 export function personalSpace(S) {
-  const { n, act, therm, arrived, rad, size } = S;
+  const { n, act, therm, arrived, rad, size, sick } = S;
   const minR = 0.6 * S.L;
   let maxR = 0;
   for (let i = 0; i < n; i++) {
@@ -21,6 +21,8 @@ export function personalSpace(S) {
     else if ((a === ACT.EAT || a === ACT.DRINK) && arrived[i]) r = 0.55 * S.rRight;
     else if (!arrived[i] && a !== ACT.REST) r = 0.65 * S.rRight; // on the way somewhere: squeeze through
     else if (a === ACT.REST) r = 0.75 * S.rRight;
+    // a sick bird sits apart: the others keep a little more room round it (level only)
+    if (sick[i]) r = 2.2 * S.rRight;
     r = (r > minR ? r : minR) * size[i];
     rad[i] = r;
     if (r > maxR) maxR = r;
@@ -30,7 +32,7 @@ export function personalSpace(S) {
 
 export function steerAll(S, grid, dt, fctx) {
   const n = S.n, b = S.bounds, rand = S.rand;
-  const { px, pz, vx, vz, fx, fz, tx, tz, rad, size, act, arrived, therm, stuck, scare, sitA } = S;
+  const { px, pz, vx, vz, fx, fz, tx, tz, rad, size, act, arrived, therm, stuck, scare, sitA, sick, pen } = S;
   const items = grid.items, cs = grid.cellStart, gnx = grid.nx, gnz = grid.nz;
   const L = S.L, base = S.baseSpeed;
   const arriveR = 0.03 + 0.15 * L;
@@ -49,7 +51,8 @@ export function steerAll(S, grid, dt, fctx) {
     const dxT = tx[i] - x, dzT = tz[i] - z, dT = Math.sqrt(dxT * dxT + dzT * dzT);
     // cold/hot birds hurry, then slow in the crowd; so do the walkers spreading out after the curtain lifts
     const hurry = !arrived[i] && dT > 1 && (th !== 0 || (S.spreadT > 0 && a === ACT.WANDER)) ? 1.6 : 1;
-    const maxSp = base * si * hurry;
+    // sick birds shuffle slowly, lame ones slower still (level only; 0 in the sandbox)
+    const maxSp = base * si * hurry * (sick[i] ? (sick[i] === 2 ? 0.3 : 0.5) : 1);
     if (!arrived[i]) {
       if (dT < arriveR) arrived[i] = 1;
       else {
@@ -99,7 +102,7 @@ export function steerAll(S, grid, dt, fctx) {
     }
 
     // 3. farmer: a moving clearing around him and the path he is about to walk (0.5 s ahead)
-    if (fOn) {
+    if (fOn && !pen[i]) { // birds held in the catching frame cannot run from him
       let qx = ffx, qz = ffz;
       if (fl2 > 1e-6) {
         let t = ((x - ffx) * fsx + (z - ffz) * fsz) / fl2;
@@ -108,7 +111,7 @@ export function steerAll(S, grid, dt, fctx) {
       }
       const dx = x - qx, dz = z - qz, d2 = dx * dx + dz * dz;
       // cold birds are loath to leave the warmth: they only shuffle out of his way
-      const R = fR * (0.9 + 0.2 * S.boldness[i]) * (th === COLD ? 0.75 : 1);
+      const R = fR * (0.9 + 0.2 * S.boldness[i]) * (th === COLD ? 0.75 : 1) * (sick[i] ? 0.3 : 1); // too weak to run
       if (d2 < R * R) {
         const d = Math.sqrt(d2) + 1e-6, k = 1 - d / R, ux = dx / d, uz = dz / d;
         const flee = base * si * (1.4 + 3.0 * k);

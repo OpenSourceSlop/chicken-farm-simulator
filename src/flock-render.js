@@ -12,7 +12,8 @@ import { buildBirdGeometry } from './flock-geometry.js';
 
 const HI_DIST = 10; // metres from the camera: closer birds use the detailed model
 
-export function createFlockRender(scene, camera, n, material, depth) {
+// count(): birds in use (slots 0..count-1; a level packs the active birds first, flock-pop.js)
+export function createFlockRender(scene, camera, n, material, depth, count = () => n) {
   const stage = {
     M: new Float32Array(n * 16), A: new Float32Array(n * 4), B: new Float32Array(n * 4), C: new Float32Array(n * 4),
     R: new Float32Array(n),
@@ -88,7 +89,7 @@ export function createFlockRender(scene, camera, n, material, depth) {
     const cx = camera.matrixWorld.elements[12], cy = camera.matrixWorld.elements[13], cz = camera.matrixWorld.elements[14];
     const M = stage.M, R = stage.R, hi2 = HI_DIST * HI_DIST;
     let kn = 0, kf = 0, culled = 0;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0, m = count(); i < m; i++) {
       const o = i * 16, x = M[o + 12], y = M[o + 13] + 0.4 * R[i], z = M[o + 14], r = R[i] + 0.15;
       let inside = enabled;
       if (inside) {

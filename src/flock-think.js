@@ -35,13 +35,13 @@ function sampleThermal(S, i, field) {
   S.tAmb[i] += (amb - S.tAmb[i]) * 0.6;
 }
 
-function farmerPenalty(ctx, x, z) {
+export function farmerPenalty(ctx, x, z) {
   if (!ctx.farmerOn) return 0;
   const dx = x - ctx.fx, dz = z - ctx.fz, r = ctx.farmerR + 0.2;
   return dx * dx + dz * dz < r * r ? 50 : 0;
 }
 
-function setTarget(S, i, x, z) {
+export function setTarget(S, i, x, z) {
   S.tx[i] = clampX(S, x); S.tz[i] = clampZ(S, z);
   S.arrived[i] = 0; S.stuck[i] = 0;
 }
@@ -103,6 +103,16 @@ function warmSpot(S, i, field, env, ctx, fresh) {
     // on the way: keep heading for the current target unless something is clearly better
     const s = warmScore(field, ctx, ctx.grid, S.tx[i], S.tz[i]) + 0.3;
     if (s > bs) { bs = s; bx = S.tx[i]; bz = S.tz[i]; keep = true; }
+  }
+  if (S.lv && S.lv.out.length && env.heaterLevel > 0.05) {
+    // under a brooder that went out: the chicks there pile up on each other where they are
+    const k = nearestHeater(x, z), h = HEATERS[k];
+    if (S.lv.out.includes(k) && (x - h.x) ** 2 + (z - h.z) ** 2 < 9) {
+      if (settled) return;
+      const a = rand() * 6.283, r = Math.sqrt(rand()) * 0.7 * S.huddleSpread;
+      setTarget(S, i, h.x + Math.cos(a) * r, h.z + Math.sin(a) * r);
+      return;
+    }
   }
   if (env.heaterLevel > 0.05) {
     const h = HEATERS[nearestHeater(x, z)];
@@ -184,7 +194,8 @@ function wanderSpot(S, i, field, ctx, grid, reach) {
     const c = Math.abs(field.sample(cx, cz));
     // near spots are judged by the crowd right there, far ones by how full that part of the house is
     const crowd = k < 4 ? grid.crowd(cx, cz) : grid.slice(cx) - 0.1;
-    const s = 2 * Math.max(0, c - 1.0) + 0.8 * crowd + farmerPenalty(ctx, cx, cz);
+    let s = 2 * Math.max(0, c - 1.0) + 0.8 * crowd + farmerPenalty(ctx, cx, cz);
+    if (S.lv && wetAt(S, cx, cz)) s += 6;
     if (s < bs) { bs = s; bx = cx; bz = cz; }
   }
   setTarget(S, i, bx, bz);
@@ -199,6 +210,25 @@ function nearestLine(lines, z, rand) {
   return rand() < 0.75 || db > 4 ? a : b;
 }
 
+// Level only (S.lv set by flock-sick.js refreshAccess): which line a bird walks to. Birds weigh the
+// lines by how much they get there (water access, pan fill) and by how far away they are, so a
+// low line loses its drinkers to the lines either side.
+function weightedLine(lines, z, rand, good) {
+  let sum = 0;
+  for (let k = 0; k < lines.length; k++) sum += good[k] * Math.exp(-Math.abs(lines[k] - z) / 1.5);
+  let r = rand() * sum;
+  for (let k = 0; k < lines.length; k++) { r -= good[k] * Math.exp(-Math.abs(lines[k] - z) / 1.5); if (r <= 0) return k; }
+  return lines.length - 1;
+}
+// Wet litter (cell above 40 % moisture): birds do not settle or rest there.
+export function wetAt(S, x, z) {
+  const lv = S.lv;
+  if (!lv || !lv.moist) return false;
+  const cx = Math.floor(x - lv.x0), cz = Math.floor(z - lv.z0);
+  if (cx < 0 || cz < 0 || cx >= lv.nx || cz >= lv.nz) return false;
+  return lv.moist[cz * lv.nx + cx] > 40;
+}
+
 // A feeder or nipple is acceptable if it is comfortable, or at least no worse than where the bird
 // stands now (a uniformly warm or cool house must not stop the flock eating).
 function okComfort(S, i, ctx) {
@@ -208,7 +238,7 @@ function okComfort(S, i, ctx) {
 // Claim a feeder pan near the bird; returns false if every nearby pan is crowded.
 function feederSpot(S, i, ctx) {
   const { rand } = S;
-  const line = nearestLine(FEEDER_LINES_Z, S.pz[i], rand);
+  const line = S.lv ? weightedLine(FEEDER_LINES_Z, S.pz[i], rand, S.lv.feedPull) : nearestLine(FEEDER_LINES_Z, S.pz[i], rand);
   const per = S.panPerLine, cap = S.L < 0.3 ? 7 : 5;
   const j0 = Math.round((S.px[i] - FEEDER_PAN_X[0]) / FEEDER_PAN_SPACING);
   const spread = 8 + 16 * Math.max(0, ctx.grid.crowd(S.px[i], S.pz[i]) - 1); // crowded: look further
@@ -226,6 +256,8 @@ function feederSpot(S, i, ctx) {
   }
   if (best < 0 || use >= cap) return false;
   S.res[i] = best; S.resUse[best]++;
+  // an empty pan: a few quick pecks, then off again (restless)
+  if (S.lv && S.lv.fill[line] < 0.25) S.actT[i] = 3 + rand() * 4;
   const cx = S.pans[best * 2], cz = S.pans[best * 2 + 1];
   const a = Math.atan2(S.pz[i] - cz, S.px[i] - cx) + (rand() - 0.5) * 1.6;
   const r = PAN_RADIUS + 0.3 * S.L * S.size[i];
@@ -234,9 +266,9 @@ function feederSpot(S, i, ctx) {
 }
 
 // Claim a nipple; the bird stands beside the line with its head under the nipple.
-function drinkerSpot(S, i, ctx) {
+export function drinkerSpot(S, i, ctx) {
   const { rand } = S;
-  const line = nearestLine(DRINKER_LINES_Z, S.pz[i], rand);
+  const line = S.lv ? weightedLine(DRINKER_LINES_Z, S.pz[i], rand, S.lv.waterPull) : nearestLine(DRINKER_LINES_Z, S.pz[i], rand);
   const per = S.nipPerLine;
   const j0 = Math.round((S.px[i] - NIPPLE_X[0]) / NIPPLE_SPACING);
   const spread = 12 + 30 * Math.max(0, ctx.grid.crowd(S.px[i], S.pz[i]) - 1);
@@ -252,15 +284,17 @@ function drinkerSpot(S, i, ctx) {
     if (Math.abs(ctx.field.sample(nx, S.nips[r * 2 + 1])) > ok) continue;
     if (S.resUse[S.nPans + r] < use) { use = S.resUse[S.nPans + r]; best = r; }
   }
-  if (best < 0 || use >= 2) return false;
+  // low flow (a clogged filter): birds crowd the nipples, three to one, and peck on and on
+  if (best < 0 || use >= (S.lv && S.lv.meanAcc < 0.8 ? 3 : 2)) return false;
   S.res[i] = S.nPans + best; S.resUse[S.nPans + best]++;
+  if (S.lv) S.actT[i] *= 1 + 1.5 * (1 - S.lv.acc[line]);
   const nx = S.nips[best * 2], nz = S.nips[best * 2 + 1];
   const side = S.pz[i] >= nz ? 1 : -1;
   setTarget(S, i, nx + (rand() - 0.5) * 0.04, nz + side * 0.3 * S.L * S.size[i]);
   return true;
 }
 
-function startActivity(S, i, act, dur) {
+export function startActivity(S, i, act, dur) {
   if (S.act[i] !== act || act === ACT.EAT || act === ACT.DRINK) releaseRes(S, i);
   S.act[i] = act; S.actT[i] = dur;
 }
@@ -278,7 +312,17 @@ function chooseRight(S, i, field, env, ctx, grid) {
   const age = Math.min(1, Math.max(0, (S.day - 1) / 34));
   // weights: eat, drink, wander, idle, rest
   const explore = Math.max(0, grid.slice(S.px[i]) - 1.1); // a fuller part of the house: roam more
-  const wE = 0.26, wD = 0.14, wW = 0.32 - 0.12 * age + 0.6 * explore, wI = 0.14 - 0.04 * age, wR = 0.14 + 0.36 * age;
+  let wE = 0.26, wD = 0.14, wW = 0.32 - 0.12 * age + 0.6 * explore, wI = 0.14 - 0.04 * age, wR = 0.14 + 0.36 * age;
+  const lv = S.lv;
+  if (lv) {
+    // thirsty when the water is short, restless when the pans are empty, quiet in dim light
+    wD *= 1 + 2 * (1 - lv.meanAcc);
+    wE *= 0.5 + 0.5 * lv.meanFill;
+    wW += 0.35 * (1 - lv.meanFill);
+    if (lv.lowLux) { wW *= 0.4; wR *= 1.6; }
+    // standing on wet, caked litter: move off it
+    if (wetAt(S, S.px[i], S.pz[i])) { startActivity(S, i, ACT.WANDER, 8); wanderSpot(S, i, field, ctx, grid, 2 + rand() * 2); return; }
+  }
   let r = rand() * (wE + wD + wW + wI + wR);
   if ((r -= wE) < 0) {
     startActivity(S, i, ACT.EAT, 12 + rand() * 20);

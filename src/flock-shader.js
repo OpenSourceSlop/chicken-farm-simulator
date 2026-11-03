@@ -88,11 +88,15 @@ varying float vBrood;
 const COLOR_CODE = /* glsl */`
 {
   int pi = int(aPart + 0.5);
-  vec3 col = uCol[pi];
-  float feather = (pi <= 1 || pi == 4 || pi == 5 || pi == 8) ? 1.0 : 0.0;
   float tint = aAnimC.z;
+  // tint above 2 marks a sick (or dead) bird: eyes shut (head colour over the eye), a dull coat
+  float sick = step(2.0, tint);
+  tint -= 3.0 * sick;
+  vec3 col = (pi == 9 && sick > 0.5) ? uCol[1] * 0.86 : uCol[pi];
+  float feather = (pi <= 1 || pi == 4 || pi == 5 || pi == 8) ? 1.0 : 0.0;
   col *= aShade * (1.0 + 0.06 * tint * feather);
   col.b *= 1.0 + 0.3 * tint * feather * (1.0 - 0.8 * uMorph); // chicks vary in yellow, broilers stay white
+  col = mix(col, vec3(dot(col, vec3(0.3, 0.55, 0.15))), 0.3 * sick * feather) * (1.0 - 0.1 * sick * feather);
   vBirdColor = col;
   // warm light of a burning brooder on the birds under it (the litter gets the same pool, so a
   // chick in the pool stays brighter than the litter around it)
@@ -139,8 +143,13 @@ export function setMorphUniforms(u, m) {
   lerp3(u.uWattlePivot.value, 'wattle');
 }
 
-export function createBirdMaterials(uniforms) {
+// dead = the material of the dead birds (flock-dead.js): same shape and pose code, the coat
+// greyed and darkened (matted down, no life in it), no brooder glow, less self-light.
+export function createBirdMaterials(uniforms, { dead = false } = {}) {
   const material = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+  const deadCode = dead
+    ? '\n\tdiffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15))), diffuseColor.rgb, 0.5) * 0.8;'
+    : '';
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
@@ -148,11 +157,14 @@ export function createBirdMaterials(uniforms) {
       .replace('#include <begin_vertex>', `vec3 transformed = birdPose(position);\n${COLOR_CODE}`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vBirdColor;\nvarying float vBrood;\nuniform float uGlow;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\n\tdiffuseColor.rgb *= vBirdColor;')
+      .replace('#include <color_fragment>', `#include <color_fragment>\n\tdiffuseColor.rgb *= vBirdColor;${deadCode}`)
       // a little self-light keeps small birds readable against the litter and in wall shadow
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * (uGlow + vBrood * vec3(1.0, 0.5, 0.22));');
+      .replace('#include <emissivemap_fragment>', dead
+        ? '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * 0.5 * uGlow;'
+        : '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * (uGlow + vBrood * vec3(1.0, 0.5, 0.22));');
   };
-  material.customProgramCacheKey = () => 'flock-bird-lambert-4';
+  material.customProgramCacheKey = () => (dead ? 'flock-bird-dead-1' : 'flock-bird-lambert-5');
+  if (dead) return { material };
 
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   depth.onBeforeCompile = (shader) => {
