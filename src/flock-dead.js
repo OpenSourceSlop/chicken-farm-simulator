@@ -117,9 +117,13 @@ export function createDeadBirds(ctx, S, uniforms, pop) {
       // alone, away from the feeders: the best of a few spots far from a feeder line and the crowd
       let best = null, bs = 1e9;
       for (let k = 0; k < 8; k++) {
-        const x = randX(), z = b.zMin + 0.2 + rnd() * (b.zMax - b.zMin - 0.4);
-        let feed = 9;
-        for (const fz of FEEDER_LINES_Z) feed = Math.min(feed, Math.abs(z - fz));
+        const x = randX();
+        let z = 0, feed = 0;
+        for (let t = 0; t < 12 && feed < 0.9; t++) { // never right beside a feeder line
+          z = b.zMin + 0.2 + rnd() * (b.zMax - b.zMin - 0.4);
+          feed = 9;
+          for (const fz of FEEDER_LINES_Z) feed = Math.min(feed, Math.abs(z - fz));
+        }
         let crowd = 0;
         for (let q = 0; q < 12 && S.n > 0; q++) { const j = (rnd() * S.n) | 0; if ((S.px[j] - x) ** 2 + (S.pz[j] - z) ** 2 < 1) crowd++; }
         let s = -Math.min(feed, 1.3) + 0.5 * crowd + 0.4 * rnd();

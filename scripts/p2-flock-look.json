@@ -45,5 +45,12 @@
   {"eval": "Object.assign(__game.farm.flock, { cv: 0.16 }), 'cv 16 %'"},
   {"advance": 2},
   {"eval": "'cv 0.16 size ' + JSON.stringify(__game.flock.debug.sizeSpread())"},
-  {"shot": "flock-10-uneven-day6"}
+  {"shot": "flock-10-uneven-day6"},
+  {"eval": "(() => { const e = __game.env, H = [-19, -13, -7, -1].flatMap((x) => [{ x, z: -2.6 }, { x, z: 2.6 }]); e.brooderOut = [5]; e._bh = e.brooderHeat; e.brooderHeat = function (x, z) { if (this.heaterLevel <= 0.01) return 0; let r = 0; H.forEach((h, k) => { if (k !== 5) r += Math.exp(-((x - h.x) ** 2 + (z - h.z) ** 2) / 5.12); }); return 7 * this.heaterLevel * Math.min(1, r); }; __game.setState({ day: 1, hour: 6, setpoint: 34, houseTemp: 30, heaterLevel: 1, farmer: { x: -7, z: 6.2, yaw: 0 }, zoom: 12, cameraYaw: 0 }); Object.assign(__game.farm.flock, { meanWeightG: 52, cv: 0.08 }); return 'brooder 5 (x -7, z 2.6) out, house 30 °C (env.brooderHeat stubbed: the stub sim ignores brooderOut)'; })()"},
+  {"advance": 25},
+  {"shot": "flock-11-brooder-out"},
+  {"eval": "__game.env.brooderOut = [], (__game.env.brooderHeat = __game.env._bh), __game.farm.water.lines.forEach((l) => { l.access = 0.55; }), __game.setState({ day: 3, hour: 11, setpoint: 33, houseTemp: 33, farmer: { x: -12, z: 4.6, yaw: 0 }, zoom: 9 }), Object.assign(__game.farm.flock, { meanWeightG: 90 }), 'day 3, clogged filter: every line access 0.55'"},
+  {"advance": 25},
+  {"eval": "'drinkers per line ' + JSON.stringify(__game.flock.debug.drinkersByLine())"},
+  {"shot": "flock-12-low-water-crowding"}
 ]
