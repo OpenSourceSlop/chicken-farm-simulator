@@ -135,7 +135,7 @@ export function buildBirdGeometry(lod = 0) {
   // Tail: a downy nub on the chick, a short upturned wedge on the broiler
   add(base.cone, PART.tail,
     T(-0.4, 0.5, 0, 0.1, 0.06, 0.05, 0, 0, Math.PI - 0.6),
-    T(-0.45, 0.56, 0, 0.15, 0.08, 0.04, 0, 0, Math.PI - 0.7), 0.92);
+    T(-0.44, 0.55, 0, 0.11, 0.05, 0.075, 0, 0, Math.PI - 0.5), 0.92);
   // Legs and feet (feet belong to the leg part so they swing with it)
   for (const s of [-1, 1]) {
     const part = s < 0 ? PART.legL : PART.legR;

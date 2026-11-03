@@ -35,14 +35,15 @@ export function steerAll(S, grid, dt, fctx) {
   const kSep = Math.min(0.5, dt * 9);
   const invDt = 1 / dt;
   const fOn = fctx.farmerOn, ffx = fctx.fx, ffz = fctx.fz, fR = fctx.farmerR;
+  const fsx = fctx.vx * 0.5, fsz = fctx.vz * 0.5, fl2 = fsx * fsx + fsz * fsz; // look-ahead segment
 
   for (let i = 0; i < n; i++) {
     const x = px[i], z = pz[i], si = size[i], a = act[i], th = therm[i];
     // 1. seek the target
     let dvx = 0, dvz = 0, want = 0;
-    const hurry = (th !== 0 && !arrived[i]) ? 1.6 : 1;
-    const maxSp = base * si * hurry;
     const dxT = tx[i] - x, dzT = tz[i] - z, dT = Math.sqrt(dxT * dxT + dzT * dzT);
+    const hurry = th !== 0 && !arrived[i] && dT > 1 ? 1.6 : 1; // cold/hot birds hurry, then slow in the crowd
+    const maxSp = base * si * hurry;
     if (!arrived[i]) {
       if (dT < arriveR) arrived[i] = 1;
       else {
@@ -59,6 +60,8 @@ export function steerAll(S, grid, dt, fctx) {
     const ri = rad[i];
     let sx = 0, sz = 0, cx = 0, cz = 0, cn = 0;
     const coh = th === COLD && !arrived[i]; // cold birds on the move draw together
+    // a sitting bird is "heavy": walkers step around it rather than shoving it along the floor
+    const mi = sitA[i] > 0.5 ? 0.25 : 1;
     const gx = grid.cellX(x), gz = grid.cellZ(z);
     const z0 = gz > 0 ? gz - 1 : 0, z1 = gz < gnz - 1 ? gz + 1 : gz;
     const x0 = gx > 0 ? gx - 1 : 0, x1 = gx < gnx - 1 ? gx + 1 : gx;
@@ -73,7 +76,11 @@ export function steerAll(S, grid, dt, fctx) {
           const rij = 0.5 * (ri + rad[j]);
           if (d2 < rij * rij) {
             if (d2 < 1e-10) { sx += (rand() - 0.5) * rij; sz += (rand() - 0.5) * rij; }
-            else { const d = Math.sqrt(d2); const o = (rij - d) / d; sx += dx * o; sz += dz * o; }
+            else {
+              const d = Math.sqrt(d2), w = (2 * mi) / (mi + (sitA[j] > 0.5 ? 0.25 : 1));
+              const o = ((rij - d) / d) * w;
+              sx += dx * o; sz += dz * o;
+            }
           }
           if (coh) { cx += dx; cz += dz; cn++; }
         }
@@ -85,9 +92,15 @@ export function steerAll(S, grid, dt, fctx) {
       dvx -= (cx / cn) * k; dvz -= (cz / cn) * k;
     }
 
-    // 3. farmer: a moving clearing around him
+    // 3. farmer: a moving clearing around him and the path he is about to walk (0.5 s ahead)
     if (fOn) {
-      const dx = x - ffx, dz = z - ffz, d2 = dx * dx + dz * dz;
+      let qx = ffx, qz = ffz;
+      if (fl2 > 1e-6) {
+        let t = ((x - ffx) * fsx + (z - ffz) * fsz) / fl2;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        qx = ffx + fsx * t; qz = ffz + fsz * t;
+      }
+      const dx = x - qx, dz = z - qz, d2 = dx * dx + dz * dz;
       // cold birds are loath to leave the warmth: they only shuffle out of his way
       const R = fR * (0.9 + 0.2 * S.boldness[i]) * (th === COLD ? 0.75 : 1);
       if (d2 < R * R) {

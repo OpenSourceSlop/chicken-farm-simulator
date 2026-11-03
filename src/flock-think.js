@@ -62,7 +62,8 @@ function tryWarm(S, field, ctx, cx, cz) {
 function warmSpot(S, i, field, env, ctx) {
   const { rand } = S;
   const x = S.px[i], z = S.pz[i];
-  bx = x; bz = z; bs = warmScore(field, ctx, ctx.grid, x, z) + 0.3; // small bias to stay put
+  // bias to stay put, strong once settled in the huddle (no endless pushing to the middle)
+  bx = x; bz = z; bs = warmScore(field, ctx, ctx.grid, x, z) + (S.arrived[i] && S.act[i] === ACT.HUDDLE ? 1.0 : 0.3);
   if (env.heaterLevel > 0.05) {
     const h = HEATERS[nearestHeater(x, z)];
     if (h.x <= S.bounds.xMax) {
@@ -77,7 +78,7 @@ function warmSpot(S, i, field, env, ctx) {
   }
   if (bx === x && bz === z && S.act[i] === ACT.HUDDLE) return; // nothing better: stay put
   // aim at a point scattered around the best spot so the huddle is a blob, not a single point
-  const a = rand() * 6.283, r = Math.sqrt(rand()) * (0.12 + 1.6 * S.L);
+  const a = rand() * 6.283, r = Math.sqrt(rand()) * S.huddleSpread;
   setTarget(S, i, bx + Math.cos(a) * r, bz + Math.sin(a) * r);
 }
 

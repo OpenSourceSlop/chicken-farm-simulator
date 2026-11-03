@@ -14,7 +14,7 @@
 //   flock-metrics.js   metrics()
 // Two draw calls (+ two shadow draws) for the whole flock.
 import * as THREE from 'three';
-import { COLORS, FLOCK_COUNT, HOUSE_BOUNDS, weightAt } from './config.js';
+import { COLORS, FLOCK_COUNT, HEATERS, HOUSE_BOUNDS, weightAt } from './config.js';
 import { PART } from './flock-geometry.js';
 import { createFlockRender } from './flock-render.js';
 import { createBirdMaterials, createBirdUniforms, setMorphUniforms } from './flock-shader.js';
@@ -94,6 +94,8 @@ export function createFlock(ctx, { house } = {}) {
     S.rHot = Math.min(even, Math.max(0.72 * even, 1.3 * S.L));
     S.rHuddle = 0.62 * S.L;
     S.huddleR = 0.4 + 5 * S.L; // a cold bird blocked this close to its warm spot settles there
+    // radius of one brooder's share of the flock packed at huddle spacing: targets scatter over it
+    S.huddleSpread = 0.9 * Math.sqrt(((n / HEATERS.length) * 0.866 * S.rHuddle * S.rHuddle) / Math.PI);
     S.maxR = 1.15 * Math.max(S.rHot, S.rRight);
 
     if (reset) {
@@ -102,7 +104,7 @@ export function createFlock(ctx, { house } = {}) {
     }
   }
 
-  const fctx = { farmerOn: false, fx: 0, fz: 0, farmerR: 1.6, field, grid, anyTemp: false };
+  const fctx = { farmerOn: false, wasOn: false, fx: 0, fz: 0, vx: 0, vz: 0, farmerR: 1.6, field, grid, anyTemp: false };
   let built = false;
 
   function update(dt, env, farmerPos) {
@@ -117,9 +119,17 @@ export function createFlock(ctx, { house } = {}) {
     if (dt > 0) {
       S.time += dt;
       const hb = HOUSE_BOUNDS;
-      fctx.farmerOn = !!farmerPos && farmerPos.x > hb.xMin - 0.3 && farmerPos.x < hb.xMax + 0.3 &&
+      fctx.farmerOn = !api.debugIgnoreFarmer && !!farmerPos && farmerPos.x > hb.xMin - 0.3 && farmerPos.x < hb.xMax + 0.3 &&
         farmerPos.z > hb.zMin - 0.3 && farmerPos.z < hb.zMax + 0.3;
-      if (fctx.farmerOn) { fctx.fx = farmerPos.x; fctx.fz = farmerPos.z; }
+      if (fctx.farmerOn) {
+        // his walking velocity (smoothed; a jump of over 1 m is a teleport, not a walk)
+        const jx = farmerPos.x - fctx.fx, jz = farmerPos.z - fctx.fz;
+        const k = Math.min(1, dt * 6), tele = !fctx.wasOn || jx * jx + jz * jz > 1;
+        fctx.vx = tele ? 0 : fctx.vx + (jx / dt - fctx.vx) * k;
+        fctx.vz = tele ? 0 : fctx.vz + (jz / dt - fctx.vz) * k;
+        fctx.fx = farmerPos.x; fctx.fz = farmerPos.z;
+      } else { fctx.vx = fctx.vz = 0; }
+      fctx.wasOn = fctx.farmerOn;
       fctx.farmerR = 1.6 + 1.0 * Math.max(0, S.L - 0.15); // about 1.6 m for chicks, 2 m for broilers
       const t0 = prof.on ? performance.now() : 0;
       grid.build(S.px, S.pz, n, personalSpace(S), S.perM2, S.bounds.zMax - S.bounds.zMin);
@@ -153,7 +163,7 @@ export function createFlock(ctx, { house } = {}) {
   field.refresh(ctx.env, 0);
   poseAll(S, 0, render.stage);
 
-  return {
+  const api = {
     count: n,
     object3d: render.group,
     meshes: render.meshes,
@@ -164,6 +174,8 @@ export function createFlock(ctx, { house } = {}) {
       if (!built) { grid.build(S.px, S.pz, n, S.maxR, S.perM2, S.bounds.zMax - S.bounds.zMin); built = true; }
       return { ...computeMetrics(S, grid) };
     },
+    // test tools only: true = birds ignore the farmer (to film them up close)
+    debugIgnoreFarmer: false,
     _state: S, // internal, for debugging only
     profile: prof,
     // debugging aid for the test tools: activity and thermal-state counts
@@ -173,4 +185,5 @@ export function createFlock(ctx, { house } = {}) {
       return { idle: acts[0], wander: acts[1], eat: acts[2], drink: acts[3], rest: acts[4], huddle: acts[5], pant: acts[6], ...th };
     },
   };
+  return api;
 }

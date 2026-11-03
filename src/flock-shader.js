@@ -54,7 +54,9 @@ vec3 birdPose(vec3 chickPos) {
   if (part > 3.5 && part < 5.5) {
     float side = part > 4.5 ? 1.0 : -1.0;
     vec3 piv = vec3(uWingPivot.xy, uWingPivot.z * side);
-    vec3 q = birdRotX(p - piv, aAnimB.z, -aAnimB.w * side);
+    // spread wings also fan out (bigger), so a hot bird's silhouette is wider from above
+    vec3 q = (p - piv) * (1.0 + 0.35 * clamp(aAnimC.w * 4.0, 0.0, 1.0));
+    q = birdRotX(q, aAnimB.z, -aAnimB.w * side);
     float wy = aAnimC.w * side;
     q = birdRotY(q, 1.0 - 0.5 * wy * wy, wy);
     p = piv + q;
