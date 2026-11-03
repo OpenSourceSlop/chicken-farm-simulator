@@ -15,7 +15,7 @@
 //   runCycle (farm-profiles-cycle-run.js): the trace scripts/test-cycle.mjs checkCycle measures.
 // The ideal's fans and pads follow scripts/cycle-refs.mjs idealFans / idealPad (re-stated below: the
 // browser cannot import a script) at its stops, base controls only (no vent.stages).
-import { EQUIP, LIGHT_PRESETS, HARVEST, CLEAN, feedStdGAt, flowTargetAt, nippleHeightCmAt, feederRimCmAt, targetTempAt, PLACEMENT_DAY, feedTypeForDay, HEAT } from './config.js';
+import { EQUIP, LIGHT_PRESETS, HARVEST, CLEAN, WEATHER, feedStdGAt, flowTargetAt, nippleHeightCmAt, feederRimCmAt, targetTempAt, PLACEMENT_DAY, feedTypeForDay, HEAT } from './config.js';
 import { signTimer } from './farm-profiles.js';
 import { feedLeftKg } from './farm-silos.js';
 
@@ -114,7 +114,7 @@ function keepFed(farm, env, act, day) {
   if (!(fl.alive > 0) || day > 40) return;
   const type = typeOn(farm, day);
   // the starter to the blend's start (an empty silo 1 leaves the blend to silo 2: no old starter under the finisher)
-  const endDay = type === 'starter' ? (farm.profileGrower === false ? 29.6 : 14.6) : type === 'grower' ? 29.6 : 41.6, margin = type === 'starter' ? 1 : 1.04;
+  const endDay = type === 'starter' ? (farm.profileGrower === false ? 29.6 : 15.1) : type === 'grower' ? 29.6 : 41.6, margin = type === 'starter' ? 1 : 1.04;
   const stock = feed.silos.reduce((a, s) => a + s.layers.filter((l) => l.type === type).reduce((x, l) => x + l.kg, 0), 0)
     + feed.pending.filter((o) => o.type === type).reduce((a, o) => a + o.kg, 0);
   const need = (days) => { let kg = 0; for (let t = 0; t < days; t += 0.25) kg += (fl.alive * feedStdGAt(age + t)) / 1000 * 0.25; return kg * margin; };
@@ -142,6 +142,9 @@ function fanPlan(farm, env, act, P, day) {
   const age = env.day - PLACEMENT_DAY;
   if (!(farm.flock.alive > 0)) return;
   let n = idealFans(env, age);
+  // the last stop of the evening (sign-heat): young birds want the tunnel fans off at night, so under four weeks
+  // the fans go by the night's low
+  if (env.hour >= 20.5 && age < 28) n = Math.min(n, Math.max(1, idealFans({ outsideTemp: nightLow(env), targetTemp: env.targetTemp }, age)));
   if (P.fixes && heatFound(farm, env)) n = 6;
   if (P.fixes && isState(farm, 'dusty-air', 'found') && P.dustAnswer) n = Math.max(n, 2);
   if (P.fixes && isState(farm, 'heat-wave', 'found', 'fixed') && day >= 30 && day <= 32) n = Math.max(n, idealFans(env, age));
@@ -151,6 +154,11 @@ function fanPlan(farm, env, act, P, day) {
   let pad = P.pads === 'never' || P.noTunnel ? false : idealPad({ ...envView(env), padOn: env.padOn }, n);
   if (P.padInHumid && n >= 6 && day === 33 && env.hour >= 10 && env.hour < 18) pad = true;
   fansTo(act, env, n, pad);
+}
+/** Tomorrow's 05:00 outside temperature (the weather's low and the level's weather events). */
+function nightLow(env) {
+  const w = WEATHER[env.weather] || WEATHER.normal, t = env.dayNumber + 1 + 5 / 24;
+  return w.min - (env.weatherEvents || []).reduce((a, e) => a + (t > e.fromDay && t < e.toDay ? e.outsideDrop : 0), 0);
 }
 /** The mistakes that run no tunnel fans: minimum ventilation only in week 3 (minVentW3) or from day 22 (noTunnel). */
 const noTunnelOn = (P, day) => (P.minVentW3 && day >= 15 && day <= 21) || (P.noTunnel && day >= 22);

@@ -15,7 +15,9 @@
 import { EV } from './events.js';
 import { LEVEL1, MIN_DAY, targetTempAt, weightAt, nippleHeightCmAt, flowTargetAt, minVentM3hPer1000, EQUIP } from './config.js';
 import { buildRow, settingsNow } from './records-rows.js';
-import { jobById } from './content-jobs.js';
+import { jobById as jobByIdP2 } from './content-jobs.js';
+import { jobByIdCycle } from './content-jobs-cycle.js';
+const jobById = (id) => jobByIdP2(id) || jobByIdCycle(id);
 
 const thousands = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 /** The calendar day a job instance belongs to ('r-walk@3' -> 3), or null. */
@@ -38,11 +40,31 @@ const KIND = {
   'water.filter': 'filter', 'controller.read': 'controller', 'grade.submit': 'grade.sheet', 'chicks.cull': 'cull',
   'chicks.tip': 'tip', 'feed.order': 'order', 'water.clearFilter': 'text', 'water.fixLeak': 'text', 'heat.relight': 'text',
   'litter.patch': 'text', 'phone.report': 'text',
+  // Phase 3 (PHASE3.md §8.1): the cycle's readings and what he did
+  'air.probe': 'air', 'sample.bird': 'bird', 'fans.read': 'fans', 'pad.check': 'pad', 'gas.meter': 'gas', 'load.ticket': 'ticket',
+  'water.medicate': 'medicine', 'phone.bookCatch': 'booking', 'phone.bookChicks': 'booking', 'clean.swab': 'swab', 'water.test': 'watertest',
+  'plan.measure': 'measure', 'plan.send': 'plan', 'phone.vet': 'text', 'fan.fix': 'text', 'pad.flush': 'text', 'pad.fixFloat': 'text',
+  'heat.brooders': 'text', 'house.curtain': 'text', 'water.main': 'text', 'vaccine.mix': 'text', 'feed.withdraw': 'text', 'catch.panels': 'text',
+  'house.close': 'text', 'litter.fork': 'text', 'feed.valve': 'setting',
 };
-const SETTINGS = new Set(['heat.setpoint', 'vent.timer', 'vent.fans', 'vent.pad', 'light.program', 'water.pressure', 'water.height', 'feed.line', 'litter.depth', 'water.flush']);
+const SETTINGS = new Set(['heat.setpoint', 'vent.timer', 'vent.fans', 'vent.pad', 'light.program', 'water.pressure', 'water.height', 'feed.line', 'litter.depth', 'water.flush',
+  'feed.valve', 'vent.stages', 'water.disinfect']);
 const TEXT = {
   'water.clearFilter': 'Main water filter cleaned', 'water.fixLeak': 'Nipple replaced on drinker line', 'heat.relight': 'Brooder relit',
   'litter.patch': 'Fresh husk put on a wet patch', 'phone.report': 'Deaths reported to the company vet',
+  'phone.vet': 'Company vet called', 'fan.fix': 'New fan belt fitted', 'pad.flush': 'Pad distribution pipe flushed', 'pad.fixFloat': 'Pad float valve freed',
+  'catch.panels': 'Catching panels put up', 'house.close': 'House closed for the rest', 'litter.fork': 'Caked litter forked over',
+};
+// texts that depend on the action's arguments
+const textOf = (p) => {
+  switch (p.id) {
+    case 'heat.brooders': return p.up ? 'Brooders off and winched up' : 'Brooders let down';
+    case 'house.curtain': return p.open ? 'Brooding curtain lifted' : 'Brooding curtain let down';
+    case 'water.main': return p.open ? 'Main water valve opened' : 'Main water valve shut';
+    case 'vaccine.mix': return `Vaccine mixed in the header tank${p.stabiliser ? ' with skim milk powder' : ''}${p.result && p.result.litres ? `: ${p.result.litres} L` : ''}`;
+    case 'feed.withdraw': return p.on ? 'Feeder lines stopped for the catch' : 'Feeder lines running again';
+    default: return TEXT[p.id];
+  }
 };
 const PROBLEM_WORDS = {
   'brooder-out': 'a brooder not burning', 'cold-night': 'a cold night forecast', 'blocked-filter': 'low water flow',
@@ -77,6 +99,8 @@ export function createRecords({ farm, env, events } = {}) {
     },
     /** Notes of one day. */
     notesOf(day) { return notebook.filter((n) => n.day === day); },
+    /** The per-day extras (notes, skill lines, missed jobs and their ids): read-only, for the skill rules. */
+    extrasOf() { return extras; },
     /** Job results (the job engine reports them; skills read them). */
     logJob(key, day, result) { jobLog.push({ key, day, result: result ?? null }); },
     get jobLog() { return jobLog; },
@@ -125,7 +149,7 @@ export function createRecords({ farm, env, events } = {}) {
         const v = { id: p.id, ...strip(p) }, js = JSON.stringify(v);
         for (let i = notebook.length - 1; i >= 0; i--) {
           const n = notebook[i];
-          if (n.kind === 'setting' && n.value.id === v.id && n.value.line === v.line) {
+          if (n.kind === 'setting' && n.value.id === v.id && n.value.line === v.line && n.value.silo === v.silo) {
             if (JSON.stringify(n.value) === js) return;
             // stepping the same control again right away (a winch or thermostat key pressed many
             // times): one line with the value it ends on
@@ -138,12 +162,16 @@ export function createRecords({ farm, env, events } = {}) {
       }
       const kind = KIND[p.id];
       if (!kind) return;
-      if (kind === 'text') { records.note('text', TEXT[p.id]); return; }
+      if (kind === 'text') { const t = textOf(p); if (t) records.note('text', t); return; }
       let value = p.result === undefined ? strip(p) : p.result;
       if (kind === 'water.flow') value = { line: p.line, ...p.result };
       if (kind === 'dead') value = { n: p.n };
       if (kind === 'cull') value = { n: p.n, reason: p.reason };
       if (kind === 'grade') value = { i: p.i, ...p.result };
+      if (kind === 'bird' || kind === 'air' || kind === 'pad' || kind === 'gas' || kind === 'ticket' || kind === 'watertest') value = { ...strip(p), ...(p.result || {}) };
+      if (kind === 'medicine') value = { on: !!p.on };
+      if (kind === 'booking') value = { id: p.id, ...strip(p), ...(p.result || {}) };
+      if (kind === 'swab') value = { spot: p.spot, n: p.result && p.result.n };
       records.note(kind, value, where);
     });
     events.on(EV.LISTEN, (p) => {
@@ -180,6 +208,7 @@ export function createRecords({ farm, env, events } = {}) {
       if (!live() || !p) return;
       const d = dayOfKey(p.key) ?? today(), e = ex(d), title = (p.id && jobById(p.id)?.title) || p.id;
       e.jobsMissed++; if (title) e.missed.push(title);
+      if (p.id) (e.missedIds || (e.missedIds = [])).push(p.id);
       const row = rows.get(d);
       if (row) { row.jobsMissed = e.jobsMissed; row.missed = [...e.missed]; }
     });

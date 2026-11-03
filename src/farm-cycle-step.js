@@ -121,11 +121,12 @@ function dailyStats(farm, env, hrs, age) {
     if (h < 6) D.nightMin = Math.min(D.nightMin ?? 99, +(env.houseTemp - env.targetTemp).toFixed(2));
     if (h >= 12 && h < 17 && env.heaterLevel < 0.05) D.heatOff1217 = (D.heatOff1217 || 0) + hrs;
     if (X.on && feedersUpInHeat(farm.feed, env) && h >= 11 && h < 16) D.feedersUp = (D.feedersUp || 0) + hrs;
-    if ((C.coldShare ?? 0) > 0.2) D.cold = (D.cold || 0) + hrs;
+    if ((C.e ?? 0) < -2) D.cold = (D.cold || 0) + hrs; // most birds cold (70 % of them at or under e)
     if (env.day >= 30.25 && env.day < 32 + 19 / 24) st.pantWave = (st.pantWave || 0) + hrs * (C.pantShare || 0);
     const g = farm.feed.panType;
     if (g) {
-      if ((g.grower || 0) >= 0.2 && (g.grower || 0) <= 0.8) st.blendH = (st.blendH || 0) + hrs;
+      const dg = farm.feed.drawMix ? farm.feed.drawMix.grower : null; // the augers' draw: the valves' blend
+      if (dg != null && dg >= 0.2 && dg <= 0.8 && d <= 20) st.blendH = (st.blendH || 0) + hrs;
       if (st.growerAt90 == null && (g.grower || 0) >= 0.9) st.growerAt90 = +env.day.toFixed(4);
       if (st.finisherAt90 == null && (g.finisher || 0) >= 0.9 && d >= 29) st.finisherAt90 = +env.day.toFixed(4);
     }

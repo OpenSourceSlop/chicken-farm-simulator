@@ -17,6 +17,7 @@
 import { SKILL_BRANCHES, SKILL_LEVEL_POINTS, UNLOCKS } from './config.js';
 import { EV } from './events.js';
 import { RULES } from './skills-rules.js';
+import { RULES_CYCLE } from './skills-rules-cycle.js';
 // Phase 3: the milestones of the whole cycle (contract data; rules come with package "sim", PHASE3.md §9)
 import { MILESTONES_CYCLE } from './skills-cycle.js';
 
@@ -73,6 +74,8 @@ export const MILESTONES = [
 // ALL_MILESTONES when the cycle rules exist (the cycle milestones of level 'level1' count only in a run, at
 // the brooding week's level-end: ctx.run), package "run" its skill tree.
 export const ALL_MILESTONES = [...MILESTONES.map((m) => ({ ...m, level: 'level1' })), ...MILESTONES_CYCLE];
+const P2_IDS = new Set(MILESTONES.map((m) => m.id));
+const byId = new Map(ALL_MILESTONES.map((m) => [m.id, m]));
 
 export function createSkills({ events, records, farm } = {}) {
   /** milestone id -> best tier index earned (profile, kept across replays) */
@@ -81,7 +84,7 @@ export function createSkills({ events, records, farm } = {}) {
 
   const pointsOf = (branch) => {
     let p = 0;
-    for (const m of MILESTONES) {
+    for (const m of ALL_MILESTONES) {
       if (m.branch !== branch || !earned.has(m.id)) continue;
       p += m.tiers[earned.get(m.id)].points;
     }
@@ -97,23 +100,31 @@ export function createSkills({ events, records, farm } = {}) {
     level: levelOf,
     /** Milestones of a branch with what was earned: [{ ...milestone, tier: index|null, points }] */
     milestones(branch) {
-      return MILESTONES.filter((m) => m.branch === branch).map((m) => {
+      return ALL_MILESTONES.filter((m) => m.branch === branch).map((m) => {
         const t = earned.has(m.id) ? earned.get(m.id) : null;
         return { ...m, tier: t, points: t == null ? 0 : m.tiers[t].points };
       });
     },
     /** @param {keyof typeof UNLOCKS} key */
     unlocked(key) { const u = UNLOCKS[key]; return !!u && levelOf(u.branch) >= u.level; },
-    /** STUB: package "sim" checks the milestones of this checkpoint here (reads farm.stats,
-     *  farm.problems, records). Returns the awards made: [{ id, tier, delta }]. */
+    /**
+     * Award the milestones of this checkpoint (PHASE3.md §9): only those of the checkpoint's level (ctx.level,
+     * else the level last announced); at a level-end every milestone of the level. The cycle milestones of
+     * 'level1' count only inside a run (ctx.run) at the brooding week's level-end, so the lone brooding week
+     * awards exactly Phase 2's. Returns the awards made: [{ id, tier, delta }].
+     */
     evaluate(checkpoint, ctx = {}) {
       const out = [];
       if (!farm || farm.mode !== 'level') return out;
-      // Phase 2's milestones are the brooding week's: they never run at a later level's checkpoint
-      if ((ctx.level ?? currentLevel) !== 'level1') return out;
-      for (const m of MILESTONES) {
+      const level = ctx.level ?? currentLevel;
+      for (const m of ALL_MILESTONES) {
+        if (m.level !== level) continue;
         if (checkpoint !== 'level-end' && m.checkpoint !== checkpoint) continue;
-        const r = RULES[m.id] ? RULES[m.id](farm, records) : null;
+        const p2 = P2_IDS.has(m.id);
+        if (!p2 && level === 'level1' && !(ctx.run && checkpoint === 'level-end')) continue;
+        const rule = p2 ? RULES[m.id] : RULES_CYCLE[m.id];
+        let r = null;
+        try { r = rule ? (p2 ? rule(farm, records) : rule(farm, records, { ...ctx, checkpoint })) : null; } catch (err) { console.error(`milestone ${m.id} rule failed`, err); }
         if (!r || r.tier == null) continue;
         const before = earned.has(m.id) ? m.tiers[earned.get(m.id)].points : 0;
         if (skills.award(m.id, r.tier, r.detail || '')) out.push({ id: m.id, tier: r.tier, delta: m.tiers[r.tier].points - before });
@@ -122,7 +133,7 @@ export function createSkills({ events, records, farm } = {}) {
     },
     /** Award directly (used by evaluate and tests). Returns true when it raised the tier. */
     award(id, tier = 0, detail = '') {
-      const m = MILESTONES.find((x) => x.id === id);
+      const m = byId.get(id);
       if (!m || (earned.has(id) && earned.get(id) >= tier)) return false;
       const before = levelOf(m.branch);
       const had = earned.has(id) ? m.tiers[earned.get(id)].points : 0;

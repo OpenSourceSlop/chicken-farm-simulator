@@ -81,6 +81,7 @@ export function stepAugersCycle(feed, hrs) {
     l.panFill = Math.min(1, l.kg / panCap(l));
   }
   feed.siloKg = sumSilos(feed);
+  if (addKg > 0) feed.drawMix = Object.fromEntries(TYPES.map((t) => [t, +((added[t] || 0) / addKg).toFixed(3)]));
   if (addKg > 0) {
     const mix = feed.panType, tot = before + addKg;
     for (const t of TYPES) mix[t] = tot > 0 ? (mix[t] * before + (added[t] || 0)) / tot : mix[t];
