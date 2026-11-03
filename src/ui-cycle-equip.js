@@ -32,8 +32,9 @@ export function cycleFeederParts(L, { foldPlates }) {
   wdRow.el.hidden = true;
   const bar = progressBar();
   let busy = null;
+  const washed = []; // pans washed here (the farm's clean.pans is the record; the stub keeps none)
   const pans = FEEDER_LINES_Z.map((z, i) => {
-    const job = machineJob(env, 4, () => { L.act('feed.wash', { line: i }); busy = null; bar.set(0); sync(); });
+    const job = machineJob(env, 4, () => { L.act('feed.wash', { line: i }); washed[i] = env.timeLabel; busy = null; bar.set(0); sync(); });
     const b = button({ class: 'key key--wide', 'aria-label': `Wash the pans of line ${i + 1}` }, 'Wash the pans');
     b.addEventListener('click', () => { if (busy) return; foldPlates(); busy = job; job.start(); sync(); });
     const row = machineRow(`Line ${i + 1} pans`, '', b);
@@ -50,8 +51,8 @@ export function cycleFeederParts(L, { foldPlates }) {
     setText(wdRow.small, w ? `the lines stopped${memo.at != null ? ` ${whenText(memo.at)}` : ''}${empty != null ? ` · pans empty ${whenText(empty)}` : ''} · water stays on` : 'stop the lines before the catch; the pans winch up once empty');
     wash.hidden = !on || d < CYCLE.cleanFrom;
     pans.forEach((p, i) => {
-      const done = !!farm.clean?.pans?.[i];
-      setText(p.row.small, p.job.running ? 'washing…' : done ? 'washed' : 'not washed');
+      const done = !!farm.clean?.pans?.[i] || !!washed[i];
+      setText(p.row.small, p.job.running ? 'washing…' : done ? `washed${washed[i] ? ` ${washed[i]}` : ''}` : 'not washed');
       p.row.led.classList.toggle('is-on', p.job.running);
       p.b.disabled = !!busy;
     });

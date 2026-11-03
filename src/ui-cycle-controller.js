@@ -51,7 +51,7 @@ export function cycleControllerParts(L, { draft, lp, refresh }) {
     const b = button({ class: 'key key--wide' }, p.label);
     b.addEventListener('click', () => {
       Object.assign(lp, { darkStart: p.darkStart, darkHours: p.darkHours, dimmer: p.dimmer });
-      L.uiAct('light.preset', { id });
+      L.uiAct('light.preset', { preset: id }); // the payload's id is the action id: the preset key travels as `preset`
       L.act('light.program', { ...lp });
       refresh();
     });

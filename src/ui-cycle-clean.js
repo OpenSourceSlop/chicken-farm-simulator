@@ -33,8 +33,9 @@ export function buildWashBay(api) {
   const washed = readout('Floor washed'), dry = readout('Floor dry'), sprayed = readout('Disinfected'), swabs = readout('Swabs taken');
   const bar = progressBar();
   let busy = null;
+  const washedAt = {}; // what the farmer washed here (the farm's clean.washbay is the record; the stub keeps none)
   const items = CLEAN.washItems.map((item) => {
-    const job = machineJob(env, 3, () => { L.act('clean.washbay', { item }); busy = null; bar.set(0); refresh(); });
+    const job = machineJob(env, 3, () => { L.act('clean.washbay', { item }); washedAt[item] = env.timeLabel; busy = null; bar.set(0); refresh(); });
     const b = button({ class: 'key key--wide', 'aria-label': `Wash and disinfect: ${ITEMS[item] || item}` }, 'Wash');
     b.addEventListener('click', () => { if (busy) return; shell.foldPlates(); busy = job; job.start(); refresh(); });
     const row = machineRow(ITEMS[item] || item, '', b);
@@ -58,8 +59,8 @@ export function buildWashBay(api) {
     sprayed.set(pct(C.sprayShare), 'of the house floor');
     swabs.set(`${(C.swabs || []).length} of ${CLEAN.swabs}`, C.lab ? 'the lab letter is on the desk' : C.labDay != null ? `lab letter day ${C.labDay}` : 'at the flagged places');
     for (const x of items) {
-      const done = !!C.washbay?.[x.item];
-      setText(x.row.small, x.job.running ? 'washing…' : done ? 'washed and disinfected' : 'not washed');
+      const done = !!C.washbay?.[x.item] || !!washedAt[x.item];
+      setText(x.row.small, x.job.running ? 'washing…' : done ? `washed and disinfected${washedAt[x.item] ? ` ${washedAt[x.item]}` : ''}` : 'not washed');
       x.row.led.classList.add('led--pad'); x.row.led.classList.toggle('is-on', x.job.running);
       x.b.disabled = !!busy;
     }
