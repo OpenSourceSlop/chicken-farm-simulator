@@ -22,12 +22,13 @@ export function equipShell({ cls = '', icon, title, sub, plates = [], onClose, s
   const plateEls = plates.map((id) => buildPlate(id));
   const links = signLinks.length ? h('p', { class: 'equip-links' }, h('span', { html: ICONS.facts, 'aria-hidden': 'true' }),
     `Facts also on: ${signLinks.map((id) => `${BOARDS[id].title} (${BOARDS[id].where.toLowerCase()})`).join('; ')}`) : null;
-  const side = plateEls.length || links ? h('div', { class: 'equip-side' }, plateEls.map((p) => p.el), links) : null;
+  const side = plateEls.length ? h('div', { class: 'equip-side' }, plateEls.map((p) => p.el), links) : null;
+  if (!plateEls.length && links) { links.classList.add('equip-links--below'); }
   const screws = ['tl', 'tr', 'bl', 'br'].map((p) => h('span', { class: `screw screw--${p}`, 'aria-hidden': 'true' }));
   el.append(h('div', { class: 'equip-case' }, screws,
     h('header', { class: 'ctrl-brand' }, h('span', { class: 'ctrl-logo', html: icon || ICONS.sliders, 'aria-hidden': 'true' }),
       h('div', null, h('h2', { id: titleId }, title), sub ? h('p', null, sub) : null)),
-    h('div', { class: `equip-grid${side ? '' : ' equip-grid--solo'}` }, main, side)), closeBtn);
+    h('div', { class: `equip-grid${side ? '' : ' equip-grid--solo'}` }, main, side), side ? null : links), closeBtn);
   return { el, main, plates: plateEls, foldPlates() { for (const p of plateEls) p.fold(); } };
 }
 

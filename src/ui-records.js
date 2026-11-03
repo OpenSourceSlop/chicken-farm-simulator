@@ -71,6 +71,9 @@ export function buildRecordsPanel(L) {
   const signBtn = button({ class: 'btn btn--paper btn--ink' }, 'Sign today’s record');
   signBtn.addEventListener('click', () => { records.sign(env.dayNumber); render(); });
 
+  // the record job of today has not opened yet (before 16:00): signing waits for the evening
+  const signWait = () => L.jobs().some((i) => i.day === env.dayNumber && (i.id === 'r-record' || i.id === 'prep-record') && i.status === 'waiting');
+
   function todayPage() {
     const d = env.dayNumber;
     const row = records.row?.(d);
@@ -89,7 +92,7 @@ export function buildRecordsPanel(L) {
       }))));
     }
     if (row && row.signed) out.push(h('p', { class: 'book-signed' }, `Signed. ${row.skillLines?.length ? row.skillLines.join(' · ') : ''}`));
-    else out.push(h('div', { class: 'book-row book-row--sign' }, signBtn, h('span', { class: 'book-note' }, 'Signing closes today’s row.')));
+    else out.push(h('div', { class: 'book-row book-row--sign' }, signBtn, h('span', { class: 'book-note' }, signWait() ? 'The day’s record is signed in the evening, from 16:00.' : 'Signing closes today’s row.')));
     return out;
   }
 
@@ -108,7 +111,7 @@ export function buildRecordsPanel(L) {
     const d = env.dayNumber;
     kgBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(kgOpts[i] === kg)));
     vetBtn.disabled = false;
-    signBtn.disabled = !!records.row?.(d)?.signed;
+    signBtn.disabled = !!records.row?.(d)?.signed || signWait();
     if (tab === 0) pages[0].replaceChildren(...todayPage());
     if (tab === 1) pages[1].replaceChildren(weekPage());
     if (tab === 2) pages[2].replaceChildren(...graphsPage());

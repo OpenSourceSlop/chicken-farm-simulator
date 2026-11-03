@@ -233,8 +233,8 @@ export function createLevel(ctx, deps = {}) {
       get fast() { return fast; },
       get userPaused() { return userPaused; },
       rateLabel() {
-        if (env.paused) return userPaused ? 'Paused' : 'Clock stopped';
-        if (env.timeScale === 0) return 'Clock stopped';
+        if (env.paused) return userPaused ? 'Paused' : 'Stopped';
+        if (env.timeScale === 0) return 'Stopped';
         if (env.timeScale === C.fast) return '4×';
         if (env.timeScale === C.work) return '1×';
         return `${env.timeScale / C.work}×`.replace('0.25×', '¼ speed');

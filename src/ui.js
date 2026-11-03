@@ -145,7 +145,7 @@ export function createUI(ctx, deps) {
       const inst = id && L.jobs().find((i) => i.id === id);
       if (!inst) return '';
       const n = inst.st.list.length, s = new Set(inst.st.list.map((x) => x.s)).size;
-      return `${purpose === 'crop' ? 'Crops felt' : 'Vent temperatures'} so far: ${n} chicks from ${s} part${s === 1 ? '' : 's'} of the floor.`;
+      return `${purpose === 'crop' ? 'Crops felt' : 'Vent temperatures'} so far: ${n} chick${n === 1 ? '' : 's'} from ${s} part${s === 1 ? '' : 's'} of the floor.`;
     },
     skillDetail: (id) => ctx.level?.skillDetail?.(id) || details.get(id) || '',
     squeeze: () => squeeze(),
