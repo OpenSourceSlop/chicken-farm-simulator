@@ -1,0 +1,42 @@
+<title>Chicken Farm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Sarabun:wght@400;500;600&display=swap">
+<style>
+/* Layout: a full-bleed 3D farm with a game HUD floating over its edges.
+   One deliberate look (a farm at work, read through painted signs and a controller LCD), so a single theme. */
+:root {
+  color-scheme: dark;
+  --ink: #f3ecd8;            /* cream text, like sign paint */
+  --ink-dim: #c9c1aa;
+  --panel: rgba(24, 36, 30, 0.86);   /* dark feed-sack green */
+  --panel-solid: #18241e;
+  --panel-edge: rgba(243, 236, 216, 0.16);
+  --accent: #f28c28;         /* brooder flame orange */
+  --lcd: #b9e27a;            /* controller LCD green */
+  --cold: #6cb8f0;
+  --ok: #8fd17a;
+  --hot: #f0664a;
+  --sky: #bfd9ea;
+  --font-display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Sarabun", "Segoe UI", system-ui, sans-serif;
+  --gutter: 16px;
+}
+html, body { height: 100%; }
+body { background: var(--panel-solid); color: var(--ink); font-family: var(--font-body); overflow: hidden; }
+#app { position: fixed; inset: 0; }
+#game { display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
+#hud { position: absolute; inset: 0; pointer-events: none; font-variant-numeric: tabular-nums; }
+#hud > * { pointer-events: auto; }
+.hud-clock { position: absolute; top: calc(var(--gutter) + env(safe-area-inset-top, 0px)); left: max(var(--gutter), env(safe-area-inset-left, 0px)); background: var(--panel); border: 1px solid var(--panel-edge); padding: 8px 12px; border-radius: 6px; font-family: var(--font-display); }
+#boot { position: absolute; inset: 0; display: grid; place-items: center; background: var(--panel-solid); color: var(--ink); font-family: var(--font-display); font-size: 18px; letter-spacing: 0.04em; padding-inline: max(var(--gutter), env(safe-area-inset-left, 0px)); text-align: center; }
+#boot.boot--error { color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+<div id="app">
+  <canvas id="game" tabindex="0" aria-label="3D view of the chicken farm"></canvas>
+  <div id="hud"></div>
+  <div id="boot">Opening the farm gate…</div>
+</div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">/*__GAME_BUNDLE__*/</script>

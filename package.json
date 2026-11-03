@@ -1,0 +1,17 @@
+{
+  "name": "chicken-farm-game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser game that teaches broiler farming through a full flock cycle.",
+  "scripts": {
+    "build": "node build.mjs",
+    "shoot": "node scripts/shoot.mjs"
+  },
+  "dependencies": {
+    "three": "0.160.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.20.2"
+  }
+}
