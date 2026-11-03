@@ -8,6 +8,9 @@
 import * as THREE from 'three';
 import { Batch, mat } from './house-kit.js';
 import { wheelbarrow, sack, handTruck, boxesOnTruck, bucket, catchingFrame, handScale, chick } from './props-models.js';
+// Phase 3 (package "scene"): the tape measure, the litter fork, the scraper, the pressure washer lance,
+// the knapsack sprayer, the swab kit; and the light and air meters shown in the hand for a moment (flash)
+import { tapeMeasure, fork, scraper, washerLance, sprayer, swabKit, handMeter } from './props-cycle-models.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth = (t) => t * t * (3 - 2 * t);
@@ -21,7 +24,16 @@ const HOLD = {
   frame: { L: [0.12, -0.42, 0.5], R: [0.55, 0.12, 0.7], lean: 0 },
   scale: { L: null, R: [0.55, 0.12, 0.7], lean: 0 },
   chick: { L: [0.75, -0.05, 1.35], R: [0.75, 0.05, 1.35], lean: -0.05 },
+  // Phase 3
+  tape: { L: null, R: [0.6, 0.12, 0.7], lean: 0 },
+  fork: { L: [0.55, -0.12, 0.45], R: [0.8, 0.1, 0.35], lean: -0.08 },
+  scraper: { L: [0.45, -0.16, 0.3], R: [0.45, 0.16, 0.3], lean: -0.12 },
+  washer: { L: [0.62, -0.1, 0.7], R: [0.85, 0.1, 0.45], lean: -0.04 },
+  sprayer: { L: null, R: [0.7, 0.1, 0.55], lean: 0.03 },
+  swabs: { L: [0.55, -0.1, 1.0], R: null, lean: 0 },
 };
+// tools that sit in a hand (parented to the forearm, at the wrist) instead of on the body
+const IN_HAND = { tape: 'R', swabs: 'L', lightMeter: 'R', airMeter: 'R' };
 
 function build(kind) {
   const b = new Batch();
@@ -43,7 +55,14 @@ function build(kind) {
     handScale(b);
   } else if (kind === 'chick') {
     chick(b, 0, 0, 0, Math.PI, 1.6);
-  }
+  } else if (kind === 'tape') tapeMeasure(b);
+  else if (kind === 'fork') fork(b);
+  else if (kind === 'scraper') scraper(b);
+  else if (kind === 'washer') washerLance(b);
+  else if (kind === 'sprayer') sprayer(b);
+  else if (kind === 'swabs') swabKit(b);
+  else if (kind === 'lightMeter') handMeter(b, 'light');
+  else if (kind === 'airMeter') handMeter(b, 'air');
   return b.geometry();
 }
 
@@ -56,6 +75,15 @@ const PLACE = {
   frame: { p: [-0.36, 0.42, 0.02], r: [0, Math.PI / 2, 0.06] },
   scale: { p: [0.3, 0.78, -0.3], r: [0, 0.2, 0] },
   chick: { p: [0, 1.04, -0.36], r: [0, 0, 0] },
+  // Phase 3 (in-hand ones are relative to the wrist of that forearm)
+  tape: { p: [0, -0.34, -0.03], r: [0, 0, 0] },
+  fork: { p: [0, 0, 0], r: [0, 0, 0] },
+  scraper: { p: [0, 0, 0], r: [0, 0, 0] },
+  washer: { p: [0.26, 1.02, -0.32], r: [0, 0, 0] },
+  sprayer: { p: [0, 0, 0], r: [0, 0, 0] },
+  swabs: { p: [0, -0.36, -0.06], r: [-1.0, 0, 0] },
+  lightMeter: { p: [0, -0.35, -0.04], r: [0, 0, 0] },
+  airMeter: { p: [0, -0.35, -0.04], r: [0, 0, 0] },
 };
 
 export function createCarry(root, material, joints) {
@@ -68,15 +96,24 @@ export function createCarry(root, material, joints) {
     m.position.set(...pl.p);
     m.rotation.set(...pl.r);
     m.visible = false;
-    root.add(m);
+    const hand = IN_HAND[kind];
+    (hand && joints[`elbow${hand}`] ? joints[`elbow${hand}`] : root).add(m);
     meshes[kind] = m;
   }
   // the frame kind shows the scale too
-  const st = { kind: null, w: 0, pose: null, poseT: 0, poseDur: 0, t: 0 };
+  const st = { kind: null, w: 0, pose: null, poseT: 0, poseDur: 0, t: 0, flash: null, flashT: 0 };
 
+  function show() {
+    for (const [k, m] of Object.entries(meshes)) m.visible = k === st.kind || (st.kind === 'frame' && k === 'scale') || k === st.flash;
+  }
   function set(kind) {
     st.kind = kind && HOLD[kind] ? kind : null;
-    for (const [k, m] of Object.entries(meshes)) m.visible = k === st.kind || (st.kind === 'frame' && k === 'scale');
+    show();
+  }
+  /** Phase 3: a hand tool shown for `seconds` (the light meter, the air meter), whatever is carried. */
+  function flash(kind, seconds = 2) {
+    st.flash = meshes[kind] ? kind : null; st.flashT = seconds;
+    show();
   }
 
   function pose(name, seconds = 1) {
@@ -93,6 +130,7 @@ export function createCarry(root, material, joints) {
 
   function apply(dt) {
     st.t += dt;
+    if (st.flash && (st.flashT -= dt) <= 0) { st.flash = null; show(); }
     st.w = clamp(st.w + (st.kind ? 1 : -1) * dt * 6, 0, 1);
     const j = joints;
     if (st.kind) {
@@ -129,5 +167,5 @@ export function createCarry(root, material, joints) {
     }
   }
 
-  return { set, pose, apply, meshes, get kind() { return st.kind; } };
+  return { set, pose, flash, apply, meshes, get kind() { return st.kind; }, get flashing() { return st.flash; } };
 }

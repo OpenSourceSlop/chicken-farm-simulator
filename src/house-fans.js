@@ -144,10 +144,15 @@ export function buildFans(kit) {
   place();
 
   return {
+    // tests: blade angle and spin of each fan (rad, rad/s)
+    angle, speed,
     update(dt, env) {
       let moving = false;
+      // Phase 3: a fan whose belt is broken (env.fansBroken) has its lamp on but the blade stands
+      // still and the shutters stay shut (no air through it); the sandbox never has one
+      const broken = env.fansBroken && env.fansBroken.length ? env.fansBroken : null;
       for (let i = 0; i < FAN_COUNT; i++) {
-        const on = i < env.fansOn;
+        const on = i < env.fansOn && !(broken && broken.includes(i));
         const target = on ? MAX_SPIN : 0;
         speed[i] = smooth(speed[i], target, on ? 0.9 : 0.45, dt);
         if (!on && speed[i] < 0.05) speed[i] = 0;

@@ -17,6 +17,7 @@ export function createFlockRender(scene, camera, n, material, depth, count = () 
   const stage = {
     M: new Float32Array(n * 16), A: new Float32Array(n * 4), B: new Float32Array(n * 4), C: new Float32Array(n * 4),
     R: new Float32Array(n),
+    E: new Float32Array(n),   // Phase 3: felt comfort of each bird (the comfort view, flock-shader.js aComf)
   };
   const group = new THREE.Group();
   group.name = 'flock';
@@ -30,6 +31,9 @@ export function createFlockRender(scene, camera, n, material, depth, count = () 
       return at;
     };
     const a = attr('aAnimA'), b = attr('aAnimB'), c = attr('aAnimC');
+    const e = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
+    e.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('aComf', e);
     const mesh = new THREE.InstancedMesh(geo, material, n);
     mesh.name = lod === 0 ? 'flock-near' : 'flock-far';
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -42,7 +46,7 @@ export function createFlockRender(scene, camera, n, material, depth, count = () 
     mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.5, 0), 26);
     mesh.count = 0;
     group.add(mesh);
-    return { mesh, a, b, c };
+    return { mesh, a, b, c, e };
   }
   const near = makeMesh(0), far = makeMesh(1);
 
@@ -67,6 +71,7 @@ export function createFlockRender(scene, camera, n, material, depth, count = () 
   function copyBird(dst, k, i) {
     const M = stage.M, A = stage.A, B = stage.B, C = stage.C;
     const m = dst.mesh.instanceMatrix.array, a = dst.a.array, b = dst.b.array, c = dst.c.array;
+    dst.e.array[k] = stage.E[i];
     const o = k * 16, s = i * 16;
     for (let e = 0; e < 16; e++) m[o + e] = M[s + e];
     const q = k * 4, r = i * 4;
@@ -104,8 +109,8 @@ export function createFlockRender(scene, camera, n, material, depth, count = () 
     }
     near.mesh.count = kn; far.mesh.count = kf;
     stats.near = kn; stats.far = kf; stats.culled = culled;
-    near.mesh.instanceMatrix.needsUpdate = true; near.a.needsUpdate = true; near.b.needsUpdate = true; near.c.needsUpdate = true;
-    far.mesh.instanceMatrix.needsUpdate = true; far.a.needsUpdate = true; far.b.needsUpdate = true; far.c.needsUpdate = true;
+    near.mesh.instanceMatrix.needsUpdate = true; near.a.needsUpdate = true; near.b.needsUpdate = true; near.c.needsUpdate = true; near.e.needsUpdate = true;
+    far.mesh.instanceMatrix.needsUpdate = true; far.a.needsUpdate = true; far.b.needsUpdate = true; far.c.needsUpdate = true; far.e.needsUpdate = true;
   }
 
   group.updateMatrixWorld = function (force) {

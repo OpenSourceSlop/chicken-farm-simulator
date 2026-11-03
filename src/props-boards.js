@@ -5,8 +5,10 @@
 // boards and equipment plates the current job links to (props.highlight). Owner: package "props".
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { SPOTS, SPOTS2, HOUSE_BOUNDS } from './config.js';
+import { SPOTS, SPOTS2, SPOTS3, HOUSE_BOUNDS } from './config.js';
 import { BOARDS, sourceLabel } from './content-signs.js';
+import { BOARDS_CYCLE } from './content-signs-cycle.js';
+import { pictogram3 } from './props-pictos.js';
 import { Batch, canvasTexture, roundRect, FONT, instancedParts } from './props-kit.js';
 
 const { zMin } = HOUSE_BOUNDS;
@@ -15,7 +17,10 @@ export const BOARD_W = 1.5, BOARD_H = 1.04;
 const PX_W = 1024, PX_H = 710;
 const OUT_TILT = 0.3;                    // outdoor boards lean back toward the high camera
 
-const HEAD = { 'sign-water': '#2f6fb5', 'sign-vent': '#3d7f6f', 'sign-litter': '#a8742c', 'sign-chicks': '#c4471d', 'sign-health': '#8c3b5a' };
+const HEAD = { 'sign-water': '#2f6fb5', 'sign-vent': '#3d7f6f', 'sign-litter': '#a8742c', 'sign-chicks': '#c4471d', 'sign-health': '#8c3b5a',
+  // Phase 3 boards (BOARDS_CYCLE)
+  'sign-plan': '#4a5f8c', 'sign-light': '#b08a1c', 'sign-curtain': '#3d7f6f', 'sign-legs': '#8c5a3b', 'sign-air': '#4f7f9a',
+  'sign-droppings': '#7a5a36', 'sign-heat': '#c4471d', 'sign-feed': '#a8742c', 'sign-catch': '#2f6fb5', 'sign-clean': '#2f7a6a' };
 
 /** Board ids and where they hang. inside: true = north wall, false = outside the south wall. */
 export const BOARD_SPOTS = [
@@ -24,6 +29,15 @@ export const BOARD_SPOTS = [
   { id: 'sign-litter', ...SPOTS2.signLitter },
   { id: 'sign-chicks', ...SPOTS2.signChicks },
   { id: 'sign-health', ...SPOTS2.signHealth },
+];
+/** Phase 3 boards (content-signs-cycle.js BOARDS_CYCLE) at config SPOTS3; inside ones hang on the
+ *  north-wall columns, outside ones stand on posts (the office porch, the silo gauge, the south wall,
+ *  the wash bay). */
+export const BOARD_SPOTS3 = [
+  { id: 'sign-light', ...SPOTS3.signLight }, { id: 'sign-curtain', ...SPOTS3.signCurtain }, { id: 'sign-legs', ...SPOTS3.signLegs },
+  { id: 'sign-air', ...SPOTS3.signAir }, { id: 'sign-droppings', ...SPOTS3.signDroppings }, { id: 'sign-heat', ...SPOTS3.signHeat },
+  { id: 'sign-plan', ...SPOTS3.signPlan }, { id: 'sign-feed', ...SPOTS3.signFeed }, { id: 'sign-catch', ...SPOTS3.signCatch },
+  { id: 'sign-clean', ...SPOTS3.signClean },
 ];
 
 // A short line for the 3D board: the first sentence, or the part before a colon when that part
@@ -102,8 +116,7 @@ function pictogram(g, id, x, y, w, h) {
   g.restore();
 }
 
-function paintBoard(g, id, ox, oy) {
-  const B = BOARDS[id];
+function paintBoard(g, id, ox, oy, B = BOARDS[id]) {
   g.save();
   g.translate(ox, oy);
   const w = PX_W, h = PX_H;
@@ -122,9 +135,9 @@ function paintBoard(g, id, ox, oy) {
     g.fillStyle = '#2f6b5b'; roundRect(g, 40, 164, kw, 38, 10); g.fill();
     g.fillStyle = '#f5efdc'; g.fillText(B.kicker, 54, 184);
   }
-  const pic = (B.items.find((it) => it.pic) || {}).pic || (id === 'sign-vent' ? 'fan' : null);
+  const pic = (B.items.find((it) => it.pic) || {}).pic || (id === 'sign-vent' ? 'fan' : null) || (pictogram3(null, id) ? id : null);
   const picW = 230;
-  if (pic) pictogram(g, pic, w - picW - 40, 172, picW, 240);
+  if (pic && !pictogram3(g, pic, w - picW - 40, 172, picW, 240)) pictogram(g, pic, w - picW - 40, 172, picW, 240);
   // facts: short lines with their source in small text, as many as fit
   let y = 222;
   const left = 46, maxW = (pic ? w - picW - 70 : w - 80) - left;
@@ -157,22 +170,18 @@ function tabTexture() {
   }, { mipmaps: false });
 }
 
-/**
- * @returns {{ group, interactables, tabs: { set(ids) }, tabSpots: Map, frames: Batch }}
- */
-export function buildBoards(stat) {
-  const group = new THREE.Group();
-  group.name = 'props-boards';
-  // atlas: 2 columns x 3 rows of 1024 x 710 boards
-  const atlas = canvasTexture(2048, 2048, (g) => {
-    BOARD_SPOTS.forEach((s, i) => paintBoard(g, s.id, (i % 2) * PX_W, Math.floor(i / 2) * (PX_H + 2)));
+// One atlas (2 columns of 1024 x 710 boards, as many rows as needed) and one merged mesh per board set.
+function boardFaces(stat, spots, data, name) {
+  const rows = Math.ceil(spots.length / 2), AH = rows * (PX_H + 2);
+  const atlas = canvasTexture(2048, AH, (g) => {
+    spots.forEach((s, i) => paintBoard(g, s.id, (i % 2) * PX_W, Math.floor(i / 2) * (PX_H + 2), data[s.id]));
   });
   const geos = [];
   const tabSpots = new Map();
-  BOARD_SPOTS.forEach((s, i) => {
+  spots.forEach((s, i) => {
     const pg = new THREE.PlaneGeometry(BOARD_W, BOARD_H);
     const u0 = (i % 2) * 0.5, u1 = u0 + 0.5;
-    const vTop = 1 - (Math.floor(i / 2) * (PX_H + 2)) / 2048, vBot = vTop - PX_H / 2048;
+    const vTop = 1 - (Math.floor(i / 2) * (PX_H + 2)) / AH, vBot = vTop - PX_H / AH;
     const uv = pg.attributes.uv;
     for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) ? u1 : u0, uv.getY(k) ? vTop : vBot);
     const M = new THREE.Matrix4();
@@ -202,9 +211,22 @@ export function buildBoards(stat) {
     geos.push(pg);
   });
   const faces = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ map: atlas }));
-  faces.name = 'props-board-faces';
+  faces.name = name;
   faces.receiveShadow = true;
-  group.add(faces);
+  return { faces, tabSpots };
+}
+
+/**
+ * @returns {{ group, interactables, tabs: { set(ids) }, tabSpots: Map, frames: Batch }}
+ */
+export function buildBoards(stat) {
+  const group = new THREE.Group();
+  group.name = 'props-boards';
+  const p2 = boardFaces(stat, BOARD_SPOTS, BOARDS, 'props-board-faces');
+  // Phase 3: the ten new boards in their own atlas (hidden with the props in the sandbox)
+  const p3 = boardFaces(stat, BOARD_SPOTS3, BOARDS_CYCLE, 'props-board-faces-3');
+  group.add(p2.faces, p3.faces);
+  const tabSpots = new Map([...p2.tabSpots, ...p3.tabSpots]);
 
   // Phase 1 boards and the equipment plates get tabs too (their 3D objects are elsewhere)
   tabSpots.set('sign-brooder', { x: SPOTS.signBrooder.x + 0.42, y: 1.97, z: FACE_Z + 0.06, ry: 0, rx: 0 });
@@ -213,7 +235,7 @@ export function buildBoards(stat) {
 
   const tabGeo = new THREE.PlaneGeometry(0.34, 0.13);
   const tabMat = new THREE.MeshBasicMaterial({ map: tabTexture(), toneMapped: false, side: THREE.DoubleSide });
-  const MAX_TABS = 16;
+  const MAX_TABS = 24;
   const tabMesh = instancedParts(tabGeo, tabMat, MAX_TABS, { color: false });
   tabMesh.name = 'props-facts-tabs';
   group.add(tabMesh);
@@ -222,7 +244,7 @@ export function buildBoards(stat) {
   let shown = [];
   let pulse = 0;
 
-  const interactables = BOARD_SPOTS.map((s) => ({
+  const interactables = [...BOARD_SPOTS, ...BOARD_SPOTS3].map((s) => ({
     id: s.id, label: s.label, x: s.x, z: s.z, radius: 2.0, inside: s.inside, verb: 'Read the',
   }));
 

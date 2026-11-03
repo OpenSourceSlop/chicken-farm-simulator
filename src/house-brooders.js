@@ -142,16 +142,30 @@ export function buildBrooders(kit) {
   const wire = new Batch();
   wire.rod([HOUSE.broodCurtainX, 2.63, zMin], [HOUSE.broodCurtainX, 2.63, zMax], 0.012, 0x6d757c, 4);
   for (let z = zMin + 0.4; z < zMax; z += 0.8) wire.cyl(0.018, 0.03, HOUSE.broodCurtainX, 2.6, z, 0xd8dcdf, 6);
-  wire.box(0.07, 0.035, zMax - zMin - 0.1, HOUSE.broodCurtainX + 0.04, 0.035, 0, 0xc9d3d8);   // weighted hem on the litter
-  curtain.add(sheet, wire.mesh(mats.vc, { cast: false }));
+  // weighted hem on the litter, with the rolled-up sheet around it (the roll only shows in a level,
+  // where the winch rolls the curtain up to the wire instead of the Phase 1 fade)
+  const hemB = new Batch();
+  hemB.box(0.07, 0.035, zMax - zMin - 0.1, 0, 0, 0, 0xc9d3d8);
+  const hem = hemB.mesh(mats.vc, { cast: false });
+  hem.position.set(HOUSE.broodCurtainX + 0.04, 0.035, 0);
+  const rollB = new Batch();
+  rollB.add(new THREE.CylinderGeometry(1, 1, zMax - zMin - 0.14, 10, 1), 0xd5e0e6, mat(0, 0, 0, Math.PI / 2, 0, 0));
+  const roll = rollB.mesh(mats.vc, { cast: false });
+  roll.visible = false;
+  curtain.add(sheet, wire.mesh(mats.vc, { cast: false }), hem, roll);
   curtain.renderOrder = 2;
   group.add(curtain);
 
-  let level = 0, curtainK = 1, winch = -1;
+  const isLevel = () => !!(kit.farm && kit.farm.mode === 'level');
+  let level = 0, curtainK = 1, winch = -1, rollK = -1;
   return {
     update(dt, env) {
-      // winched up once brooding is over (same day test as the curtain)
-      const wT = env.broodCurtain ? 0 : 1;
+      const lv = isLevel();
+      // Phase 1 (sandbox): winched up once brooding is over (same day test as the curtain). In a level
+      // the brooders stay down after the curtain lifts and go up with env.broodersUp (Phase 3, the
+      // farmer's "Brooders off and up"; the farm's house.broodersUp while the env has no such field).
+      const up = lv ? !!(env.broodersUp ?? kit.farm.house?.broodersUp) : !env.broodCurtain;
+      const wT = up ? 1 : 0;
       winch = winch < 0 || dt <= 0 ? wT : smooth(winch, wT, 1.5, dt);
       lift.position.y = LIFT * winch;
       hangGroup.scale.y = Math.max(0.05, (chainLen - LIFT * winch) / chainLen);
@@ -162,9 +176,36 @@ export function buildBrooders(kit) {
       burnerMat.emissiveIntensity = 2.2 * level;
       glow.visible = level > 0.01;
       glowMat.opacity = 0.3 * level;
-      curtainK = smooth(curtainK, env.broodCurtain ? 1 : 0, 2.5, dt);
-      curtain.visible = curtainK > 0.01;
-      curtainMat.opacity = 0.5 * curtainK;
+      if (lv) {
+        // a level: the winch rolls the sheet up from the hem to the wire (about 40 s of play)
+        const rT = env.broodCurtain ? 0 : 1;
+        rollK = rollK < 0 || dt <= 0 ? rT : smooth(rollK, rT, 1.1, dt);
+        setRoll(rollK);
+        curtainK = 1;
+        curtain.visible = true;
+        curtainMat.opacity = 0.5;
+      } else {
+        if (rollK !== 0) { rollK = 0; setRoll(0); }
+        rollK = -1;
+        curtainK = smooth(curtainK, env.broodCurtain ? 1 : 0, 2.5, dt);
+        curtain.visible = curtainK > 0.01;
+        curtainMat.opacity = 0.5 * curtainK;
+      }
     },
+    /** 0 down .. 1 rolled up to the wire (tests) */
+    get curtainRoll() { return Math.max(0, rollK); },
   };
+
+  // k 0: the sheet hangs to the litter (Phase 1 look); 1: rolled up under the wire
+  function setRoll(k) {
+    const top = 2.62, hang = 2.62 * (1 - 0.94 * k);
+    sheet.scale.y = Math.max(0.02, hang / 2.62);
+    sheet.position.y = top - hang / 2;
+    const bottom = top - hang;
+    hem.position.y = Math.max(0.035, bottom + 0.02);
+    const r = 0.02 + 0.07 * k;
+    roll.visible = k > 0.02;
+    roll.scale.set(r, r, 1);
+    roll.position.set(HOUSE.broodCurtainX + 0.02, bottom + r * 0.6, 0);
+  }
 }

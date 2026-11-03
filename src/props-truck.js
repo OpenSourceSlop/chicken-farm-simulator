@@ -14,7 +14,7 @@ import { buildFarmerModel } from './player-model.js';
 const CAB = 0xf2f2ee, TRIM = 0x2b2f33, GLASS = 0x2c3e4e, TYRE = 0x26292c, HUB = 0xb8bec4, CHASSIS = 0x3a3e42;
 
 // Cab and chassis, front toward +x, ground at y 0, rear of the chassis at x = -3.6.
-function chassis(b) {
+export function chassis(b) {
   const L0 = -3.6, L1 = 3.55;
   b.box(L1 - L0 - 0.4, 0.22, 0.9, (L0 + L1) / 2 - 0.2, 0.72, 0, CHASSIS);              // frame rails
   b.box(1.9, 1.25, 2.25, 2.55, 1.55, 0, CAB);                                          // cab box
@@ -121,6 +121,11 @@ const CHICK_OUT = [{ x: STOP.x, z: STOP.z }, { x: 22, z: 14 }, { x: 28.5, z: 18.
 const FEED_STOP = { x: (FARM.silos[0].x + FARM.silos[1].x) / 2 + 0.6, z: FARM.silos[0].z - 3.9 };
 const FEED_IN = [OUTSIDE, ROAD[0], ROAD[1], { x: -27, z: 14 }, { x: -27, z: FEED_STOP.z }, FEED_STOP];
 const FEED_OUT = [FEED_STOP, { x: 29, z: FEED_STOP.z }, { x: 29, z: 11 }, { x: 24, z: 14 }, ROAD[1], ROAD[0], OUTSIDE];
+// Phase 3: a delivery of a feed type goes to its silo (config FEED_TYPES: silo 1 starter / finisher,
+// silo 2 grower): the truck parks with its blower pipe right under that silo's filler
+const siloStop = (i) => ({ x: FARM.silos[i].x + 3.75, z: FEED_STOP.z });
+const feedIn = (stop) => [OUTSIDE, ROAD[0], ROAD[1], { x: -27, z: 14 }, { x: -27, z: stop.z }, stop];
+const feedOut = (stop) => [stop, { x: 29, z: stop.z }, { x: 29, z: 11 }, { x: 24, z: 14 }, ROAD[1], ROAD[0], OUTSIDE];
 
 /** One truck that follows sampled paths. kind 'chicks' | 'feed'. */
 function makeTruck(kind, mats, group) {
@@ -196,6 +201,8 @@ export function buildTrucks(mats, group) {
   const truckOf = { chicks: chick, feed };
   const inPath = { chicks: paths.chickIn, feed: paths.feedIn };
   const outPath = { chicks: paths.chickOut, feed: paths.feedOut };
+  const siloPaths = FARM.silos.map((_, i) => ({ stop: siloStop(i), in: pathFrom(feedIn(siloStop(i)), 4.5), out: pathFrom(feedOut(siloStop(i)), 4.5) }));
+  let feedSilo = null;   // null: Phase 2's stop between the silos; 0 / 1: under that silo (Phase 3)
   const DRIVE_IN = 8, SPEED_OUT = 11;
 
   function setState(kind, state) {
@@ -232,7 +239,7 @@ export function buildTrucks(mats, group) {
       s.open += (want - s.open) * (1 - Math.exp(-3 * dt));
       for (const d of t.doors) {
         if (kind === 'chicks') d.pivot.rotation.y = d.s * s.open * 1.75;
-        else { d.pivot.rotation.y = -0.3 * s.open; d.pivot.rotation.x = -0.55 * s.open; d.pivot.scale.setScalar(1); }
+        else { d.pivot.rotation.y = (feedSilo == null ? -0.3 : 0) * s.open; d.pivot.rotation.x = -0.55 * s.open; d.pivot.scale.setScalar(1); }
       }
     }
     // the driver stands at the chick truck's tail while it is parked
@@ -250,19 +257,27 @@ export function buildTrucks(mats, group) {
     tail: { x: STOP.x - 3.7, z: STOP.z },
     feedStop: FEED_STOP,
     // a second arrive (the farm's delivery event and the level both asking) does not restart it
-    arrive(kind = 'chicks', instant = false) {
+    // opts.silo (Phase 3, feed): 0 / 1 = the silo of the delivered feed type
+    arrive(kind = 'chicks', instant = false, opts = {}) {
       const cur = st[kind].state;
       if (!instant && (cur === 'driving-in' || cur === 'parked')) return;
+      if (kind === 'feed') {
+        feedSilo = opts.silo === 0 || opts.silo === 1 ? opts.silo : null;
+        inPath.feed = feedSilo == null ? paths.feedIn : siloPaths[feedSilo].in;
+        outPath.feed = feedSilo == null ? paths.feedOut : siloPaths[feedSilo].out;
+      }
       setState(kind, instant ? 'parked' : 'driving-in');
       if (instant) st[kind].time = 5;
     },
     leave(kind = 'chicks', instant = false) { if (st[kind].state === 'away') return; setState(kind, instant ? 'away' : 'leaving'); },
+    get feedSilo() { return feedSilo; },
     update,
     collider(kind) {
       const s = st[kind];
       if (s.state !== 'parked') return null;
       if (kind === 'chicks') return { type: 'box', minX: STOP.x - 3.75, maxX: STOP.x + 3.65, minZ: STOP.z - 1.25, maxZ: STOP.z + 1.25 };
-      return { type: 'box', minX: FEED_STOP.x - 3.75, maxX: FEED_STOP.x + 3.65, minZ: FEED_STOP.z - 1.25, maxZ: FEED_STOP.z + 1.25 };
+      const fs = feedSilo == null ? FEED_STOP : siloPaths[feedSilo].stop;
+      return { type: 'box', minX: fs.x - 3.75, maxX: fs.x + 3.65, minZ: fs.z - 1.25, maxZ: fs.z + 1.25 };
     },
   };
 }

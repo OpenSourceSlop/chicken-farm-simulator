@@ -48,6 +48,14 @@ import { buildTrucks } from './props-truck.js';
 import { buildBoxes } from './props-boxes.js';
 import { createTriggers } from './props-triggers.js';
 import { createFx } from './props-fx.js';
+// Phase 3 (package "scene", PHASE3.md §12): the cycle's equipment, yard, catching night, tools, dust
+import { FEED_TYPES, HOUSE } from './config.js';
+import { buildCycleEquipment } from './props-cycle-equip.js';
+import { buildCycleYard } from './props-cycle-yard.js';
+import { buildCatch, CATCH_STOPS } from './props-catch.js';
+import { createCycleTools } from './props-tools.js';
+import { buildDust } from './props-air.js';
+import { OVERLAYS } from './props-overlay.js';
 
 const CHICKS_PER_STACK = (LEVEL1.boxes / LEVEL1.stacks) * LEVEL1.chicksPerBox;
 const inBrood = (p) => p.x > BROOD_BOUNDS.xMin && p.x < BROOD_BOUNDS.xMax && p.z > BROOD_BOUNDS.zMin && p.z < BROOD_BOUNDS.zMax;
@@ -64,7 +72,7 @@ export function buildProps(ctx, { house } = {}) {
   const mats = makePropMaterials();
   // outdoor and indoor static props: the world's occlusion-faded flat material (same program)
   mats.out = withOcclusionFade(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 'occ-flat');
-  const pool = createBoxPool(new THREE.MeshLambertMaterial({ color: 0xffffff }), 112);
+  const pool = createBoxPool(new THREE.MeshLambertMaterial({ color: 0xffffff }), 400);
   group.add(pool.mesh);
 
   const stat = new Batch();
@@ -72,15 +80,19 @@ export function buildProps(ctx, { house } = {}) {
   group.add(boards.group);
   const equip = buildEquipment(stat, pool, group);
   const yard = buildYard(stat, mats, group);
+  const equip3 = buildCycleEquipment(stat, pool, group);
+  const yard3 = buildCycleYard(stat, pool, group, mats);
   const statMesh = stat.mesh(mats.out, { cast: true, receive: true });
   statMesh.name = 'props-static';
   group.add(statMesh);
   const floor = buildFloorStates(ctx, house, group);
   const trucks = buildTrucks(mats, group);
+  const catchNight = buildCatch(mats, group);
+  const dust = buildDust(group);
   const boxes = buildBoxes(mats.vc, group);
   const fx = createFx(pool);
   const triggers = createTriggers(ctx, fx);
-  const tabSpots = new Map([...boards.tabSpots, ...equip.tabSpots, ...yard.tabSpots]);
+  const tabSpots = new Map([...boards.tabSpots, ...equip.tabSpots, ...yard.tabSpots, ...equip3.tabSpots, ...yard3.tabSpots]);
   boards.tabSpots.clear();
   for (const [k, v] of tabSpots) boards.tabSpots.set(k, v);
 
@@ -120,16 +132,19 @@ export function buildProps(ctx, { house } = {}) {
       pl()?.pose?.('crouch', 0.6);
     },
   }));
+  const countIntoBin = () => {
+    const o = props.carryOpts || { n: 0, causes: {} };
+    const n = o.n || 0, causes = { ...(o.causes || {}) };
+    ctx.farm?.act('dead.count', { n, causes });
+    emit(EV.DEAD_DROP, { n, causes });
+    props.drop();
+  };
   reg({
     id: 'dead-bin', label: SPOTS2.deadBin.label, verb: 'Count into the', x: SPOTS2.deadBin.x, z: SPOTS2.deadBin.z, radius: 1.5, inside: false,
     enabled: () => st.level && props.carrying === 'bucket',
-    use() {
-      const o = props.carryOpts || { n: 0, causes: {} };
-      const n = o.n || 0, causes = { ...(o.causes || {}) };
-      ctx.farm?.act('dead.count', { n, causes });
-      emit(EV.DEAD_DROP, { n, causes });
-      props.drop();
-    },
+    // Phase 3: with "dead birds by look" unlocked (skills deadByLook) E opens the panels package's
+    // dead-bin panel (no use(): the ui opens the panel registered under the id), which counts them
+    get use() { return ctx.skills?.unlocked?.('deadByLook') ? undefined : countIntoBin; },
   });
   const leakSpot = () => {
     const lk = ctx.farm?.water?.leak;
@@ -232,17 +247,41 @@ export function buildProps(ctx, { house } = {}) {
       if (!isLevel() || !d) return;
       if (d.kind === 'chicks' && d.phase === 'arrive') props.truck.arrive();
       else if (d.kind === 'chicks' && d.phase === 'leave') props.truck.leave();
-      else if (d.kind === 'feed' && d.phase === 'arrive') { trucks.arrive('feed'); st.feedWait = 14; }
+      else if (d.kind === 'feed' && d.phase === 'arrive') {
+        // Phase 3: a feed type goes to its own silo (FEED_TYPES); Phase 2's delivery has no type
+        const ft = d.type ? FEED_TYPES.find((t) => t.id === d.type) : null;
+        trucks.arrive('feed', false, { silo: ft ? ft.silo : null }); st.feedWait = 14;
+      }
       else if (d.kind === 'feed' && d.phase === 'leave') trucks.leave('feed');
     });
   }
 
+  // ---------------- Phase 3 tools and interactables (created once `props` exists, below) ----------------
+  let tools = null;
+  if (ev) {
+    ev.on(EV.FARM_DELIVERY, (d) => {
+      if (!isLevel() || !d || d.kind !== 'catch') return;
+      if (d.phase === 'arrive') { catchNight.arrive(0); catchNight.arrive(1); }
+      else if (d.phase === 'leave') { if (d.truck == null) { catchNight.leave(0); catchNight.leave(1); } else catchNight.leave(d.truck); }
+    });
+  }
+  // the door shut while the clean house rests
+  const d = HOUSE.door;
+  const doorShut = { type: 'box', minX: d.x - d.width / 2 - 0.1, maxX: d.x + d.width / 2 + 0.1, minZ: HOUSE.door.z - 0.2, maxZ: HOUSE.door.z + 0.25 };
+  const catchCollider = (i) => {
+    const t = catchNight.trucks[i];
+    if (t.state !== 'parked') return null;
+    const s = CATCH_STOPS[i];
+    return { type: 'box', minX: s.x - 7.7, maxX: s.x + 3.65, minZ: s.z - 1.25, maxZ: s.z + 1.25 };
+  };
+
   // ---------------- colliders (level mode only) ----------------
-  const staticColliders = [...equip.colliders, ...yard.colliders];
+  const staticColliders = [...equip.colliders, ...yard.colliders, ...equip3.colliders, ...yard3.colliders];
   function syncColliders() {
     const list = ctx.colliders;
     if (!list) return;
-    const want = st.level ? [...staticColliders, trucks.collider('chicks'), trucks.collider('feed')].filter(Boolean) : [];
+    const shut = !!ctx.farm?.house?.closed;
+    const want = st.level ? [...staticColliders, trucks.collider('chicks'), trucks.collider('feed'), catchCollider(0), catchCollider(1), shut ? doorShut : null].filter(Boolean) : [];
     const same = want.length === st.colliders.length && want.every((c, i) => c === st.colliders[i] || JSON.stringify(c) === JSON.stringify(st.colliders[i]));
     if (same) return;
     for (const c of st.colliders) { const i = list.indexOf(c); if (i >= 0) list.splice(i, 1); }
@@ -258,7 +297,7 @@ export function buildProps(ctx, { house } = {}) {
   function update(dt, env, view) {
     const level = isLevel();
     if (level !== st.level) { st.level = level; group.visible = level; colliderTimer = 0; if (!level) triggers.reset(); }
-    floor.update(dt, ctx.farm || {}, level, props.overlay.floorTemp);
+    floor.update(dt, ctx.farm || {}, level, OVERLAYS.find((k) => props.overlay[k]) || null, env);
     colliderTimer -= dt;
     if (colliderTimer <= 0) { colliderTimer = 0.25; syncColliders(); }
     if (!level) return;
@@ -267,6 +306,14 @@ export function buildProps(ctx, { house } = {}) {
     if (house && house.lineHeights) for (let i = 0; i < 4; i++) lineY[i] = house.lineHeights[i];
     equip.update(dt, f, env, lineY);
     boards.update(dt);
+    // Phase 3
+    const roll = house?.debug?.brooders?.curtainRoll ?? 0;
+    equip3.update(dt, f, env, { moving: Math.abs(roll - (st.roll ?? roll)) > 1e-4 });
+    st.roll = roll;
+    yard3.update(dt, f, env, (env.dayNumber ?? 0) >= 43, tools.panelsSeen);
+    catchNight.update(dt, f);
+    tools.update(dt, true);
+    dust.update(dt, f.air?.dustIndex ?? 0, pl(), ctx.camera, true);
 
     // heap shrinks as the floor is covered (it never quite disappears: the sacks come from it)
     const cover = f.litter ? f.litter.cover ?? 0 : 0;
@@ -320,7 +367,9 @@ export function buildProps(ctx, { house } = {}) {
   const props = {
     group,
     colliders: [],          // level colliders are added to ctx.colliders in level mode only
-    overlay: { floorTemp: false },
+    // floor views, one at a time (PHASE3.md §12 item 9): floorTemp (Phase 2, F), moisture (M), lux (luxMap),
+    // brooderZones (unlock); the run package draws the legend of the one that is on
+    overlay: { floorTemp: false, moisture: false, lux: false, brooderZones: false },
     carrying: null,
     carryOpts: null,
     startCarry(kind, opts = {}) {
@@ -354,7 +403,11 @@ export function buildProps(ctx, { house } = {}) {
     },
     stacks: { left: 0 },
     update,
-    setOverlay(name, on) { if (name in props.overlay) props.overlay[name] = !!on; },
+    setOverlay(name, on) {
+      if (!(name in props.overlay)) return;
+      if (on) for (const k of OVERLAYS) props.overlay[k] = false;
+      props.overlay[name] = !!on;
+    },
     highlighted: [],
     highlight(ids = []) { props.highlighted = [...ids]; boards.setTabs(props.highlighted); },
     reset() {
@@ -364,6 +417,8 @@ export function buildProps(ctx, { house } = {}) {
       st.delivered = false; st.frameAt = null; yard.frameSet.visible = false;
       props.stacks.left = 0;
       triggers.reset();
+      catchNight.leave(0, true); catchNight.leave(1, true);
+      tools.reset();
       floor.refresh(ctx.farm);
     },
     serialize() {
@@ -373,6 +428,9 @@ export function buildProps(ctx, { house } = {}) {
         v: 2, carrying: props.carrying === 'chick' ? null : props.carrying, carryOpts: props.carrying === 'chick' ? null : props.carryOpts,
         truck: trucks.st.chicks.state, feedTruck: trucks.st.feed.state, stacks: props.stacks.left,
         stackStates: boxes.stacks.map((s) => s.state), pile: boxes.pile, delivered: st.delivered,
+        // Phase 3: the catching trucks, the panels put up, the tape's hook, the feed truck's silo
+        catchTrucks: catchNight.trucks.map((t) => (t.state === 'parked' || t.state === 'in' ? 1 : 0)), panels: tools.panelsSeen ? 1 : 0,
+        tape: tools.st.tape ? { ...tools.st.tape } : null, feedSilo: trucks.feedSilo,
       };
     },
     restore(d) {
@@ -382,15 +440,19 @@ export function buildProps(ctx, { house } = {}) {
       showCarry(props.carrying);
       const settle = (s) => (s === 'parked' || s === 'driving-in' ? 'parked' : 'away');
       if (settle(d.truck) === 'parked') trucks.arrive('chicks', true); else trucks.leave('chicks', true);
-      if (settle(d.feedTruck) === 'parked') trucks.arrive('feed', true); else trucks.leave('feed', true);
+      if (settle(d.feedTruck) === 'parked') trucks.arrive('feed', true, { silo: d.feedSilo }); else trucks.leave('feed', true);
       if (Array.isArray(d.stackStates)) d.stackStates.forEach((s, i) => { if (boxes.stacks[i]) { boxes.stacks[i].state = s; boxes.stacks[i].drop = 1; } });
       boxes.pile = d.pile ?? 0;
       st.delivered = !!d.delivered;
       props.stacks.left = d.stacks ?? 0;
+      (d.catchTrucks || []).forEach((on, i) => { if (on) catchNight.arrive(i, true); else catchNight.leave(i, true); });
+      tools.st.panelsSeen = !!d.panels;
+      tools.st.tape = d.tape && props.carrying === 'tape' ? { ...d.tape } : null;
       floor.refresh(ctx.farm);
     },
     // test and tooling hooks (not part of the contract)
-    debug: { trucks, boxes, floor, pool, triggers, yard, equip, boards },
+    debug: { trucks, boxes, floor, pool, triggers, yard, equip, boards, equip3, yard3, catchNight, get tools() { return tools; }, dust },
   };
+  tools = createCycleTools(ctx, { props, pool, yard: yard3, lv });
   return props;
 }

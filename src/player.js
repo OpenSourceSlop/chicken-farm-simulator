@@ -253,6 +253,10 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
     carrying: null,
     carry(kind) { api.carrying = kind === 'scale' ? 'frame' : kind || null; carry.set(kind || null); },
     pose(name, seconds = 1) { carry.pose(name, seconds); },
+    // Phase 3 (package "scene"): a hand tool in his hand for a moment (props shows the light meter on L and
+    // the air meter on V for 2 s, with the run's 'reach' pose): 'lightMeter' | 'airMeter'
+    flash(kind, seconds = 2) { carry.flash(kind, seconds); },
+    get flashing() { return carry.flashing; },
     update,
     dispose() {
       input.dispose();

@@ -20,7 +20,10 @@ import { ACT, COLD } from './flock-state.js';
 export const MAX_DRAWN = 160;
 // top of the litter (house-shell.js lays the floor 2 cm up; live birds stand with their toes in it)
 const FLOOR_Y = 0.02;
-export const CAUSES = ['cold', 'heat', 'dehydration', 'weak', 'starveout', 'other', 'box'];
+// Phase 3 adds (at the end, so Phase 2 saves keep their indices): sds -> on its back, legs up, by a
+// feeder line; legs -> thin, beside a drinker line; disease -> hunched by the side walls;
+// respiratory -> anywhere, on its side. ('doa' is counted at the plant, never on the floor.)
+export const CAUSES = ['cold', 'heat', 'dehydration', 'weak', 'starveout', 'other', 'box', 'sds', 'legs', 'disease', 'respiratory'];
 
 // The stiff legs sticking out are what tells a dead bird from a resting one: draw them twice as
 // thick (and the feet wider) as on the live model, in both the chick and the broiler shape.
@@ -101,9 +104,18 @@ export function createDeadBirds(ctx, S, uniforms, pop) {
       const h = HEATERS[(rnd() * HEATERS.length) | 0], a = rnd() * 6.283, r = 1.6 + rnd();
       return { x: h.x + Math.cos(a) * r, z: h.z + Math.sin(a) * r };
     }
-    if (cause === 'heat') {
+    if (cause === 'heat' || cause === 'disease') {
       const side = rnd() < 0.5 ? -1 : 1;
       return { x: randX(), z: side < 0 ? b.zMin + 0.1 + rnd() * 0.45 : b.zMax - 0.1 - rnd() * 0.45 };
+    }
+    if (cause === 'sds') {
+      // big birds that die suddenly are often found near the feeders
+      const fz = FEEDER_LINES_Z[(rnd() * FEEDER_LINES_Z.length) | 0];
+      return { x: randX(), z: fz + (rnd() < 0.5 ? -1 : 1) * (0.3 + 0.35 * rnd()) };
+    }
+    if (cause === 'legs') {
+      const dz = DRINKER_LINES_Z[(rnd() * DRINKER_LINES_Z.length) | 0];
+      return { x: randX(), z: dz + (rnd() < 0.5 ? -1 : 1) * (0.2 + 0.3 * rnd()) };
     }
     if (cause === 'dehydration') {
       const line = S.lv ? S.lv.minLine : (rnd() * DRINKER_LINES_Z.length) | 0;
@@ -137,8 +149,9 @@ export function createDeadBirds(ctx, S, uniforms, pop) {
 
   function lay(cause) {
     const p = clampB(spotFor(cause));
-    // dead birds are mostly the small ones (weak, late starters)
-    const small = cause === 'weak' || cause === 'starveout' || cause === 'box' ? 0.82 : 0.92;
+    // dead birds are mostly the small ones (weak, late starters); a sudden death is a big, well-grown
+    // bird; a bird that died of its legs is thin
+    const small = cause === 'weak' || cause === 'starveout' || cause === 'box' ? 0.82 : cause === 'sds' ? 1.05 : cause === 'legs' ? 0.8 : 0.92;
     list.push({ id: nextId++, x: p.x, z: p.z, yaw: rnd() * 6.283, side: rnd() < 0.5 ? -1 : 1,
       s: S.L * (small + 0.12 * rnd()), cause, tint: rnd() * 2 - 1 });
     dirty = true;
@@ -222,18 +235,31 @@ export function createDeadBirds(ctx, S, uniforms, pop) {
     for (let k = 0; k < list.length; k++) {
       const d = list[k];
       const ph = (d.id * 0.618) % 1;
-      // on its side (roll 90°), stretched out and flat on the litter: across the body (now
-      // vertical) squashed to 80 %, so it sits half that width above the floor
       const cy = Math.cos(d.yaw), sy = Math.sin(d.yaw);
-      // the body's middle (0.42 up the standing bird) now lies to one side: shift it back over (x, z)
-      const off = 0.42 * d.s * d.side;
-      writeBirdMatrix(m, k * 16, d.x + sy * off, FLOOR_Y + 0.19 * d.s, d.z - cy * off, cy, sy, d.side * 1.5708, 1.06 * d.s, d.s, 0.72 * d.s);
+      const q = k * 4;
+      let pitch = -0.45 - 0.35 * ph, wing = 0.45 + 0.4 * ph, sit = 0, legs = -0.5 + 0.2 * ph, wYaw = 0.05;
+      if (d.cause === 'sds') {
+        // on its back, legs up (rolled over about its length; the back on the litter)
+        writeBirdMatrix(m, k * 16, d.x, FLOOR_Y + 0.6 * d.s, d.z, cy, sy, d.side * 3.0, 1.04 * d.s, 0.95 * d.s, 0.92 * d.s);
+        pitch = -0.2; wing = 0.35 + 0.2 * ph; legs = 0.15 * (ph - 0.5);
+      } else if (d.cause === 'disease') {
+        // hunched: on its breast, legs folded under, head sunk to the litter, feathers fluffed
+        writeBirdMatrix(m, k * 16, d.x, FLOOR_Y, d.z, cy, sy, 0.12 * d.side, 0.95 * d.s, 0.9 * d.s, 1.12 * d.s);
+        pitch = 0.75 + 0.2 * ph; wing = 0.2; sit = 1; legs = 0;
+      } else {
+        // on its side (roll 90°), stretched out and flat on the litter: across the body (now
+        // vertical) squashed to 80 %, so it sits half that width above the floor
+        // the body's middle (0.42 up the standing bird) now lies to one side: shift it back over (x, z)
+        const off = 0.42 * d.s * d.side, thin = d.cause === 'legs' ? 0.78 : 1;
+        // heat: wings spread wide, beak open
+        if (d.cause === 'heat') { wing = 0.9 + 0.1 * ph; wYaw = 0.22; }
+        writeBirdMatrix(m, k * 16, d.x + sy * off, FLOOR_Y + 0.19 * d.s, d.z - cy * off, cy, sy, d.side * 1.5708, 1.06 * d.s, d.s, 0.72 * d.s * thin);
+      }
       writeBirdMatrix(pm, k * 16, d.x + 0.05 * d.s * cy, FLOOR_Y + 0.004, d.z + 0.05 * d.s * sy, cy, sy, 0, 1.4 * d.s, 1, 1.05 * d.s);
       // head thrown back, a wing flopped open, legs stiff and out behind, beak a little open
-      const q = k * 4, pitch = -0.45 - 0.35 * ph, wing = 0.45 + 0.4 * ph;
-      A[q] = Math.cos(pitch); A[q + 1] = Math.sin(pitch); A[q + 2] = -0.03; A[q + 3] = 0;
+      A[q] = Math.cos(pitch); A[q + 1] = Math.sin(pitch); A[q + 2] = -0.03; A[q + 3] = sit;
       B[q] = Math.cos(0.3 * (ph - 0.5)); B[q + 1] = Math.sin(0.3 * (ph - 0.5)); B[q + 2] = Math.cos(wing); B[q + 3] = Math.sin(wing);
-      C[q] = 0.2; C[q + 1] = -0.5 + 0.2 * ph; C[q + 2] = d.tint + 3; C[q + 3] = 0.05;
+      C[q] = d.cause === 'heat' ? 0.45 : 0.2; C[q + 1] = legs; C[q + 2] = d.tint + 3; C[q + 3] = wYaw;
     }
     mesh.count = patch.count = list.length;
     mesh.visible = patch.visible = list.length > 0;

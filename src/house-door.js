@@ -14,7 +14,9 @@ function part(b, M, w, h, d, x, y, z, color) {
 
 // The portal, door leaves and canopy go into `porch` (its own mesh, faded while the farmer is at
 // the door or inside with the camera on the south side); threshold and foot dip into `stat`.
-export function buildDoor(stat, porch = stat) {
+// Phase 3: the leaves are their own batches (`leaves.open`, `leaves.shut`): the house shows the shut
+// pair while the clean house rests (farm.house.closed, level only); open as in Phase 1 otherwise.
+export function buildDoor(stat, porch = stat, leaves = null) {
   const d = HOUSE.door;
   const x0 = d.x - d.width / 2, x1 = d.x + d.width / 2;
   const zc = zMax + T / 2;
@@ -26,23 +28,32 @@ export function buildDoor(stat, porch = stat) {
   porch.box(x1 - x0 + 0.2, 0.06, T + 0.04, d.x, H - 0.03, zc, 0xb5bcc2);
   stat.box(x1 - x0, 0.05, T + 0.1, d.x, 0.025, zc, COLORS.concrete); // threshold
 
-  // two leaves swung outward about 100 degrees
-  const open = (100 * Math.PI) / 180;
-  for (const side of [-1, 1]) {
-    const hx = side < 0 ? x0 : x1;
-    const dirX = side < 0 ? Math.cos(open) : -Math.cos(open);
-    const dirZ = Math.sin(open);
-    const ry = Math.atan2(-dirZ, dirX);
-    const M = mat(hx, 0, zMax + T + 0.03, 0, ry, 0);
-    const w = d.width / 2 - 0.02;
-    part(porch, M, w, doorH - 0.04, 0.045, w / 2, doorH / 2, 0, STEEL);
-    part(porch, M, w, 0.06, 0.06, w / 2, doorH - 0.05, 0, STEEL_EDGE);
-    part(porch, M, w, 0.06, 0.06, w / 2, 0.06, 0, STEEL_EDGE);
-    part(porch, M, 0.06, doorH - 0.04, 0.06, 0.03, doorH / 2, 0, STEEL_EDGE);
-    part(porch, M, 0.06, doorH - 0.04, 0.06, w - 0.03, doorH / 2, 0, STEEL_EDGE);
-    part(porch, M, w - 0.12, 0.3, 0.05, w / 2, 0.3, 0, 0xa9b0b5);          // kick plate
-    part(porch, M, w * 0.5, 0.42, 0.055, w / 2, 1.55, 0, 0x5c7480);       // wired glass window
-    part(porch, M, 0.03, 0.12, 0.08, w - 0.1, 1.0, 0, 0x3c4246);          // handle
+  // two leaves swung outward about 100 degrees (or shut in the door frame)
+  const leafPair = (b, open) => {
+    for (const side of [-1, 1]) {
+      const hx = side < 0 ? x0 : x1;
+      const dirX = side < 0 ? Math.cos(open) : -Math.cos(open);
+      const dirZ = Math.sin(open);
+      const ry = Math.atan2(-dirZ, dirX);
+      const M = mat(hx, 0, zMax + T + 0.03, 0, ry, 0);
+      const w = d.width / 2 - 0.02;
+      part(b, M, w, doorH - 0.04, 0.045, w / 2, doorH / 2, 0, STEEL);
+      part(b, M, w, 0.06, 0.06, w / 2, doorH - 0.05, 0, STEEL_EDGE);
+      part(b, M, w, 0.06, 0.06, w / 2, 0.06, 0, STEEL_EDGE);
+      part(b, M, 0.06, doorH - 0.04, 0.06, 0.03, doorH / 2, 0, STEEL_EDGE);
+      part(b, M, 0.06, doorH - 0.04, 0.06, w - 0.03, doorH / 2, 0, STEEL_EDGE);
+      part(b, M, w - 0.12, 0.3, 0.05, w / 2, 0.3, 0, 0xa9b0b5);          // kick plate
+      part(b, M, w * 0.5, 0.42, 0.055, w / 2, 1.55, 0, 0x5c7480);       // wired glass window
+      part(b, M, 0.03, 0.12, 0.08, w - 0.1, 1.0, 0, 0x3c4246);          // handle
+    }
+  };
+  leafPair(leaves ? leaves.open : porch, (100 * Math.PI) / 180);
+  if (leaves) {
+    leafPair(leaves.shut, 0);
+    // the seal across the shut pair: a padlocked bar and a "resting" tag
+    leaves.shut.box(d.width - 0.1, 0.06, 0.05, d.x, 1.05, zMax + T + 0.09, 0x6d757c);
+    leaves.shut.box(0.08, 0.1, 0.05, d.x, 1.0, zMax + T + 0.12, 0xb08d3c);
+    leaves.shut.box(0.3, 0.2, 0.01, d.x + 0.35, 1.45, zMax + T + 0.08, 0xf2e6c4);
   }
 
   // canopy over the door on two posts

@@ -316,7 +316,7 @@ function chooseRight(S, i, field, env, ctx, grid) {
   const lv = S.lv;
   if (lv) {
     // thirsty when the water is short, restless when the pans are empty, quiet in dim light
-    wD *= 1 + 2 * (1 - lv.meanAcc);
+    wD *= 1 + 2 * (1 - lv.meanAcc) + 5 * (lv.rush || 0); // (Phase 3: the lines just opened after the thirst)
     wE *= 0.5 + 0.5 * lv.meanFill;
     wW += 0.35 * (1 - lv.meanFill);
     if (lv.lowLux) { wW *= 0.4; wR *= 1.6; }
@@ -348,7 +348,7 @@ export function thinkBird(S, i, field, env, ctx, grid) {
   const tt = 0.85 * S.tIdx[i] + 0.15 * S.tAmb[i]; // hot index
   const prev = S.therm[i];
   let th = prev;
-  const hotIn = S.hotTh[i];
+  const hotIn = S.hotTh[i] * S.hotK + S.hotB; // Phase 1: hotTh; growing birds: the farm's band
   if (prev === COLD) { if (tc > -LEAVE_COLD) th = tt > hotIn ? HOT : RIGHT; }
   else if (prev === HOT) { if (tt < hotIn - HOT_BAND) th = tc < -ENTER ? COLD : RIGHT; }
   else if (tc < -ENTER) th = COLD;

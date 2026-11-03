@@ -42,6 +42,10 @@ export function createState(n) {
     lightsOn: true,
     sites: null, siteR: 0.6, // huddle sites (x, z pairs) for the usable floor, see makeHuddleSites
     spreadT: 0,              // seconds left of the "curtain just lifted" spreading phase
+    // Phase 3 (flock-cycle.js): a bird pants from hotTh * hotK + hotB °C over target (Phase 1: 1, 0);
+    // heatRef = where the heat pose starts. secOn: the catch pens the birds in their 6 m section
+    // (flock-harvest.js): x stays inside [secX0 + k * secW, +secW] of its section k
+    hotK: 1, hotB: 0, heatRef: 1.5, secOn: false, secX0: -24, secW: 6,
   };
   for (let i = 0; i < n; i++) {
     // ±8 % size spread (roughly normal), slight colour tint, personality
