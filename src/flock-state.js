@@ -93,12 +93,14 @@ export function makeHuddleSites(b) {
 
 // Place the whole flock. Young chicks are "just placed" along the feeder and drinker lines of the
 // brooding area; an older flock (e.g. restored on reload) is scattered over the usable floor.
-export function placeFlock(S) {
+// keep(i) true: that bird stays where it is (a level after a time jump: penned, sick birds).
+export function placeFlock(S, keep = null) {
   const { n, rand } = S;
   const b = S.bounds;
-  S.resUse.fill(0);
+  if (!keep) S.resUse.fill(0);
   const lines = [...FEEDER_LINES_Z, ...DRINKER_LINES_Z];
   for (let i = 0; i < n; i++) {
+    if (keep) { if (keep(i)) continue; releaseRes(S, i); }
     let x, z;
     if (S.day < 4) {
       const lz = lines[(rand() * lines.length) | 0];

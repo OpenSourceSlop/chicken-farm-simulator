@@ -15,7 +15,7 @@ function test(name, fn) {
 const assert = (c, msg) => { if (!c) throw new Error(msg); };
 const inBand = (v, [a, b], what) => assert(v >= a && v <= b, `${what} ${v} not in ${a}..${b}`);
 
-function makeLevel() {
+function makeLevel(profileStore = null) {
   const w = makeWorld();
   const pos = { x: 0, z: 0 };
   const player = { position: pos, yaw: 0, isInside: false, teleport(x, z, yaw) { pos.x = x; pos.z = z; this.yaw = yaw ?? 0; } };
@@ -23,7 +23,8 @@ function makeLevel() {
   const props = { carrying: null, reset() {}, serialize: () => ({}), restore() {} };
   const flock = { resetLevel() {}, serialize: () => ({}), restore() {} };
   const store = { data: null, available: true, save(d) { this.data = JSON.parse(JSON.stringify(d)); return true; }, load() { return this.data; }, clear() { this.data = null; },
-    loadProfile: () => null, saveProfile() {}, info() { return null; } };
+    loadProfile: () => (profileStore ? JSON.parse(JSON.stringify(profileStore.p ?? null)) : null),
+    saveProfile(p) { if (profileStore) profileStore.p = JSON.parse(JSON.stringify(p)); }, info() { return null; } };
   const level = createLevel({ env: w.env }, { ...w, save: store, player, flock, props, ui });
   return { ...w, level, ui, store };
 }
@@ -85,6 +86,81 @@ test('save -> resume keeps day, hour, jobs and the farm', () => {
   // both play on the same way
   L.level.debug.goto(3, 12, { auto: true }); M.level.debug.goto(3, 12, { auto: true });
   assert(Math.abs(M.farm.flock.meanWeightG - L.farm.flock.meanWeightG) < 0.5, `weights ${M.farm.flock.meanWeightG} vs ${L.farm.flock.meanWeightG}`);
+});
+
+// ---------------- review round 2 ----------------
+let weighedRatio = null;
+test('not weighed by hand: the result uses the automatic scale at the weigh-in age, not at the end', () => {
+  const A = makeLevel();
+  A.level.start({ seed: 1 });
+  A.level.debug.goto(7, 21, { auto: true });
+  weighedRatio = A.level.result.ratio;
+  const B = makeLevel();
+  B.level.start({ seed: 1 });
+  B.level.debug.goto(7, 8.5, { auto: true }); // the ideal week up to the weigh-in, nobody weighs
+  B.level.debug.goto(8, 6.5);                  // the level ends by itself at 06:00 day 8
+  const r = B.level.result;
+  assert(r && r.reason === 'time' && !r.weighedByHand, `ended ${r?.reason}, by hand ${r?.weighedByHand}`);
+  console.log(`     weighed ${weighedRatio.toFixed(3)} x, scale at age 7.0 ${r.ratio.toFixed(3)} x (true mean at the end ${(B.farm.flock.meanWeightG / r.chickWeightG).toFixed(2)} x)`);
+  assert(Math.abs(r.ratio - weighedRatio) <= 0.1, `scale ratio ${r.ratio.toFixed(3)} vs weighed ${weighedRatio.toFixed(3)}`);
+});
+
+test('goto(auto) called after 07:15 on the prep day still plays the prep round', () => {
+  const L = makeLevel();
+  L.level.start({ seed: 1 });
+  L.env.skipHours(0.3); // 07:18
+  L.level.debug.goto(7, 21, { auto: true });
+  const r = L.level.result;
+  assert(r && r.pass, `did not pass: ${r?.failText}`);
+  assert(L.farm.stats.floorShareAtFirstTip >= 0.9, `floor share at the first tip ${L.farm.stats.floorShareAtFirstTip}`);
+});
+
+test('resume (Continue / hot reload) keeps the skill profile: one more award leaves every milestone', () => {
+  const store = { p: null };
+  const A = makeLevel(store);
+  A.level.boot?.();
+  A.level.start({ seed: 1 });
+  A.level.debug.goto(7, 21, { auto: true });
+  const had = store.p?.skills?.earned?.length ?? 0;
+  assert(had >= 15, `profile after run 1: ${had} milestones`);
+  // replay, save on day 0, resume the blob in a new level (no boot: the hot-reload path)
+  A.level.replay();
+  A.level.debug.goto(0, 10, { auto: true });
+  const blob = JSON.parse(JSON.stringify(A.level.saveBlob()));
+  const M = makeLevel(store);
+  assert(M.level.resume(blob), 'resume failed');
+  assert(M.skills.points('brooding') >= 9 && M.skills.unlocked('floorOverlay'), `after resume: brooding ${M.skills.points('brooding')} pts`);
+  M.level.debug.goto(1, 12, { auto: true });
+  const now = store.p?.skills?.earned?.length ?? 0;
+  console.log(`     profile: ${had} milestones after run 1, ${now} after resume and the next awards`);
+  assert(now >= had, `profile shrank to ${now} milestones`);
+});
+
+test('save -> resume keeps the house humidity', () => {
+  const L = makeLevel();
+  L.level.start({ seed: 1 });
+  L.level.debug.goto(1, 3, { auto: true });
+  const blob = JSON.parse(JSON.stringify(L.level.saveBlob()));
+  const M = makeLevel();
+  M.level.resume(blob);
+  for (const k of ['day', 'hour', 'houseTemp', 'slabTemp', 'heaterSetpoint', 'heaterLevel', 'houseRH']) {
+    assert(Math.abs(M.env[k] - L.env[k]) < 1e-6, `${k}: ${M.env[k]} vs ${L.env[k]}`);
+  }
+});
+
+test('keep walking after the end: the clock stops at 23:59 on day 7, the farm stops', () => {
+  const L = makeLevel();
+  L.level.start({ seed: 1 });
+  L.level.debug.goto(7, 21, { auto: true });
+  assert(L.level.result, 'level did not end');
+  L.level.keepWalking();
+  const dead0 = L.farm.flock.deadTotal;
+  for (let i = 0; i < 2 * 3600 * 10; i++) { L.level.update(0.1); L.env.update(0.1); } // 2 h of real time at 1x
+  assert(L.env.dayNumber === 7 && L.env.hour >= 23.9, `clock at day ${L.env.dayNumber} ${L.env.hour.toFixed(2)}`);
+  const w = L.farm.flock.meanWeightG, a = L.farm.age;
+  for (let i = 0; i < 3600; i++) { L.level.update(0.1); L.env.update(0.1); }
+  assert(L.farm.flock.meanWeightG === w && L.farm.age === a, 'the farm kept growing');
+  console.log(`     day ${L.env.dayNumber} ${L.env.timeLabel}, dead ${dead0} -> ${L.farm.flock.deadTotal}, age ${a.toFixed(2)}`);
 });
 
 console.log(failed ? `${failed} failed` : 'all passed');

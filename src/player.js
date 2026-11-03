@@ -50,12 +50,12 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
   const carry = createCarry(root, model.material, model.joints);
 
   const st = {
-    yaw: FARM.spawn.yaw ?? 0,
+    yaw: FARM.spawnSandbox.yaw ?? 0,
     vel: new THREE.Vector3(),
     animSpeed: 0,
     path: null, pathIdx: 0, blocked: 0, clickRun: false,
   };
-  root.position.set(FARM.spawn.x, 0, FARM.spawn.z);
+  root.position.set(FARM.spawnSandbox.x, 0, FARM.spawnSandbox.z);
   root.rotation.y = st.yaw;
   cam.setView({ yaw: 0, distance: ZOOM_DEFAULT });
   cam.snapTo(root.position);

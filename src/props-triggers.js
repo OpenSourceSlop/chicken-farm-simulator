@@ -7,7 +7,7 @@
 import { FARM, FLOOR_GRID } from './config.js';
 import { EV } from './events.js';
 
-const DIP = { hw: 0.72, hd: 0.48 };                  // gate tray half sizes (world-gate.js)
+const DIP = { hw: FARM.footDipGate.hw ?? 0.72, hd: FARM.footDipGate.hd ?? 0.48 }; // gate tray half sizes (world-gate.js)
 const HOUSE_DIP = { hw: 0.63, hd: 0.45 };            // house tray 1.25 x 0.72 (house-door.js)
 const DIPPED_FOR = 10;                               // s
 const LISTEN_AFTER = 2;                              // s standing still

@@ -3,7 +3,7 @@
   { "eval": "(() => { window.__R = []; window.__P0 = __game.renderer.info.programs.length; __game.events.on('*', (p, t) => __R.push([t, p])); window.__count = (t, f) => __R.filter(([tt, p]) => tt === t && (!f || f(p))).length; __game.stop(); return 'recorder on, programs after warm-up ' + __P0; })()" },
   { "eval": "(() => { const r = __game.renderer, g = __game; g.setState({ day: 1, hour: 10, paused: true, farmer: { x: -14, z: 1.5 }, zoom: 22, cameraYaw: 0 }); g.advance(0.2); g.renderNow(); const a = { calls: r.info.render.calls, tris: r.info.render.triangles }; window.__sandbox = a; return 'sandbox house view: ' + a.calls + ' draw calls, ' + a.tris + ' triangles'; })()" },
   { "eval": "(() => { const f = __game.farm; f.start(); __game.props.reset(); f.litter.coverGrid.fill(1); f.litter.cover = 1; return 'level started (stub farm), mode ' + f.mode; })()" },
-  { "state": { "day": -1, "hour": 9, "paused": true, "farmer": { "x": -35.5, "z": 38.4, "yaw": 0 }, "zoom": 22, "cameraYaw": 0 } },
+  { "state": { "day": -1, "hour": 9, "paused": true, "farmer": { "x": -40, "z": 38.4, "yaw": 0 }, "zoom": 22, "cameraYaw": 0 } },
   { "advance": 0.2 },
   { "holdKey": "w", "for": 0.9 },
   { "eval": "'gate dip: footdip gate = ' + __count('footdip', (p) => p.where === 'gate') + ' (expect 1)'" },

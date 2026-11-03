@@ -162,9 +162,10 @@ export function buildGateArea(group, mats, colliders, signTex) {
   metal.add(unitCyl(8), 0x6d757c, { x: px + 0.1, y: 0.31, z: pz + 0.25, sx: 0.14, sy: 0.3, sz: 0.14, rz: Math.PI / 2 });
   metal.pipe(px + 0.35, 0.47, pz + 0.25, ax1 - 0.18, 0.3, SPRAY_Z, 0.03, pvc, 5);
   colliders.push({ type: 'box', minX: px - 0.7, maxX: px + 0.8, minZ: pz - 0.75, maxZ: pz + 0.75 });
-  // Foot dip tray at the pedestrian entry: rubber tray with blue-green disinfectant
-  const D = FARM.footDipGate, tw = 0.72, td = 0.48;
-  flat.boxMM(D.x - 1.05, D.x + 1.05, -0.02, 0.03, D.z - 0.75, D.z + 0.72, COLORS.concrete);
+  // Foot dip tray across the gateway, just inside the gate rail: everyone walking in steps through
+  // it (rubber tray with blue-green disinfectant; trucks roll over it)
+  const D = FARM.footDipGate, tw = D.hw ?? 0.72, td = D.hd ?? 0.48;
+  flat.boxMM(D.x - tw - 0.3, D.x + tw + 0.3, -0.02, 0.03, D.z - td - 0.27, D.z + td + 0.2, COLORS.concrete);
   flat.boxMM(D.x - tw, D.x + tw, 0.03, 0.05, D.z - td, D.z + td, 0x2f3a40);
   flat.boxMM(D.x - tw, D.x + tw, 0.03, 0.15, D.z - td, D.z - td + 0.07, 0x3b4a52);
   flat.boxMM(D.x - tw, D.x + tw, 0.03, 0.15, D.z + td - 0.07, D.z + td, 0x3b4a52);

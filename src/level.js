@@ -182,6 +182,7 @@ export function createLevel(ctx, deps = {}) {
     const d0 = env.dayNumber;
     ui?.closePanel?.();
     env.skipHours(hours);
+    flock?.afterSkip?.(hours); // the drawn flock spread over the skipped time
     engine.tick();
     checks();
     if (env.dayNumber !== d0 && env.hour >= 5.9 && env.hour < 12) player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw); // each morning at the gate
@@ -229,7 +230,8 @@ export function createLevel(ctx, deps = {}) {
     const prepDone = !!records?.row?.(LEVEL1.startDay)?.signed;
     for (let d = env.dayNumber; d <= Math.min(Math.floor(target), LEVEL1.endDay); d++) {
       if (d < LEVEL1.arrivalDay) {
-        if (!prepDone) { add(d, 7.25, 'prep'); add(d, 20, 'eve'); add(d, 21, 'sign'); }
+        // the prep round is past due (goto called after 07:15): play it now rather than drop it
+        if (!prepDone) { add(d, 7.25, 'prep', Math.max(d + 7.25 * H, env.day + 1e-6)); add(d, 20, 'eve'); add(d, 21, 'sign'); }
         continue;
       }
       add(d, d === 1 ? 6.5 : 6.25, 'am');
@@ -293,6 +295,7 @@ export function createLevel(ctx, deps = {}) {
       records?.reset?.();
       props?.reset?.();
       flock?.resetLevel?.();
+      ui?.newRun?.();
       farm.start(LEVEL1, { seed });
       engine.start(LEVEL1.startDay);
       player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw);
@@ -302,8 +305,12 @@ export function createLevel(ctx, deps = {}) {
     },
     resume(data) {
       if (!data || !data.level || !data.env) return false;
+      // the skill profile first: a resume (Continue or the artifact hot reload) never starts from
+      // empty skills, and the next award saves the profile it came from
+      loadProfile();
       resetRun();
       ui?.closePanel?.();
+      ui?.newRun?.();
       const e = data.env;
       // restore order (PHASE2.md §11): env -> farm -> records -> props -> flock -> level.
       // farm.start (keepClock) first: it puts the level climate on with the prep-day equipment;
@@ -319,12 +326,14 @@ export function createLevel(ctx, deps = {}) {
       env.setHeaterSetpoint(e.heaterSetpoint ?? 20);
       if (e.houseTemp != null) env.houseTemp = e.houseTemp;
       if (e.slabTemp != null) env.slabTemp = e.slabTemp;
+      if (e.houseRH != null) env.houseRH = e.houseRH;
       if (e.heaterLevel != null) { env.heaterLevel = e.heaterLevel; env.heatersOn = e.heaterLevel > 0.02; }
       farm.restore(data.farm);
       if (farm.mode !== 'level') { farm.mode = 'level'; farm.level = LEVEL1; }
       records?.restore?.(data.records);
       props?.restore?.(data.props);
       flock?.restore?.(data.flock);
+      if (props?.carrying === 'chick') props.drop?.(); // a chick in the hand is not in the save: hands empty
       const lv = data.level;
       seed = lv.seed ?? 1;
       engine.restore(lv.jobs);
@@ -345,7 +354,7 @@ export function createLevel(ctx, deps = {}) {
       env.reset();
       env.clearWeatherEvents?.();
       env.setVentTimer(null);
-      player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw);
+      player?.teleport?.(FARM.spawnSandbox.x, FARM.spawnSandbox.z, FARM.spawnSandbox.yaw);
       level.mode = 'sandbox';
       level.sampling = null;
       ui?.setMode?.('sandbox');
@@ -367,10 +376,11 @@ export function createLevel(ctx, deps = {}) {
     update(dt) {
       if (level.mode === 'title' || level.mode === 'result') { env.paused = true; return; }
       if (level.mode !== 'level') return;
-      if (ended) { // keep walking on day 7: the clock runs, the level is over
-        env.paused = !!userPaused || ui?.panelKind === 'paused';
+      if (ended) { // keep walking on day 7: the clock runs to 23:59, then stands; the level is over
+        const stopAt = LEVEL1.endDay + 23.98 / 24;
+        env.paused = !!userPaused || ui?.panelKind === 'paused' || env.day >= stopAt - 1e-9;
         env.timeScale = C.work;
-        if (env.dayNumber > LEVEL1.endDay) env.setDay(LEVEL1.endDay);
+        if (env.day > stopAt) { env.setDay(LEVEL1.endDay); env.setHour(23.98); }
         return;
       }
       clock();
@@ -418,7 +428,7 @@ export function createLevel(ctx, deps = {}) {
       const p = player;
       return {
         level: level.serialize(),
-        env: { day: env.day, hour: env.hour, weather: env.weather, houseTemp: env.houseTemp, slabTemp: env.slabTemp,
+        env: { day: env.day, hour: env.hour, weather: env.weather, houseTemp: env.houseTemp, slabTemp: env.slabTemp, houseRH: env.houseRH,
           heaterSetpoint: env.heaterSetpoint, heaterLevel: env.heaterLevel, fansOn: env.fansOn, fansManual: env.fansManual, padOn: env.padOn,
           ventTimer: env.ventTimer, lightProgram: env.lightProgram },  // weatherEvents: rebuilt by the farm
         farm: farm?.serialize() ?? null,

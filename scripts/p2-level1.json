@@ -7,7 +7,7 @@
   {"clickText": "Start Level 1"},
   {"advance": 0.5},
   {"expect": "__game.level.mode === 'level' && __game.env.dayNumber === -1 && __t()", "label": "Start Level 1 from the title card: prep day 07:00"},
-  {"walkTo": [-35.5, 37], "tol": 0.25},
+  {"walkTo": [-40, 36.9], "tol": 0.3},
   {"advance": 0.3},
   {"expect": "__game.level.jobs.byKey('prep-gate@-1').status === 'done'", "label": "prep-gate done by walking through the gate dip"},
   {"walkTo": [-14, 7.4], "tol": 0.4},

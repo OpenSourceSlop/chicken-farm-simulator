@@ -1,4 +1,5 @@
 [
+  {"eval": "'NOTE: package walk-through of the panels, written against the stubs: it prints job states and checks nothing (d0-place stays open here because this file emits synthetic tips instead of chicks.tip). The acceptance runs with the real farm are scripts/p2-level1.json and scripts/p2-level1-find.json.'"},
   {"wait": 600},
   {"eval": "__game.stop(), window.__click = (t) => { const b = [...document.querySelectorAll('.panel:not([hidden]) button, .panel:not([hidden]) label')].find((x) => x.offsetParent !== null && x.textContent.trim().startsWith(t)); if (!b) return 'NOT FOUND ' + t; b.click(); return 'clicked ' + t; }, window.__d0 = () => __game.jobs().filter((j) => j.key.endsWith('@0')).map((j) => j.key.replace('@0', '') + ':' + j.status).join(' '), 'helpers set'"},
   {"eval": "__game.startLevel({ seed: 1 }), __game.level.debug.goto(0, 6.5), __game.farm.flock.delivered = 6000, __game.farm.flock.inBoxes = 6000, __game.farm.flock.placed = 0, 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel"},

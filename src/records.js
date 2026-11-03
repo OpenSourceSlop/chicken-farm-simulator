@@ -91,7 +91,7 @@ export function createRecords({ farm, env, events } = {}) {
     timeline() { return records.rows().map(timelineOf); },
     reset() { notebook.length = 0; rows.clear(); jobLog.length = 0; for (const k of Object.keys(extras)) delete extras[k]; state.closedThrough = null; },
     // notebook lines saved as [day, hour, kind, value, where?] (the autosave stays small all week)
-    serialize() { return { v: 1, notebook: notebook.map((n) => (n.where ? [n.day, n.hour, n.kind, n.value, n.where] : [n.day, n.hour, n.kind, n.value])), rows: records.rows(), jobLog: jobLog.slice(), extras: JSON.parse(JSON.stringify(extras)), closedThrough: state.closedThrough }; },
+    serialize() { return { v: 1, notebook: notebook.map((n) => (n.where ? [n.day, n.hour, n.kind, n.value, n.where] : [n.day, n.hour, n.kind, n.value])), rows: records.rows(), jobLog: jobLog.map((j) => [j.key, j.day]), extras: JSON.parse(JSON.stringify(extras)), closedThrough: state.closedThrough }; },
     restore(d) {
       records.reset();
       if (!d) return;
@@ -102,7 +102,8 @@ export function createRecords({ farm, env, events } = {}) {
         notebook.push(o);
       }
       for (const r of d.rows || []) rows.set(r.day, r);
-      jobLog.push(...(d.jobLog || []));
+      // saved as [key, day]: the results are in the notebook (nothing reads them from the log)
+      jobLog.push(...(d.jobLog || []).map((j) => (Array.isArray(j) ? { key: j[0], day: j[1], result: null } : j)));
       Object.assign(extras, JSON.parse(JSON.stringify(d.extras || {})));
       state.closedThrough = d.closedThrough ?? null;
     },

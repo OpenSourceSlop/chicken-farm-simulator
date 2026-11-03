@@ -54,10 +54,11 @@ export const SPOTS = {
 export const FARM = {
   fence: { xMin: -56, xMax: 56, zMin: -36, zMax: 38 },
   gate: { x: -40, z: 38, width: 6 },
-  spawn: { x: -38, z: 34, yaw: 0 }, // just inside the gate, facing north
+  spawn: { x: -40, z: 40.5, yaw: 0 }, // Level 1: outside the gate on the farm road, facing north: walking in crosses the dip
+  spawnSandbox: { x: -38, z: 34, yaw: 0 }, // Phase 1 sandbox: just inside the gate, facing north (as approved)
   office: { x: -32, z: 23, w: 7, d: 5 },
   guardHut: { x: -47, z: 34, w: 3, d: 3 },
-  footDipGate: { x: -35.5, z: 37 },
+  footDipGate: { x: -40, z: 36.9, hw: 2.2, hd: 0.5 }, // across the gateway, just inside the gate rail (tray half sizes)
   footDipHouse: { x: -14, z: 6.9 },
   silos: [{ x: -20, z: -9.6 }, { x: -16.5, z: -9.6 }],
   waterTank: { x: -34, z: -12 },

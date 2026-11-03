@@ -58,7 +58,9 @@ export function createUI(ctx, deps) {
   // top right: Phase 1 jobs (sandbox)
   const tr = h('div', { class: 'hud-tr' });
   root.appendChild(tr);
-  const avoid = () => [tr, trL, root.querySelector('.hud-tl'), root.querySelector('.hud-bl'), root.querySelector('.hud-br')].filter((e) => e && !e.hidden);
+  // HUD elements the edge pointer keeps clear of: the cards, the E prompt and the captions
+  const avoid = () => [tr, trL, root.querySelector('.hud-tl'), root.querySelector('.hud-bl'), root.querySelector('.hud-br'),
+    root.querySelector('.hud-bc .prompt'), root.querySelector('.caption')].filter((e) => e && !e.hidden);
   const tasks = createTasks(tr, ctx, { player, root, avoid });
   const p1Marker = ctx.scene.getObjectByName('task-marker');
   const p1Pointer = root.querySelector('.edge-pointer');
@@ -70,6 +72,15 @@ export function createUI(ctx, deps) {
   const nextBar = button({ class: 'btn', title: 'Next job', 'aria-label': 'Next job' });
   nextBar.innerHTML = `${ICONS.next}<span>Next job</span>`; // icon outside a span: narrow screens hide the text spans
   nextBar.hidden = true;
+  const nextBarText = nextBar.querySelector('span');
+  let nextBarAcc = 0;
+  // the time-bar button says what the next press does, as the job card's button does ("Skip to 10:13")
+  function refreshNextBar(dt) {
+    if ((nextBarAcc -= dt) > 0) return;
+    nextBarAcc = 0.25;
+    const label = ctx.level?.nextLabel?.() || 'Next job';
+    if (nextBarText.textContent !== label) { nextBarText.textContent = label; nextBar.title = label; nextBar.setAttribute('aria-label', label); }
+  }
   hud.timebar.append(nextBar, h('div', { class: 'timebar-sep', 'aria-hidden': 'true' }), help.toggleBtn, lhelp.toggleBtn);
   let helpAuto = help.visible;
   help.toggleBtn.addEventListener('click', () => { helpAuto = false; });
@@ -273,7 +284,7 @@ export function createUI(ctx, deps) {
   function reset() {
     panels.close(false);
     env.reset();
-    player.teleport(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw);
+    player.teleport(FARM.spawnSandbox.x, FARM.spawnSandbox.z, FARM.spawnSandbox.yaw);
     tasks.reset();
     hud.refresh();
   }
@@ -328,8 +339,15 @@ export function createUI(ctx, deps) {
     root.classList.toggle('is-title', m === 'title');
     if (m === 'title') { panels.close(false); title.show(); } else title.hide();
     if (m !== 'level' && m !== 'result') jobCard.hide();
-    if (m === 'level' && was !== 'result') { jobCard.reset(); caption.clear(); mm.min = mm.max = null; hist.length = 0; lastFlows.length = 0; weigh = { day: null, list: [] }; }
     if (m === 'sandbox') tasks.reset();
+  }
+  /** A new run of the level (start, replay, continue): no panel, chart, reading or sample of the
+   *  run before carries over (level.start / level.resume call it). */
+  function newRun() {
+    panels.close(false);
+    panels.clearBuilt();
+    jobCard.reset(); caption.clear();
+    mm.min = mm.max = null; hist.length = 0; histAcc = 0; lastFlows.length = 0; weigh = { day: null, list: [] };
   }
 
   let hudAcc = 0, fitAcc = 0;
@@ -348,6 +366,7 @@ export function createUI(ctx, deps) {
         if (p1Marker) p1Marker.visible = false;
         if (p1Pointer) p1Pointer.hidden = true;
         if (mode === 'level' || mode === 'result') jobCard.update(dt, !!panels.openId);
+        if (mode === 'level') refreshNextBar(dt);
       }
       panels.update(dt);
       floorLegend.hidden = !(mode === 'level' && props?.overlay?.floorTemp);
@@ -364,6 +383,7 @@ export function createUI(ctx, deps) {
     get taskIndex() { return tasks.index; },
     get mode() { return mode; },
     setMode,
+    newRun,
     showResult(res) { if (openPanel('result')) panels.openPanel?.show?.(res); },
     caption: (msg, s) => caption.show(msg, s),
     jobCard,

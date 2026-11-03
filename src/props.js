@@ -221,7 +221,7 @@ export function buildProps(ctx, { house } = {}) {
     // a stack tipped without the hand truck (level.debug.goto auto, farm-profiles): its boxes go
     // straight to the pile of empties, so the yard matches the farm
     ev.on(EV.ACTION, (p) => {
-      if (!st.level || p.id !== 'chicks.tip' || !(p.result?.placed > 0)) return;
+      if (!isLevel() || p.id !== 'chicks.tip' || !(p.result?.placed > 0)) return;
       const s = boxes.stacks[p.stack];
       if (!s || s.state === 'tipped') return;
       if (props.carrying === 'boxes' && props.carryOpts?.stack === p.stack) props.drop();
@@ -229,7 +229,7 @@ export function buildProps(ctx, { house } = {}) {
       boxes.pile += LEVEL1.boxes / LEVEL1.stacks;
     });
     ev.on(EV.FARM_DELIVERY, (d) => {
-      if (!st.level || !d) return;
+      if (!isLevel() || !d) return;
       if (d.kind === 'chicks' && d.phase === 'arrive') props.truck.arrive();
       else if (d.kind === 'chicks' && d.phase === 'leave') props.truck.leave();
       else if (d.kind === 'feed' && d.phase === 'arrive') { trucks.arrive('feed'); st.feedWait = 14; }
@@ -368,7 +368,9 @@ export function buildProps(ctx, { house } = {}) {
     },
     serialize() {
       return {
-        v: 2, carrying: props.carrying, carryOpts: props.carryOpts,
+        // a chick in the hand is not in the flock's save (the chick-in-hand panel opens only on
+        // EV.BIRD_PICK): a save made while one is held restores with empty hands
+        v: 2, carrying: props.carrying === 'chick' ? null : props.carrying, carryOpts: props.carrying === 'chick' ? null : props.carryOpts,
         truck: trucks.st.chicks.state, feedTruck: trucks.st.feed.state, stacks: props.stacks.left,
         stackStates: boxes.stacks.map((s) => s.state), pile: boxes.pile, delivered: st.delivered,
       };

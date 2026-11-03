@@ -1,4 +1,5 @@
 [
+  {"eval": "'NOTE: package walk-through of the panels, written against the stubs: it prints job states and checks nothing (prep-feeders stays open here because the real pans fill over farm time and this file sets fields the farm owns). The acceptance runs with the real farm are scripts/p2-level1.json and scripts/p2-level1-find.json.'"},
   {"wait": 600},
   {"eval": "__game.stop(), window.__click = (t) => { const b = [...document.querySelectorAll('.panel:not([hidden]) button, .panel:not([hidden]) label')].find((x) => x.offsetParent !== null && x.textContent.trim().startsWith(t)); if (!b) return 'NOT FOUND ' + t; b.click(); return 'clicked ' + t; }, window.__prep = () => __game.jobs().filter((j) => j.key.endsWith('@-1')).map((j) => j.key.replace('@-1', '') + ':' + j.status).join(' '), 'loop stopped, helpers set'"},
   {"eval": "__game.startLevel({ seed: 1 }), __game.farm.litter.cover = 0, __game.farm.feed.lines.forEach((l) => { l.flood = false; l.panFill = 0; }), __game.farm.water.lines.forEach((l) => { l.flushClear = 0; }), 'mode ' + __game.level.mode + ', day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ', jobs ' + __game.jobs().length"},

@@ -153,6 +153,26 @@ export function createFlock(ctx, { house } = {}) {
   }
 
   const lvl = createLevelFlock(ctx, { S, pop, uniforms, grid, render, reset: () => applyDay(ctx.env, true) });
+  /** After a time jump of 30 game minutes or more in a level the drawn flock has had that time to
+   *  spread from where it was (the box tips, a huddle): the free birds are re-placed over the floor
+   *  (as on a long jump), then think at the new climate. Penned and sick birds stay; held birds and
+   *  dead birds are not in the drawn flock. */
+  function afterSkip(hours) {
+    if (!S.levelMode || !(hours >= 0.5)) return false;
+    // chicks still to spill from a tip are out by now: drop the spill queue, the count comes back
+    // spread over the floor
+    pop.pending.length = 0;
+    pop.reconcile(ctx.farm, 0, ctx.player?.position || null);
+    if (S.n <= 0) return false;
+    applyDay(ctx.env, false);
+    placeFlock(S, (i) => !!(S.pen[i] || S.sick[i]));
+    for (let i = 0; i < S.n; i++) S.lagT[i] = 0;
+    grid.build(S.px, S.pz, S.n, S.maxR, S.perM2, S.bounds.zMax - S.bounds.zMin);
+    built = true;
+    field.refresh(ctx.env, 0);
+    render.markDirty();
+    return true;
+  }
   const fctx = { farmerOn: false, wasOn: false, fx: 0, fz: 0, vx: 0, vz: 0, farmerR: 1.6, field, grid, anyTemp: false, padPull: 0 };
   let built = false;
 
@@ -266,6 +286,8 @@ export function createFlock(ctx, { house } = {}) {
     sounds() { return lvl.sounds(); },
     /** Wipe the level's birds (prep day: empty house). */
     resetLevel() { lvl.resetLevel(); },
+    /** level.skip: the clock jumped `hours` forward (>= 0.5 re-places the free birds). */
+    afterSkip,
     /** Test hooks: counts and spreads for the p2-flock steps files (never shown to the player). */
     debug: lvl.debug,
     // test tools only: true = birds ignore the farmer (to film them up close)

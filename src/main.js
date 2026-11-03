@@ -251,7 +251,8 @@ function start(saved = {}) {
       heaterSetpoint: env.heaterSetpoint, fansOn: env.fansOn, padOn: env.padOn, timeScale: env.timeScale,
     },
     player: { x: player.position.x, z: player.position.z, yaw: player.yaw },
-    levelSave: level.mode === 'level' ? level.saveBlob() : null,
+    // a running level only: after the end (keep walking) a reload goes back to the title card
+    levelSave: level.mode === 'level' && !level.result ? level.saveBlob() : null,
   }));
 
   // Compile every shader program now, behind the boot card. Otherwise the first look into the
@@ -296,9 +297,9 @@ function start(saved = {}) {
     }
   }
   warmUp();
-  // Title card / sandbox (level.js). A hot reload of a running level resumes it instead.
-  if (saved.levelSave) level.resume(saved.levelSave);
-  else level.boot();
+  // Title card / sandbox (level.js). A hot reload of a running level resumes it instead
+  // (level.resume loads the skill profile first, so the skill tree carries over).
+  if (!(saved.levelSave && level.resume(saved.levelSave))) level.boot();
 
   const boot = document.getElementById('boot');
   if (boot) boot.hidden = true;
