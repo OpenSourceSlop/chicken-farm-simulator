@@ -58,6 +58,8 @@ export function buildResultPanel(L) {
   let res = null;
   function render() {
     if (!res) return;
+    // the grid follows the number of cards shown (an early end shows two or three)
+    const bigs = (...cards) => { const c = cards.filter(Boolean); return h('div', { class: `bigs bigs--${c.length}` }, c); };
     const big = (k, v, sub, extra) => h('div', { class: 'big' }, h('p', { class: 'big-k' }, k), h('p', { class: 'big-v' }, v), sub ? h('p', { class: 'big-sub' }, sub) : null, extra || null);
     const outcome = res.pass
       ? h('div', { class: 'outcome' }, h('h3', null, 'Level 1 complete'), h('p', null, 'The week is in the book. Replay it to try other settings, or keep walking the farm on day 7.'))
@@ -72,13 +74,16 @@ export function buildResultPanel(L) {
       button({ class: 'btn', onclick: () => L.level()?.toTitle() }, 'Back to the title'));
     body.replaceChildren(
       h('header', { class: 'result-head' }, h('p', { class: 'sign-kicker' }, res.early ? `Ended ${res.endedAt}` : 'Day 7 · the brooding week'), h('h2', { id: titleId }, LEVEL1.title)),
-      h('div', { class: 'bigs' },
-        big('Day 7 weight', res.ratio != null ? `${two(res.ratio)} ×` : '—', `chick weight · ${int(res.weightG)} g ${res.weighedByHand ? 'weighed' : 'automatic scale, not weighed by hand'} ÷ ${one(res.chickWeightG)} g (${res.chickSource === 'box' ? 'box weighing' : 'delivery note'})`, h('div', { class: 'band', html: bandSvg(res.ratio) })),
+      bigs(
+        // only what was measured: no day 7 weight before the weigh-in age, then the card says what ended the level
+        res.ratio != null
+          ? big('Day 7 weight', `${two(res.ratio)} ×`, `chick weight · ${int(res.weightG)} g ${res.weighedByHand ? 'weighed' : 'automatic scale, not weighed by hand'} ÷ ${one(res.chickWeightG)} g (${res.chickSource === 'box' ? 'box weighing' : 'delivery note'})`, h('div', { class: 'band', html: bandSvg(res.ratio) }))
+          : big(res.early ? 'Ended early' : 'Day 7 weight', res.early ? `Day ${fmt0(res.day)}, ${hhmm(res.hour ?? 0)}` : 'not weighed', res.failText ? `${res.failText.charAt(0).toUpperCase()}${res.failText.slice(1)}. No day 7 weighing.` : 'No day 7 weighing.'),
         big('Deaths and culls', `${two(res.deathsPct)} %`, `${int(res.deaths)} of ${int(res.placed)} chicks ${res.placedReal === false ? 'delivered' : 'placed'}`,
           res.countedDead != null ? h('p', { class: 'big-sub' }, [`${int(res.countedDead)} counted at the bin`, `${int(res.deadOnFloor)} still lying in the house`,
             res.deadInBoxes ? `${int(res.deadInBoxes)} dead in the boxes` : null, res.culls ? `${int(res.culls)} culled` : null].filter(Boolean).join(' · ')) : null),
-        big('Uniformity', res.uniformityPct != null ? `${fmt0(res.uniformityPct)} %` : '—', 'birds within ±10 % of the mean'),
-        big('FCR', res.fcr != null ? two(res.fcr) : '—', 'feed ÷ live weight so far')),
+        res.uniformityPct != null ? big('Uniformity', `${fmt0(res.uniformityPct)} %`, 'birds within ±10 % of the mean, hand weighing') : null,
+        res.fcr != null ? big('FCR', two(res.fcr), 'feed ÷ live weight so far') : null),
       outcome, btns,
       h('h3', { class: 'result-h' }, 'Your week'), yourWeek(L, res),
       h('h3', { class: 'result-h' }, 'Points earned'),

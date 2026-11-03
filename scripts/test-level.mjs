@@ -66,6 +66,9 @@ test('a week with no management fails at the end (or early on deaths)', () => {
   assert(r, 'level did not end');
   assert(!r.pass, `passed: ratio ${r.ratio}, deaths ${r.deathsPct}`);
   console.log(`     ended '${r.reason}' at ${r.endedAt}: ${r.failText}`);
+  // only measured numbers on the result: an early end has no day 7 weight and no uniformity
+  if (r.early) assert(r.ratio == null && r.weightG == null && r.uniformityPct == null && (r.placedReal || r.fcr == null), `early end shows unmeasured numbers: ${JSON.stringify({ ratio: r.ratio, u: r.uniformityPct, fcr: r.fcr })}`);
+  else assert(r.ratio != null && r.uniformityPct == null, `day 8 end, not weighed by hand: scale ratio ${r.ratio}, no uniformity ${r.uniformityPct}`);
 });
 
 test('save -> resume keeps day, hour, jobs and the farm', () => {

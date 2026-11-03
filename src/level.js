@@ -147,21 +147,26 @@ export function createLevel(ctx, deps = {}) {
     const measured = farm.stats?.chickWeightMeasuredG;
     const chick = measured ?? farm.flock.chickWeightG ?? LEVEL1.chickWeightG;
     const wr = weighResult();
-    // not weighed by hand: the automatic bird scale at the weigh-in age (08:00 day 7, about 2 % high)
-    const weightG = wr ? wr.mean : farm.stats?.scaleAtWeighInG ?? (farm.flock.meanWeightG || 0) * 1.02;
-    const ratio = chick ? weightG / chick : null;
+    // not weighed by hand: the automatic bird scale at the weigh-in age (08:00 day 7, about 2 % high);
+    // a level that ended before the weigh-in age has no day 7 weight (null: the screen says what ended it)
+    const weightG = wr ? wr.mean : farm.stats?.scaleAtWeighInG ?? null;
+    const ratio = chick && weightG != null ? weightG / chick : null;
     const pass = ratio != null && ratio >= LEVEL1.fail.weightRatioMin && deathsPct <= LEVEL1.fail.mortalityMaxPct;
     // what the farmer knows of the dead (the bin) and what he has not seen yet (the floor, the boxes)
     const fl = farm.flock, onFloor = fl.deadOnFloor || 0, inBoxes = (fl.boxDead || 0);
     const notPicked = onFloor > 0 ? ` (${onFloor.toLocaleString('en')} dead bird${onFloor === 1 ? '' : 's'} not picked up)` : '';
-    const failText = deathsPct > LEVEL1.fail.mortalityMaxPct ? `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}${notPicked}` : `day 7 weight ${two(ratio)} × chick weight`;
+    const failText = deathsPct > LEVEL1.fail.mortalityMaxPct ? `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}${notPicked}`
+      : ratio != null ? `day 7 weight ${two(ratio)} × chick weight` : (fl.placed || 0) > 0 ? 'no day 7 weight' : 'no chicks were placed';
     const floor = records?.timeline?.()?.find?.((e) => e.day === 0)?.floorAtArrivalC ?? null;
     const { day, hour } = splitDay(env.day);
     return { pass, reason, early: reason === 'mortality', endedAt: `day ${day}, ${hhmm(hour)}`, day, hour,
       ratio, weightG, weighedByHand: !!wr, chickWeightG: chick, chickSource: measured != null ? 'box' : 'delivery',
       deaths, placed, placedReal: (fl.placed || 0) > 0, countedDead: fl.countedDead || 0, deadOnFloor: onFloor, deadInBoxes: inBoxes, culls: fl.culls || 0,
-      deathsPct, uniformityPct: wr && wr.n >= 10 ? wr.uniformityPct : farm.flock.uniformityPct ?? null,
-      fcr: farm.flock.fcr || records?.row?.(LEVEL1.endDay)?.fcr || null, failText, floorAtArrival: floor, points: points.slice() };
+      // uniformity only from a hand weighing of 10 birds or more (the scale gives no spread); FCR only
+      // once chicks were placed and are eating
+      deathsPct, uniformityPct: wr && wr.n >= 10 ? wr.uniformityPct : null,
+      fcr: (fl.placed || 0) > 0 && fl.alive > 0 ? (Number.isFinite(fl.fcr) && fl.fcr > 0 ? fl.fcr : records?.row?.(LEVEL1.endDay)?.fcr || null) : null,
+      failText, floorAtArrival: floor, points: points.slice() };
   }
 
   function end(reason) {

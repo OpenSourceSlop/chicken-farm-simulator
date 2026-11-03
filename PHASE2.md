@@ -680,7 +680,9 @@ result screen; the Skill tree button gets a dot. No pop-up praise.
   mean) if he did not weigh the box. A typed value is never used.
 - **Fail early**: at any day's close, if deaths + culls already exceed 2.0 %, the result screen opens.
 - **Result screen**: four numbers large — day 7 weight "× chick weight" with the band 4–5 × (Week 1
-  guide), deaths %, uniformity %, FCR; the week table (§8); **"Your week"** (`records.timeline()`): per
+  guide), deaths %, uniformity %, FCR — each only when it was measured (final check): no day 7 weight
+  before the weigh-in age (an early end shows an *Ended early* card with what ended the level),
+  uniformity only from a hand weighing of 10 birds or more, FCR only once chicks were placed; the week table (§8); **"Your week"** (`records.timeline()`): per
   day the setpoint against the sign's table, flow per line against day + 20, nipple heights, vent
   timer against the sign's air need, light hours, floor at arrival, crop tally, all as plain numbers
   side by side; the points earned; then **"Level 1 complete"** (*Keep walking the farm* stays on day 7)
