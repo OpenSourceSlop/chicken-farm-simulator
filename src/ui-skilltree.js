@@ -49,7 +49,7 @@ export function buildSkillTreePanel(L) {
   function render() {
     const skills = L.skills;
     const branches = skills.branches();
-    if (!picked || !branches.some((b) => b.id === picked)) picked = (branches.find((b) => b.points > 0) || branches[0]).id;
+    if (!picked || !branches.some((b) => b.id === picked)) picked = (branches.find((b) => b.points > 0) || branches.find((b) => b.earnable) || branches[0]).id;
     const max = SKILL_LEVEL_POINTS[2];
     grid.replaceChildren(...branches.map((b) => {
       const pips = h('span', { class: 'pips3', 'aria-label': `Level ${b.level} of 3` }, [1, 2, 3].map((i) => h('span', { class: `pip3${b.level >= i ? ' is-on' : ''}` })));
@@ -57,10 +57,17 @@ export function buildSkillTreePanel(L) {
         h('span', { class: 'pbar-fill', style: `width:${Math.min(100, (b.points / max) * 100).toFixed(1)}%` }),
         SKILL_LEVEL_POINTS.map((p, i) => h('span', { class: 'pbar-mark', style: `left:${((p / max) * 100).toFixed(1)}%` }, h('small', null, `L${i + 1}`))));
       const next = unlockOf(b.id, Math.min(3, b.level + 1));
-      const card = button({ class: `branch branch--earn branch--pick${b.id === picked ? ' is-picked' : ''}`, 'aria-pressed': String(b.id === picked) },
-        h('div', { class: 'branch-top' }, h('span', { html: badge(b.id, b.level) }), h('div', null, h('h3', null, b.name), pips)),
-        h('div', { class: 'branch-pts' }, h('b', null, String(b.points)), ' points'), bar,
-        b.level < 3 && next ? h('p', { class: 'branch-later branch-later--unlock' }, h('b', null, `Level ${b.level + 1}`), ` · ${next.name}`) : h('p', { class: 'branch-later branch-later--unlock' }, 'Every level reached'));
+      // config SKILL_BRANCHES[i].earnable: Phase 2 made two earnable; the integrator sets all eleven at the
+      // run merge (PHASE3.md §9). A branch not yet earnable keeps Phase 2's preview of its first unlock.
+      const card = b.earnable
+        ? button({ class: `branch branch--earn branch--pick${b.id === picked ? ' is-picked' : ''}`, 'aria-pressed': String(b.id === picked) },
+          h('div', { class: 'branch-top' }, h('span', { html: badge(b.id, b.level) }), h('div', null, h('h3', null, b.name), pips)),
+          h('div', { class: 'branch-pts' }, h('b', null, String(b.points)), ' points'), bar,
+          h('p', { class: 'branch-later branch-next' }, b.level < 3 && next ? [h('b', null, `Level ${b.level + 1}`), ` · ${next.name}`] : 'Every level reached'))
+        : button({ class: `branch branch--later branch--pick${b.id === picked ? ' is-picked' : ''}`, 'aria-pressed': String(b.id === picked) },
+          h('div', { class: 'branch-top' }, h('span', { html: badge(b.id, 0) }), h('div', null, h('h3', null, b.name), pips)),
+          h('p', { class: 'branch-later' }, 'Comes in a later level'),
+          unlockOf(b.id, 1) ? h('p', { class: 'branch-later branch-later--unlock' }, h('b', null, 'Level 1'), ` · ${unlockOf(b.id, 1).name}`) : null);
       card.addEventListener('click', () => { picked = b.id; render(); });
       return card;
     }));

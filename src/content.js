@@ -71,7 +71,7 @@ export const LEVEL_TEXT = {
   line: 'Plan the farm, take in 6,000 chicks, grow them to the harvest and rest the clean house: seven levels on one flock.',
   start: 'Start a new flock',
   startBrooding: 'Start at the brooding week',
-  startAgain: (what) => `Start again — replaces your ${what} save`,
+  startAgain: (what) => `Start again — replaces your save (${what})`,
   continueLabel: (where, time) => `Continue — ${where}, ${time}`,
   sandbox: 'Walk the Phase 1 farm (sandbox)',
   skills: 'Skill tree',

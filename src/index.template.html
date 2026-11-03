@@ -831,14 +831,18 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .branch--pick .branch-pts { margin: 4px 0 2px; }
 .branch--pick .branch-pts b { font-size: 18px; }
 .branch--pick .pbar { margin-bottom: 14px; }
-.branch--pick .branch-later--unlock { margin-top: 0; font-size: 11.5px; }
+.branch--pick .branch-later--unlock, .branch--pick .branch-next { margin-top: 2px; font-size: 11.5px; line-height: 1.35; }
+.branch-next b { font-weight: 600; }
 .branch--pick:hover { border-color: rgba(242, 140, 40, 0.75); }
 .branch--pick.is-picked { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .tree-miles--one { grid-template-columns: minmax(0, 1fr); }
+.help--wide { width: min(560px, calc(100vw - 2 * var(--gutter))); }
+.help--wide .help-list { grid-template-columns: auto 1fr auto 1fr; }
 .tree-miles--one .miles { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
 .mile-level { color: var(--ink-faint); }
 @media (max-width: 699px) {
   .tree-case .tree-grid { grid-template-columns: minmax(0, 1fr); }
+  .help--wide .help-list { grid-template-columns: auto 1fr; }
 }
 @media (max-width: 860px) {
   .title-card { grid-template-columns: minmax(0, 1fr); }

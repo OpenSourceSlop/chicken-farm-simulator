@@ -5,7 +5,7 @@ import { LEVEL_TEXT, LEVEL_KEYS, dayLabel } from './content.js';
 import { h, button, setText, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { hhmm } from './ui-format.js';
-import { createRunCard } from './ui-run.js';
+import { createRunCard, shortIn } from './ui-run.js';
 
 /**
  * @param {HTMLElement} root  #hud
@@ -43,7 +43,7 @@ export function createTitle(root, o) {
       const info = o.saveInfo();
       if (info && confirm !== btn) {
         reset(); confirm = btn;
-        setText(btn.lastChild, LEVEL_TEXT.startAgain(info.short || dayLabel(info.day).toLowerCase()));
+        setText(btn.lastChild, LEVEL_TEXT.startAgain(info.short ? `${shortIn(info)}, ${dayLabel(info.day).toLowerCase()}` : dayLabel(info.day).toLowerCase()));
         btn.classList.add('is-confirm');
         clearTimeout(confirmTimer);
         confirmTimer = setTimeout(reset, 5000);

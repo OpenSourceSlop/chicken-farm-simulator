@@ -14,7 +14,8 @@ export function createHelp(keys = HELP_KEYS, seenKey = HELP_SEEN_KEY) {
     list.append(h('dt', null, keys), h('dd', null, row.what));
   }
   const closeBtn = button({ class: 'btn' }, 'Got it');
-  const card = h('section', { class: 'card help', 'aria-labelledby': titleId },
+  // the level's longer list (Phase 3: L, V, C, M) reads in two columns so it stays low on a 600 px screen
+  const card = h('section', { class: `card help${keys.length > 12 ? ' help--wide' : ''}`, 'aria-labelledby': titleId },
     h('div', { class: 'help-head' }, h('span', { html: ICONS.keyboard, 'aria-hidden': 'true' }),
       h('h2', { class: 'label', id: titleId }, 'Controls'), closeBtn),
     list);
