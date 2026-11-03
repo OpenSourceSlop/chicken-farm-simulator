@@ -8,7 +8,9 @@
 // Lengths are in model units (bird length = 1); the instance matrix scales to metres.
 import * as THREE from 'three';
 import { PART_COUNT, PIVOTS } from './flock-geometry.js';
-import { HEATERS } from './config.js';
+import { HEATERS, COMFORT_RAMP } from './config.js';
+
+const RAMP_N = COMFORT_RAMP.length;
 
 const VERT_HEAD = /* glsl */`
 attribute vec3 aPos2;
@@ -83,6 +85,21 @@ varying vec3 vBirdColor;
 uniform vec2 uHeat[${HEATERS.length}];
 uniform float uBrood;
 varying float vBrood;
+#ifndef BIRD_DEAD
+// Phase 3 comfort view (unlock comfortOverlay, key C): each bird in the colour of its felt comfort
+// (aComf = felt °C minus the target), config COMFORT_RAMP as linear colours; off = Phase 2's colours
+attribute float aComf;
+uniform float uComfortOn;
+uniform vec3 uRampC[${RAMP_N}];
+uniform float uRampT[${RAMP_N}];
+vec3 comfortRamp(float e) {
+  vec3 c = uRampC[0];
+  for (int k = 1; k < ${RAMP_N}; k++) {
+    if (e > uRampT[k - 1]) c = mix(uRampC[k - 1], uRampC[k], clamp((e - uRampT[k - 1]) / (uRampT[k] - uRampT[k - 1]), 0.0, 1.0));
+  }
+  return c;
+}
+#endif
 `;
 
 const COLOR_CODE = /* glsl */`
@@ -111,6 +128,14 @@ const COLOR_CODE = /* glsl */`
   float g = 0.0;
   for (int k = 0; k < ${HEATERS.length}; k++) { vec2 d = bp - uHeat[k]; g += exp(-dot(d, d) * 0.55); }
   vBrood = uBrood * min(g, 1.0);
+#ifndef BIRD_DEAD
+  if (uComfortOn > 0.5) {
+    // the eye stays dark; beak, legs and comb keep a little of their own colour
+    float own = (pi == 9) ? 1.0 : (feather > 0.5 ? 0.0 : 0.35);
+    vBirdColor = mix(comfortRamp(aComf) * (0.82 + 0.18 * aShade), col, own);
+    vBrood = 0.0;
+  }
+#endif
 }
 `;
 
@@ -132,6 +157,10 @@ export function createBirdUniforms() {
     uCombPivot: { value: v3(c.comb) },
     uWattlePivot: { value: v3(c.wattle) },
     uCol: { value: Array.from({ length: PART_COUNT }, () => new THREE.Color(1, 1, 1)) },
+    // Phase 3 comfort view
+    uComfortOn: { value: 0 },
+    uRampC: { value: COMFORT_RAMP.map(([, c]) => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace)) },
+    uRampT: { value: COMFORT_RAMP.map(([t]) => t) },
   };
 }
 
@@ -170,7 +199,7 @@ export function createBirdMaterials(uniforms, { dead = false } = {}) {
         ? '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * uGlow;'
         : '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * (uGlow + vBrood * vec3(1.0, 0.5, 0.22));');
   };
-  material.customProgramCacheKey = () => (dead ? 'flock-bird-dead-1' : 'flock-bird-lambert-5');
+  material.customProgramCacheKey = () => (dead ? 'flock-bird-dead-2' : 'flock-bird-lambert-6');
   if (dead) return { material };
 
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });

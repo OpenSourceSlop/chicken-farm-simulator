@@ -9,7 +9,7 @@ function fract(v) { return v - Math.floor(v); }
 
 // stage = { M: n*16 instance matrices, A/B/C: n*4 pose vec4s, R: n bird scale (m) } (flock-render.js)
 export function poseAll(S, dt, stage) {
-  const mat = stage.M, animA = stage.A, animB = stage.B, animC = stage.C, rad = stage.R;
+  const mat = stage.M, animA = stage.A, animB = stage.B, animC = stage.C, rad = stage.R, E = stage.E;
   const n = S.n, t = S.time, L = S.L, base = S.baseSpeed;
   const { px, pz, fx, fz, act, arrived, therm, size, phase, sitA, wingA, hp, hl, ht, beak, stride } = S;
   // level only (all 0 in the sandbox): sick / lame birds, chicks tumbling out of a box, dazed after the tip
@@ -28,12 +28,13 @@ export function poseAll(S, dt, stage) {
       if (a === ACT.HUDDLE || a === ACT.REST) sitT = 1;
       else if (a === ACT.PANT && S.sitPref[i] < 0.72) sitT = 1;
     }
-    const sk = sick[i];
+    // Phase 3: a lame bird (sick 3) is alert, not fluffed or dull: it sits, and limps when it walks
+    const lame = sick[i] === 3, sk = lame ? 0 : sick[i];
     if (lagT[i] > 0) sitT = 1; // just tipped out: sits a moment, then gets up and goes
     sitA[i] += (sitT - sitA[i]) * Math.min(1, dt * (sitT > sitA[i] ? 1.6 : 5));
     // heat stress shows in degrees: wings held further out and harder panting the hotter the bird
     let heat = 0;
-    if (hot) { heat = (S.tIdx[i] - 1.5) / 4; heat = heat < 0.3 ? 0.3 : heat > 1 ? 1 : heat; }
+    if (hot) { heat = (S.tIdx[i] - S.heatRef) / 4; heat = heat < 0.3 ? 0.3 : heat > 1 ? 1 : heat; }
     // a sick bird lets its wings hang a little away from the body
     const wingT = sk ? 0.3 : hot ? heat * (S.spd[i] > 0.3 * base ? 0.55 : 1) : 0;
     wingA[i] += (wingT - wingA[i]) * kWing;
@@ -93,11 +94,13 @@ export function poseAll(S, dt, stage) {
     // instance matrix: yaw from facing (fx, fz), uniform scale s, little bob while walking
     let y = walk * (1 - sitA[i]) * 0.035 * s * Math.abs(Math.sin(st));
     const o = i * 16;
-    if (sk || spawnT[i] > 0) {
+    if (sk || lame || spawnT[i] > 0) {
       // sick: fluffed up (rounder, wider); lame: a rolling limp while it walks; a chick from the
       // box drops the last few centimetres with a tumble
       let roll = 0, fl = sk ? 1 : 0;
       if (sk === 2 && walk > 0.2) { const w = Math.sin(st); roll = 0.24 * w * walk; y += 0.03 * s * Math.abs(w); }
+      // Phase 3 lame bird: a hop on the good leg, the body dropping hard onto the bad side
+      if (lame && walk > 0.15) { const w = Math.sin(st); roll = 0.32 * Math.max(0, w) * walk - 0.06; y += 0.05 * s * Math.max(0, -w); }
       if (spawnT[i] > 0) { const k = spawnT[i] / 0.3; y += 0.9 * s * k * k; roll += 1.4 * k * (ph > 3.14 ? 1 : -1); spawnT[i] -= dt; }
       writeBirdMatrix(mat, o, px[i], y, pz[i], fx[i], fz[i], roll, s * (1 - 0.06 * fl), s * (1 + 0.1 * fl), s * (1 + 0.24 * fl));
     } else {
@@ -109,11 +112,12 @@ export function poseAll(S, dt, stage) {
     }
 
     rad[i] = s;
+    E[i] = S.tIdx[i]; // felt comfort (°C over the target) for the comfort view
     const q = i * 4, wing = 0.95 * wingA[i];
     animA[q] = Math.cos(hp[i]); animA[q + 1] = Math.sin(hp[i]); animA[q + 2] = hl[i]; animA[q + 3] = sitA[i];
     animB[q] = Math.cos(ht[i]); animB[q + 1] = Math.sin(ht[i]); animB[q + 2] = Math.cos(wing); animB[q + 3] = Math.sin(wing);
     animC[q] = 0.6 * beak[i]; // sin(x) ~ x is plenty for a 0.6 rad beak gape
-    animC[q + 1] = Math.sin(walk * (1 - sitA[i]) * 0.55 * Math.sin(st));
+    animC[q + 1] = Math.sin(walk * (1 - sitA[i]) * (lame ? 0.2 : 0.55) * Math.sin(st));
     // tint +3 = eyes closed and a dull coat (flock-shader.js): sick birds
     animC[q + 2] = S.tint[i] + (sk ? 3 : 0); animC[q + 3] = 0.25 * wingA[i];
   }

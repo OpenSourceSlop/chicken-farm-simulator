@@ -62,7 +62,8 @@ export function refreshAccess(lv, farm, env) {
 export function updateSick(S, farm, heldSick) {
   const want = Math.max(0, Math.min(MAX_SICK, Math.round(num(farm.flock?.sick, 0))));
   let have = heldSick;
-  for (let i = 0; i < S.n; i++) if (S.sick[i]) have++;
+  // (Phase 3 lame birds, sick 3, are flock-cycle.js's: not counted or cleared here)
+  for (let i = 0; i < S.n; i++) if (S.sick[i] && S.sick[i] !== 3) have++;
   if (have < want && S.n > 0) {
     // weak birds are small birds: pick from the lightest third of the flock
     for (let tries = 0; have < want && tries < 60; tries++) {
@@ -74,7 +75,7 @@ export function updateSick(S, farm, heldSick) {
     }
   } else if (have > want) {
     for (let i = 0; i < S.n && have > want; i++) {
-      if (!S.sick[i]) continue;
+      if (!S.sick[i] || S.sick[i] === 3) continue;
       S.sick[i] = 0; S.actT[i] = 0; S.thinkT[i] = S.rand();
       have--;
     }

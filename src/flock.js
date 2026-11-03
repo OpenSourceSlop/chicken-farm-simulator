@@ -186,7 +186,7 @@ export function createFlock(ctx, { house } = {}) {
     applyDay(env, false);
     S.lightsOn = env.lightsOn !== false;
     uniforms.uBrood.value = 0.55 * (env.heaterLevel || 0); // the brooder pools light the birds in them
-    if (field.refresh(env, dt) === 2) {
+    if (field.refresh(env, dt, lv ? lvl.zones() : null) === 2) {
       // the climate jumped (heaters, setpoint, fans, test tools): everyone reconsiders soon
       for (let i = 0; i < S.n; i++) { S.thinkT[i] = Math.min(S.thinkT[i], S.rand() * 0.4); S.actT[i] = Math.min(S.actT[i], S.rand() * 1.2); }
     }
@@ -288,6 +288,16 @@ export function createFlock(ctx, { house } = {}) {
     resetLevel() { lvl.resetLevel(); },
     /** level.skip: the clock jumped `hours` forward (>= 0.5 re-places the free birds). */
     afterSkip,
+    // ---- Phase 3 (package "scene", PHASE3.md §12 items 13-20) ----
+    /** 'comfort': each drawn bird in the colour of its felt comfort (unlock comfortOverlay, key C;
+     *  config COMFORT_RAMP, blue cooler / white at the target / orange warmer; the run draws the legend). */
+    overlay: { comfort: false },
+    setOverlay(name, on) {
+      if (name !== 'comfort') return;
+      api.overlay.comfort = !!on;
+      uniforms.uComfortOn.value = on ? 1 : 0;
+      render.markDirty();
+    },
     /** Test hooks: counts and spreads for the p2-flock steps files (never shown to the player). */
     debug: lvl.debug,
     // test tools only: true = birds ignore the farmer (to film them up close)

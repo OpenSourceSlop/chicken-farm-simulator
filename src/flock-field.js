@@ -22,19 +22,34 @@ export function createComfortField() {
   const v = new Float32Array(nx * nz);
   const air = new Float32Array(nx * nz);
   const sig = new Float64Array(6).fill(NaN);
-  let age = 1e9;
+  // Phase 3: the farm's comfort per 6 m strip (farm.comfort.eZ) moves the field strip by strip
+  const zsig = new Float64Array(8).fill(NaN), zOff = new Float64Array(8), zSum = new Float64Array(8), zN = new Float64Array(8);
+  let age = 1e9, zonesOn = false;
   return {
     // Recompute when any climate input moved (at most every 0.25 s for slow drifts).
     // Returns 2 after a big change (birds should reconsider at once), 1 after a small one, else 0.
-    refresh(env, dt) {
+    // zones (Phase 3, from day 8 in a level): Float64Array(8) of the farm's mean comfort e per 6 m
+    // strip along the house (NaN = no birds there): each strip of the field is shifted so its mean is
+    // the farm's (humidity, wet litter and the rest of what growing birds feel); null = Phase 1/2.
+    refresh(env, dt, zones = null) {
       age += dt;
       const s0 = env.houseTemp, s1 = env.heaterLevel, s2 = env.targetTemp, s3 = env.windChill, s4 = env.fansOn;
       // (the brooder output drifts slowly with the modulating thermostat; only a real jump counts)
-      const big = Math.abs(s0 - sig[0]) > 0.5 || Math.abs(s1 - sig[1]) > 0.25 || Math.abs(s2 - sig[2]) > 0.5 ||
+      let big = Math.abs(s0 - sig[0]) > 0.5 || Math.abs(s1 - sig[1]) > 0.25 || Math.abs(s2 - sig[2]) > 0.5 ||
         Math.abs(s3 - sig[3]) > 0.5 || s4 !== sig[4] || Number.isNaN(sig[0]);
-      const small = s0 !== sig[0] || s1 !== sig[1] || s2 !== sig[2] || s3 !== sig[3];
+      let small = s0 !== sig[0] || s1 !== sig[1] || s2 !== sig[2] || s3 !== sig[3];
+      if (!!zones !== zonesOn) big = true;
+      if (zones) {
+        for (let k = 0; k < 8; k++) {
+          const a = zones[k], b = zsig[k];
+          if (Number.isFinite(a) !== Number.isFinite(b)) big = true;
+          else if (Number.isFinite(a)) { const d = Math.abs(a - b); if (d > 0.6) big = true; else if (d > 0.05) small = true; }
+        }
+      }
       if (!big && !(small && age > 0.25)) return 0;
       sig[0] = s0; sig[1] = s1; sig[2] = s2; sig[3] = s3; sig[4] = s4;
+      zonesOn = !!zones;
+      if (zones) zsig.set(zones);
       age = 0;
       const radiantOn = s1 > 0.01 && typeof env.brooderHeat === 'function';
       for (let j = 0; j < nz; j++) {
@@ -51,8 +66,23 @@ export function createComfortField() {
           if (radiant > 0 && aboveTarget > 0) v[k] = full - (1 - RADIANT_FELT_ABOVE_TARGET) * Math.min(radiant, aboveTarget);
         }
       }
+      if (zones) {
+        // strip means of the env's comfort, then a shift per strip, eased between strip centres
+        zSum.fill(0); zN.fill(0);
+        for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+          const s = stripOf(FX0 + i * sx);
+          zSum[s] += v[j * nx + i]; zN[s]++;
+        }
+        for (let s = 0; s < 8; s++) zOff[s] = Number.isFinite(zones[s]) && zN[s] ? zones[s] - zSum[s] / zN[s] : 0;
+        for (let i = 0; i < nx; i++) {
+          const o = offsetAt(zOff, FX0 + i * sx);
+          for (let j = 0; j < nz; j++) v[j * nx + i] += o;
+        }
+      }
       return big ? 2 : 1;
     },
+    /** the shift of each strip now (°C; tests) */
+    zoneOffsets: zOff,
     sample(x, z) {
       let fx = (x - FX0) / sx, fz = (z - FZ0) / sz;
       if (fx < 0) fx = 0; else if (fx > nx - 1.001) fx = nx - 1.001;
@@ -64,6 +94,14 @@ export function createComfortField() {
       return a + (b - a) * az;
     },
   };
+}
+
+// The 6 m strips along the house (farm.comfort.eZ, PHASE3.md §13.5): x -24 + 6i .. -18 + 6i.
+const stripOf = (x) => { const s = Math.floor((x + 24) / 6); return s < 0 ? 0 : s > 7 ? 7 : s; };
+function offsetAt(off, x) {
+  const t = (x + 24) / 6 - 0.5, k = Math.floor(t), a = t - k;
+  const k0 = k < 0 ? 0 : k > 7 ? 7 : k, k1 = k + 1 < 0 ? 0 : k + 1 > 7 ? 7 : k + 1;
+  return off[k0] + (off[k1] - off[k0]) * (k < 0 ? 0 : a);
 }
 
 // Grid covers the bird floor with a 1 m margin.

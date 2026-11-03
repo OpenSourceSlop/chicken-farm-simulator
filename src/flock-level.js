@@ -10,26 +10,34 @@
 // Events: listens to farm:death (lay dead birds) and farm:placed (placeBatch); emits bird:pick,
 // bird:release, dead:pick. Providers: 'chick' and 'sick-bird' (5), 'dead-bird' (6).
 import { EV } from './events.js';
-import { COLD, HOT } from './flock-state.js';
+import { ACT, COLD, HOT } from './flock-state.js';
 import { ST } from './flock-pop.js';
 import { createAccess, refreshAccess, thinkSick, updateSick } from './flock-sick.js';
 import { createDeadBirds } from './flock-dead.js';
 import { createCatcher } from './flock-catch.js';
+// Phase 3 (package "scene"): the growing flock over the whole cycle and the catch
+import { cycleOn, zones, heatBand, updateLame, thinkLame, water, breathing, LAME } from './flock-cycle.js';
+import { createCatchFlock } from './flock-harvest.js';
 
 export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
   const lv = createAccess();
   const isLevel = () => ctx.farm?.mode === 'level';
   const dead = createDeadBirds(ctx, S, uniforms, pop);
   const catcher = createCatcher(ctx, S, pop, isLevel);
+  const catchFlock = createCatchFlock(S, pop);
   const farmer = () => ctx.player?.position || null;
   S.levelMode = false;
   S.lv = null;
-  let stillT = 0, calmK = 1, lastTarget = 0, wantSick = 0;
+  let stillT = 0, calmK = 1, lastTarget = 0, wantSick = 0, wantLame = 0, cyc = false;
+  const zoneE = new Float64Array(8);
+  let zonesOk = false;
 
   function switchMode(on) {
     S.levelMode = on;
     catcher.clear();
     dead.clear();
+    catchFlock.clear();
+    cyc = false; heatBand(S, null, null, false);
     if (on) {
       S.lv = lv;
       pop.clear();
@@ -51,6 +59,13 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
   }
   // an event can arrive before the first frame in level mode: switch first, so it is not wiped
   function sync() { if (isLevel() !== S.levelMode) switchMode(isLevel()); }
+  // the drinker lines open again after the thirst (vaccination): the flock gets up and goes to drink
+  function rush() {
+    for (let i = 0; i < S.n; i++) {
+      if (S.pen[i] || S.sick[i]) continue;
+      if (S.act[i] === ACT.REST || S.act[i] === ACT.IDLE || S.act[i] === ACT.WANDER) { S.actT[i] = S.rand() * 1.5; S.thinkT[i] = Math.min(S.thinkT[i], S.rand() * 0.4); }
+    }
+  }
 
   // ---- providers (PHASE2.md §13.3) ----
   catcher.providers();
@@ -70,7 +85,8 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
       radius: 1.5, inside: true, priority: 6, nearRadius: 0.8, nearPriority: 15, use: () => { const f = farmer() || p; dead.api.pickUp(f.x, f.z, 1.5); } };
   });
 
-  const heldSick = () => { let k = 0; for (const h of catcher.held.values()) if (h.sick) k++; return k; };
+  const heldSick = () => { let k = 0; for (const h of catcher.held.values()) if (h.sick && h.sick !== LAME) k++; return k; };
+  const heldLame = () => { let k = 0; for (const h of catcher.held.values()) if (h.sick === LAME) k++; return k; };
 
   const lvl = {
     dead, catcher, lv,
@@ -80,16 +96,28 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
       if (!S.levelMode) return false;
       const farm = ctx.farm;
       refreshAccess(lv, farm, env);
-      lastTarget = pop.reconcile(farm, dt, farmerPos);
+      // Phase 3, from day 8: the farm's comfort per strip, the panting band of growing birds, the
+      // vaccination's dry and open lines
+      cyc = cycleOn(S, env);
+      heatBand(S, farm, env, cyc);
+      zonesOk = cyc && zones(farm, zoneE);
+      if (cyc) { if (water(lv, farm, env, dt) === 'opened') rush(); } else { lv.thirst = false; lv.rush = 0; }
+      // the catch sets the drawn birds per section while it runs (flock-harvest.js)
+      if (catchFlock.update(dt, farm, env)) { let w = 0; for (const v of catchFlock.want) w += v; lastTarget = Math.round(w); }
+      else lastTarget = pop.reconcile(farm, dt, farmerPos);
       pop.sizes(farm, dt, false);
       wantSick = updateSick(S, farm, heldSick());
+      wantLame = updateLame(S, farm, heldLame());
       dead.update(dt, farm);
       return true;
     },
+    /** comfort per 6 m strip for the comfort field (Phase 3, day 8 on) or null */
+    zones() { return zonesOk ? zoneE : null; },
     /** a bird's decision in a level when it follows its own rules; false = the normal think */
     think(i, field, env, fctx, grid) {
       if (S.pen[i]) return catcher.thinkPen(i);
       if (S.lagT[i] > 0) return true; // still sitting dazed where it was tipped out
+      if (S.sick[i] === LAME) { thinkLame(S, i, fctx); return true; }
       if (S.sick[i]) { thinkSick(S, i, fctx, grid); return true; }
       return false;
     },
@@ -139,7 +167,14 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
       const nh3 = inLevel ? +farm?.litter?.ammoniaPpm || 0 : 0;
       const dark = ctx.env && ctx.env.lightsOn === false;
       const r2 = (v) => Math.round(v * 100) / 100;
-      return { distress: r2(distress), contented: r2((1 - distress) * (dark ? 0.35 : 1)), snick: r2(Math.max(0, Math.min(1, (nh3 - 15) / 15))) };
+      const out = { distress: r2(distress), contented: r2((1 - distress) * (dark ? 0.35 : 1)), snick: r2(Math.max(0, Math.min(1, (nh3 - 15) / 15))) };
+      if (!cyc) return out;
+      // Phase 3 (day 8 on): the breathing (dust and ammonia) and the panting of the drawn birds
+      const br = breathing(farm);
+      out.snick = r2(Math.max(out.snick, br.snick));
+      out.rattle = r2(br.rattle);
+      out.pant = r2(Math.max(0, Math.min(1, hot / n)));
+      return out;
     },
     debug: {
       /** counts for the harness (never shown to the player) */
@@ -148,9 +183,14 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
         for (const d of dead.list) causes[d.cause] = (causes[d.cause] || 0) + 1;
         let sick = 0, lame = 0, pen = 0;
         for (let i = 0; i < S.n; i++) { if (S.sick[i]) sick++; if (S.sick[i] === 2) lame++; if (S.pen[i]) pen++; }
+        let lame3 = 0, hot = 0;
+        for (let i = 0; i < S.n; i++) { if (S.sick[i] === LAME) lame3++; if (S.therm[i] === HOT) hot++; }
         return { level: S.levelMode, drawn: S.n, target: lastTarget, pending: pop.pending.length, held: catcher.held.size,
           sick, lame, wantSick, penned: pen, dead: dead.api.count, deadDrawn: dead.list.length, deadQueued: dead.queue.length, causes,
-          ahead: +pop.aheadOfCount.toFixed(2) };
+          ahead: +pop.aheadOfCount.toFixed(2),
+          // Phase 3
+          cycle: cyc, lameBirds: lame3, wantLame, panting: hot, hotFrom: +(S.heatRef + 0.5).toFixed(2), catchOn: catchFlock.on,
+          thirst: !!lv.thirst, rush: +(lv.rush || 0).toFixed(2) };
       },
       /** std / mean of the drawn birds' size factor (uniformity check) */
       sizeSpread() {
@@ -185,7 +225,12 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
         }
         return { sick: ks, sickToNearestWell: +(ds / Math.max(1, ks)).toFixed(3), wellToNearestWell: +(dw / Math.max(1, kw)).toFixed(3) };
       },
-      sickBirds() { const o = []; for (let i = 0; i < S.n; i++) if (S.sick[i]) o.push({ index: S.id[i], x: +S.px[i].toFixed(2), z: +S.pz[i].toFixed(2), lame: S.sick[i] === 2 }); return o; },
+      sickBirds() { const o = []; for (let i = 0; i < S.n; i++) if (S.sick[i]) o.push({ index: S.id[i], x: +S.px[i].toFixed(2), z: +S.pz[i].toFixed(2), lame: S.sick[i] === 2 || S.sick[i] === LAME, phase3Lame: S.sick[i] === LAME }); return o; },
+      /** Phase 3: drawn birds per 6 m section (x -24 + 6i ..), and the catch's wanted counts */
+      sections() { const c = new Array(8).fill(0); for (let i = 0; i < S.n; i++) c[Math.max(0, Math.min(7, Math.floor((S.px[i] + 24) / 6)))]++; return { drawn: c, want: Array.from(catchFlock.want, (v) => +v.toFixed(1)) }; },
+      /** Phase 3: mean x of the drawn birds (the spread after the curtain lift) */
+      meanX() { let s = 0; for (let i = 0; i < S.n; i++) s += S.px[i]; return S.n ? +(s / S.n).toFixed(2) : null; },
+      catchFlock,
       held: () => [...catcher.held.keys()],
       status: (id) => ['hidden', 'active', 'held', 'culled'][pop.status[id]],
       ST,

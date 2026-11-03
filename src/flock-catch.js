@@ -27,11 +27,12 @@ export function createCatcher(ctx, S, pop, isLevel) {
   const frame = { on: false, x: 0, z: 0, ids: [] };
   const farmer = () => ctx.player?.position || null;
 
-  // nearest active slot within maxDist of (x, z); sickOnly: only sick birds
-  function nearest(x, z, maxDist, sickOnly) {
+  // nearest active slot within maxDist of (x, z); sickOnly: only sick (or lame) birds; lameOnly: only
+  // the Phase 3 lame birds (S.sick 3, flock-cycle.js)
+  function nearest(x, z, maxDist, sickOnly, lameOnly = false) {
     let best = -1, bd = maxDist * maxDist;
     for (let i = 0; i < S.n; i++) {
-      if (S.pen[i] || S.spawnT[i] > 0 || (sickOnly && !S.sick[i])) continue;
+      if (S.pen[i] || S.spawnT[i] > 0 || (sickOnly && !S.sick[i]) || (lameOnly && S.sick[i] !== 3)) continue;
       const dx = S.px[i] - x, dz = S.pz[i] - z, d = dx * dx + dz * dz;
       if (d < bd) { bd = d; best = i; }
     }
@@ -45,8 +46,9 @@ export function createCatcher(ctx, S, pop, isLevel) {
     nearest,
     catchNearest(x, z, maxDist = 1.2, purpose) {
       if (!isLevel()) return null;
-      const p = purpose || ctx.level?.sampling || 'vent';
-      const i = nearest(x, z, maxDist, p === 'sick');
+      // Phase 3: the bird check (level.sampling 'bird') picks with purpose 'check'; a lame bird 'lame'
+      const p0 = purpose || ctx.level?.sampling || 'vent', p = p0 === 'bird' ? 'check' : p0;
+      const i = nearest(x, z, maxDist, p === 'sick' || p === 'lame', p === 'lame');
       if (i < 0) return null;
       const id = S.id[i], bx = S.px[i], bz = S.pz[i];
       held.set(id, { purpose: p, sick: S.sick[i] });
@@ -166,8 +168,10 @@ export function createCatcher(ctx, S, pop, isLevel) {
         if (!isLevel() || !inside || !handsEmpty()) return null;
         const i = nearest(p.x, p.z, 1.2, true);
         if (i < 0) return null;
-        return { id: 'sick-bird', label: 'bird sitting apart', verb: 'Pick up the', x: S.px[i], z: S.pz[i], radius: 1.2, inside: true, priority: 5,
-          use: () => { const f = farmer() || p; catcher.catchNearest(f.x, f.z, 1.3, 'sick'); } };
+        // Phase 3: a lame bird (it cannot walk well) is caught with purpose 'lame'
+        const lame = S.sick[i] === 3;
+        return { id: 'sick-bird', label: lame ? 'bird that cannot walk well' : 'bird sitting apart', verb: 'Pick up the', x: S.px[i], z: S.pz[i], radius: 1.2, inside: true, priority: 5,
+          use: () => { const f = farmer() || p; catcher.catchNearest(f.x, f.z, 1.3, lame ? 'lame' : 'sick'); } };
       });
     },
     /** level reset / sandbox: whatever is held goes */

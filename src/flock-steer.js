@@ -35,6 +35,7 @@ export function steerAll(S, grid, dt, fctx) {
   const { px, pz, vx, vz, fx, fz, tx, tz, rad, size, act, arrived, therm, stuck, scare, sitA, sick, pen } = S;
   const items = grid.items, cs = grid.cellStart, gnx = grid.nx, gnz = grid.nz;
   const L = S.L, base = S.baseSpeed;
+  const secOn = S.secOn, secX0 = S.secX0, secW = S.secW;
   const arriveR = 0.03 + 0.15 * L;
   const slowR = 0.08 + 1.0 * L;
   const kv = Math.min(1, dt * 5);
@@ -52,7 +53,8 @@ export function steerAll(S, grid, dt, fctx) {
     // cold/hot birds hurry, then slow in the crowd; so do the walkers spreading out after the curtain lifts
     const hurry = !arrived[i] && dT > 1 && (th !== 0 || (S.spreadT > 0 && a === ACT.WANDER)) ? 1.6 : 1;
     // sick birds shuffle slowly, lame ones slower still (level only; 0 in the sandbox)
-    const maxSp = base * si * hurry * (sick[i] ? (sick[i] === 2 ? 0.3 : 0.5) : 1);
+    // (Phase 3 lame birds, sick 3: a slow limp, 0.35)
+    const maxSp = base * si * hurry * (sick[i] ? (sick[i] === 2 ? 0.3 : sick[i] === 3 ? 0.35 : 0.5) : 1);
     if (!arrived[i]) {
       if (dT < arriveR) arrived[i] = 1;
       else {
@@ -162,6 +164,12 @@ export function steerAll(S, grid, dt, fctx) {
     }
     nx = nx < b.xMin ? b.xMin : nx > b.xMax ? b.xMax : nx;
     nz = nz < b.zMin ? b.zMin : nz > b.zMax ? b.zMax : nz;
+    if (secOn) {
+      // the catch (Phase 3): penned in its 6 m section behind the catching panels
+      let k = Math.floor((x - secX0) / secW); k = k < 0 ? 0 : k > 7 ? 7 : k;
+      const lo = secX0 + k * secW + 0.2, hi = lo + secW - 0.4;
+      nx = nx < lo ? lo : nx > hi ? hi : nx;
+    }
     const mvx = nx - px[i], mvz = nz - pz[i];
     px[i] = nx; pz[i] = nz;
     const sp = Math.sqrt(mvx * mvx + mvz * mvz) * invDt;
