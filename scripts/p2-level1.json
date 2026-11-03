@@ -4,7 +4,7 @@
   {"eval": "__game.stop(), window.__jobs = (d) => __game.jobs().filter((j) => j.key.endsWith('@' + d)).map((j) => j.key.replace('@' + d, '') + ':' + j.status).join(' '), window.__t = () => 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel, __game.level.toTitle(), 'title: ' + __game.level.mode"},
   {"advance": 0.3},
   {"shot": "l1-00-title"},
-  {"clickText": "Start Level 1"},
+  {"clickText": "Start at the brooding week"},
   {"advance": 0.5},
   {"expect": "__game.level.mode === 'level' && __game.env.dayNumber === -1 && __t()", "label": "Start Level 1 from the title card: prep day 07:00"},
   {"walkTo": [-40, 36.9], "tol": 0.3},

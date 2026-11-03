@@ -1,7 +1,7 @@
 // Number, time and reading formatting for the Level 1 UI. Owner: package "level".
 // Plain numbers only: nothing here colours or judges a value.
 import { fmt0, fmt1 } from './ui-dom.js';
-import { BROOD_BOUNDS, broodSector } from './config.js';
+import { BROOD_BOUNDS, BIRD_BOUNDS, broodSector, houseSector } from './config.js';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 /** 13.5 -> "13:30" (hours past 24 wrap). */
@@ -47,7 +47,13 @@ const lineNo = (v) => (v.line ?? 0) + 1;
 export function placeWords(x, z) {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return '';
   const b = BROOD_BOUNDS;
-  if (x < b.xMin - 0.5 || x > b.xMax + 0.5 || z < b.zMin - 0.5 || z > b.zMax + 0.5) return '';
+  if (x < b.xMin - 0.5 || x > b.xMax + 0.5 || z < b.zMin - 0.5 || z > b.zMax + 0.5) {
+    // Phase 3: the east half after the curtain lift, in the house's four parts along its length
+    const hb = BIRD_BOUNDS;
+    if (x < hb.xMin - 0.8 || x > hb.xMax + 0.8 || z < hb.zMin - 0.8 || z > hb.zMax + 0.8) return '';
+    const s = houseSector(x, z);
+    return `${['west end', 'west middle', 'east middle', 'east end'][Math.floor(s / 2)]} of the house, ${s % 2 ? 'south' : 'north'} side`;
+  }
   const s = broodSector(x, z);
   return `${['west', 'middle', 'east'][Math.floor(s / 2)]} part, ${s % 2 ? 'south' : 'north'} side`;
 }
@@ -75,6 +81,16 @@ export function settingText(v) {
       return `Feeder line ${lineNo(v)}: ${parts.join(', ') || 'set'}`;
     }
     case 'litter.depth': return `Litter depth ${num(v.cm)} cm`;
+    // Phase 3 controls (PHASE3.md §13.3)
+    case 'house.curtain': return v.open ? 'Brooding curtain lifted' : 'Brooding curtain down';
+    case 'heat.brooders': return v.up ? 'Brooders off and winched up' : 'Brooders down';
+    case 'feed.valve': return `Silo ${(v.silo ?? 0) + 1} slide valve ${v.open >= 1 ? 'open' : v.open > 0 ? 'half open' : 'shut'}`;
+    case 'feed.withdraw': return v.on ? 'Feeder lines stopped: the feed taken away' : 'Feeder lines running again';
+    case 'water.main': return `Main water valve ${v.open ? 'open' : 'shut'}`;
+    case 'water.medicate': return `Medicine in the water ${v.on ? 'on' : 'off'}`;
+    case 'water.disinfect': return `Disinfectant in the header tank ${v.on ? 'on' : 'off'}`;
+    case 'vent.stages': return 'Tunnel fan stages set';
+    case 'light.preset': return `Light program preset: ${v.id ?? ''}`.trim();
     default: {
       const parts = [];
       for (const [k, val] of Object.entries(v)) if (val != null && typeof val !== 'object' && k !== 'id') parts.push(`${k} ${typeof val === 'number' ? num(val) : val}`);
@@ -99,6 +115,14 @@ export function readingText(kind, v) {
     case 'crop': case 'sample.crop': return `crop ${cropWords(r.crop)}`;
     case 'litter': case 'litter.squeeze': return `litter ${int(r.moisturePct)} % · ${feelWords(r.feel)}`;
     case 'lux': case 'light.lux': return `${int(r.lux)} lux`;
+    case 'air': case 'air.probe': return [r.speedMs != null && `${one(r.speedMs)} m/s`, r.tempC != null && `${one(r.tempC)} °C`, r.rh != null && `${int(r.rh)} %`].filter(Boolean).join(' · ') || '—';
+    case 'bird': case 'sample.bird': return `${r.look ?? 'bird'}: ${typeof r.value === 'number' ? num(r.value) : r.value ?? '—'}`;
+    case 'fans': case 'fans.read': return [r.fans != null && `${int(r.fans)} tunnel fans`, r.houseC != null && `house ${one(r.houseC)} °C`, r.rh != null && `${int(r.rh)} %`, r.speedMs != null && `${one(r.speedMs)} m/s`].filter(Boolean).join(' · ') || 'fan panel read';
+    case 'gas': case 'gas.meter': return [r.kgLeft != null && `${int(r.kgLeft)} kg gas left`, r.kgUsed != null && `${int(r.kgUsed)} kg used`].filter(Boolean).join(' · ') || 'gas gauge read';
+    case 'pad': case 'pad.check': return Array.isArray(r.dry) ? `pad: ${r.dry.filter(Boolean).length} of ${r.dry.length} sections dry${r.flowing === false ? ', no flow' : ''}` : 'pad checked';
+    case 'ticket': case 'load.ticket': return `truck ${(r.truck ?? 0) + 1}: ${int(r.crates)} crates, ${int(r.birds)} birds, net ${int(r.netKg)} kg`;
+    case 'swab': case 'clean.swab': return `swab ${int(r.n ?? (r.spot ?? 0) + 1)} taken`;
+    case 'booking': case 'phone.bookCatch': case 'phone.bookChicks': return r.booked ? `booked${r.bookedDay != null ? `: chicks on day ${r.bookedDay}` : ''}` : `not booked: ${r.reason ?? ''}`;
     case 'dead': case 'dead.count': return `${int(r.n)} dead counted at the bin`;
     case 'weigh': case 'sample.weigh': return `bird ${int(r.weightG)} g`;
     case 'box': case 'sample.box': return `box ${two(r.weightKg)} kg gross, box ${two(r.boxKg)} kg`;
@@ -108,8 +132,8 @@ export function readingText(kind, v) {
     case 'house.temp': return `house ${one(r.houseC ?? r.tempC)} °C`;
     case 'setting': return settingText(v);
     case 'tip': case 'chicks.tip': return `${int(r.placed)} chicks out on the litter${r.deadInBoxes ? `, ${int(r.deadInBoxes)} dead in the boxes` : ''}`;
-    case 'cull': case 'chicks.cull': return `${int(r.n)} culled${r.reason === 'grading' ? ' at the chick table' : r.reason === 'sick' ? ' (sick bird)' : ''}`;
-    case 'order': case 'feed.order': return r.arriveDay != null ? `feed ordered, arrives day ${r.arriveDay} ${hhmm(r.arriveHour ?? 9)}` : 'feed ordered';
+    case 'cull': case 'chicks.cull': return `${int(r.n)} culled${r.reason === 'grading' ? ' at the chick table' : r.reason === 'sick' ? ' (sick bird)' : r.reason === 'lame' ? ' (lame bird)' : ''}`;
+    case 'order': case 'feed.order': return r.arriveDay != null ? `${r.type ? `${r.type} ` : ''}feed ordered${r.kg != null ? ` (${int(r.kg)} kg)` : ''}, arrives day ${r.arriveDay} ${hhmm(r.arriveHour ?? 9)}` : 'feed ordered';
     case 'grade': case 'sample.grade': return `chick ${int((r.i ?? 0) + 1)}: rights itself in ${one(r.reflexSec)} s, navel ${r.navel ?? '—'}, hocks ${r.hocks ?? '—'}`;
     case 'grade.sheet': case 'grade.submit': {
       const s = r.sheet || {};

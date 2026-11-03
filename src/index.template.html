@@ -824,14 +824,25 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .summary .bigs--4 .big-v { font-size: 30px; }
 
 /* skill tree: every branch a button; the picked one shows its milestones */
-.branch--pick { display: block; width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.branch--pick { display: block; width: 100%; padding: 7px 10px 8px; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.tree-case .tree-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.branch--pick .badge { width: 40px; height: 40px; }
+.branch--pick .branch-top h3 { font-size: 12.5px; }
+.branch--pick .branch-pts { margin: 4px 0 2px; }
+.branch--pick .branch-pts b { font-size: 18px; }
+.branch--pick .pbar { margin-bottom: 14px; }
+.branch--pick .branch-later--unlock { margin-top: 0; font-size: 11.5px; }
 .branch--pick:hover { border-color: rgba(242, 140, 40, 0.75); }
 .branch--pick.is-picked { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .tree-miles--one { grid-template-columns: minmax(0, 1fr); }
 .tree-miles--one .miles { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
 .mile-level { color: var(--ink-faint); }
+@media (max-width: 699px) {
+  .tree-case .tree-grid { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 860px) {
   .title-card { grid-template-columns: minmax(0, 1fr); }
+  .tree-case .tree-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tree-miles--one .miles { grid-template-columns: minmax(0, 1fr); }
 }
 

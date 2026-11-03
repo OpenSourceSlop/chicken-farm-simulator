@@ -1,16 +1,20 @@
 // The farmer's notebook (N): every reading as he took it, by day, newest day first, with his look
 // notes. The same readings the office book lists. The clock stops while it is open.
-// Owner: package "level".
+// Owner: package "run" (Phase 2: "level").
 import { h, button, uniqueId, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
 import { hhmm, readingText, placeWords } from './ui-format.js';
+import { dayLabel } from './content.js';
 
 const KIND_LABEL = {
   'water.meter': 'Water meter', 'feed.meter': 'Feed meter', 'feed.silo': 'Silo', 'water.flow': 'Flow test', 'water.flowtest': 'Flow test',
   'water.height': 'Nipples', 'floor.temp': 'Floor', 'floor.probe': 'Floor', litter: 'Litter', 'litter.squeeze': 'Litter', lux: 'Light',
   dead: 'Dead birds', 'vent.temp': 'Vent', crop: 'Crop', grade: 'Grading', box: 'Box scale', weigh: 'Weighing', 'house.temp': 'House',
   look: 'Look', filter: 'Filter', controller: 'Controller', text: 'Note', setting: 'Set', 'grade.sheet': 'Grading', cull: 'Cull', tip: 'Chicks out', order: 'Feed order',
+  // Phase 3 readings
+  'light.lux': 'Light', air: 'Air', 'air.probe': 'Air', bird: 'Bird', 'sample.bird': 'Bird', fans: 'Fan panel', 'fans.read': 'Fan panel', gas: 'Gas', 'gas.meter': 'Gas',
+  pad: 'Pad', 'pad.check': 'Pad', ticket: 'Ticket', 'load.ticket': 'Ticket', swab: 'Swab', 'clean.swab': 'Swab', letter: 'Letter', booking: 'Phone', 'phone.bookCatch': 'Phone', 'phone.bookChicks': 'Phone',
 };
 // where a reading was taken, in words (the brooding floor's six parts); a place off it is left out
 const whereText = (w) => { const s = Array.isArray(w) ? placeWords(w[0], w[1]) : ''; return s ? ` · ${s}` : ''; };
@@ -31,7 +35,7 @@ export function buildNotebookPanel(L) {
     const days = [...new Set(notes.map((n) => n.day))].sort((a, b) => b - a);
     if (!days.length) { body.replaceChildren(h('p', { class: 'nb-empty' }, 'Nothing written yet. Readings go in here as you take them: the meter, a flow test, the floor thermometer (T), a handful of litter (Q).')); return; }
     body.replaceChildren(...days.map((d) => h('section', { class: 'nb-day' },
-      h('h3', null, d < 0 ? 'Prep day' : `Day ${fmt0(d)}`),
+      h('h3', null, dayLabel(d)),
       h('ul', null, notes.filter((n) => n.day === d).slice().reverse().map((n) => h('li', { class: `nb-line nb-line--${n.kind.replace('.', '-')}` },
         h('span', { class: 'nb-t' }, hhmm(n.hour)), h('span', { class: 'nb-k' }, KIND_LABEL[n.kind] || n.kind), h('span', { class: 'nb-v' }, readingText(n.kind, n.value), whereText(n.where))))))));
   }

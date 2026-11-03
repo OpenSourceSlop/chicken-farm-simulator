@@ -642,6 +642,8 @@ export function createLevel(ctx, deps = {}) {
       prevDay = env.day;
       enterMode('resume');
       engine.tick();
+      // a level saved at its end (a run's level-end save) shows its result again, it does not play on
+      if (lv.ended) end(lv.ended);
       return true;
     },
     continueSave() { const d = save?.load?.(); return d ? level.resume(d) : false; },
@@ -739,7 +741,7 @@ export function createLevel(ctx, deps = {}) {
     startCounts,
     serialize() {
       return { v: 1, mode: level.mode, seed, levelId: def.id, inRun, jobs: engine.serialize(), fired: [...fired], points, weighs,
-        signed7: signedEnd, signedEnd, fast, failAt, ownStart, ownScale, startAt, reached: [...reached],
+        signed7: signedEnd, signedEnd, fast, failAt, ownStart, ownScale, startAt, reached: [...reached], ended: ended ? ended.reason : null,
         ...(inRun && runApi ? { run: runApi.serialize() } : {}) };
     },
     saveBlob() {
