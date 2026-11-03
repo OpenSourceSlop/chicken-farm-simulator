@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { HOUSE, HOUSE_BOUNDS, SPOTS, FEEDER_LINES_Z, DRINKER_LINES_Z } from './config.js';
 import { Batch, makeMaterials, smooth, clamp01 } from './house-kit.js';
 import { buildFloor, buildWalls, buildFrame, H, T } from './house-shell.js';
+import { buildRoof, withDither, withChordFade } from './house-roof.js';
 import { buildDoor, buildApron, houseSign } from './house-door.js';
 import { buildPad } from './house-pad.js';
 import { buildFans, FAN_Z } from './house-fans.js';
@@ -24,25 +25,34 @@ export function buildHouse(ctx) {
   const mats = makeMaterials();
   const stat = new Batch();      // static, single-sided, casts shadows
   const statDS = new Batch();    // static, double-sided (open cones)
-  const roof = new Batch();      // trusses and ridge: no shadows, fade when the camera comes close
+  const chords = new Batch();    // truss tie beams: no shadows, cleared out of the camera's sight line
+  const rafters = new Batch();   // rafters, webs, ridge: shown with the roof only
+  const porch = new Batch();     // door portal, leaves and canopy: fade while the farmer is at the door
   const kit = { group, mats, stat, statDS };
 
   group.add(buildFloor());
-  const walls = buildWalls(stat, mats, HOUSE.door);
+  const walls = buildWalls(stat, mats, HOUSE.door, (north, south) => buildFrame(stat, chords, rafters, { [-1]: north, [1]: south }));
   for (const w of walls) group.add(w.group);
   walls[1].group.add(houseSign());
-  buildFrame(stat, roof);
-  buildDoor(stat);
+  buildDoor(stat, porch);
   buildApron(stat);
 
   const parts = [buildPad, buildFans, buildFeeders, buildDrinkers, buildBrooders, buildFittings].map((make) => make(kit));
 
   group.add(stat.mesh(mats.vc));
   group.add(statDS.mesh(mats.vcDS, { receive: false }));
-  const roofMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true });
-  const roofMesh = roof.mesh(roofMat, { cast: false, receive: false });
-  roofMesh.renderOrder = 3;
-  group.add(roofMesh);
+  const chordMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  withChordFade(chordMat, 'house-chords');
+  group.add(chords.mesh(chordMat, { cast: false, receive: false }));
+  const rafterMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const rafterFade = withDither(rafterMat, 'house-rafters');
+  const rafterMesh = rafters.mesh(rafterMat, { cast: false, receive: false });
+  group.add(rafterMesh);
+  const porchMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const porchFade = withDither(porchMat, 'house-porch');
+  const porchMesh = porch.mesh(porchMat);
+  group.add(porchMesh);
+  const roof = buildRoof(group);
 
   // Walls as boxes; the 1.8 m door gap in the south wall stays open.
   const d = HOUSE.door;
@@ -64,17 +74,29 @@ export function buildHouse(ctx) {
 
   // Wall cutaway: a side wall slides down to the stub when the farmer is inside or within ~6 m of
   // the house and the camera (or the farmer) is on its outer side. End walls (pad, fans) stay up.
+  // The roof (and the rafters under it) dissolves between 8 and 6 m, before the walls drop. The
+  // door portal and canopy fade while the farmer is at the door or inside, seen from the south.
+  let roofK = -1, porchK = 1;
   function cutaway(dt, view) {
     const cam = view.camera.position, p = view.playerPos;
     const dx = Math.max(xMin - p.x, 0, p.x - xMax), dz = Math.max(zMin - p.z, 0, p.z - zMax);
-    const near = view.playerInside || Math.hypot(dx, dz) < 6;
+    const dist = view.playerInside ? 0 : Math.hypot(dx, dz);
+    const near = view.playerInside || dist < 6;
     for (const w of walls) {
       const drop = near && ((cam.z - w.z) * w.n > 0.05 || (p.z - w.z) * w.n > 0.05);
       w.h = smooth(w.h, drop ? HOUSE.stubHeight : H, 7, dt);
       w.group.position.y = w.h - H;
     }
-    // trusses turn see-through when the camera comes down close to them
-    roofMat.opacity = 0.22 + 0.78 * clamp01((cam.y - 5.5) / 5);
+    const roofT = clamp01((dist - 6) / 2);
+    roofK = roofK < 0 || dt <= 0 ? roofT : smooth(roofK, roofT, 5, dt);
+    roof.setFade(roofK);
+    rafterFade.value = roofK;
+    rafterMesh.visible = roofK > 0.01;
+    const atDoor = Math.hypot(p.x - HOUSE.door.x, p.z - zMax) < 3.5;
+    const porchT = cam.z > zMax + 0.5 && (view.playerInside || atDoor) ? 0 : 1;
+    porchK = dt <= 0 ? porchT : smooth(porchK, porchT, 6, dt);
+    porchFade.value = porchK;
+    porchMesh.visible = porchK > 0.01;
   }
 
   return {

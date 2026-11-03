@@ -134,6 +134,7 @@ export function createFlock(ctx, { house } = {}) {
     env = env || ctx.env;
     applyDay(env, false);
     S.lightsOn = env.lightsOn !== false;
+    uniforms.uBrood.value = 0.55 * (env.heaterLevel || 0); // the brooder pools light the birds in them
     if (field.refresh(env, dt) === 2) {
       // the climate jumped (heaters, setpoint, fans, test tools): everyone reconsiders soon
       for (let i = 0; i < n; i++) { S.thinkT[i] = Math.min(S.thinkT[i], S.rand() * 0.4); S.actT[i] = Math.min(S.actT[i], S.rand() * 1.2); }

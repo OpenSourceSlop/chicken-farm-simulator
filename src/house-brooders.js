@@ -10,6 +10,10 @@ import { TRUSS_Y, T } from './house-shell.js';
 const { xMin, zMin, zMax } = HOUSE_BOUNDS;
 const HH = HEATER_HEIGHT;
 const RIM_R = 0.46;
+// After brooding the farmer winches the brooders up out of the broilers' way: canopies and burners
+// rise LIFT m, the chains and gas hoses shorten toward the truss.
+const LIFT = 0.62;
+const HANG_Y = TRUSS_Y - 0.07;   // top anchor of the chains
 const GAS = 0xe2b33c, STEEL = 0x8f989f, CHAIN = 0x5d646a, HOSE = 0x2e2b28;
 
 function glowTexture() {
@@ -39,6 +43,9 @@ export function buildBrooders(kit) {
   ], 16);
   const rib = new THREE.TorusGeometry(0.3, 0.012, 4, 16);
   const burners = new Batch();
+  const brood = new Batch();   // canopies and valve housings: ride up when winched
+  const hang = new Batch();    // chains and gas hoses, built relative to HANG_Y: shorten when winched
+  const toHang = new THREE.Matrix4().makeTranslation(0, -HANG_Y, 0);
   const glowGeos = [];
   const xs = [...new Set(HEATERS.map((h) => h.x))];
   const xEnd = Math.max(...xs) + 1.3;
@@ -61,21 +68,21 @@ export function buildBrooders(kit) {
 
   for (const h of HEATERS) {
     const s = Math.sign(h.z);
-    stat.add(canopy, COLORS.heater, mat(h.x, HH, h.z));
-    stat.add(rib, 0x7f888e, mat(h.x, HH + 0.112, h.z, Math.PI / 2, 0, 0));
-    stat.cyl(0.075, 0.1, h.x, HH + 0.29, h.z, 0x6f787f, 8);                     // valve housing
-    stat.box(0.05, 0.05, 0.08, h.x + 0.08, HH + 0.3, h.z, 0xb08d3c);
-    stat.add(new THREE.TorusGeometry(0.03, 0.008, 4, 8), CHAIN, mat(h.x, HH + 0.37, h.z));
-    addChain(stat, h.x, h.z, HH + 0.38, TRUSS_Y - 0.07);
+    brood.add(canopy, COLORS.heater, mat(h.x, HH, h.z));
+    brood.add(rib, 0x7f888e, mat(h.x, HH + 0.112, h.z, Math.PI / 2, 0, 0));
+    brood.cyl(0.075, 0.1, h.x, HH + 0.29, h.z, 0x6f787f, 8);                     // valve housing
+    brood.box(0.05, 0.05, 0.08, h.x + 0.08, HH + 0.3, h.z, 0xb08d3c);
+    brood.add(new THREE.TorusGeometry(0.03, 0.008, 4, 8), CHAIN, mat(h.x, HH + 0.37, h.z));
+    addChain(hang, h.x, h.z, HH + 0.38 - HANG_Y, 0);
     // gas hose: from a tap on the gas line, sagging down to the valve housing
     const zp = h.z - s * 0.16;
     const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(h.x + 0.3, TRUSS_Y - 0.2, zp),
-      new THREE.Vector3(h.x + 0.42, TRUSS_Y - 0.55, zp + s * 0.03),
-      new THREE.Vector3(h.x + 0.32, HH + 0.62, h.z - s * 0.05),
-      new THREE.Vector3(h.x + 0.1, HH + 0.32, h.z),
+      new THREE.Vector3(h.x + 0.3, TRUSS_Y - 0.2 - HANG_Y, zp),
+      new THREE.Vector3(h.x + 0.42, TRUSS_Y - 0.55 - HANG_Y, zp + s * 0.03),
+      new THREE.Vector3(h.x + 0.32, HH + 0.62 - HANG_Y, h.z - s * 0.05),
+      new THREE.Vector3(h.x + 0.1, HH + 0.32 - HANG_Y, h.z),
     ]);
-    stat.add(new THREE.TubeGeometry(curve, 14, 0.011, 5), HOSE);
+    hang.add(new THREE.TubeGeometry(curve, 14, 0.011, 5), HOSE);
     stat.box(0.05, 0.05, 0.05, h.x + 0.3, TRUSS_Y - 0.19, zp, 0xb08d3c);
     // ceramic burner under the canopy, with a hot rim
     burners.cyl(0.2, 0.05, h.x, HH + 0.07, h.z, 0xffffff, 16);
@@ -87,10 +94,19 @@ export function buildBrooders(kit) {
   }
 
   const burnerMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, color: 0x6a4030, emissive: COLORS.heaterGlow, emissiveIntensity: 0 });
-  group.add(burners.mesh(burnerMat, { cast: false, receive: false }));
+  const lift = new THREE.Group();          // moves up by LIFT * winch
+  lift.add(brood.mesh(mats.vc, { cast: false }), burners.mesh(burnerMat, { cast: false, receive: false })); // in the roof shade: no shadows
+  group.add(lift);
+  const hangGroup = new THREE.Group();     // origin at HANG_Y; y scale shortens chains and hoses
+  hangGroup.position.y = HANG_Y;
+  hangGroup.add(hang.mesh(mats.vc, { cast: false }));
+  group.add(hangGroup);
+  const chainLen = HANG_Y - (HH + 0.38);
 
   const glowMat = new THREE.MeshBasicMaterial({
-    map: glowTexture(), color: COLORS.heaterGlow, transparent: true, opacity: 0,
+    // redder and weaker than the burner colour: a warm pool that tints the litter without washing
+    // the chicks in it out to the litter's brightness
+    map: glowTexture(), color: 0xff5a14, transparent: true, opacity: 0,
     blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
   });
   const glow = new THREE.Mesh(mergeGeometries(glowGeos), glowMat);
@@ -108,7 +124,7 @@ export function buildBrooders(kit) {
   }
   cg.computeVertexNormals();
   const curtainMat = new THREE.MeshLambertMaterial({
-    color: 0xe4eef3, emissive: 0x67737a, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false,
+    color: 0xe4eef3, emissive: 0x67737a, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true,
   });
   const curtain = new THREE.Group();
   const sheet = new THREE.Mesh(cg, curtainMat);
@@ -121,13 +137,18 @@ export function buildBrooders(kit) {
   curtain.renderOrder = 2;
   group.add(curtain);
 
-  let level = 0, curtainK = 1;
+  let level = 0, curtainK = 1, winch = -1;
   return {
     update(dt, env) {
+      // winched up once brooding is over (same day test as the curtain)
+      const wT = env.broodCurtain ? 0 : 1;
+      winch = winch < 0 || dt <= 0 ? wT : smooth(winch, wT, 1.5, dt);
+      lift.position.y = LIFT * winch;
+      hangGroup.scale.y = Math.max(0.05, (chainLen - LIFT * winch) / chainLen);
       level = env.heaterLevel;
       burnerMat.emissiveIntensity = 2.2 * level;
       glow.visible = level > 0.01;
-      glowMat.opacity = 0.42 * level;
+      glowMat.opacity = 0.3 * level;
       curtainK = smooth(curtainK, env.broodCurtain ? 1 : 0, 2.5, dt);
       curtain.visible = curtainK > 0.01;
       curtainMat.opacity = 0.5 * curtainK;

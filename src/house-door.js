@@ -12,16 +12,18 @@ function part(b, M, w, h, d, x, y, z, color) {
   b.add(unitBox(), color, M.clone().multiply(mat(x, y, z, 0, 0, 0, w, h, d)));
 }
 
-export function buildDoor(stat) {
+// The portal, door leaves and canopy go into `porch` (its own mesh, faded while the farmer is at
+// the door or inside with the camera on the south side); threshold and foot dip into `stat`.
+export function buildDoor(stat, porch = stat) {
   const d = HOUSE.door;
   const x0 = d.x - d.width / 2, x1 = d.x + d.width / 2;
   const zc = zMax + T / 2;
   const doorH = 2.05;
   // portal: posts, header panel and lintel stay standing when the side wall slides down
-  for (const px of [x0 - 0.05, x1 + 0.05]) stat.box(0.1, H, T + 0.04, px, H / 2, zc, STEEL_EDGE);
-  stat.box(x1 - x0, H - doorH, T, d.x, (H + doorH) / 2, zc, COLORS.wallWhite);
-  stat.box(x1 - x0 + 0.2, 0.08, T + 0.04, d.x, doorH + 0.04, zc, STEEL_EDGE);
-  stat.box(x1 - x0 + 0.2, 0.06, T + 0.04, d.x, H - 0.03, zc, 0xb5bcc2);
+  for (const px of [x0 - 0.05, x1 + 0.05]) porch.box(0.1, H, T + 0.04, px, H / 2, zc, STEEL_EDGE);
+  porch.box(x1 - x0, H - doorH, T, d.x, (H + doorH) / 2, zc, COLORS.wallWhite);
+  porch.box(x1 - x0 + 0.2, 0.08, T + 0.04, d.x, doorH + 0.04, zc, STEEL_EDGE);
+  porch.box(x1 - x0 + 0.2, 0.06, T + 0.04, d.x, H - 0.03, zc, 0xb5bcc2);
   stat.box(x1 - x0, 0.05, T + 0.1, d.x, 0.025, zc, COLORS.concrete); // threshold
 
   // two leaves swung outward about 100 degrees
@@ -33,14 +35,14 @@ export function buildDoor(stat) {
     const ry = Math.atan2(-dirZ, dirX);
     const M = mat(hx, 0, zMax + T + 0.03, 0, ry, 0);
     const w = d.width / 2 - 0.02;
-    part(stat, M, w, doorH - 0.04, 0.045, w / 2, doorH / 2, 0, STEEL);
-    part(stat, M, w, 0.06, 0.06, w / 2, doorH - 0.05, 0, STEEL_EDGE);
-    part(stat, M, w, 0.06, 0.06, w / 2, 0.06, 0, STEEL_EDGE);
-    part(stat, M, 0.06, doorH - 0.04, 0.06, 0.03, doorH / 2, 0, STEEL_EDGE);
-    part(stat, M, 0.06, doorH - 0.04, 0.06, w - 0.03, doorH / 2, 0, STEEL_EDGE);
-    part(stat, M, w - 0.12, 0.3, 0.05, w / 2, 0.3, 0, 0xa9b0b5);          // kick plate
-    part(stat, M, w * 0.5, 0.42, 0.055, w / 2, 1.55, 0, 0x5c7480);       // wired glass window
-    part(stat, M, 0.03, 0.12, 0.08, w - 0.1, 1.0, 0, 0x3c4246);          // handle
+    part(porch, M, w, doorH - 0.04, 0.045, w / 2, doorH / 2, 0, STEEL);
+    part(porch, M, w, 0.06, 0.06, w / 2, doorH - 0.05, 0, STEEL_EDGE);
+    part(porch, M, w, 0.06, 0.06, w / 2, 0.06, 0, STEEL_EDGE);
+    part(porch, M, 0.06, doorH - 0.04, 0.06, 0.03, doorH / 2, 0, STEEL_EDGE);
+    part(porch, M, 0.06, doorH - 0.04, 0.06, w - 0.03, doorH / 2, 0, STEEL_EDGE);
+    part(porch, M, w - 0.12, 0.3, 0.05, w / 2, 0.3, 0, 0xa9b0b5);          // kick plate
+    part(porch, M, w * 0.5, 0.42, 0.055, w / 2, 1.55, 0, 0x5c7480);       // wired glass window
+    part(porch, M, 0.03, 0.12, 0.08, w - 0.1, 1.0, 0, 0x3c4246);          // handle
   }
 
   // canopy over the door on two posts
@@ -49,15 +51,15 @@ export function buildDoor(stat) {
   const slope = Math.atan2(yBack - yFront, cz1 - cz0);
   const CM = mat(d.x, (yBack + yFront) / 2, (cz0 + cz1) / 2, slope, 0, 0);
   const len = Math.hypot(cz1 - cz0, yBack - yFront);
-  part(stat, CM, cw, 0.035, len, 0, 0, 0, COLORS.roofBlue);
-  for (let x = -cw / 2 + 0.09; x < cw / 2; x += 0.18) part(stat, CM, 0.05, 0.03, len, x, 0.03, 0, 0x4c7cab);
-  part(stat, CM, cw + 0.04, 0.12, 0.05, 0, -0.03, len / 2, 0x2f5578);   // fascia
+  part(porch, CM, cw, 0.035, len, 0, 0, 0, COLORS.roofBlue);
+  for (let x = -cw / 2 + 0.09; x < cw / 2; x += 0.18) part(porch, CM, 0.05, 0.03, len, x, 0.03, 0, 0x4c7cab);
+  part(porch, CM, cw + 0.04, 0.12, 0.05, 0, -0.03, len / 2, 0x2f5578);   // fascia
   for (const px of [d.x - cw / 2 + 0.1, d.x + cw / 2 - 0.1]) {
-    stat.box(0.08, yFront, 0.08, px, yFront / 2, cz1 - 0.08, STEEL_EDGE);
+    porch.box(0.08, yFront, 0.08, px, yFront / 2, cz1 - 0.08, STEEL_EDGE);
     stat.box(0.2, 0.03, 0.2, px, 0.05, cz1 - 0.08, 0x7c858c);
-    stat.bar([px, yFront - 0.08, cz1 - 0.1], [px, yBack - 0.08, cz0 + 0.05], 0.05, STEEL_EDGE);
+    porch.bar([px, yFront - 0.08, cz1 - 0.1], [px, yBack - 0.08, cz0 + 0.05], 0.05, STEEL_EDGE);
   }
-  for (const s of [-1, 1]) stat.bar([d.x + s * (cw / 2 - 0.1), yBack - 0.4, zc + 0.08], [d.x + s * (cw / 2 - 0.1), yBack - 0.06, cz0 + 0.5], 0.04, STEEL_EDGE);
+  for (const s of [-1, 1]) porch.bar([d.x + s * (cw / 2 - 0.1), yBack - 0.4, zc + 0.08], [d.x + s * (cw / 2 - 0.1), yBack - 0.06, cz0 + 0.5], 0.04, STEEL_EDGE);
 
   // foot-dip tray with disinfectant
   const fd = FARM.footDipHouse;

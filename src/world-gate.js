@@ -95,7 +95,7 @@ export function buildFence(group, mats, colliders) {
 
   group.add(flat.mesh(mats.flat, { name: 'fence-posts' }));
   group.add(metal.mesh(mats.metal, { name: 'fence-metal' }));
-  const meshMat = new THREE.MeshLambertMaterial({ map: meshTexture(), color: 0xc4ccd2, transparent: true, side: THREE.DoubleSide, depthWrite: false, alphaTest: 0.02 });
+  const meshMat = new THREE.MeshLambertMaterial({ map: meshTexture(), color: 0xc4ccd2, transparent: true, side: THREE.DoubleSide, depthWrite: false, alphaTest: 0.02, forceSinglePass: true });
   const panel = mesh.mesh(meshMat, { cast: false, receive: false, name: 'fence-mesh' });
   panel.renderOrder = 2;
   group.add(panel);

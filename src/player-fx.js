@@ -5,7 +5,7 @@ const RING_LIFE = 1.6;
 
 export function createTargetMarker(scene) {
   const common = {
-    transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide,
+    transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
   };
   const light = new THREE.MeshBasicMaterial({ color: 0xfffbea, ...common });

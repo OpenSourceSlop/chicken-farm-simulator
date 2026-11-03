@@ -48,7 +48,7 @@ export function createUI(ctx, { player, flock, interactables = [] }) {
   root.appendChild(h('div', { class: 'hud-bl' }, help.card, hud.timebar));
 
   // bottom right: Phase 1 test tools
-  const tools = createTestTools(env, { flock, onReset: reset });
+  const tools = createTestTools(env, { flock, onReset: reset, perf: ctx.perf });
   const br = h('div', { class: 'hud-br' }, tools.panel, tools.toggle);
   root.appendChild(br);
   // The open tools take the height left under the jobs card, and scroll inside it if they must.

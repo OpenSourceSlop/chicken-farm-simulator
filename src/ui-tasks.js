@@ -98,7 +98,7 @@ export function createTasks(parent, ctx, { player, root, avoid }) {
   gem.renderOrder = 20;
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.5, 0.68, 40),
-    new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true }),
   );
   ring.rotation.x = -Math.PI / 2;
   ring.renderOrder = 19;

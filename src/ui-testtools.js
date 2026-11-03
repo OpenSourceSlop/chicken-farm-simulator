@@ -10,7 +10,8 @@ function range(id, min, max, step) {
   return h('input', { type: 'range', id, min, max, step });
 }
 
-export function createTestTools(env, { flock, onReset }) {
+// perf (optional): { fps, pixelRatio, shadowMap } kept up to date by main.js
+export function createTestTools(env, { flock, onReset, perf }) {
   const regionId = uniqueId('tools');
   const toggle = button({ class: 'btn tools-toggle', 'aria-expanded': 'false', 'aria-controls': regionId });
   toggle.innerHTML = `${ICONS.sliders}<span>Test tools – Phase 1 only</span><span class="chev">${ICONS.chevron}</span>`;
@@ -48,7 +49,7 @@ export function createTestTools(env, { flock, onReset }) {
 
   // readouts
   const rd = {
-    target: h('dd', { class: 'rd-target' }), huddle: h('dd'), comfy: h('dd'), pant: h('dd'), spread: h('dd'),
+    target: h('dd', { class: 'rd-target' }), huddle: h('dd'), comfy: h('dd'), pant: h('dd'), spread: h('dd'), perf: h('dd'),
   };
   const targetLabel = h('dt', { class: 'rd-wide' });
   const readouts = h('dl', { class: 'readouts' },
@@ -56,7 +57,8 @@ export function createTestTools(env, { flock, onReset }) {
     h('dt', null, 'Huddling'), rd.huddle,
     h('dt', null, 'Comfortable'), rd.comfy,
     h('dt', null, 'Panting'), rd.pant,
-    h('dt', { title: '0 = all in one clump, 1 = evenly spread over the floor' }, 'Spread index'), rd.spread);
+    h('dt', { title: '0 = all in one clump, 1 = evenly spread over the floor' }, 'Spread index'), rd.spread,
+    h('dt', { title: 'Frames per second, and the pixel ratio the game renders at (it lowers it on a slow graphics card)' }, 'Frame rate'), rd.perf);
 
   const status = h('span', { class: 'tools-status', role: 'status' });
   const resetBtn = button({ class: 'btn' }, 'Reset farm');
@@ -109,6 +111,7 @@ export function createTestTools(env, { flock, onReset }) {
     setText(rd.comfy, pct(m.fracComfortable));
     setText(rd.pant, pct(m.fracPanting));
     setText(rd.spread, (m.spreadIndex ?? 0).toFixed(2));
+    if (perf) setText(rd.perf, `${Math.round(perf.fps)} fps · ${perf.pixelRatio.toFixed(2).replace(/0$/, '')}×${perf.shadowMap < 2048 ? ' · low shadows' : ''}`);
   }
 
   return {

@@ -17,11 +17,11 @@ function fluteTexture() {
   const t = canvasTexture(128, 128, (g, w, h) => {
     g.fillStyle = 'rgb(212,212,212)';
     g.fillRect(0, 0, w, h);
-    const step = 16;
-    g.lineWidth = 3;
+    const step = 32; // coarse enough that the diamonds survive mipmapping at the default zoom
+    g.lineWidth = 5;
     g.strokeStyle = 'rgb(255,255,255)';
     for (let k = -h; k < w + h; k += step) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k + h, h); g.stroke(); }
-    g.lineWidth = 2;
+    g.lineWidth = 4;
     g.strokeStyle = 'rgb(150,142,132)';
     for (let k = -h; k < w + h; k += step) { g.beginPath(); g.moveTo(k, h); g.lineTo(k + h, 0); g.stroke(); }
     g.fillStyle = 'rgb(110,96,82)';
@@ -29,6 +29,7 @@ function fluteTexture() {
     g.fillRect(w - 1, 0, 1, h);
   }, { repeat: [20, PAD.height / 0.59] });
   t.colorSpace = THREE.NoColorSpace;
+  t.anisotropy = 16; // three clamps this to what the GPU supports; keeps the lattice at grazing angles
   return t;
 }
 
@@ -58,8 +59,9 @@ export function buildPad(kit) {
   const galv = 0xa9b1b7, pvc = 0xd8dcdf, bluePipe = 0x3a78b5;
 
   // pad body
-  const dry = new THREE.Color(COLORS.pad), wetC = new THREE.Color(0x96652f);
-  const padMat = new THREE.MeshLambertMaterial({ color: dry.clone(), map: fluteTexture() });
+  // wet pad at most 0.75x the dry colour; a small emissive floor keeps the honeycomb warm in shade
+  const dry = new THREE.Color(COLORS.pad).lerp(new THREE.Color(0xe0b071), 0.3), wetC = dry.clone().multiplyScalar(0.75);
+  const padMat = new THREE.MeshLambertMaterial({ color: dry.clone(), map: fluteTexture(), emissive: dry.clone().multiplyScalar(0.08) });
   const pad = new THREE.Mesh(new THREE.BoxGeometry(PAD_T, PAD.height, Z1 - Z0), padMat);
   pad.position.set(xc, (y0 + y1) / 2, (Z0 + Z1) / 2);
   pad.castShadow = pad.receiveShadow = true;
@@ -117,6 +119,7 @@ export function buildPad(kit) {
     update(dt, env) {
       wet = smooth(wet, env.padOn ? 1 : 0, env.padOn ? 0.8 : 0.25, dt);
       padMat.color.copy(dry).lerp(wetC, wet);
+      padMat.emissive.copy(padMat.color).multiplyScalar(0.08);
       sheen.visible = wet > 0.02;
       gutterWater.visible = wet > 0.3;
       if (sheen.visible) {

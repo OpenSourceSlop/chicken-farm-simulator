@@ -2,7 +2,7 @@
 // curtain band that slides down for the camera cutaway), steel columns, eave beams, roof trusses.
 // Owner: house agent.
 import * as THREE from 'three';
-import { COLORS, HOUSE, HOUSE_BOUNDS, DRINKER_LINES_Z, HEATERS } from './config.js';
+import { COLORS, HOUSE, HOUSE_BOUNDS, DRINKER_LINES_Z, HEATERS, SPOTS } from './config.js';
 import { Batch, canvasTexture, rng } from './house-kit.js';
 
 const { xMin, xMax, zMin, zMax } = HOUSE_BOUNDS;
@@ -59,7 +59,8 @@ export function buildFloor() {
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const col = new Float32Array(pos.count * 3);
-  const base = new THREE.Color(COLORS.litter);
+  // a little darker than COLORS.litter: in the even roof shade the chicks must stand out on it
+  const base = new THREE.Color(COLORS.litter).multiplyScalar(0.88);
   const damp = new THREE.Color(0xb39058);
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
@@ -78,7 +79,7 @@ export function buildFloor() {
     // a little darker where litter packs along the walls
     const edge = Math.min(z - zMin, zMax - z, x - xMin, xMax - x);
     if (edge < 0.4) c.multiplyScalar(0.9 + (edge / 0.4) * 0.1);
-    col[i * 3] = c.r * 1.06; col[i * 3 + 1] = c.g * 1.06; col[i * 3 + 2] = c.b * 1.06;
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const mat = new THREE.MeshLambertMaterial({ map: huskTexture(), vertexColors: true });
@@ -104,9 +105,9 @@ function panelRun(b, x0, x1, zc) {
   b.box(w, 0.08, PANEL_T + 0.02, cx, H - 0.04, zc, 0xb5bcc2);
 }
 
-// Static parts (kick walls, columns, eave beams, trusses) go into `stat`; returns the two
-// sliding wall panels (north, south) for the cutaway.
-export function buildWalls(stat, mats, door) {
+// Static parts (kick walls) go into `stat`; returns the two sliding wall panels (north, south) for
+// the cutaway. frame(north, south) may add more parts that slide with each panel (see buildFrame).
+export function buildWalls(stat, mats, door, frame) {
   const kick = COLORS.wallLow;
   const dx0 = door.x - door.width / 2 - 0.1, dx1 = door.x + door.width / 2 + 0.1; // incl. door posts
   const zN = zMin - T / 2, zS = zMax + T / 2;
@@ -124,6 +125,7 @@ export function buildWalls(stat, mats, door) {
   const south = new Batch();
   panelRun(south, xMin, dx0, zS);
   panelRun(south, dx1, xMax, zS);
+  if (frame) frame(north, south);
   const mk = (b, z, n) => {
     const m = b.mesh(mats.vc);
     const g = new THREE.Group();
@@ -133,32 +135,40 @@ export function buildWalls(stat, mats, door) {
   return [mk(north, zMin, -1), mk(south, zMax, 1)];
 }
 
-// Steel frame: columns every 4 m on the inside of the side walls and eave beams go into `stat`;
-// gable trusses with Fink webs and the ridge line go into `roof` (drawn without shadows so they
-// never darken the birds; the roof sheets are left off so you can see inside).
-export function buildFrame(stat, roof) {
-  const cs = 0.12;
+// Steel frame. Columns every 4 m on the inside of the side walls: the base up to the stub stays in
+// `stat`, the rest and the eave beam ride on that side's sliding wall (side[-1] north, side[1]
+// south), so nothing tall is left standing on the camera side when the wall drops. The two
+// north-wall columns that carry the boards (SPOTS) stay whole. Gable trusses: the bottom chords
+// (tie beams, where the equipment hangs) go into `chords`; rafters, Fink webs and the ridge line
+// into `rafters`, which show only with the roof (both drawn without shadows).
+export function buildFrame(stat, chords, rafters, side) {
+  const cs = 0.12, stub = HOUSE.stubHeight;
+  const boardX = [SPOTS.signBrooder, SPOTS.controller].map((p) => (p.z < 0 ? -1 : 1) * 1000 + p.x);
   for (const x of FRAME_X) {
     const cx = Math.max(xMin + cs / 2, Math.min(xMax - cs / 2, x));
     for (const s of [-1, 1]) {
       const z = s * (zMax - cs / 2);
-      stat.box(cs, EAVE_Y, cs, cx, EAVE_Y / 2, z, SIDE_LIGHT);
+      if (boardX.some((k) => Math.abs(k - (s * 1000 + x)) < 0.5)) stat.box(cs, EAVE_Y, cs, cx, EAVE_Y / 2, z, SIDE_LIGHT);
+      else {
+        stat.box(cs, stub, cs, cx, stub / 2, z, SIDE_LIGHT);
+        side[s].box(cs, H - stub, cs, cx, (stub + H) / 2, z, SIDE_LIGHT);
+      }
       stat.box(0.2, 0.02, 0.2, cx, 0.03, z, 0x7c858c); // base plate
     }
   }
   for (const s of [-1, 1]) {
-    stat.box(xMax - xMin + 0.1, 0.1, 0.14, 0, H + 0.05, s * (zMax - 0.06), SIDE_LIGHT);
+    side[s].box(xMax - xMin + 0.1, 0.1, 0.14, 0, H + 0.05, s * (zMax - 0.06), SIDE_LIGHT);
   }
   const top = (z) => TRUSS_Y + (RIDGE_Y - TRUSS_Y) * (1 - Math.abs(z) / 6.05);
   const m = 0.04;
   for (const x of FRAME_X) {
     const tx = Math.max(xMin + 0.06, Math.min(xMax - 0.06, x));
-    roof.bar([tx, TRUSS_Y, -6.05], [tx, TRUSS_Y, 6.05], m, TRUSS);
+    chords.bar([tx, TRUSS_Y, -6.05], [tx, TRUSS_Y, 6.05], m, TRUSS);
     for (const s of [-1, 1]) {
-      roof.bar([tx, TRUSS_Y, s * 6.05], [tx, RIDGE_Y, 0], m, TRUSS);
-      roof.bar([tx, TRUSS_Y, s * 2.0], [tx, top(3.0), s * 3.0], m * 0.75, TRUSS);
-      roof.bar([tx, TRUSS_Y, s * 2.0], [tx, RIDGE_Y - 0.05, 0], m * 0.75, TRUSS);
+      rafters.bar([tx, TRUSS_Y, s * 6.05], [tx, RIDGE_Y, 0], m, TRUSS);
+      rafters.bar([tx, TRUSS_Y, s * 2.0], [tx, top(3.0), s * 3.0], m * 0.75, TRUSS);
+      rafters.bar([tx, TRUSS_Y, s * 2.0], [tx, RIDGE_Y - 0.05, 0], m * 0.75, TRUSS);
     }
   }
-  roof.bar([xMin, RIDGE_Y + 0.04, 0], [xMax, RIDGE_Y + 0.04, 0], 0.07, 0x87909a);
+  rafters.bar([xMin, RIDGE_Y + 0.04, 0], [xMax, RIDGE_Y + 0.04, 0], 0.07, 0x87909a);
 }

@@ -8,6 +8,7 @@
 // Lengths are in model units (bird length = 1); the instance matrix scales to metres.
 import * as THREE from 'three';
 import { PART_COUNT, PIVOTS } from './flock-geometry.js';
+import { HEATERS } from './config.js';
 
 const VERT_HEAD = /* glsl */`
 attribute vec3 aPos2;
@@ -79,6 +80,9 @@ vec3 birdPose(vec3 chickPos) {
 const COLOR_HEAD = /* glsl */`
 uniform vec3 uCol[${PART_COUNT}];
 varying vec3 vBirdColor;
+uniform vec2 uHeat[${HEATERS.length}];
+uniform float uBrood;
+varying float vBrood;
 `;
 
 const COLOR_CODE = /* glsl */`
@@ -90,6 +94,12 @@ const COLOR_CODE = /* glsl */`
   col *= aShade * (1.0 + 0.06 * tint * feather);
   col.b *= 1.0 + 0.3 * tint * feather * (1.0 - 0.8 * uMorph); // chicks vary in yellow, broilers stay white
   vBirdColor = col;
+  // warm light of a burning brooder on the birds under it (the litter gets the same pool, so a
+  // chick in the pool stays brighter than the litter around it)
+  vec2 bp = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
+  float g = 0.0;
+  for (int k = 0; k < ${HEATERS.length}; k++) { vec2 d = bp - uHeat[k]; g += exp(-dot(d, d) * 0.55); }
+  vBrood = uBrood * min(g, 1.0);
 }
 `;
 
@@ -101,6 +111,8 @@ export function createBirdUniforms() {
     uMorph: { value: 0 },
     uComb: { value: 0 },
     uGlow: { value: 0.22 },
+    uBrood: { value: 0 },  // brooder glow on the birds: env.heaterLevel times a strength (flock.js)
+    uHeat: { value: HEATERS.map((h) => new THREE.Vector2(h.x, h.z)) },
     uLegH: { value: c.legH },
     uHeadPivot: { value: v3(c.head) },
     uBeakHinge: { value: v3(c.beak) },
@@ -135,12 +147,12 @@ export function createBirdMaterials(uniforms) {
       .replace('#include <common>', `#include <common>\n${VERT_HEAD}\n${COLOR_HEAD}`)
       .replace('#include <begin_vertex>', `vec3 transformed = birdPose(position);\n${COLOR_CODE}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vBirdColor;\nuniform float uGlow;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vBirdColor;\nvarying float vBrood;\nuniform float uGlow;')
       .replace('#include <color_fragment>', '#include <color_fragment>\n\tdiffuseColor.rgb *= vBirdColor;')
       // a little self-light keeps small birds readable against the litter and in wall shadow
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * uGlow;');
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * (uGlow + vBrood * vec3(1.0, 0.5, 0.22));');
   };
-  material.customProgramCacheKey = () => 'flock-bird-lambert-3';
+  material.customProgramCacheKey = () => 'flock-bird-lambert-4';
 
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   depth.onBeforeCompile = (shader) => {
