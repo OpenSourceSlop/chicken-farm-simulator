@@ -16,6 +16,7 @@ export function personalSpace(S) {
     if (a === ACT.HUDDLE) r = S.rHuddle;
     else if (therm[i] === HOT) r = S.rHot;
     else if ((a === ACT.EAT || a === ACT.DRINK) && arrived[i]) r = 0.55 * S.rRight;
+    else if (!arrived[i] && a !== ACT.REST) r = 0.65 * S.rRight; // on the way somewhere: squeeze through
     else if (a === ACT.REST) r = 0.75 * S.rRight;
     r = (r > minR ? r : minR) * size[i];
     rad[i] = r;
@@ -108,7 +109,10 @@ export function steerAll(S, grid, dt, fctx) {
         const flee = base * si * (1.4 + 3.0 * k);
         dvx = dvx * (1 - k) + ux * flee; dvz = dvz * (1 - k) + uz * flee;
         scare[i] = 1.2;
-        if (k > 0.2 && (a !== ACT.WANDER || arrived[i])) {
+        // birds on their way somewhere just dodge round him; settled birds, and birds whose goal
+        // is right where he stands, get up and pick a spot out of his way
+        const gx2 = tx[i] - ffx, gz2 = tz[i] - ffz, goalIn = gx2 * gx2 + gz2 * gz2 < (R + 0.3) * (R + 0.3);
+        if (k > 0.2 && (arrived[i] || goalIn)) {
           if (th !== COLD && a !== ACT.PANT) { releaseRes(S, i); act[i] = ACT.WANDER; S.actT[i] = 4 + rand() * 4; }
           const r = R - d + 0.25 + rand() * 0.5, side = (rand() - 0.5) * 0.8;
           tx[i] = x + (ux - uz * side) * r; tz[i] = z + (uz + ux * side) * r;
@@ -144,7 +148,7 @@ export function steerAll(S, grid, dt, fctx) {
     if (want > 0.02) {
       const prog = (mvx * dvx + mvz * dvz) / (want * want * dt + 1e-9);
       if (prog < 0.35) stuck[i] += dt; else stuck[i] = Math.max(0, stuck[i] - dt * 2);
-      const lim = a === ACT.EAT || a === ACT.DRINK ? 1.0 : 1.2;
+      const lim = a === ACT.EAT || a === ACT.DRINK ? 1.0 : a === ACT.WANDER ? 2.5 : 1.2;
       if (stuck[i] > lim) {
         if (a === ACT.EAT || a === ACT.DRINK) { if (dT < 0.25 + 1.2 * L) arrived[i] = 1; }
         else if (a === ACT.HUDDLE) { if (dT < S.huddleR) arrived[i] = 1; } // else keep pushing in

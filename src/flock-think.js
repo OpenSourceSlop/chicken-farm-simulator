@@ -49,7 +49,7 @@ let bx = 0, bz = 0, bs = 0;
 // there is no heater.
 function warmScore(field, ctx, grid, cx, cz) {
   const crowd = grid.crowdLocal(cx, cz);
-  return -Math.abs(field.sample(cx, cz)) + 0.35 * (crowd < 3 ? crowd : 3) - farmerPenalty(ctx, cx, cz);
+  return -Math.abs(field.sample(cx, cz)) + 0.6 * (crowd < 3 ? crowd : 3) - farmerPenalty(ctx, cx, cz);
 }
 
 function tryWarm(S, field, ctx, cx, cz) {
@@ -65,7 +65,7 @@ function warmSpot(S, i, field, env, ctx, fresh) {
   const x = S.px[i], z = S.pz[i];
   const settled = !fresh && S.arrived[i];
   // bias to stay put, strong once settled in the huddle (no endless pushing to the middle)
-  bx = x; bz = z; bs = warmScore(field, ctx, ctx.grid, x, z) + (settled ? 1.0 : 0.3);
+  bx = x; bz = z; bs = warmScore(field, ctx, ctx.grid, x, z) + (settled ? 1.0 : 0.15);
   let keep = settled;
   if (!fresh && !S.arrived[i]) {
     // on the way: keep heading for the current target unless something is clearly better
@@ -144,7 +144,9 @@ function wanderSpot(S, i, field, ctx, grid, reach) {
     }
     cx = clampX(S, cx); cz = clampZ(S, cz);
     const c = Math.abs(field.sample(cx, cz));
-    const s = 2 * Math.max(0, c - 1.0) + 0.8 * grid.crowd(cx, cz) + farmerPenalty(ctx, cx, cz);
+    // near spots are judged by the crowd right there, far ones by how full that part of the house is
+    const crowd = k < 4 ? grid.crowd(cx, cz) : grid.slice(cx) - 0.1;
+    const s = 2 * Math.max(0, c - 1.0) + 0.8 * crowd + farmerPenalty(ctx, cx, cz);
     if (s < bs) { bs = s; bx = cx; bz = cz; }
   }
   setTarget(S, i, bx, bz);
