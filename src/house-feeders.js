@@ -4,7 +4,7 @@
 // outside the north wall to the hoppers. Owner: house agent.
 import * as THREE from 'three';
 import { COLORS, FEEDER_LINES_Z, LINE_X, FEEDER_PAN_SPACING, FARM, HOUSE_BOUNDS } from './config.js';
-import { Batch, mat, lathe, cone, table } from './house-kit.js';
+import { Batch, mat, lathe, cone, disc, table } from './house-kit.js';
 import { FRAME_X, TRUSS_Y, T } from './house-shell.js';
 
 const { zMin } = HOUSE_BOUNDS;
@@ -24,17 +24,17 @@ for (let x = LINE_X.start + 0.6; x <= LINE_X.end - 0.45; x += FEEDER_PAN_SPACING
 
 function addPan(b, x, z, ctrl = false) {
   const pan = COLORS.feederPan, grill = 0xc84a24;
-  const dish = lathe('pan', [[0, 0], [0.08, 0], [0.152, 0.012], [0.168, 0.046], [0.174, PAN_RIM], [0.162, PAN_RIM + 0.002], [0.152, 0.044], [0.07, 0.014], [0, 0.016]], 10);
+  const dish = lathe('pan', [[0, 0], [0.15, 0.01], [0.174, PAN_RIM], [0.156, 0.046], [0.06, 0.014], [0, 0.016]], 9);
   b.add(dish, pan, mat(x, 0, z));
-  b.cyl(0.146, 0.012, x, 0.036, z, FEED, 8);
-  b.add(cone(0.035, 0.075, 0.1, 6), pan, mat(x, 0.07, z));
+  b.add(disc(0.148, 9), FEED, mat(x, 0.04, z));
+  b.add(cone(0.035, 0.075, 0.1, 6, true), pan, mat(x, 0.08, z));
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2 + 0.2;
     const c = Math.cos(a), s = Math.sin(a);
-    b.bar([x + c * 0.045, 0.235, z + s * 0.045], [x + c * 0.163, PAN_RIM + 0.004, z + s * 0.163], 0.011, grill);
+    b.rod([x + c * 0.045, 0.235, z + s * 0.045], [x + c * 0.165, PAN_RIM + 0.004, z + s * 0.165], 0.008, grill, 3, true);
   }
-  b.cyl(0.052, 0.05, x, 0.245, z, pan, 6);
-  b.rod([x, 0.25, z], [x, AUG_Y, z], 0.03, 0xd2683f, 6);
+  b.add(cone(0.052, 0.052, 0.05, 6, true), pan, mat(x, 0.245, z));
+  b.rod([x, 0.25, z], [x, AUG_Y, z], 0.03, 0xd2683f, 5, true);
   b.box(0.09, 0.07, 0.09, x, AUG_Y, z, 0xc0c6ca);
   if (ctrl) b.box(0.12, 0.14, 0.1, x, AUG_Y + 0.12, z, 0x3d4a55);   // feed level sensor
 }
@@ -106,7 +106,7 @@ export function buildFeeders(kit) {
   stat.add(new THREE.CylinderGeometry(0.1, 0.1, 0.32, 10), MOTOR, mat(HOP_X, CROSS_Y, zLast + 0.55, Math.PI / 2, 0, 0));
   stat.box(0.2, 0.2, 0.14, HOP_X, CROSS_Y, zLast + 0.36, 0x9aa3a9);
   for (const z of FEEDER_LINES_Z) stat.cyl(0.07, 0.08, HOP_X, CROSS_Y - 0.08, z, 0x9aa3a9, 8);
-  stat.box(0.3, 0.3, 0.03, HOP_X, CROSS_Y, zMin - T - 0.02, 0x8f989f);                 // wall flashing
+  stat.add(new THREE.CylinderGeometry(0.07, 0.07, 0.08, 10), 0x8f989f, mat(HOP_X, CROSS_Y, zMin - T - 0.05, Math.PI / 2, 0, 0)); // pipe collar
   const silos = FARM.silos;
   const xs = silos.map((s) => s.x);
   const xFar = Math.max(...xs) + 0.25;

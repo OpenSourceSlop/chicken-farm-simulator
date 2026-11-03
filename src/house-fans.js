@@ -3,9 +3,33 @@
 // Blades spin up smoothly when the fan index < env.fansOn; shutters open with the air flow.
 // Owner: house agent.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { COLORS, FAN_COUNT, FAN_DIAMETER, HOUSE_BOUNDS } from './config.js';
-import { Batch, mat, smooth } from './house-kit.js';
+import { Batch, mat, smooth, canvasTexture, roundRect, FONT } from './house-kit.js';
 import { T, H } from './house-shell.js';
+
+// Number plates 1..FAN_COUNT above the fans on the inside of the end wall (one atlas, one mesh),
+// so "fans on: 3" can be matched to the fans that spin.
+function numberPlates(top) {
+  const cell = 96;
+  const tex = canvasTexture(cell * FAN_COUNT, cell, (g) => {
+    for (let i = 0; i < FAN_COUNT; i++) {
+      g.fillStyle = '#f3ecd8'; roundRect(g, i * cell + 4, 4, cell - 8, cell - 8, 12); g.fill();
+      g.strokeStyle = '#2f5d8a'; g.lineWidth = 6; roundRect(g, i * cell + 9, 9, cell - 18, cell - 18, 9); g.stroke();
+      g.fillStyle = '#2f5d8a'; g.font = `700 60px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(i + 1), i * cell + cell / 2, cell / 2 + 3);
+    }
+  });
+  const geos = FAN_Z.map((z, i) => {
+    const p = new THREE.PlaneGeometry(0.3, 0.3);
+    const uv = p.attributes.uv;
+    for (let k = 0; k < uv.count; k++) uv.setX(k, (i + uv.getX(k)) / FAN_COUNT);
+    p.rotateY(-Math.PI / 2);
+    p.translate(xMax - 0.005, (top + H) / 2, z);
+    return p;
+  });
+  return new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ map: tex }));
+}
 
 const { xMax, zMin, zMax } = HOUSE_BOUNDS;
 const R = FAN_DIAMETER / 2;                    // 0.635
@@ -89,13 +113,13 @@ export function buildFans(kit) {
   }
 
   // spinning rotors and swinging shutter slats (instanced: one draw call each)
-  const rotorMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const rotorMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
   const rotors = new THREE.InstancedMesh(rotorGeometry(), rotorMat, FAN_COUNT);
   rotors.castShadow = true;
   const slatGeo = new THREE.BoxGeometry(0.012, (BOX - 0.12) / SLATS + 0.02, BOX - 0.1);
   slatGeo.translate(0, -((BOX - 0.12) / SLATS + 0.02) / 2, 0);  // hinge at the top edge
   const slats = new THREE.InstancedMesh(slatGeo, new THREE.MeshLambertMaterial({ color: 0xdfe3e6 }), FAN_COUNT * SLATS);
-  group.add(rotors, slats);
+  group.add(rotors, slats, numberPlates(top));
 
   const speed = new Float32Array(FAN_COUNT), angle = new Float32Array(FAN_COUNT), open = new Float32Array(FAN_COUNT);
   for (let i = 0; i < FAN_COUNT; i++) angle[i] = i * 0.37;

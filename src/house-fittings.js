@@ -99,18 +99,18 @@ export function buildFittings(kit) {
   // LED light lines: wire under the trusses, drops, sockets; bulbs in one emissive mesh
   const bulbs = new Batch();
   for (const z of LIGHT_Z) {
-    stat.rod([xMin + 0.2, TRUSS_Y - 0.03, z], [xMax - 0.2, TRUSS_Y - 0.03, z], 0.006, 0x3a3f43, 4);
+    stat.rod([xMin + 0.2, TRUSS_Y - 0.03, z], [xMax - 0.2, TRUSS_Y - 0.03, z], 0.004, 0x5a6066, 4);
     for (let x = xMin + 2; x < xMax; x += 4) {
-      stat.rod([x, TRUSS_Y - 0.03, z], [x, BULB_Y + 0.07, z], 0.005, 0x3a3f43, 4);
+      stat.rod([x, TRUSS_Y - 0.03, z], [x, BULB_Y + 0.07, z], 0.004, 0x5a6066, 4);
       stat.cyl(0.024, 0.05, x, BULB_Y + 0.055, z, 0x2b2f33, 8);
       bulbs.add(new THREE.SphereGeometry(0.05, 8, 6), 0xffffff, mat(x, BULB_Y, z, 0, 0, 0, 1, 1.15, 1));
     }
   }
-  const bulbMat = new THREE.MeshLambertMaterial({ vertexColors: true, color: 0xd9d6cf, emissive: 0xfff0cc, emissiveIntensity: 0 });
+  const bulbMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, color: 0xd9d6cf, emissive: 0xfff0cc, emissiveIntensity: 0 });
   group.add(bulbs.mesh(bulbMat, { cast: false, receive: false }));
   const lamps = [-16, 0, 16].map((x) => {
-    const l = new THREE.PointLight(0xffd29a, 0, 20, 1.5);
-    l.position.set(x, 2.15, 0);
+    const l = new THREE.PointLight(0xffd6a2, 0, 26, 1.5);
+    l.position.set(x, 3.6, 0);   // up near the ridge: a top-down fill like the many bulbs give
     group.add(l);
     return l;
   });
@@ -148,7 +148,7 @@ export function buildFittings(kit) {
       bulbK = smooth(bulbK, env.lightsOn ? 1 : 0, 6, dt);
       lampK = smooth(lampK, env.lightsOn ? night : 0, 6, dt);
       bulbMat.emissiveIntensity = bulbK * (0.7 + 1.3 * night);
-      for (const l of lamps) l.intensity = lampK * 9;
+      for (const l of lamps) l.intensity = lampK * 20;
       // probes follow the drinker height (bird head height)
       const py = nippleHeight(env.day) + 0.05;
       if (Math.abs(py - lastProbeY) > 1e-4) {

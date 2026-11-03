@@ -9,7 +9,7 @@ import { TRUSS_Y, T } from './house-shell.js';
 
 const { xMin, zMin, zMax } = HOUSE_BOUNDS;
 const HH = HEATER_HEIGHT;
-const RIM_R = 0.52;
+const RIM_R = 0.46;
 const GAS = 0xe2b33c, STEEL = 0x8f989f, CHAIN = 0x5d646a, HOSE = 0x2e2b28;
 
 function glowTexture() {
@@ -34,9 +34,10 @@ function addChain(b, x, z, y0, y1) {
 export function buildBrooders(kit) {
   const { stat, group, mats } = kit;
   const canopy = lathe('brooder', [
-    [RIM_R, 0], [0.4, 0.07], [0.16, 0.2], [0.06, 0.24], [0, 0.245],
-    [0, 0.215], [0.16, 0.175], [0.4, 0.05], [RIM_R - 0.02, -0.02], [RIM_R, 0],
+    [RIM_R, 0], [RIM_R - 0.03, 0.035], [0.3, 0.11], [0.13, 0.2], [0.06, 0.225], [0, 0.23],
+    [0, 0.2], [0.13, 0.17], [0.3, 0.08], [RIM_R - 0.04, 0.0], [RIM_R - 0.02, -0.025], [RIM_R, 0],
   ], 16);
+  const rib = new THREE.TorusGeometry(0.3, 0.012, 4, 16);
   const burners = new Batch();
   const glowGeos = [];
   const xs = [...new Set(HEATERS.map((h) => h.x))];
@@ -61,6 +62,7 @@ export function buildBrooders(kit) {
   for (const h of HEATERS) {
     const s = Math.sign(h.z);
     stat.add(canopy, COLORS.heater, mat(h.x, HH, h.z));
+    stat.add(rib, 0x7f888e, mat(h.x, HH + 0.112, h.z, Math.PI / 2, 0, 0));
     stat.cyl(0.075, 0.1, h.x, HH + 0.29, h.z, 0x6f787f, 8);                     // valve housing
     stat.box(0.05, 0.05, 0.08, h.x + 0.08, HH + 0.3, h.z, 0xb08d3c);
     stat.add(new THREE.TorusGeometry(0.03, 0.008, 4, 8), CHAIN, mat(h.x, HH + 0.37, h.z));
@@ -84,7 +86,7 @@ export function buildBrooders(kit) {
     glowGeos.push(pg);
   }
 
-  const burnerMat = new THREE.MeshLambertMaterial({ vertexColors: true, color: 0x6a4030, emissive: COLORS.heaterGlow, emissiveIntensity: 0 });
+  const burnerMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, color: 0x6a4030, emissive: COLORS.heaterGlow, emissiveIntensity: 0 });
   group.add(burners.mesh(burnerMat, { cast: false, receive: false }));
 
   const glowMat = new THREE.MeshBasicMaterial({

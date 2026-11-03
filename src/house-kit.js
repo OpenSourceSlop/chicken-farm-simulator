@@ -36,23 +36,32 @@ export const unitBox = () => cached('box', () => new THREE.BoxGeometry(1, 1, 1))
 export const unitCyl = (seg = 8, open = false) => cached(`cyl${seg}${open}`, () => new THREE.CylinderGeometry(1, 1, 1, seg, 1, open));
 export const cone = (rTop, rBot, h, seg = 12, open = false) =>
   cached(`cone${rTop},${rBot},${h},${seg},${open}`, () => new THREE.CylinderGeometry(rTop, rBot, h, seg, 1, open));
+export const disc = (r, seg = 8) => cached(`disc${r},${seg}`, () => new THREE.CircleGeometry(r, seg).rotateX(-Math.PI / 2));
 export const lathe = (key, pts, seg = 12) =>
   cached(`lathe${key}`, () => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg));
 
-// Accumulates parts (each with one flat colour) into one non-indexed, vertex-coloured geometry.
+// Accumulates parts (each with one flat colour) into one indexed, vertex-coloured geometry.
+// Shared vertices keep the vertex count low; materials use flatShading for the faceted look.
 export class Batch {
-  constructor() { this.pos = []; this.col = []; }
+  constructor() { this.pos = []; this.col = []; this.idx = []; }
 
   add(geo, color, matrix) {
     const p = geo.attributes.position;
-    const idx = geo.index;
+    const index = geo.index;
+    const base = this.pos.length / 3;
     _c.set(color);
-    const n = idx ? idx.count : p.count;
-    for (let i = 0; i < n; i++) {
-      _v.fromBufferAttribute(p, idx ? idx.getX(i) : i);
+    for (let i = 0; i < p.count; i++) {
+      _v.fromBufferAttribute(p, i);
       if (matrix) _v.applyMatrix4(matrix);
       this.pos.push(_v.x, _v.y, _v.z);
       this.col.push(_c.r, _c.g, _c.b);
+    }
+    const flip = matrix && matrix.determinant() < 0;
+    const n = index ? index.count : p.count;
+    for (let i = 0; i < n; i += 3) {
+      const a = index ? index.getX(i) : i, b = index ? index.getX(i + 1) : i + 1, c = index ? index.getX(i + 2) : i + 2;
+      if (flip) this.idx.push(base + a, base + c, base + b);
+      else this.idx.push(base + a, base + b, base + c);
     }
     return this;
   }
@@ -68,8 +77,8 @@ export class Batch {
   }
 
   // Round bar / pipe from p0 to p1 (arrays [x,y,z]).
-  rod(p0, p1, r, color, seg = 6) {
-    return this.add(unitCyl(seg), color, between(p0, p1, r));
+  rod(p0, p1, r, color, seg = 6, open = false) {
+    return this.add(unitCyl(seg, open), color, between(p0, p1, r));
   }
 
   // Square bar from p0 to p1 (a thin box oriented along the segment).
@@ -83,7 +92,8 @@ export class Batch {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
-    g.computeVertexNormals();
+    g.setIndex(new THREE.BufferAttribute(new Uint32Array(this.idx), 1));
+    g.computeVertexNormals();   // only used for shadow normal bias; shading is flat
     g.computeBoundingSphere();
     g.computeBoundingBox();
     return g;
@@ -99,8 +109,8 @@ export class Batch {
 
 export function makeMaterials() {
   return {
-    vc: new THREE.MeshLambertMaterial({ vertexColors: true }),
-    vcDS: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+    vc: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
+    vcDS: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }),
   };
 }
 

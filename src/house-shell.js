@@ -15,7 +15,7 @@ export const RIDGE_Y = 4.0;
 export const FRAME_X = [];
 for (let x = xMin; x <= xMax + 1e-6; x += 4) FRAME_X.push(x);
 export const SIDE_LIGHT = 0x8f989f;            // columns
-export const TRUSS = 0x9ba4ab;
+export const TRUSS = 0xb3bbc1;
 
 const PANEL_T = 0.1;                           // panel hides inside the 0.15 kick wall when lowered
 const BAND = { y0: 1.0, y1: 2.2 };             // green curtain band on the side walls
@@ -85,6 +85,7 @@ export function buildFloor() {
   const floor = new THREE.Mesh(geo, mat);
   floor.position.set((xMin + xMax) / 2, 0.02, (zMin + zMax) / 2);
   floor.receiveShadow = true;
+  floor.renderOrder = -1;   // drawn first so the ground under it is rejected by the depth test
   return floor;
 }
 
@@ -92,11 +93,11 @@ export function buildFloor() {
 // One side-wall panel run from x0 to x1 on the wall line zc (centre of the wall thickness).
 function panelRun(b, x0, x1, zc) {
   const w = x1 - x0, cx = (x0 + x1) / 2;
-  const wall = COLORS.wallWhite, band = COLORS.curtain, bandDark = 0x285d4f;
+  const wall = COLORS.wallWhite, band = COLORS.curtain, fold = 0x4a8c79;
   b.box(w, H - KICK, PANEL_T, cx, (KICK + H) / 2, zc, wall);
   b.box(w, BAND.y1 - BAND.y0, PANEL_T + 0.02, cx, (BAND.y0 + BAND.y1) / 2, zc, band);
   // folds of the curtain and its rope rail
-  for (let y = BAND.y0 + 0.2; y < BAND.y1 - 0.1; y += 0.24) b.box(w, 0.03, PANEL_T + 0.03, cx, y, zc, bandDark);
+  for (let y = BAND.y0 + 0.14; y < BAND.y1 - 0.08; y += 0.16) b.box(w, 0.05, PANEL_T + 0.03, cx, y, zc, fold);
   b.box(w, 0.05, PANEL_T + 0.035, cx, BAND.y1 + 0.02, zc, 0x9aa1a6);
   b.box(w, 0.05, PANEL_T + 0.035, cx, BAND.y0 - 0.02, zc, 0x9aa1a6);
   // top flashing (what stays visible as the stub cap when the panel is lowered)
@@ -149,7 +150,7 @@ export function buildFrame(stat, roof) {
     stat.box(xMax - xMin + 0.1, 0.1, 0.14, 0, H + 0.05, s * (zMax - 0.06), SIDE_LIGHT);
   }
   const top = (z) => TRUSS_Y + (RIDGE_Y - TRUSS_Y) * (1 - Math.abs(z) / 6.05);
-  const m = 0.045;
+  const m = 0.04;
   for (const x of FRAME_X) {
     const tx = Math.max(xMin + 0.06, Math.min(xMax - 0.06, x));
     roof.bar([tx, TRUSS_Y, -6.05], [tx, TRUSS_Y, 6.05], m, TRUSS);

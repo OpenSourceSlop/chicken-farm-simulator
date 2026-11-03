@@ -30,8 +30,8 @@ export function buildDrinkers(kit) {
     b.rod([REG_X, SUS_Y, z], [LINE_X.end + 0.05, SUS_Y, z], 0.014, GALV, 6);
     for (let x = REG_X + 0.6; x < LINE_X.end; x += 1.2) b.box(0.03, SUS_Y - PIPE_Y, 0.046, x, (PIPE_Y + SUS_Y) / 2, z, 0x808a91);
     for (const x of NIPPLE_X) {
-      b.add(cone(0.009, 0.005, 0.066, 5), STEEL, mat(x, PIPE_Y - 0.052, z));
-      b.bar([x, PIPE_Y - 0.02, z + 0.018], [x, -0.012, z + 0.04], 0.006, cup);
+      b.add(cone(0.009, 0.005, 0.066, 5, true), STEEL, mat(x, PIPE_Y - 0.052, z));
+      b.rod([x, PIPE_Y - 0.02, z + 0.018], [x, -0.012, z + 0.04], 0.004, cup, 3, true);
       b.add(cone(0.022, 0.014, 0.016, 6), cup, mat(x, -0.018, z + 0.04));
     }
     // pressure regulator with sight tube (west end)

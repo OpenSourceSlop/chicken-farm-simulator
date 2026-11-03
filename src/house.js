@@ -39,7 +39,7 @@ export function buildHouse(ctx) {
 
   group.add(stat.mesh(mats.vc));
   group.add(statDS.mesh(mats.vcDS, { receive: false }));
-  const roofMat = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true });
+  const roofMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true });
   const roofMesh = roof.mesh(roofMat, { cast: false, receive: false });
   roofMesh.renderOrder = 3;
   group.add(roofMesh);
