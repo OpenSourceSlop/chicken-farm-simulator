@@ -53,6 +53,10 @@ export const SPOTS = {
 
 export const FARM = {
   fence: { xMin: -56, xMax: 56, zMin: -36, zMax: 38 },
+  // where the farmer may walk: the fenced farm plus the first 5 m of the farm road outside the gate
+  // (the road's guard-post colliders and the fence keep him on it), so the level spawn outside the
+  // gate (spawn, z 40.5) lies inside the player's clamp
+  walk: { xMin: -56, xMax: 56, zMin: -36, zMax: 43 },
   gate: { x: -40, z: 38, width: 6 },
   spawn: { x: -40, z: 40.5, yaw: 0 }, // Level 1: outside the gate on the farm road, facing north: walking in crosses the dip
   spawnSandbox: { x: -38, z: 34, yaw: 0 }, // Phase 1 sandbox: just inside the gate, facing north (as approved)

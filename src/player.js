@@ -37,7 +37,7 @@ const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 export function createPlayer(ctx, { colliders = [] } = {}) {
   const { scene, camera, canvas } = ctx;
-  const bounds = FARM.fence;
+  const bounds = FARM.walk || FARM.fence; // the fenced farm and the road just outside the gate
   const model = buildFarmerModel();
   const root = model.root;
   scene.add(root);
@@ -166,7 +166,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
     if (el <= stepV) st.vel.set(dx * speed, 0, dz * speed);
     else { st.vel.x += (ex / el) * stepV; st.vel.z += (ez / el) * stepV; }
 
-    // Move with collision sliding, clamped inside the farm fence
+    // Move with collision sliding, clamped inside FARM.walk (the fence and the road outside the gate)
     const p = root.position;
     pos.x = p.x; pos.z = p.z;
     moveAndSlide(pos, st.vel.x * dt, st.vel.z * dt, RADIUS, colliders, bounds);

@@ -274,7 +274,9 @@ feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
   (penned and sick birds stay), so the flock never shows tip piles as cold huddles after *Next job*.
 - **Keep walking** after the end: the clock runs to 23:59 on day 7 and stands (no day wrap; the farm
   stops with it).
-- **Spawn**: a level starts and each morning begins outside the gate (`FARM.spawn` −40, 40.5,
+- **Spawn**: the player is clamped to `FARM.walk` (the fence rectangle plus the first 5 m of the walled
+  farm road outside the gate, z ≤ 43), so the spawn is not pulled into the gateway on the first frame.
+  A level starts and each morning begins outside the gate (`FARM.spawn` −40, 40.5,
   facing north) and the gate foot dip lies across the gateway (`FARM.footDipGate` −40, 36.9, half
   sizes 2.2 × 0.5 m), so walking onto the farm crosses it. The sandbox keeps its Phase 1 start just
   inside the gate (`FARM.spawnSandbox`).
