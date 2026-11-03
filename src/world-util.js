@@ -220,9 +220,10 @@ const OCC_TEST = /* glsl */`
     vec3 ab = uPlayer - uCam;
     float t = dot(vOccW - uCam, ab) / max(dot(ab, ab), 1e-3);
     float d = length(vOccW - (uCam + ab * clamp(t, 0.0, 1.0)));
-    float f = smoothstep(2.6, 1.2, d) * step(0.02, t) * step(t, 0.94) * step(0.4, vOccW.y);
-    f = max(f, smoothstep(10.0, 5.0, length(vOccW - uCam)));
-    if (f > 0.01 && occBayer(floor(gl_FragCoord.xy)) < f * 0.82) discard;
+    float f = smoothstep(3.4, 1.6, d) * step(t, 0.94);
+    f = max(f, smoothstep(9.0, 4.5, length(vOccW - uCam)) * step(t, 0.85));
+    f *= step(0.02, t) * step(0.45, vOccW.y);
+    if (f > 0.01 && occBayer(floor(gl_FragCoord.xy)) < f * 0.86) discard;
   }`;
 export function patchOcclusion(shader) {
   shader.uniforms.uCam = occlusion.uCam;

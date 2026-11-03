@@ -87,15 +87,19 @@ export function spiritHouse(flat, metal, x, z, colliders) {
   flat.box(0.95, 0.06, 0.95, x, 1.31, z, 0xc9a640);
   flat.box(0.52, 0.5, 0.42, x, 1.45, z - 0.1, 0xf0d58a);
   flat.box(0.16, 0.32, 0.02, x, 1.47, z + 0.115, 0x8a2a20);
-  // two-tier gable roof (ridge along z, front faces south) with gold finials
-  for (const [y, w, h, c] of [[1.95, 0.75, 0.32, 0xb83a2a], [2.2, 0.5, 0.28, 0x2c6e4a]]) {
+  // two-tier gable roof, front gable to the south, red tiles with green eaves and gold finials
+  for (const [base, w, len, zc, c] of [[1.93, 0.86, 0.72, z - 0.1, 0xc4402c], [2.2, 0.56, 0.5, z - 0.1, 0xd4562e]]) {
+    const pitch = 0.78, h = (w / 2) * Math.tan(pitch);
     for (const s of [-1, 1]) {
-      flat.add(unitBox(), c, { x: x + s * w / 4, y: y + h / 2 - 0.02, z: z - 0.1, sx: w / 2 / Math.cos(0.7), sy: 0.04, sz: 0.62, rz: -s * 0.7, order: 'XYZ' });
+      flat.add(unitBox(), c, { x: x + s * w / 4, y: base + h / 2, z: zc, sx: (w / 2) / Math.cos(pitch) + 0.06, sy: 0.035, sz: len, rz: -s * pitch, order: 'XYZ' });
+      flat.add(unitBox(), 0x2c6e4a, { x: x + s * (w / 2 + 0.01), y: base - 0.01, z: zc, sx: 0.04, sy: 0.04, sz: len, order: 'XYZ' });
     }
-    flat.add(unitCone(4), 0xd8b040, { x: x - w / 2 + 0.02, y: y + 0.06, z: z + 0.2, sx: 0.03, sy: 0.16, sz: 0.03, rz: 0.6 });
-    flat.add(unitCone(4), 0xd8b040, { x: x + w / 2 - 0.02, y: y + 0.06, z: z + 0.2, sx: 0.03, sy: 0.16, sz: 0.03, rz: -0.6 });
+    const fz = zc + len / 2 - 0.02;
+    flat.tri(x - w / 2 + 0.04, base + 0.02, fz, x + w / 2 - 0.04, base + 0.02, fz, x, base + h - 0.02, fz, 0xd8b040);
+    flat.add(unitCone(4), 0xe0b848, { x, y: base + h + 0.08, z: zc + len / 2, sx: 0.025, sy: 0.18, sz: 0.025, rx: 0.5 });
+    flat.add(unitCone(4), 0xe0b848, { x, y: base + h + 0.08, z: zc - len / 2, sx: 0.025, sy: 0.18, sz: 0.025, rx: -0.5 });
   }
-  flat.add(unitCone(6), 0xd8b040, { x, y: 2.62, z: z - 0.1, sx: 0.05, sy: 0.3, sz: 0.05 });
+  flat.add(unitCone(6), 0xd8b040, { x, y: 2.75, z: z - 0.1, sx: 0.04, sy: 0.32, sz: 0.04 });
   // offerings: red drinks, marigold garland, incense pot
   for (const ox of [-0.3, -0.2]) flat.cyl(0.035, 0.16, x + ox, 1.45, z + 0.32, 0xd8322f, 6);
   flat.add(new THREE.TorusGeometry(0.09, 0.03, 4, 8), 0xf2a33a, { x: x + 0.25, y: 1.48, z: z + 0.32, rx: Math.PI / 2 });

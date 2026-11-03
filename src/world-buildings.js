@@ -37,6 +37,20 @@ function gableRoof(b, x0, x1, z0, z1, yEave, rise, over, color) {
   }
   b.boxMM(x0 - over, x1 + over, yEave + rise + 0.02, yEave + rise + 0.12, zc - 0.12, zc + 0.12, color);
 }
+// Raised ribs of a corrugated metal roof, running down the slope
+function roofRibs(b, x0, x1, z0, z1, yEave, rise, over, color) {
+  const zc = (z0 + z1) / 2, half = (z1 - z0) / 2 + over, run = half - over, slope = Math.atan2(rise, run);
+  const len = half / Math.cos(slope);
+  for (let x = x0 - over + 0.25; x < x1 + over - 0.1; x += 0.5) {
+    for (const side of [-1, 1]) {
+      b.add(new THREE.BoxGeometry(1, 1, 1), color, {
+        x, y: yEave + rise / 2 - (over * rise) / run / 2 + 0.12, z: zc + side * half / 2,
+        sx: 0.05, sy: 0.04, sz: len, rx: side * slope, order: 'XYZ',
+      });
+    }
+  }
+}
+
 function gableEnds(b, x0, x1, z0, z1, yEave, rise, color) {
   const zc = (z0 + z1) / 2;
   for (const x of [x0, x1]) {
@@ -53,6 +67,7 @@ function office(flat, metal, colliders, signTex, group) {
   flat.boxMM(x0 - 0.02, x1 + 0.02, base, base + 0.35, z0 - 0.02, z1 + 0.02, WALL_TRIM);
   gableEnds(flat, x0, x1, z0, z1, eave, 1.3, WALL);
   gableRoof(flat, x0, x1, z0, z1, eave, 1.3, 0.65, COLORS.roofBlue);
+  roofRibs(flat, x0, x1, z0, z1, eave, 1.3, 0.65, 0x355f88);
   // front (south): door, two windows, sign
   const doorX = x0 + 1.4;
   flat.boxMM(doorX - 0.55, doorX + 0.55, base, base + 2.15, z1 - 0.02, z1 + 0.05, DOOR);

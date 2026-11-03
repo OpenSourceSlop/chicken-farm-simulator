@@ -3,7 +3,8 @@
 // Helper files (all world-*.js): util (geometry builder, noise), layout (derived positions),
 // sky (dome, stars, sun/moon, fog), ground (yard, roads), fields (paddies, groves, hills),
 // gate (fence, gate, guard hut, spray arch, foot dip, sign), buildings (office, generator,
-// water tower), silos (silos, auger, spirit house), yard (trees inside the fence), trees, signs.
+// water tower), silos (silos, auger, spirit house), yard (trees inside the fence), trees, signs,
+// lamps (yard lights that glow at night).
 import * as THREE from 'three';
 import { SPOTS } from './config.js';
 import { GeoBuilder, makeMaterials, occlusion } from './world-util.js';
@@ -15,6 +16,7 @@ import { buildBuildings } from './world-buildings.js';
 import { buildSilos, spiritHouse } from './world-silos.js';
 import { buildYardTrees } from './world-yard.js';
 import { makeSignTextures } from './world-signs.js';
+import { buildLamps } from './world-lamps.js';
 
 export function buildWorld(ctx) {
   const { scene } = ctx;
@@ -38,6 +40,7 @@ export function buildWorld(ctx) {
   spiritHouse(shrine, null, -29.6, 29.6, colliders);
   root.add(shrine.mesh(mats.flat, { name: 'spirit-house' }));
   const sway = buildYardTrees(root, colliders);
+  const lamps = buildLamps(root, mats, colliders);
 
   const interactables = [
     { id: 'sign-gate', label: SPOTS.signGate.label, x: SPOTS.signGate.x, z: SPOTS.signGate.z, radius: 2.2 },
@@ -55,6 +58,7 @@ export function buildWorld(ctx) {
       sway.uTime.value = time;
       sky.update(dt, env, view);
       fields.update(sky);
+      lamps.update(sky.state.night);
       if (view && view.camera && view.playerPos) {
         occlusion.uCam.value.copy(view.camera.position);
         occlusion.uPlayer.value.set(view.playerPos.x, 1.0, view.playerPos.z);

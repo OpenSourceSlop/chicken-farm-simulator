@@ -9,13 +9,13 @@ const KEYS = [
   { h: 0.0, zen: 0x0b1634, hor: 0x24365e, hs: 0x8aa2d8, hg: 0x34404c, hi: 1.25, sc: 0xa8c0ff, si: 0.85 },
   { h: 4.8, zen: 0x0d1838, hor: 0x283a62, hs: 0x8aa2d8, hg: 0x34404c, hi: 1.25, sc: 0xa8c0ff, si: 0.85 },
   { h: 5.6, zen: 0x2a3f72, hor: 0xc98a7e, hs: 0xa6a8cc, hg: 0x4a4a48, hi: 1.15, sc: 0xff9a60, si: 1.6 },
-  { h: 6.3, zen: 0x4a76b6, hor: 0xf2bf94, hs: 0xc6ccdc, hg: 0x5e5a46, hi: 1.05, sc: 0xffae6c, si: 2.4 },
-  { h: 7.5, zen: 0x4f8ad2, hor: 0xd4e2ea, hs: 0xd2e2f2, hg: 0x5f6a44, hi: 1.0, sc: 0xffd9a8, si: 2.8 },
+  { h: 6.3, zen: 0x4a76b6, hor: 0xf2bf94, hs: 0xd6d2dc, hg: 0x625c48, hi: 1.15, sc: 0xffb070, si: 2.6 },
+  { h: 7.5, zen: 0x4f8ad2, hor: 0xd4e2ea, hs: 0xd8e4f0, hg: 0x66704a, hi: 1.1, sc: 0xffd9a8, si: 2.9 },
   { h: 10, zen: 0x3f82d4, hor: 0xc2dbee, hs: 0xd6e8f8, hg: 0x5e6c42, hi: 0.95, sc: 0xfff2e0, si: 3.0 },
   { h: 14, zen: 0x3d80d2, hor: 0xc4dcee, hs: 0xd6e8f8, hg: 0x5e6c42, hi: 0.95, sc: 0xfff0dc, si: 3.0 },
   { h: 16.3, zen: 0x4a84cc, hor: 0xd6e0e2, hs: 0xd8e2ee, hg: 0x626a44, hi: 0.95, sc: 0xffe2b4, si: 2.9 },
-  { h: 17.5, zen: 0x5274b2, hor: 0xf4c890, hs: 0xd8d4d6, hg: 0x665c40, hi: 1.0, sc: 0xffbc72, si: 2.7 },
-  { h: 18.3, zen: 0x3a4f8a, hor: 0xf49a5e, hs: 0xc8b8c8, hg: 0x5a4a3c, hi: 1.05, sc: 0xff8e4c, si: 2.2 },
+  { h: 17.5, zen: 0x5274b2, hor: 0xf4c890, hs: 0xe2d8d2, hg: 0x6c5e42, hi: 1.1, sc: 0xffbc72, si: 2.9 },
+  { h: 18.3, zen: 0x3a4f8a, hor: 0xf49a5e, hs: 0xd8bcc0, hg: 0x5e4c3c, hi: 1.15, sc: 0xff9450, si: 2.6 },
   { h: 19.0, zen: 0x1e2b5a, hor: 0x9c6070, hs: 0x9ca4d0, hg: 0x3c3c48, hi: 1.15, sc: 0xb0b8ee, si: 0.9 },
   { h: 19.8, zen: 0x0d1838, hor: 0x283a62, hs: 0x8aa2d8, hg: 0x34404c, hi: 1.25, sc: 0xa8c0ff, si: 0.85 },
   { h: 24.0, zen: 0x0b1634, hor: 0x24365e, hs: 0x8aa2d8, hg: 0x34404c, hi: 1.25, sc: 0xa8c0ff, si: 0.85 },
@@ -26,7 +26,7 @@ const FOG = [[0, 70, 330], [5, 55, 280], [6.5, 45, 240], [8.5, 80, 360], [16, 90
 
 const SUN_TILT = 0.45;   // sun arc leans south (Thailand ~15 deg N), so shadows fall north, away from the camera
 const MOON_TILT = 0.55;
-const MIN_LIGHT_ELEV = 0.2; // sin of the lowest angle the shadow light is allowed to take
+const MIN_LIGHT_ELEV = 0.4; // sin of the lowest angle the light may take (keeps mornings and evenings bright)
 
 function arcDir(t, tilt, out) {
   return out.set(Math.cos(t), Math.sin(t) * Math.cos(tilt), Math.sin(t) * Math.sin(tilt));

@@ -21,7 +21,7 @@ function soilAmount(x, z) {
   const n = fbm(x * 0.21, z * 0.21, 2, 31);
   let s = 0;
   const rd = roadDist(x, z);
-  s = Math.max(s, smoothstep(4.4, 2.6, rd) * (0.35 + 0.65 * n));
+  s = Math.max(s, smoothstep(4.0, 3.0, rd) * (0.1 + 0.45 * n));
   const gd = Math.hypot(x - FARM.gate.x, (z - 35) * 1.3);
   s = Math.max(s, smoothstep(11, 4, gd) * (0.3 + 0.7 * n));
   for (const r of DRIP) {
@@ -109,29 +109,48 @@ function buildTerrain() {
   return b;
 }
 
-// Laterite farm road: wheel tracks, gravel centre, worn red edges, slight crown.
+// Laterite farm road: faint wheel tracks, gravel centre, soft worn shoulders, slight crown.
 function buildRoad(b) {
-  const strips = [-2.5, -2.05, -1.35, -0.75, 0.75, 1.35, 2.05, 2.5];
-  const crown = (o) => 0.055 - 0.03 * Math.abs(o) / 2.5;
-  const edge = C(COLORS.road).lerp(SOIL, 0.55), track = C(COLORS.road).lerp(SOIL_DK, 0.35).multiplyScalar(0.86);
-  const mid = C(COLORS.road).lerp(SOIL, 0.18), centre = C(COLORS.road).multiplyScalar(1.04);
-  const stripCol = [edge, track, mid, centre, mid, track, edge];
+  const strips = [-3.4, -2.5, -1.9, -1.2, -0.6, 0.6, 1.2, 1.9, 2.5, 3.4];
+  const crown = (o) => (Math.abs(o) > 2.5 ? 0.02 : 0.05 - 0.025 * Math.abs(o) / 2.5);
+  const road = C(COLORS.road).lerp(SOIL, 0.22);
+  const edge = road.clone().lerp(SOIL, 0.12).multiplyScalar(0.98), track = road.clone().multiplyScalar(0.95);
+  const centre = road.clone().multiplyScalar(1.02), shoulder = C(COLORS.soil).lerp(GRASS, 0.45).multiplyScalar(0.95);
+  const stripCol = [shoulder, edge, track, road, centre, road, track, edge, shoulder];
   const col = new THREE.Color();
   for (let i = 1; i < ROAD_SAMPLES.length; i++) {
     const A = ROAD_SAMPLES[i - 1], B = ROAD_SAMPLES[i];
     const ax = -A.tz, az = A.tx, bx = -B.tz, bz = B.tx; // left normals
     for (let k = 0; k < strips.length - 1; k++) {
-      const o0 = strips[k], o1 = strips[k + 1];
+      let o0 = strips[k], o1 = strips[k + 1];
       const mx = (A.x + B.x) / 2 + ax * (o0 + o1) / 2, mz = (A.z + B.z) / 2 + az * (o0 + o1) / 2;
-      const n = vnoise(mx * 0.7, mz * 0.7, 3);
-      col.copy(stripCol[k]).multiplyScalar(0.94 + n * 0.12);
-      if (k === 3 && fbm(mx * 0.2, mz * 0.2, 2, 4) > 0.62) col.lerp(GRASS, 0.35); // grass on the hump
-      const wet = Math.max(0, 1 - Math.abs(mz - SPRAY_Z) / (2.6 + n)) * (mx > FARM.gate.x - 3 && mx < FARM.gate.x + 3 ? 1 : 0);
+      const n = vnoise(mx * 0.6, mz * 0.6, 3);
+      col.copy(stripCol[k]).multiplyScalar(0.92 + n * 0.14);
+      if (k === 0 || k === strips.length - 2) {
+        // ragged grass edge: the outer shoulder varies in width and greenness
+        const w = 0.25 + 0.75 * fbm(mx * 0.35, mz * 0.35, 2, 6);
+        if (k === 0) o0 = o1 - 0.9 * w; else o1 = o0 + 0.9 * w;
+        col.lerp(GRASS, 0.5 * (1 - w));
+      }
+      const wet = Math.max(0, 1 - Math.abs(mz - SPRAY_Z) / (2.6 + n)) * (Math.abs(mx - FARM.gate.x) < 2.6 ? 1 : 0);
       if (wet > 0) col.multiplyScalar(1 - 0.28 * Math.min(1, wet * 1.6));
       const p00 = [A.x + ax * o0, crown(o0), A.z + az * o0], p01 = [A.x + ax * o1, crown(o1), A.z + az * o1];
       const p10 = [B.x + bx * o0, crown(o0), B.z + bz * o0], p11 = [B.x + bx * o1, crown(o1), B.z + bz * o1];
       triUp(b, ...p00, ...p10, ...p11, col);
       triUp(b, ...p00, ...p11, ...p01, col);
+    }
+  }
+  // turning and loading area where the road ends by the tunnel-fan end of the house
+  const end = ROAD_SAMPLES[ROAD_SAMPLES.length - 1];
+  const x0 = end.x - 5, x1 = end.x + 4.5, z0 = 9.2, z1 = end.z + 4.6;
+  const cell = 1.6;
+  for (let x = x0; x < x1 - 1e-3; x += cell) {
+    for (let z = z0; z < z1 - 1e-3; z += cell) {
+      const xa = Math.min(x + cell, x1), za = Math.min(z + cell, z1);
+      const n = vnoise(x * 0.6, z * 0.6, 8);
+      col.copy(road).lerp(SOIL, 0.15 + 0.15 * n).multiplyScalar(0.94 + n * 0.1);
+      triUp(b, x, 0.03, z, x, 0.03, za, xa, 0.03, za, col);
+      triUp(b, x, 0.03, z, xa, 0.03, za, xa, 0.03, z, col);
     }
   }
 }
@@ -165,14 +184,14 @@ function buildPublicRoad(b) {
 function buildTufts() {
   const blade = new GeoBuilder();
   const r = rng(11);
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + r() * 0.5, lean = 0.4 + r() * 0.35;
-    blade.add(new THREE.ConeGeometry(0.07, 1, 3, 1), 0xffffff, { x: Math.cos(a) * 0.1, y: 0.32, z: Math.sin(a) * 0.1, rx: Math.sin(a) * lean, rz: -Math.cos(a) * lean, sy: 0.55 + r() * 0.35 });
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + r() * 0.5, lean = 0.4 + r() * 0.35;
+    blade.add(new THREE.ConeGeometry(0.075, 1, 3, 1, true), 0xffffff, { x: Math.cos(a) * 0.1, y: 0.32, z: Math.sin(a) * 0.1, rx: Math.sin(a) * lean, rz: -Math.cos(a) * lean, sy: 0.55 + r() * 0.35 });
   }
   const geo = blade.geometry();
   geo.deleteAttribute('color');
-  const mat = new THREE.MeshLambertMaterial({ flatShading: true });
-  const N = 1700;
+  const mat = new THREE.MeshLambertMaterial({ flatShading: true, side: THREE.DoubleSide });
+  const N = 1500;
   const mesh = new THREE.InstancedMesh(geo, mat, N);
   mesh.receiveShadow = true;
   mesh.castShadow = false;
