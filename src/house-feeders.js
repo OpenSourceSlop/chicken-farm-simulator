@@ -1,18 +1,19 @@
 // Pan feeder lines: auger tube with orange-red pans (dish, feed, spreader cone, grill) every
 // FEEDER_PAN_SPACING, a hopper at the west end of each line, a drive unit at the east end, hung on
-// cables from the trusses and raised with flock age. A cross auger brings feed from the two silos
-// outside the north wall to the hoppers. Owner: house agent.
+// cables from the trusses and raised with flock age. A cross auger runs from the north wall at
+// FEED_INLET over the hoppers; outside the wall the world's silo auger (world-silos.js) feeds it.
+// Owner: house agent.
 import * as THREE from 'three';
-import { COLORS, FEEDER_LINES_Z, LINE_X, FEEDER_PAN_SPACING, FARM, HOUSE_BOUNDS } from './config.js';
+import { COLORS, FEEDER_LINES_Z, LINE_X, FEEDER_PAN_SPACING, FEED_INLET, HOUSE_BOUNDS } from './config.js';
 import { Batch, mat, lathe, cone, disc, table } from './house-kit.js';
 import { FRAME_X, TRUSS_Y, T } from './house-shell.js';
 
 const { zMin } = HOUSE_BOUNDS;
 const PAN_RIM = 0.057;                 // rim height above the pan bottom
 const AUG_Y = 0.46;                    // auger tube centre above the pan bottom
-const HOP_X = LINE_X.start - 0.25;     // hopper / cross auger x
+const HOP_X = FEED_INLET.x;            // hopper / cross auger x (LINE_X.start - 0.25)
 const HOP_TOP = AUG_Y + 0.64;
-export const CROSS_Y = 2.42;
+export const CROSS_Y = FEED_INLET.y;
 const GALV = 0xb4bcc2, MOTOR = 0x4e6a80, FEED = 0xb8945a;
 
 // Pan rim height above the litter by flock age: on the floor on day 1, at the birds' back later.
@@ -97,33 +98,16 @@ export function buildFeeders(kit) {
   cables.frustumCulled = false;
   group.add(cables);
 
-  // cross auger: silo boots outside, collector along the north wall, through the wall, over the hoppers
+  // cross auger: in through the north wall at FEED_INLET (the world's silo auger ends at the
+  // outside face of the wall), then over the hoppers
   const zLast = Math.max(...FEEDER_LINES_Z);
-  const zOut = zMin - T - 1.45;
   stat.bar([HOP_X, TRUSS_Y, zMin], [HOP_X, TRUSS_Y, -zMin], 0.06, 0x8f989f);          // support beam
-  stat.rod([HOP_X, CROSS_Y, zOut], [HOP_X, CROSS_Y, zLast + 0.35], 0.045, GALV, 10);
+  stat.rod([HOP_X, CROSS_Y, zMin - T], [HOP_X, CROSS_Y, zLast + 0.35], 0.045, GALV, 10);
   for (let z = zMin + 1.2; z < zLast; z += 2.6) stat.rod([HOP_X, CROSS_Y, z], [HOP_X, TRUSS_Y, z], 0.008, 0x6d757c, 4);
   stat.add(new THREE.CylinderGeometry(0.1, 0.1, 0.32, 10), MOTOR, mat(HOP_X, CROSS_Y, zLast + 0.55, Math.PI / 2, 0, 0));
   stat.box(0.2, 0.2, 0.14, HOP_X, CROSS_Y, zLast + 0.36, 0x9aa3a9);
   for (const z of FEEDER_LINES_Z) stat.cyl(0.07, 0.08, HOP_X, CROSS_Y - 0.08, z, 0x9aa3a9, 8);
-  stat.add(new THREE.CylinderGeometry(0.07, 0.07, 0.08, 10), 0x8f989f, mat(HOP_X, CROSS_Y, zMin - T - 0.05, Math.PI / 2, 0, 0)); // pipe collar
-  const silos = FARM.silos;
-  const xs = silos.map((s) => s.x);
-  const xFar = Math.max(...xs) + 0.25;
-  stat.add(new THREE.SphereGeometry(0.06, 8, 6), GALV, mat(HOP_X, CROSS_Y, zOut));
-  stat.rod([HOP_X, CROSS_Y, zOut], [xFar, CROSS_Y, zOut], 0.045, GALV, 10);
-  stat.add(new THREE.CylinderGeometry(0.1, 0.1, 0.32, 10), MOTOR, mat(xFar + 0.2, CROSS_Y, zOut, 0, 0, Math.PI / 2));
-  for (const px of [HOP_X + 0.6, (HOP_X + xFar) / 2]) {
-    stat.bar([px, 0, zOut], [px, CROSS_Y - 0.05, zOut], 0.07, 0x8f989f);
-    stat.box(0.22, 0.03, 0.22, px, 0.03, zOut, 0x7c858c);
-  }
-  for (const s of silos) {
-    stat.box(0.34, 0.3, 0.34, s.x, 0.62, s.z, GALV);                                   // boot
-    stat.box(0.3, 0.06, 0.3, s.x, 0.8, s.z, 0x99a2a8);
-    stat.add(new THREE.CylinderGeometry(0.07, 0.07, 0.25, 8), MOTOR, mat(s.x - 0.25, 0.6, s.z, 0, 0, Math.PI / 2));
-    stat.rod([s.x, 0.62, s.z + 0.12], [s.x, CROSS_Y, zOut - 0.02], 0.045, GALV, 10);   // flex auger up
-    stat.add(new THREE.SphereGeometry(0.065, 8, 6), GALV, mat(s.x, CROSS_Y, zOut));
-  }
+  stat.add(new THREE.CylinderGeometry(0.07, 0.07, 0.06, 10), 0x8f989f, mat(HOP_X, CROSS_Y, zMin + 0.03, Math.PI / 2, 0, 0)); // wall collar
 
   let lastY = NaN;
   return {

@@ -71,11 +71,13 @@ function start(saved = {}) {
   resize();
 
   // One simulation step. dt is real seconds.
+  const view = { camera, playerPos: player.position, playerInside: false, night: 0 };
   function step(dt) {
     env.update(dt);
     player.update(dt);
-    const view = { camera, playerPos: player.position, playerInside: player.isInside };
+    view.playerInside = player.isInside;
     world.update(dt, env, view);
+    view.night = world.night; // the world's day/night state drives the house lights too
     house.update(dt, env, view);
     flock.update(dt, env, player.position);
     ui.update(dt);
@@ -127,7 +129,7 @@ function start(saved = {}) {
     renderNow() { player.update(0); renderer.render(scene, camera); },
     metrics() { return flock.metrics(); },
     snapshot() {
-      const keys = ['day', 'hour', 'weather', 'outsideTemp', 'houseTemp', 'houseRH', 'heaterSetpoint', 'heatersOn',
+      const keys = ['day', 'dayNumber', 'hour', 'weather', 'outsideTemp', 'houseTemp', 'houseRH', 'heaterSetpoint', 'heatersOn',
         'heaterLevel', 'fansOn', 'padOn', 'airSpeed', 'targetTemp', 'windChill', 'feelsLike', 'lightsOn', 'broodCurtain'];
       const out = {};
       for (const k of keys) out[k] = env[k];

@@ -26,6 +26,10 @@ export const FEEDER_LINES_Z = [-3.9, 0, 3.9];
 export const DRINKER_LINES_Z = [-4.9, -1.95, 1.95, 4.9];
 export const LINE_X = { start: -22.5, end: 22.5 };
 export const FEEDER_PAN_SPACING = 0.76;
+// Where the feed auger from the silos passes through the north wall into the house: the house's
+// cross auger runs from here over the feeder-line hoppers (at LINE_X.start - 0.25); the world's
+// feed auger rises from the silo boots to meet it at the outside face of the wall.
+export const FEED_INLET = { x: LINE_X.start - 0.25, y: 2.42 };
 export const NIPPLE_SPACING = 0.3;
 
 export const FAN_COUNT = 6;            // tunnel fans in the east end wall (x = +24), 2 rows of 3
@@ -34,8 +38,9 @@ export const PAD = { x: -24, height: 2.0, bottom: 0.4 }; // cooling pad covers t
 
 // Fixed interactive spots (world.js and house.js build the 3D objects; ui.js reads these)
 export const SPOTS = {
-  controller: { x: -12.0, z: 5.8, label: 'Climate controller', inside: true },
-  signBrooder: { x: -16.0, z: 5.8, label: 'Brooder heaters sign', inside: true },
+  // Both boards hang on north-wall columns across from the door, facing south (toward the camera)
+  controller: { x: -12.0, z: -5.8, label: 'Climate controller', inside: true },
+  signBrooder: { x: -16.0, z: -5.8, label: 'Brooder heaters sign', inside: true },
   signGate: { x: -35.5, z: 35.6, label: 'Farm gate sign', inside: false },
   houseDoor: { x: -14, z: 6.9, label: 'House door', inside: false },
 };

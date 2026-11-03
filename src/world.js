@@ -61,6 +61,9 @@ export function buildWorld(ctx) {
     colliders,
     interactables,
     sun: sky.sun,
+    // 0 by day .. 1 at full night (after update). main.js passes it on as view.night, so the house
+    // lights come on together with the yard lamps and office windows.
+    get night() { return sky.state.night; },
     update(dt, env, view) {
       time += dt;
       sway.uTime.value = time;

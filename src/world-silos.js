@@ -1,11 +1,11 @@
 // Galvanised feed silos with the auger into the house north wall, and the spirit house by the
 // office. Owner: world agent.
 import * as THREE from 'three';
-import { COLORS, FARM, HOUSE_BOUNDS } from './config.js';
+import { COLORS, FARM, FEED_INLET, HOUSE, HOUSE_BOUNDS } from './config.js';
 import { GeoBuilder, unitCone, unitCyl, unitBox } from './world-util.js';
 
 const GALV = 0xc8d0d6, GALV_DK = 0xa3acb3, GALV_RIB = 0xb4bdc4, LEG = 0x8f979e;
-export const AUGER_WALL_Z = HOUSE_BOUNDS.zMin - 0.2; // exterior face of the north wall (-6.2)
+export const AUGER_WALL_Z = HOUSE_BOUNDS.zMin - HOUSE.wallThickness; // exterior face of the north wall (-6.15)
 
 function silo(metal, x, z, ladderAngle) {
   const R = 1.3, legTop = 2.25, tip = 0.95, body = 5.0, roof = 6.05;
@@ -52,28 +52,33 @@ function silo(metal, x, z, ladderAngle) {
 export function buildSilos(group, mats, colliders) {
   const metal = new GeoBuilder(), flat = new GeoBuilder();
   const [a, b] = FARM.silos;
-  const midX = (a.x + b.x) / 2, z = a.z;
+  // The feed auger meets the house's cross auger where it enters the north wall (FEED_INLET),
+  // so the collection hopper sits under that point, at the west end of the boot-level auger.
+  const ix = FEED_INLET.x, z = a.z;
+  const x0 = Math.min(a.x, b.x, ix), x1 = Math.max(a.x, b.x);
   // concrete pad stops short of the house apron zone (z > -8)
-  flat.boxMM(a.x - 1.9, b.x + 1.9, -0.02, 0.14, z - 1.9, -8.05, COLORS.concrete);
+  flat.boxMM(Math.min(a.x - 1.9, ix - 0.7), x1 + 1.9, -0.02, 0.14, z - 1.9, -8.05, COLORS.concrete);
   silo(metal, a.x, a.z, Math.PI * 0.82);
   silo(metal, b.x, b.z, Math.PI * 0.18);
   for (const s of FARM.silos) colliders.push({ type: 'circle', x: s.x, z: s.z, r: 1.5 });
 
-  // cross auger joining both boots, then the feed auger rising to the house north wall
+  // cross auger joining both boots and running on to the collection hopper under FEED_INLET,
+  // then the feed auger rising north to the house wall, where the house's cross auger continues
   const yb = 0.55;
-  metal.pipe(a.x, yb, z, b.x, yb, z, 0.11, GALV_DK, 8);
-  metal.box(0.5, 0.45, 0.5, midX, 0.3, z, 0x6d757c); // collection hopper
-  const wallY = 2.15;
-  metal.pipe(midX, yb + 0.1, z, midX, wallY, AUGER_WALL_Z - 0.35, 0.12, GALV, 8);
-  metal.pipe(midX, wallY, AUGER_WALL_Z - 0.4, midX, wallY, AUGER_WALL_Z, 0.12, GALV, 8);
-  // drive motor at the top end, A-frame support mid-span
+  metal.pipe(x0 - 0.1, yb, z, x1, yb, z, 0.11, GALV_DK, 8);
+  metal.box(0.5, 0.45, 0.5, ix, 0.3, z, 0x6d757c); // collection hopper
+  const wallY = FEED_INLET.y, elbowZ = AUGER_WALL_Z - 0.45;
+  metal.pipe(ix, yb + 0.1, z, ix, wallY, elbowZ + 0.05, 0.12, GALV, 8);
+  metal.pipe(ix, wallY, elbowZ, ix, wallY, AUGER_WALL_Z - 0.06, 0.09, GALV, 8);
+  metal.cyl(0.14, 0.12, ix, wallY - 0.06, AUGER_WALL_Z - 0.06, GALV_DK, 10, { rx: Math.PI / 2 }); // wall flange
+  // drive motor on the top elbow, A-frame support mid-span
   const my = wallY + 0.12;
-  metal.box(0.36, 0.34, 0.5, midX, my, AUGER_WALL_Z - 0.62, 0x3d6f8f);
-  metal.add(unitCyl(10), 0x2f5670, { x: midX, y: my + 0.17, z: AUGER_WALL_Z - 0.95, sx: 0.15, sy: 0.35, sz: 0.15, rx: Math.PI / 2 });
-  const sz = (z + AUGER_WALL_Z) / 2, sy = (yb + wallY) / 2;
-  metal.pipe(midX - 0.45, 0.14, sz, midX, sy - 0.12, sz, 0.035, LEG, 4);
-  metal.pipe(midX + 0.45, 0.14, sz, midX, sy - 0.12, sz, 0.035, LEG, 4);
-  colliders.push({ type: 'box', minX: midX - 0.5, maxX: midX + 0.5, minZ: z, maxZ: sz + 0.3 });
+  metal.box(0.36, 0.34, 0.5, ix, my, elbowZ - 0.2, 0x3d6f8f);
+  metal.add(unitCyl(10), 0x2f5670, { x: ix, y: my + 0.17, z: elbowZ - 0.55, sx: 0.15, sy: 0.35, sz: 0.15, rx: Math.PI / 2 });
+  const sz = (z + elbowZ) / 2, sy = (yb + wallY) / 2;
+  metal.pipe(ix - 0.45, 0.14, sz, ix, sy - 0.12, sz, 0.035, LEG, 4);
+  metal.pipe(ix + 0.45, 0.14, sz, ix, sy - 0.12, sz, 0.035, LEG, 4);
+  colliders.push({ type: 'box', minX: ix - 0.5, maxX: ix + 0.5, minZ: z, maxZ: sz + 0.3 });
 
   group.add(metal.mesh(mats.metalFade, { name: 'silos' }));
   group.add(flat.mesh(mats.flat, { name: 'silo-pad' }));

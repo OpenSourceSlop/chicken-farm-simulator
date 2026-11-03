@@ -85,7 +85,7 @@
   --left: max(var(--gutter), env(safe-area-inset-left, 0px));
   --right: max(var(--gutter), env(safe-area-inset-right, 0px));
   --bottom: calc(var(--gutter) + env(safe-area-inset-bottom, 0px));
-  --jobs-w: 304px;
+  --jobs-w: 288px;
 }
 html, body { height: 100%; }
 body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family: var(--font-body); overflow: hidden; }
@@ -123,31 +123,31 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .hud-bc { position: absolute; left: 50%; bottom: calc(var(--bottom) + 76px); transform: translateX(-50%); }
 
 /* farm clock */
-.clock { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 14px; padding: 10px 14px 11px; min-width: 176px; }
-.clock-day { font-family: var(--font-display); font-weight: 700; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
-.clock-time { font-family: var(--font-display); font-weight: 600; font-size: 32px; line-height: 1; letter-spacing: 0.02em; margin-top: 2px; }
-.clock-sky { grid-row: 1 / span 2; grid-column: 2; font-size: 30px; color: var(--sign-yellow); }
+.clock { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 12px; padding: 7px 12px 8px; min-width: 150px; }
+.clock-day { font-family: var(--font-display); font-weight: 700; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+.clock-time { font-family: var(--font-display); font-weight: 600; font-size: 26px; line-height: 1; letter-spacing: 0.02em; margin-top: 1px; }
+.clock-sky { grid-row: 1 / span 2; grid-column: 2; font-size: 24px; color: var(--sign-yellow); }
 .clock-sky.is-night { color: var(--ink-dim); }
-.clock-weather { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--panel-edge); color: var(--ink-dim); font-size: 13px; white-space: nowrap; }
-.clock-weather .icon { font-size: 16px; color: var(--ink); }
+.clock-weather { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--panel-edge); color: var(--ink-dim); font-size: 12px; white-space: nowrap; }
+.clock-weather .icon { font-size: 14px; color: var(--ink); }
 .clock-rate { margin-left: auto; font-family: var(--font-display); font-weight: 600; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
 .clock-rate.is-paused { color: var(--accent); }
 
 /* gauge strip */
-.gauges { display: flex; align-items: stretch; padding: 4px; }
-.gauge { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 6px 14px; min-width: 92px; }
+.gauges { display: flex; align-items: stretch; padding: 3px; }
+.gauge { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 4px 11px; min-width: 76px; }
 .gauge + .gauge { border-left: 1px solid var(--panel-edge); }
 .gauge .label { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-.gauge .label .icon { font-size: 14px; color: var(--ink); }
-.gauge-value { font-family: var(--font-display); font-weight: 600; font-size: 22px; line-height: 1.05; white-space: nowrap; }
-.gauge--main { min-width: 132px; }
-.gauge--main .gauge-value { font-size: 36px; }
-.gauge-sub { font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+.gauge .label .icon { font-size: 13px; color: var(--ink); }
+.gauge-value { font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1.05; white-space: nowrap; }
+.gauge--main { min-width: 104px; }
+.gauge--main .gauge-value { font-size: 28px; }
+.gauge-sub { font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
 .pips { display: flex; gap: 3px; margin-top: 2px; }
 .pip { width: 9px; height: 5px; border-radius: 1px; background: var(--panel-sunk); box-shadow: inset 0 0 0 1px var(--panel-edge); }
 .pip.is-on { background: var(--ink); box-shadow: none; }
 .gauge--burner .gauge-value { display: flex; align-items: center; gap: 6px; }
-.gauge--burner .flame { font-size: 22px; color: var(--ink-faint); transition: color 0.3s, filter 0.3s; }
+.gauge--burner .flame { font-size: 19px; color: var(--ink-faint); transition: color 0.3s, filter 0.3s; }
 .gauge--burner.is-on .flame { color: var(--accent); filter: drop-shadow(0 0 6px rgba(242, 140, 40, 0.65)); }
 
 /* buttons */
@@ -168,22 +168,22 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .seg .btn:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
 .timebar-sep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--panel-edge); }
 /* today's jobs */
-.jobs { padding: 12px; }
-.jobs-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 9px; border-bottom: 1px solid var(--panel-edge); }
+.jobs { padding: 10px; }
+.jobs-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 7px; border-bottom: 1px solid var(--panel-edge); }
 .jobs-icon { display: inline-flex; font-size: 18px; color: var(--accent); }
 .jobs-head h2 { margin: 0; font-size: 12px; color: var(--ink); }
 .jobs-count { margin-left: auto; font: 600 12px/1 var(--font-display); color: var(--ink-dim); letter-spacing: 0.06em; }
-.jobs-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 3px; }
-.job { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 7px 8px 7px 7px; border-radius: 6px; border-left: 3px solid transparent; color: var(--ink-faint); }
-.job-mark { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid currentColor; font: 700 12px/1 var(--font-display); }
-.job-mark .icon { font-size: 13px; }
-.job-title { margin: 2px 0 0; font-size: 14px; font-weight: 500; line-height: 1.3; }
+.jobs-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.job { display: grid; grid-template-columns: 20px 1fr; gap: 9px; padding: 5px 8px 5px 7px; border-radius: 6px; border-left: 3px solid transparent; color: var(--ink-faint); }
+.job-mark { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid currentColor; font: 700 11px/1 var(--font-display); }
+.job-mark .icon { font-size: 12px; }
+.job-title { margin: 1px 0 0; font-size: 13.5px; font-weight: 500; line-height: 1.3; }
 .job.is-current { background: var(--accent-soft); border-left-color: var(--accent); color: var(--ink); }
 .job.is-current .job-mark { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .job.is-current .job-title { font-weight: 600; }
 .job.is-done { color: var(--ink-dim); }
 .job.is-done .job-mark { border-color: transparent; background: var(--panel-sunk); color: var(--ink); }
-.job-where { display: flex; gap: 6px; margin: 5px 0 0; font-size: 13px; line-height: 1.42; color: var(--ink-dim); }
+.job-where { display: flex; gap: 6px; margin: 4px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-dim); }
 .job-where .icon { font-size: 14px; color: var(--accent); margin-top: 2px; }
 .job-progress { margin-top: 8px; height: 4px; border-radius: 2px; background: var(--panel-sunk); overflow: hidden; }
 .job-bar { display: block; height: 100%; background: var(--accent); transform-origin: left center; transform: scaleX(0); }
@@ -203,15 +203,15 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .prompt b { font-weight: 600; }
 
 /* controls legend */
-.help { width: 300px; padding: 12px 14px 13px; }
-.help-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.help { width: 286px; padding: 10px 12px 11px; }
+.help-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
 .help-head .icon { font-size: 18px; color: var(--accent); }
 .help-head h2 { margin: 0; font-size: 12px; color: var(--ink); }
 .help-head .btn { margin-left: auto; min-height: 28px; padding: 4px 10px; font-size: 12px; }
-.help-list { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; margin: 0; }
+.help-list { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; margin: 0; }
 .help-list dt { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
-.help-list dd { margin: 0; font-size: 13px; color: var(--ink-dim); }
-.help .kbd { min-width: 24px; height: 24px; font-size: 12px; }
+.help-list dd { margin: 0; font-size: 12.5px; line-height: 1.3; color: var(--ink-dim); }
+.help .kbd { min-width: 22px; height: 22px; font-size: 11.5px; }
 
 /* Phase 1 test tools: tape-marked so nobody mistakes them for the game */
 .tools-toggle { position: relative; padding-left: 20px; border-style: dashed; border-color: rgba(231, 182, 70, 0.6); background: var(--panel-solid); }
@@ -343,8 +343,13 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .led--pad.is-on { background: var(--led-pad); box-shadow: 0 0 9px var(--led-pad); }
 /* ---------- smaller screens ---------- */
 @media (max-width: 1100px) {
-  :root { --jobs-w: 276px; }
-  .gauge { min-width: 0; padding: 6px 11px; }
+  :root { --jobs-w: 268px; }
+  .gauge { min-width: 0; padding: 4px 9px; }
+  .gauge .label { letter-spacing: 0.08em; }
+  .gauge--main { min-width: 92px; }
+  .gauge--main .gauge-value { font-size: 25px; }
+  .gauge-value { font-size: 17px; }
+  .clock { min-width: 138px; }
 }
 @media (max-height: 640px) and (min-width: 700px) {
   .help-list { gap: 3px 10px; }

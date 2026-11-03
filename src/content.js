@@ -71,12 +71,12 @@ export const TASKS = [
   {
     id: 'read-brooder-sign',
     title: 'Read the brooder heaters sign',
-    where: 'Inside the house, on the south wall just left of the door.',
+    where: 'Inside the house, on the north wall across from the door, on the left.',
   },
   {
     id: 'set-thermostat',
     title: 'Set the brooder thermostat',
-    where: 'Climate controller, inside on the south wall just right of the door. The sign gives the temperature for your flock’s age.',
+    where: 'Climate controller, inside on the north wall across from the door, on the right. The sign gives the temperature for your flock’s age.',
   },
   {
     id: 'watch-chicks',

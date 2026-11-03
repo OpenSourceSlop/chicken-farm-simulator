@@ -105,11 +105,14 @@ export function createTasks(parent, ctx, { player, root, avoid }) {
     return { heater: best, dist: bd };
   }
 
-  // Where the marker sits for each job: x, z of the ground ring, gem height, gem offset in z
+  // Where the marker sits for each job: x, z of the ground ring, gem height, gem offset in z.
+  // Wall boards: the ring sits on the floor in front of the board (toward the house middle), the
+  // gem over the board itself.
+  const front = (spot) => (spot.z < 0 ? 1 : -1);
   function markerSpot(i, p) {
     if (i === 0) return { x: SPOTS.houseDoor.x, z: SPOTS.houseDoor.z, y: 3.3, gz: 0 };
-    if (i === 1) return { x: SPOTS.signBrooder.x, z: SPOTS.signBrooder.z - 1.1, y: 2.7, gz: 0.9 };
-    if (i === 2) return { x: SPOTS.controller.x, z: SPOTS.controller.z - 1.1, y: 2.7, gz: 0.9 };
+    if (i === 1) { const f = front(SPOTS.signBrooder); return { x: SPOTS.signBrooder.x, z: SPOTS.signBrooder.z + f * 1.1, y: 2.7, gz: -f * 0.9 }; }
+    if (i === 2) { const f = front(SPOTS.controller); return { x: SPOTS.controller.x, z: SPOTS.controller.z + f * 1.1, y: 2.7, gz: -f * 0.9 }; }
     const { heater } = nearestHeater(p);
     return { x: heater.x, z: heater.z, y: HEATER_HEIGHT + 1.0, gz: 0 };
   }

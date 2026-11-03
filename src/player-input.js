@@ -12,10 +12,15 @@ const DRAG_PX = 5;
 const DOUBLE_MS = 380;
 const DOUBLE_PX = 24;
 
+// Keys typed into text-like controls (text fields, selects, text areas, editable text) are not
+// for the farmer. A focused HUD button, slider or checkbox keeps WASD walking (ui.js stops the
+// arrow keys a slider needs before they reach us).
+const NON_TEXT_INPUTS = new Set(['range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'color', 'image']);
 function isFormTarget(t) {
   if (!t || t === window || t === document) return false;
   const tag = t.tagName;
-  return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'BUTTON' || !!t.isContentEditable;
+  if (tag === 'INPUT') return !NON_TEXT_INPUTS.has((t.type || 'text').toLowerCase());
+  return tag === 'SELECT' || tag === 'TEXTAREA' || !!t.isContentEditable;
 }
 
 // Fallback for keyboards that report no useful code for + and -.

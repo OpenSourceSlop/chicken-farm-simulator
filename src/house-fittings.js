@@ -1,14 +1,17 @@
 // Fittings: climate controller cabinet with a live green LCD, the BROODER HEATERS sign (both on
-// steel columns of the south wall, facing into the house), temperature probes at bird height,
-// two lines of LED bulbs and warm night lights. Owner: house agent.
+// steel columns of the north wall across from the door, facing into the house so the default
+// camera reads them), temperature probes at bird height, two lines of LED bulbs and warm night
+// lights. Owner: house agent.
 import * as THREE from 'three';
 import { SPOTS, HOUSE_BOUNDS, targetTempAt } from './config.js';
 import { Batch, mat, canvasTexture, roundRect, smooth, clamp01, FONT } from './house-kit.js';
 import { TRUSS_Y } from './house-shell.js';
 import { nippleHeight } from './house-drinkers.js';
 
-const { xMin, xMax, zMax } = HOUSE_BOUNDS;
-const FACE_Z = zMax - 0.12;                      // front of the south-wall columns
+const { xMin, xMax, zMin, zMax } = HOUSE_BOUNDS;
+// Boards hang on the side-wall columns at SPOTS (north wall when z < 0). IN points into the house.
+const IN = SPOTS.controller.z < 0 ? 1 : -1;
+const FACE_Z = IN > 0 ? zMin + 0.12 : zMax - 0.12;   // front of the wall columns
 const LIGHT_Z = [-1.0, 1.0];
 const BULB_Y = 2.27;
 const PROBES = [{ x: -9.2, z: -1.0 }, { x: 9.2, z: 1.0 }];
@@ -67,33 +70,34 @@ function drawLcd(lcd, env) {
 
 export function buildFittings(kit) {
   const { stat, group, mats } = kit;
-  const back = Math.PI;                             // planes face -z (into the house)
+  const back = IN > 0 ? 0 : Math.PI;                // planes face into the house
+  const L = IN;                                     // x mirror: -1 keeps the south-wall layout, +1 mirrors it for the north wall
 
   // climate controller on the column at SPOTS.controller
-  const cx = SPOTS.controller.x, cy = 1.45, cz = FACE_Z - 0.09;
-  stat.box(0.06, 0.62, 0.04, cx - 0.1, cy, FACE_Z - 0.02, 0x6d757c);
-  stat.box(0.06, 0.62, 0.04, cx + 0.1, cy, FACE_Z - 0.02, 0x6d757c);
+  const cx = SPOTS.controller.x, cy = 1.45, cz = FACE_Z + IN * 0.09;
+  stat.box(0.06, 0.62, 0.04, cx - 0.1, cy, FACE_Z + IN * 0.02, 0x6d757c);
+  stat.box(0.06, 0.62, 0.04, cx + 0.1, cy, FACE_Z + IN * 0.02, 0x6d757c);
   stat.box(0.48, 0.6, 0.16, cx, cy, cz, 0x9da3a8);
-  stat.box(0.44, 0.56, 0.01, cx, cy, cz - 0.083, 0xb3b9bd);
-  stat.box(0.3, 0.17, 0.012, cx, cy + 0.13, cz - 0.088, 0x2b3236);         // LCD bezel
-  for (let i = 0; i < 6; i++) stat.box(0.045, 0.03, 0.02, cx - 0.1 + (i % 3) * 0.1, cy - 0.07 - Math.floor(i / 3) * 0.06, cz - 0.09, i === 2 ? 0xd8322f : 0x3d4a55);
-  stat.box(0.04, 0.1, 0.03, cx + 0.2, cy, cz - 0.09, 0x50585e);              // latch
-  stat.cyl(0.025, 0.04, cx + 0.16, cy + 0.32, cz, 0xe8a23a, 8);              // alarm lamp
-  stat.rod([cx - 0.12, cy + 0.3, cz], [cx - 0.12, TRUSS_Y, cz], 0.016, 0x80888e, 6);   // conduits
-  stat.rod([cx + 0.02, cy - 0.3, cz], [cx + 0.02, 0.02, cz], 0.016, 0x80888e, 6);
-  stat.box(0.25, 0.05, 0.012, cx, cy + 0.25, cz - 0.088, 0x2f5d8a);         // brand strip
+  stat.box(0.44, 0.56, 0.01, cx, cy, cz + IN * 0.083, 0xb3b9bd);
+  stat.box(0.3, 0.17, 0.012, cx, cy + 0.13, cz + IN * 0.088, 0x2b3236);     // LCD bezel
+  for (let i = 0; i < 6; i++) stat.box(0.045, 0.03, 0.02, cx + L * (0.1 - (i % 3) * 0.1), cy - 0.07 - Math.floor(i / 3) * 0.06, cz + IN * 0.09, i === 2 ? 0xd8322f : 0x3d4a55);
+  stat.box(0.04, 0.1, 0.03, cx - L * 0.2, cy, cz + IN * 0.09, 0x50585e);     // latch
+  stat.cyl(0.025, 0.04, cx - L * 0.16, cy + 0.32, cz, 0xe8a23a, 8);          // alarm lamp
+  stat.rod([cx + L * 0.12, cy + 0.3, cz], [cx + L * 0.12, TRUSS_Y, cz], 0.016, 0x80888e, 6);   // conduits
+  stat.rod([cx - L * 0.02, cy - 0.3, cz], [cx - L * 0.02, 0.02, cz], 0.016, 0x80888e, 6);
+  stat.box(0.25, 0.05, 0.012, cx, cy + 0.25, cz + IN * 0.088, 0x2f5d8a);    // brand strip
   const lcd = lcdCanvas();
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.27, 0.135), new THREE.MeshBasicMaterial({ map: lcd.t, toneMapped: false }));
-  screen.position.set(cx, cy + 0.13, cz - 0.095);
+  screen.position.set(cx, cy + 0.13, cz + IN * 0.095);
   screen.rotation.y = back;
   group.add(screen);
 
   // BROODER HEATERS sign on the column at SPOTS.signBrooder
   const sx = SPOTS.signBrooder.x, sy = 1.5;
-  stat.box(1.12, 0.79, 0.04, sx, sy, FACE_Z - 0.02, 0x9aa2a8);
-  for (const dy of [-0.25, 0.25]) stat.box(1.0, 0.05, 0.03, sx, sy + dy, FACE_Z + 0.005, 0x7c858c);   // mounting rails
+  stat.box(1.12, 0.79, 0.04, sx, sy, FACE_Z + IN * 0.02, 0x9aa2a8);
+  for (const dy of [-0.25, 0.25]) stat.box(1.0, 0.05, 0.03, sx, sy + dy, FACE_Z - IN * 0.005, 0x7c858c);   // mounting rails
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.08, 0.76), new THREE.MeshLambertMaterial({ map: signTexture() }));
-  sign.position.set(sx, sy, FACE_Z - 0.042);
+  sign.position.set(sx, sy, FACE_Z + IN * 0.042);
   sign.rotation.y = back;
   group.add(sign);
 
@@ -135,7 +139,7 @@ export function buildFittings(kit) {
 
   let lcdTimer = 0, lcdText = '', lampK = 0, bulbK = 0, lastProbeY = NaN;
   return {
-    update(dt, env) {
+    update(dt, env, view) {
       // LCD: redraw only when what it shows changes (at most 4 times a second)
       lcdTimer -= dt;
       if (lcdTimer <= 0) {
@@ -143,13 +147,18 @@ export function buildFittings(kit) {
         const key = `${env.houseTemp.toFixed(1)}|${env.heaterSetpoint}|${Math.round(env.houseRH)}|${env.fansOn}|${env.padOn}|${env.heatersOn}`;
         if (key !== lcdText) { lcdText = key; drawLcd(lcd, env); }
       }
-      // lights: bulbs glow while the light programme is on; the interior is lit at night
+      // lights: bulbs glow while the light programme is on; the interior is lit at night. The
+      // world's night factor (view.night) switches them with the yard lamps and office windows.
       const h = env.hour;
-      const night = h >= 12 ? clamp01((h - 17.9) / 1.0) : clamp01((6.4 - h) / 0.9);
+      const night = view && Number.isFinite(view.night)
+        ? clamp01((view.night - 0.15) / 0.5)
+        : (h >= 12 ? clamp01((h - 17.9) / 1.0) : clamp01((6.4 - h) / 0.9));
       bulbK = smooth(bulbK, env.lightsOn ? 1 : 0, 6, dt);
       lampK = smooth(lampK, env.lightsOn ? night : 0, 6, dt);
       bulbMat.emissiveIntensity = bulbK * (0.7 + 1.3 * night);
-      for (const l of lamps) l.intensity = lampK * 30;
+      // Tuned against the world's real night (moonlight up to 0.85, hemisphere 1.25 at 22:00):
+      // a warm fill that reads as "lights on" without washing the litter out.
+      for (const l of lamps) l.intensity = lampK * 20;
       // probes follow the drinker height (bird head height)
       const py = nippleHeight(env.day) + 0.05;
       if (Math.abs(py - lastProbeY) > 1e-4) {

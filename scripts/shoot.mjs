@@ -62,9 +62,9 @@ const SCENARIOS = {
     { wait: 500 }, { shot: 'pad-end' },
     { state: { hour: 22, fans: 0, pad: false, houseTemp: 33, heaterLevel: 0.6, day: 2, farmer: { x: -14, z: 11 }, zoom: 26, cameraYaw: 0 } },
     { settle: 10 }, { wait: 500 }, { shot: 'night' },
-    { state: { hour: 10, houseTemp: null, paused: false, farmer: { x: -12, z: 4.6, yaw: 0 }, zoom: 14 } },
+    { state: { hour: 10, houseTemp: null, paused: false, farmer: { x: -12, z: -4.6, yaw: 0 }, zoom: 14 } },
     { wait: 400 }, { press: 'e' }, { wait: 500 }, { shot: 'controller-panel' }, { press: 'Escape' },
-    { state: { farmer: { x: -16, z: 4.6 } } },
+    { state: { farmer: { x: -16, z: -4.6 } } },
     { wait: 400 }, { press: 'e' }, { wait: 500 }, { shot: 'sign-panel' }, { press: 'Escape' },
     { viewport: [400, 820] }, { wait: 800 }, { shot: 'phone' },
     { viewport: [1280, 800] },
@@ -155,7 +155,7 @@ async function main() {
     else if (step.eval) console.log('eval:', step.eval, '=>', await page.evaluate(step.eval));
     else if (step.metrics) {
       const r = await page.evaluate(() => ({ m: window.__game.metrics(), s: window.__game.snapshot() }));
-      console.log(`metrics [${step.metrics}]`, JSON.stringify(r.m), '| house', r.s.houseTemp?.toFixed?.(1), 'target', r.s.targetTemp?.toFixed?.(1), 'day', r.s.day?.toFixed?.(1));
+      console.log(`metrics [${step.metrics}]`, JSON.stringify(r.m), '| house', r.s.houseTemp?.toFixed?.(1), 'target', r.s.targetTemp?.toFixed?.(1), 'day', r.s.dayNumber ?? r.s.day?.toFixed?.(1));
     } else if (step.shot) {
       if (only && !only.includes(step.shot)) continue;
       await page.evaluate(() => window.__game.renderNow());

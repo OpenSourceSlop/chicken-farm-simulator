@@ -12,7 +12,7 @@ const FX0 = BIRD_BOUNDS.xMin, FX1 = BIRD_BOUNDS.xMax, FZ0 = BIRD_BOUNDS.zMin, FZ
 // radiant it can get (huddles right under the brooder), but when the air is already at or above
 // target it just shifts a little out of the hot spot. So a brooder left on in a house at target
 // clears a small patch under itself instead of driving the flock to the walls. The radiant part
-// is found by sampling env.comfort with env.heaterLevel held at 0 during the (synchronous) refresh.
+// comes from env.brooderHeat(x, z) (sim.js), so the comfort without brooders is comfort - radiant.
 const RADIANT_FELT_ABOVE_TARGET = 0.45;
 
 export function createComfortField() {
@@ -35,20 +35,16 @@ export function createComfortField() {
       if (!big && !(small && age > 0.25)) return 0;
       sig[0] = s0; sig[1] = s1; sig[2] = s2; sig[3] = s3; sig[4] = s4;
       age = 0;
+      const radiantOn = s1 > 0.01 && typeof env.brooderHeat === 'function';
       for (let j = 0; j < nz; j++) {
         const z = FZ0 + j * sz;
-        for (let i = 0; i < nx; i++) v[j * nx + i] = env.comfort(FX0 + i * sx, z);
-      }
-      if (s1 > 0.01) {
-        try {
-          env.heaterLevel = 0;
-          for (let j = 0; j < nz; j++) {
-            const z = FZ0 + j * sz;
-            for (let i = 0; i < nx; i++) air[j * nx + i] = env.comfort(FX0 + i * sx, z);
-          }
-        } finally {
-          env.heaterLevel = s1;
+        for (let i = 0; i < nx; i++) {
+          const x = FX0 + i * sx, k = j * nx + i;
+          v[k] = env.comfort(x, z);
+          air[k] = radiantOn ? v[k] - env.brooderHeat(x, z) : v[k];
         }
+      }
+      if (radiantOn) {
         for (let k = 0; k < v.length; k++) {
           const full = v[k], radiant = full - air[k], aboveTarget = full - Math.max(0, air[k]);
           if (radiant > 0 && aboveTarget > 0) v[k] = full - (1 - RADIANT_FELT_ABOVE_TARGET) * Math.min(radiant, aboveTarget);

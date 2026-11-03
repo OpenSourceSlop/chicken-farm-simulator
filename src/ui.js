@@ -36,6 +36,10 @@ export function createUI(ctx, { player, flock, interactables = [] }) {
   // bottom left: controls legend and time controls
   const help = createHelp();
   hud.timebar.append(h('div', { class: 'timebar-sep', 'aria-hidden': 'true' }), help.toggleBtn);
+  // The legend shown on first load steps aside once the farmer has walked into the house, so it
+  // never covers the flock; ? or H brings it back. If the player opened or closed it, leave it.
+  let helpAuto = help.visible;
+  help.toggleBtn.addEventListener('click', () => { helpAuto = false; });
   root.appendChild(h('div', { class: 'hud-bl' }, help.card, hud.timebar));
 
   // bottom right: Phase 1 test tools
@@ -102,6 +106,7 @@ export function createUI(ctx, { player, flock, interactables = [] }) {
       const target = nearestInteractable();
       if (target) { e.preventDefault(); panels.open(target.id); }
     } else if ((k === 'h' || k === '?') && !e.repeat) {
+      helpAuto = false;
       help.toggle();
     } else if (k === 'escape' && help.visible) {
       help.hide();
@@ -120,6 +125,7 @@ export function createUI(ctx, { player, flock, interactables = [] }) {
         if (tools.open && (fitAcc = (fitAcc + 1) % 5) === 0) fitTools();
       }
       tasks.update(dt, panels.openId);
+      if (helpAuto && tasks.index >= 1) { helpAuto = false; if (help.visible) help.hide(); }
       panels.update(dt);
       tools.update(dt);
       prompt.show(panels.openId || narrow.open ? null : nearestInteractable());

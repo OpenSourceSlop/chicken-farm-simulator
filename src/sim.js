@@ -61,15 +61,7 @@ export function createSim() {
     // Temperature a chick feels at floor point (x, z): house air, plus radiant heat under a
     // running brooder, minus wind chill, slightly cooler beside the side walls and near the pad.
     localTemp(x, z) {
-      let t = this.houseTemp - this.windChill;
-      if (this.heaterLevel > 0.01) {
-        let r = 0;
-        for (const h of HEATERS) {
-          const dx = x - h.x, dz = z - h.z;
-          r += Math.exp(-(dx * dx + dz * dz) / (2 * 1.6 * 1.6));
-        }
-        t += 7 * this.heaterLevel * Math.min(1, r);
-      }
+      let t = this.houseTemp - this.windChill + this.brooderHeat(x, z);
       const wallDist = Math.min(z - BIRD_BOUNDS.zMin, BIRD_BOUNDS.zMax - z);
       if (wallDist < 1.5) t -= 1.0 * (1 - wallDist / 1.5);
       if (this.fansOn > 0) {
@@ -81,6 +73,17 @@ export function createSim() {
     },
     // Signed difference between what a bird feels at (x, z) and the target for its age.
     comfort(x, z) { return this.localTemp(x, z) - this.targetTemp; },
+    // Radiant part of localTemp at floor point (x, z): °C added by the running brooders
+    // (Gaussian, sigma 1.6 m, up to +7 °C at full glow). 0 when the brooders are cold.
+    brooderHeat(x, z) {
+      if (this.heaterLevel <= 0.01) return 0;
+      let r = 0;
+      for (const h of HEATERS) {
+        const dx = x - h.x, dz = z - h.z;
+        r += Math.exp(-(dx * dx + dz * dz) / (2 * 1.6 * 1.6));
+      }
+      return 7 * this.heaterLevel * Math.min(1, r);
+    },
 
     // setDay picks the calendar day (whole number, 0..42) and keeps the time of day.
     setDay(d) { const n = Math.max(0, Math.min(MAX_DAY, Math.floor(d))); this.day = n + this.hour / 24; derive(this); emit('day'); },
@@ -135,7 +138,8 @@ function outsideTempAt(weather, hour) {
 function derive(env) {
   env.outsideTemp = outsideTempAt(env.weather, env.hour);
   env.outsideRH = WEATHER[env.weather].rh;
-  env.targetTemp = targetTempAt(env.day);
+  // The target follows the whole flock day (the brooder sign's table): day 1 is 34 °C all day.
+  env.targetTemp = targetTempAt(dayNumberOf(env));
   env.bodyWeight = weightAt(env.day);
   env.broodCurtain = env.day < HOUSE.broodUntilDay;
   env.airSpeed = env.fansOn * (2.5 / FAN_COUNT);
