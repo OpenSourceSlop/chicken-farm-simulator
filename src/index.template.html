@@ -343,7 +343,8 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .led--pad.is-on { background: var(--led-pad); box-shadow: 0 0 9px var(--led-pad); }
 /* ---------- smaller screens ---------- */
 @media (max-width: 1100px) {
-  :root { --jobs-w: 268px; }
+  :root { --jobs-w: 260px; }
+  .hud-tl { gap: 8px; }
   .gauge { min-width: 0; padding: 4px 9px; }
   .gauge .label { letter-spacing: 0.08em; }
   .gauge--main { min-width: 92px; }

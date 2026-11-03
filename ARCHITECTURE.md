@@ -50,7 +50,13 @@ Metres. Y up, ground at y = 0. X runs along the house (west = −X, east = +X); 
 (north = −Z, south = +Z). Default camera yaw 0 looks north (camera sits south of the farmer).
 House interior: x −24..24, z −6..6, walls 2.6 m. Door in the south wall at x = −14 (1.8 m wide).
 All positions live in `src/config.js` (`HOUSE`, `HEATERS`, `FEEDER_LINES_Z`, `DRINKER_LINES_Z`,
-`SPOTS`, `FARM`, …). Use them; do not hard-code different numbers.
+`FEEDER_PAN_X`, `NIPPLE_X`, `FEED_INLET`, `SPOTS`, `FARM`, …). Use them; do not hard-code different numbers.
+- `FEEDER_PAN_X` / `NIPPLE_X`: the exact x of every pan and nipple. The house draws them there and
+  the flock eats and drinks there.
+- `FEED_INLET`: where the silo feed auger passes the north wall. The world's auger from the silo
+  boots ends at the outside face of the wall there; the house's cross auger continues inside.
+- `SPOTS.signBrooder` (x −16) and `SPOTS.controller` (x −12) hang on north-wall columns across from
+  the door, facing south, so the default camera reads their fronts; stand at z ≈ −4.6 and press E.
 
 ## Module contracts
 
@@ -58,23 +64,30 @@ All modules import three as `import * as THREE from 'three'` (resolved by the im
 keeps it external). `ctx = { THREE, renderer, scene, camera, canvas, config, env }`.
 
 ### `env` (sim.js → `createSim()`)
-Fields: `day` (flock age, float, day 1 = arrival), `hour` (0–24), `timeScale` (game s per real s),
+Fields: `day` (flock age, float: day = N + hour / 24, so the whole number changes at midnight; the
+game starts on day 1 at 08:00 = 1.333), getter `dayNumber` (the whole flock day N; use it for every
+"Day N" label), `hour` (0–24), `timeScale` (game s per real s),
 `paused`, `weather` (`cool|normal|hot|rainy`), `outsideTemp`, `outsideRH`, `houseTemp`, `houseRH`,
 `heaterSetpoint`, `heatersOn`, `heaterLevel` (0..1 smoothed glow), `fansOn` (0..6), `padOn`,
-`airSpeed` (m/s), `lightsOn`, `targetTemp`, `windChill`, `feelsLike`, `bodyWeight` (g),
+`airSpeed` (m/s), `lightsOn`, `targetTemp` (= `targetTempAt(dayNumber)`, so day 1 is 34 °C all day,
+as on the brooder sign), `windChill`, `feelsLike`, `bodyWeight` (g),
 `broodCurtain` (bool), getters `isNight`, `timeLabel`.
 Methods: `localTemp(x,z)` (°C a chick feels there: house air + brooder radiant − wind chill,
 slightly cooler at side walls), `comfort(x,z)` (= localTemp − targetTemp; negative = cold),
-`setDay`, `setHour`, `setWeather`, `setHeaterSetpoint`, `setFans`, `setPad`, `forceHouseTemp(t|null)`,
+`brooderHeat(x,z)` (the brooder radiant part of localTemp, °C), `setDay` (keeps the time of day),
+`setHour`, `reset()`, `setWeather`, `setHeaterSetpoint`, `setFans`, `setPad`, `forceHouseTemp(t|null)`,
 `skipHours(h)`, `update(dtReal)`, `on(event, fn)` (events: `day`, `time`, `weather`, `controls`, `*`).
 
 ### world.js → `buildWorld(ctx)` returns
-`{ colliders, interactables, sun, update(dt, env, view) }`. Owns scene background, fog, hemisphere
+`{ colliders, interactables, sun, night, update(dt, env, view) }` (`night`: 0 day .. 1 full night,
+which main.js passes on as `view.night`). Owns scene background, fog, hemisphere
 light, the sun (a shadow-casting DirectionalLight whose shadow box follows `view.playerPos`), and
 the day/night look driven by `env.hour` (sunrise 06:00, sunset 18:30; night stays readable).
 
 ### house.js → `buildHouse(ctx)` returns
-`{ group, colliders, interactables, update(dt, env, view) }`. `view = { camera, playerPos, playerInside }`.
+`{ group, colliders, interactables, feeders, drinkers, update(dt, env, view) }`.
+`view = { camera, playerPos, playerInside, night }` (`night` from the world, so the house lights
+switch with the yard lamps). `feeders = { z, panX, rimHeight(day) }`, `drinkers = { z, nippleX, nippleHeight(day) }`.
 Animates: tunnel fan blades when `env.fansOn` > i, brooder glow from `env.heaterLevel`, house lights
 from `env.lightsOn` (visible at night), brooding curtain shown while `env.broodCurtain`, drinker and
 feeder line heights rising with `env.day`, pad water flow when `env.padOn`. Wall cutaway: any wall
@@ -125,7 +138,10 @@ npm run build               # -> dist/index.html (single page, three from jsDeli
 node scripts/shoot.mjs      # build + "tour" scenario screenshots into shots/
 node scripts/shoot.mjs --scenario walk --out /tmp/x
 node scripts/shoot.mjs --steps my-steps.json --no-build
+node scripts/shoot.mjs --steps scripts/phase1-jobs.json   # the four Phase 1 jobs end to end
 ```
+Steps files that call `__game.stop()` drive the game with `advance`; `{"holdKey": "w", "for": 0.6}`
+holds a real key while advancing and `{"clickOn": "css selector"}` clicks a page element.
 The harness serves the page exactly as the artifact viewer wraps it, maps the three.js CDN URL to
 `node_modules/three`, blanks Google Fonts (no network in the sandbox), prints console errors,
 page errors and flock metrics. Headless Chromium renders WebGL with SwiftShader (software), so
