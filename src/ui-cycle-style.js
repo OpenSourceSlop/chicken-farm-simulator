@@ -11,11 +11,15 @@ const CSS = `
 .cyc-line { margin: 0; font-size: 13.5px; line-height: 1.4; color: var(--key-ink); }
 .cyc-line + .cyc-line { margin-top: 2px; }
 .cyc-dim { color: var(--key-sub); }
-.cyc-box { padding: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); min-width: 0; }
+.cyc-box { padding: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); min-width: 0; color: var(--key-ink); }
+.cyc-presets .ctrl-apply { justify-content: flex-start; gap: 6px; }
+.cyc-presets .key--wide { min-width: 0; height: 34px; padding: 0 10px; font-size: 11.5px; letter-spacing: 0.05em; }
 .cyc-row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .cyc-row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .cyc-check { display: inline-flex; align-items: center; gap: 8px; font: 600 13px/1.2 var(--font-display); letter-spacing: 0.04em; color: var(--key-ink); cursor: pointer; }
 .cyc-check input { width: 18px; height: 18px; accent-color: var(--key-on-hi); }
+.cyc-num { width: 92px; box-sizing: border-box; padding: 5px 7px; border: 0; border-radius: 4px; background: var(--lcd); color: var(--lcd-ink); font: 700 15px/1.1 var(--font-display); text-align: right; box-shadow: inset 0 0 0 2px var(--plate-edge); }
+.cyc-num:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .cyc-progress { height: 4px; margin-top: 6px; border-radius: 2px; background: rgba(0, 0, 0, 0.35); overflow: hidden; }
 .cyc-progress > span { display: block; height: 100%; background: var(--accent); transform-origin: left center; transform: scaleX(0); }
 .cyc-plate-col { min-width: 0; }
@@ -50,7 +54,7 @@ const CSS = `
 /* pad pump */
 .cyc-pad svg { display: block; width: 100%; max-width: 420px; height: auto; }
 /* heat budget bars (diverging, neutral colours) */
-.cyc-bars { display: grid; grid-template-columns: 84px minmax(0, 1fr) 62px; gap: 3px 8px; align-items: center; font: 600 12.5px/1.2 var(--font-display); }
+.cyc-bars { display: grid; grid-template-columns: 110px minmax(0, 1fr) 54px; gap: 3px 8px; align-items: center; font: 600 12.5px/1.2 var(--font-display); color: var(--key-ink); }
 .cyc-bars .bar { position: relative; height: 10px; border-radius: 2px; background: rgba(255, 255, 255, 0.06); }
 .cyc-bars .bar::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--key-sub); }
 .cyc-bars .bar > span { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--key-sub); }

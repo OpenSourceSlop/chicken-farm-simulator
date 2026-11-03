@@ -10,6 +10,8 @@ import { dialogShell } from './ui-panels.js';
 import { key, lcdCell } from './ui-controller.js';
 import { buildPlate } from './ui-boards.js';
 import { hhmm, int } from './ui-format.js';
+// Phase 3 (package "panels"): brooders up, heat loss, min vent calculator, humidity chart, light presets, dimming
+import { cycleControllerParts } from './ui-cycle-controller.js';
 
 const READ_AFTER = 2; // real seconds open before the controller counts as read
 
@@ -80,11 +82,15 @@ export function buildLevelControllerPanel(L) {
   applyLights.addEventListener('click', () => { const p = { ...lp }; L.act('light.program', p); refresh(); });
   const luxBtn = button({ class: 'key key--wide' }, 'Measure lux here');
   luxBtn.addEventListener('click', () => { const p = L.player.position; const r = L.act('light.lux', { x: p.x, z: p.z }); setText(lux, `${int(r?.lux)} lux at chick level here`); });
-  const lightsPlate = buildPlate('controller-lights');
-  secs[2].append(h('div', { class: 'ctrl-lights' }, h('div', null,
+  let lightsPlate = buildPlate('controller-lights');
+  const cyc = cycleControllerParts(L, { draft, lp, refresh: () => refresh() });
+  secs[0].insertBefore(h('div', { style: 'display: contents' }, cyc.temp), chart);
+  secs[1].append(...cyc.vent);
+  secs[2].append(h('div', { class: 'ctrl-lights' }, h('div', null, ...cyc.lights,
     row('Dark period starts', null, key('One hour earlier', ICONS.minus, lstep('darkStart', -1, 0, 23, true)), lStart, key('One hour later', ICONS.plus, lstep('darkStart', 1, 0, 23, true))),
     row('Dark hours', 'a day', key('Half an hour less', ICONS.minus, lstep('darkHours', -0.5, 0, 12)), lHours, key('Half an hour more', ICONS.plus, lstep('darkHours', 0.5, 0, 12))),
     row('Dimmer', 'light while on', key('Dimmer down 10 %', ICONS.minus, lstep('dimmer', -0.1, 0.1, 1)), lDim, key('Dimmer up 10 %', ICONS.plus, lstep('dimmer', 0.1, 0.1, 1))),
+    ...cyc.lightsRows,
     h('div', { class: 'ctrl-apply' }, lux, luxBtn, applyLights)), lightsPlate.el));
 
   const brand = h('header', { class: 'ctrl-brand' }, h('span', { class: 'ctrl-logo', html: ICONS.fan, 'aria-hidden': 'true' }),
@@ -147,6 +153,10 @@ export function buildLevelControllerPanel(L) {
       openFor = 0; readThisOpening = false;
       const vt = env.ventTimer; if (vt) Object.assign(draft, vt);
       Object.assign(lp, env.lightProgram || {});
+      // Phase 3: the lights plate gains its week 2 lines from day 8 (merged board of the day)
+      const fresh = buildPlate('controller-lights', { open: lightsPlate.open });
+      if (fresh.el.querySelectorAll('.plate-items > li').length !== lightsPlate.el.querySelectorAll('.plate-items > li').length) { lightsPlate.el.replaceWith(fresh.el); lightsPlate = fresh; }
+      cyc.onOpen();
     },
     update(dt, force) {
       openFor += dt;
@@ -154,6 +164,7 @@ export function buildLevelControllerPanel(L) {
       acc -= dt; chartAcc -= dt;
       if (force || acc <= 0) { acc = 0.1; refresh(); }
       if (force || chartAcc <= 0) { chartAcc = 1; drawChart(); }
+      cyc.update(dt, force);
     },
   };
 }

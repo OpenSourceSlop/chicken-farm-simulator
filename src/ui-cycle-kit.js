@@ -73,9 +73,9 @@ export function lineChart({ rows, series, lo, hi, unit = '', W = 300, H = 80, ba
 
 // ---------------- tabs ----------------
 /** A row of tabs over sections; show(i) switches; visible(i, on) hides a tab and its section. */
-export function makeTabs(names, { cls = 'cyc-tabs' } = {}) {
+export function makeTabs(names, { cls = 'cyc-tabs', secs: given = [] } = {}) {
   const btns = names.map((t, i) => button({ class: 'ctrl-tab', role: 'tab', 'aria-selected': String(i === 0) }, t));
-  const secs = names.map(() => h('div', { class: 'cyc-sec', role: 'tabpanel' }));
+  const secs = names.map((_, i) => given[i] || h('div', { class: 'cyc-sec', role: 'tabpanel' }));
   const bar = h('div', { class: cls, role: 'tablist' }, btns);
   let cur = 0;
   const show = (i) => { cur = i; btns.forEach((b, j) => b.setAttribute('aria-selected', String(i === j))); secs.forEach((s, j) => { s.hidden = i !== j; }); };
@@ -201,3 +201,22 @@ export function broilerSvg(age, pose = 'stand', size = 150) {
 
 /** Six fans in the east wall: index -> "Fan 4". */
 export const FAN_INDEXES = Array.from({ length: FAN_COUNT }, (_, i) => i);
+
+/**
+ * The weight spread of the birds weighed today (unlock uniformityChart): a histogram in 5 % steps of the
+ * mean, the ±10 % band shaded, and the share inside it (the uniformity, a measured number).
+ * @returns {{ svg: string, n: number, inside: number, mean: number } | null}
+ */
+export function spreadChart(weights) {
+  const w = weights.filter((x) => Number.isFinite(x) && x > 0);
+  if (w.length < 2) return null;
+  const mean = w.reduce((a, b) => a + b, 0) / w.length;
+  const bins = new Array(12).fill(0); // -30 .. +30 % of the mean in 5 % steps
+  for (const x of w) bins[Math.max(0, Math.min(11, Math.floor(((x / mean - 1) * 100 + 30) / 5)))]++;
+  const inside = w.filter((x) => Math.abs(x / mean - 1) <= 0.1).length;
+  const W = 300, Hh = 70, bw = W / 12, top = Math.max(...bins);
+  const bars = bins.map((n, i) => (n ? `<rect x="${(i * bw + 1).toFixed(1)}" y="${(Hh - (n / top) * (Hh - 4)).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${((n / top) * (Hh - 4)).toFixed(1)}" fill="currentColor"/>` : '')).join('');
+  const band = `<rect x="${(4 * bw).toFixed(1)}" y="0" width="${(4 * bw).toFixed(1)}" height="${Hh}" fill="currentColor" opacity="0.12"/>`;
+  const ticks = [-30, -10, 0, 10, 30].map((p) => `<text x="${(((p + 30) / 60) * W - (p === 30 ? 22 : p === -30 ? 0 : 9)).toFixed(1)}" y="${Hh + 11}" font-size="9">${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p)} %</text>`).join('');
+  return { svg: `<svg viewBox="0 0 ${W} ${Hh + 14}" height="${Hh + 14}" preserveAspectRatio="none" aria-hidden="true">${band}${bars}${ticks}</svg>`, n: w.length, inside, mean };
+}
