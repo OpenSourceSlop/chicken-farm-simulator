@@ -14,8 +14,10 @@ export const ev = (eval_) => ({ eval: eval_ });
 export const exp = (expect, label) => ({ expect, label });
 export const shot = (name) => ({ shot: name });
 export const press = (k) => ({ press: k });
-export const click = (text, times) => (times ? { clickText: text, times } : { clickText: text });
-export const clickUntil = (text, until, max = 80) => ({ clickTextUntil: text, until, max });
+/** A real click on a button of the open panel (or, with scope '#hud', anywhere in the HUD: the title card). */
+const PANEL = '#hud .panel:not([hidden])';
+export const click = (text, times, scope = PANEL) => (times ? { clickText: text, times, in: scope } : { clickText: text, in: scope });
+export const clickUntil = (text, until, max = 80) => ({ clickTextUntil: text, until, max, in: PANEL });
 export const until = (advanceUntil, max = 60, step = 0.5) => ({ advanceUntil, max, step });
 export const next = () => [{ clickOn: '.ljobs-next' }, adv(0.4)];
 /** E at an interactable and the panel it opens. */
@@ -127,7 +129,7 @@ const typeIn = (name, text) => [{ clickOn: `#hud .panel:not([hidden]) input[name
 export function planningDay() {
   return [
     ev(`__game.level.toTitle(), 'title: ' + __game.level.mode`), adv(0.3), shot('p3c-00-title'),
-    click('Start a new flock'), adv(0.4),
+    click('Start a new flock', 0, '#hud'), adv(0.4),
     exp(`__game.level.def.id === 'plan' && __game.env.dayNumber === -2 && Math.hypot(__game.player.position.x + 40, __game.player.position.z - 40.5) < 1.5 && 'planning day ' + __t() + ' at the gate'`, 'Start a new flock: the planning day 07:00 at the gate'),
     ev(`__timer('planning day')`),
     W(-40, 36.9, 0.3), job('pl-gate-dip@-2', 'the gate foot dip, walked'),
@@ -335,11 +337,11 @@ SEGMENTS.cleanout = () => [
   click('Valve shut'), click('Valve shut'), click('Valve shut'), click('Valve shut'),
   ev(`document.querySelectorAll('#hud .panel:not([hidden]) .plate.is-open .plate-head').forEach((b) => b.click()), 'plate folded: the clock runs'`),
   until('__game.farm.clean.lines.every((v) => v >= 1)', 120), click('Valve open'), click('Valve open'), click('Valve open'), click('Valve open'), shot('p3c-28-lines'), ...esc(),
-  job('c-lines@44', 'the drinker lines flushed with disinfectant'),
+  adv(1.5), job('c-lines@44', 'the drinker lines flushed with disinfectant'),
   W(-18, -4.9, 0.35), ...E('feeder-box', 'E opens the feeder box'),
   ...[0, 1, 2].flatMap((i) => [click(`Wash the pans of line ${i + 1}`), until(`__game.farm.clean.pans[${i}]`, 60, 0.5)]), ...esc(),
   job('c-pans@44', 'the feeder pans washed'),
-  { advanceUntil: '__game.env.hour >= 13', max: 200 }, ...atFans([click('All six')], 'day 44: the fans to dry the house'),
+  ...next(), ev(`'Next job -> ' + __t()`), until('__game.env.hour >= 13', 120), ...outToHouse(), ...atFans([click('All six')], 'day 44: the fans to dry the house'),
   ...houseOut(), ...evening(44), ev(`__timerEnd('day 44')`),
   exp(`(() => { const m = __game.jobs().filter((j) => j.key.endsWith('@44') && j.status !== 'done' && j.key !== 'c-dry@44'); return m.length === 0 ? 'day 44 jobs done (the drying runs on)' : 'not done: ' + m.map((j) => j.key + ':' + j.status).join(' '); })()`, 'day 44 played by real input'),
   ...autoTo(67, 7), ev(`'after the rest: ' + __game.level.mode + ' ' + __t()`), adv(0.5),
@@ -368,7 +370,7 @@ export function replay() {
     ...autoTo(14, 21), passed('week2'), ...continueOn('Continue to Week 3', 'week3', 15),
     ev(`(__game.level.debug.goto(21, 21, { auto: true, profile: 'cocciUntreated' }), 'week 3 with the coccidiosis left untreated -> ' + __game.level.mode + ' ' + __t())`), adv(0.6),
     exp(`(() => { const r = __game.level.result; return __game.level.mode === 'result' && r?.levelId === 'week3' && !r.pass && 'week 3 not passed: ' + r.failText; })()`, 'week 3 fails: deaths over the limit'),
-    exp(`(() => { const t = document.querySelector('.result-carried')?.textContent || ''; const b = [...document.querySelectorAll('.result-btns .btn')].map((x) => x.textContent.trim()); return b.includes('Replay Week 2') && /vaccine drunk in \d+(\.\d)? h on day 12/.test(t) && 'buttons ' + b.join(' | ') + ' · ' + t; })()`, 'the fail screen offers Replay Week 2 with "vaccine drunk in … h on day 12"'),
+    exp(`(() => { const t = document.querySelector('.result-carried')?.textContent || ''; const b = [...document.querySelectorAll('.result-btns .btn')].map((x) => x.textContent.trim()); return b.some((x) => x.startsWith('Replay Week 2')) && /vaccine drunk in [0-9.]+ h on day 12/.test(t) && 'buttons ' + b.join(' | ') + ' · ' + t; })()`, 'the fail screen offers Replay Week 2 with "vaccine drunk in … h on day 12"'),
     shot('p3r-week3-fail'),
     click('Replay Week 2'), adv(0.5),
     exp(`__game.level.mode === 'level' && __game.level.def.id === 'week2' && __game.env.dayNumber === 8 && Math.abs(__game.env.hour - 6) < 0.05 && 'week 2 again at ' + __t()`, 'Replay Week 2: day 8 06:00'),

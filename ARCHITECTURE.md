@@ -1,4 +1,4 @@
-# Chicken Farm — architecture (Phase 1 and Phase 2)
+# Chicken Farm — architecture (Phases 1, 2 and 3)
 
 A browser game that teaches broiler farming by running a farm through a flock cycle.
 **Phase 1** was the look-and-feel test: one chicken house, the farm around it, a walking farmer and
@@ -9,7 +9,7 @@ model, flock records, the skill tree (11 branches, two earnable), problem events
 day 7 weigh-in, autosave. The Phase 1 sections below are still valid; **"Phase 2 (Level 1)"** at the
 end lists the modules, the contracts as integrated, and the tests. **Phase 3** (the full flock cycle:
 seven levels on one flock from the plan to the rested house, all eleven skill branches) is specified in
-`PHASE3.md`; its shared contracts and stubs are on main (see "Phase 3 — contracts on main" at the end).
+`PHASE3.md` and integrated on main: see **"Phase 3 (the full flock cycle) — as integrated"** at the end.
 Not in scope yet: sound, settings, farm overview map (Phase 5), harder replays (Phase 4).
 
 ## Decisions already made (from the plan doc)
@@ -55,6 +55,10 @@ Not in scope yet: sound, settings, farm overview map (Phase 5), harder replays (
 | `src/level.js`, `src/job-engine.js`, `src/content-jobs.js`, `src/content-signs.js`, `src/ui-*.js` | level | Level flow, jobs, every Level 1 panel, sign and job content |
 | `src/props.js`, `src/props-*.js`, `src/house-level.js`, `src/player-carry.js` | props | Level 1 props, triggers, trucks, boxes, boards, floor states and overlay, carried things |
 | `src/flock-level.js`, `flock-pop/dead/catch/sick.js` | flock | Level 1 population, dead and sick birds, catching, access behaviour |
+| `src/run.js`, `src/ui-run.js`, `ui-letters.js`, `ui-summary.js` (+ level.js, job-engine.js, the core ui) | run (Phase 3) | The run of seven levels: chaining, saved starts, replays, the run card, letters, the cycle summary |
+| `src/farm-cycle*.js`, `farm-house/health/silos/harvest/clean.js`, `farm-profiles-cycle*.js`, `records-cycle.js`, `skills-rules-cycle.js` | sim (Phase 3) | The farm model from Week 2 to the rested house, the cycle profiles, records pages, milestone rules, the run store (`save.js`) |
+| `src/ui-cycle-*.js` (+ ui-climate/water/equipment/inspect.js) | panels (Phase 3) | Every new equipment and inspection panel and the Phase 3 parts of the Phase 2 panels |
+| `src/props-cycle-*.js`, `props-air/catch/overlay/pictos/tools.js`, `flock-cycle.js`, `flock-harvest.js`, `house-door/fans/pad.js` | scene (Phase 3) | Boards, yard props, hand tools and painting, floor views, the catching night, the grown flock, the house's Phase 3 states |
 
 Agents edit **only their own files**. If you need something from another module, code against the
 contract below and note the need in your report; do not edit their file.
@@ -332,46 +336,143 @@ feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
   truth()`. Steps files start a level with `{"eval": "__game.startLevel({ seed: 1 })"}` or from the
   title (`__game.level.toTitle()` then `{"clickText": "Start Level 1"}`).
 
-## Phase 3 — contracts on main (before the packages branch)
+## Phase 3 (the full flock cycle) — as integrated
 
-`PHASE3.md` is the spec and §14 the four packages (`sim`, `run`, `panels`, `scene`); §13.9 gives every
-hand-over point one owner and one signature. Committed now (after the design review):
-- `src/config.js` Phase 3 section: `CYCLE`, `ROUNDS`, the level defs `PLAN_LEVEL`, `WEEK2`, `WEEK3`,
-  `WEEKS45`, `FINISH`, `CLEANOUT` and `LEVELS` (with `LEVEL1`; titles "Level n – …", `starts`: weeks 4–5
-  saves day 22 and day 29), `levelById`, `levelOfDay`, `FEED_STD_TABLE` (`feedStdGAt` unchanged to age 7),
-  `FPG_TABLE` / `feedPerGainAt` (unchanged to age 14; the ideal ≈ 5 % over `weightAt` on every weigh day),
-  `MIN_VENT_PER_1000` to 3 kg (unchanged to 200 g), `OUTSIDE_WATER_GM3`, `PAD_EFF`, `FEED_TYPES`,
-  `LIGHT_PRESETS`, `HEAT` (`padOffAboveRH` 90: the one temperature + humidity number), `PLAN_CONTRACT` (the
-  contract's terms: 4 % losses counted, 21 rest days, 6,000 a house, send by 16:00), `HARVEST` (the
-  sign-catch figures), `CLEAN` (ten `swabSpots`), `SPOTS3`, `houseSector`, `COMFORT_RAMP`, `MOISTURE_RAMP`,
-  33 `UNLOCKS`, `RUN_SAVE`, `CONDITIONS`; `MIN_DAY` is −2 (the planning day).
-- `src/events.js`: `EV.RUN`, `EV.CATCH`, `EV.LETTER`, `ACTION_IDS` (every action id of both phases, with
-  `water.disinfect`), `UI_ACTION_IDS_CYCLE`.
-- `src/sim.js`: `env.setMaxDay(n)`, `env.setBroodCurtain(closed | null)`, and the **cycle climate**
-  (`env.setCycleClimate(on)`, off in the sandbox and the brooding week): outside air at the day's water
-  content, event `rh` / `rhDrop`, the pad by the outside wet bulb × `PAD_EFF` × `env.padWorking`;
-  `env.setFansBroken` / `env.fansEffective` (no broken fans = Phase 2's numbers exactly).
-- `src/farm-heat.js` (complete): what growing birds feel (humidity term), panting, heat deaths and intake
-  by age and weight, the dust index. `scripts/cycle-refs.mjs`: the climate and growth references, run on
-  the env alone by `test-cycle.mjs` now (the §6.3 table of PHASE3.md is their output).
-- Contract data: `src/content-jobs-cycle.js` (73 jobs), `src/content-signs-cycle.js` (new
-  boards, plates, extra lines by day, `boardsForDay`; `ui-boards.js buildPlate` reads it),
-  `src/skills-cycle.js` (98 milestones; `skills.js ALL_MILESTONES` with Phase 2's
-  tagged `level1`, and `evaluate()` filters by the checkpoint's level), `src/farm-plan.js` (`planSums`,
-  `planOutcome` with the terms), `scripts/test-cycle.mjs` `CYCLE_TARGETS`, `SNAPS`, `checkCycle`.
-- Stubs: `src/farm-cycle.js` (the Phase 3 farm state, `enterLevel`, `farm.debug.set`, and the minimal
-  state changes the run's flows wait on: vaccine drunk, the catch, the clean grids, the lab letter, the
-  bookings), `src/farm-profiles-cycle.js` (placeholder care, `climateCare` kept exported until the run
-  merge), `src/records-cycle.js`, `src/run.js`, `level.debug.freeRun(day, hour)` (a level-mode farm at any
-  age, no jobs), `src/ui-cycle-panels.js` (placeholder panels; the api has `plate`, `openPanel`, panels may
-  define `take(p)`), `__game.run / startRun / startLevel({ level }) / cycleAt`.
-- Tests: `npm test` adds `test-cycle.mjs` (the climate, growth and plan checks run now; the profiles skip
-  on the stub) and `test-run.mjs` (the chaining tests skip while `run.stub` or `farm.cycleStub`);
-  `test-contracts.mjs` checks the Phase 3 content and the skills level filter; `scripts/p3-design-stubs.json`
-  checks the stubs in the browser. The brooding week plays and measures exactly as before
-  (`test-level.mjs`, `test-sim.mjs`: ratio 4.873, FCR 0.840); its result head now reads "Level 2 – The
-  brooding week".
-- **Guide tags (provisional):** PHASE3.md §5.1 maps each week's plan topic to that week's guide (Week 2,
-  Week 3, Week 4 guide for weeks 4–5) by inference from the plan's level list; the guide-tagged lines hold
-  only that bare topic and every cause, rule and figure is general. The mapping stays provisional until the
-  farmer answers PHASE3.md open question 1.
+`PHASE3.md` is the spec (§13 the contracts, §14 the four packages). The packages `sim`, `scene`, `panels` and
+`run` were merged in that order with `--no-ff` (no file was touched by two packages); this section lists the
+wiring and every contract that changed or was settled at the merge.
+
+### The run (run.js + level.js)
+Seven levels on one flock (`config.LEVELS`): Plan the farm (day −2) · the brooding week (Phase 2's Level 1,
+days −1..7) · Week 2 · Week 3 · Weeks 4 and 5 (saved starts on day 22 and day 29) · Finishing and harvest ·
+Clean-out and rest (to the booked chick day, at least 21 days after the house closed). `run.startRun({ seed, at })`,
+`next()` (Continue: `level.enter(def)` keeps the farm and the flock, skips the night, `farm.enterLevel`, the
+level's jobs), `replay(id, { day })`, `startLevel(id, { from: 'saved' | 'standard' })` (standard: the ideal
+farmer plays to the level's start), `continueSave()` (a Phase 2 save continues as a run at the brooding week),
+`state()` `{ levelId, seed, plan, levels, summary, conditions, lastCycle }`, `card()`. A failed level's screen
+offers *Replay <level>* (its saved starts) and *Replay <previous level>* with the record lines it carried
+over ("vaccine drunk in 4.4 h on day 12"); the last level's pass gives *See the cycle summary*.
+
+### Wiring (main.js)
+Phase 2's order, then `run = createRun({ level, save, events, farm, env, records })` (`ctx.run`; it calls
+`level.attachRun`). ui.js calls `registerCyclePanels({ register, L, boards, plate, sourceLabel, openPanel })`
+after the Phase 2 panels. `window.__game` adds `run`, `startRun`, `startLevel({ level, from })`, `cycleAt(day,
+hour)` (`level.debug.freeRun`) and `config` (the config module: steps files read the signs' numbers).
+
+### Contracts changed or settled at the merge
+- **Stub fallbacks removed.** run.js uses `save.js createRunStore` (its own local store is gone) and
+  `records.cycleSummary`; a Phase 2 save comes from `migratePhase2().blob`. level.js reads the farm's
+  `stats.levelStart` and `stats.scaleAt[day]` only (it keeps no counters of its own) and the stub fan thermostat
+  `climateCare` is gone from level.js and farm-profiles-cycle.js. ui-letters reads `records.harvestPage()` /
+  `cleanPage()`. The panels take the farm's answers as given (`pad.check`, `load.ticket`, `gas.meter`,
+  `env.heatBudget()`), and read the main valve (`farm.health.mainClosed`), the medicator, the withdrawal, the
+  slide valves (`farm.feed.valves`), the washed items and pans (`farm.clean`) and the two silos from the farm.
+  The scene reads `env.broodersUp`, `env.padWorking`, `farm.feed.valves`, `farm.health.mainClosed`,
+  `farm.harvest.panels` without fallbacks.
+- **New shared state:** `farm.health.droppings` (the flock's main droppings look; the scene's floor colour,
+  §13.5); `config.GAS_TANK_KG` (500 kg; the farm's `gas.meter` and the scene's gauge); `run.state().lastCycle`
+  `{ plan, summary }` (kept across *Start a new flock* and in the run save; the plan sheet's `planCarry`).
+- **All eleven skill branches earnable** (`config.SKILL_BRANCHES[i].earnable`); the skill tree shows each
+  branch's next unlock.
+- **Vet letters** come from `farm.health.vet` (saved with the farm), so they survive a reload.
+- **Payloads as built:** `light.preset { preset }` (an `id` arg would overwrite the action id; PHASE3.md §13.3
+  updated); `fans.read { fans, houseC, rh, speedMs, pad }` (the reading at 2 s open, once per opening);
+  `vent.stages` off = `{ stages: null, padOverC: null }`; `feed.order` → `{ arriveDay, arriveHour, kg, type,
+  silo, roomKg }`; `feed.silo` → `{ kg, silos }`; `litter.patch` → `{ onLeak, onPad }`; `water.flush` →
+  `{ flushClear, disinfected }` (a line is disinfected at once while the header tank holds disinfectant).
+- **Records:** the day's row is drawn when the record is signed; the week table's *Tunnel fans (most)* and
+  *Pad on* are what the farmer read at the fan panel that day (`fans.read`), not a hidden log.
+- **Sign sources (§5.1):** three guide-tagged lines that carried a cause or a rule were split into the bare
+  guide topic and a general line (sign-air breathing sounds, sign-air minimum ventilation, the vaccine plate).
+- **Look notes** say "birds" from day 8 (the brooding week keeps "chicks"); an empty house reads as such.
+- **The vaccine walk** (`farm-cycle-act.js`, EV.CELL while the birds drink the vaccine) counts the cells within
+  the farmer's 2 m sight, as the walk jobs do: counting only the cells he stepped on, the model's 30 % meant
+  walking nearly all of the 1.5 h of drinking, and the plate's vaccination by real input got coverage 0.86
+  (0.96 now; the ideal's `noteWalk` is unchanged, so test-cycle is not affected).
+- **test-cycle bands (integrator):** `noStep` is measured against the ideal (night RH ≥ +2.5 points, litter on
+  day 14 ≥ +2 points, NH3 the night of day 14 ≥ +1.5 ppm, day 21 ≥ 0.2 % under): the absolute bands could not
+  hold in a heated week-2 house (PHASE3.md §6.16). `minVentW3` heat deaths ≤ 0.07 % (one bird over 0.05).
+
+### Tests and harness
+- `npm test` = test-contracts, test-sim (Phase 2 unchanged: ratio 4.873, FCR 0.840), test-jobs (26), test-level,
+  **test-cycle** (climate, growth and plan checks; 23 profiles incl. the ideal: every level passes, harvest
+  2,887 g live, FCR 1.58, mortality 2.35 %, EPEF 427; determinism; whole cycle 2.5 s; 24 h skip about 80 ms;
+  level starts 8–140 KB, the day 41 blob 149 KB) and **test-run** (the chaining tests on the real sim: a
+  scripted plan, Continue to Week 2, goto(auto) through every level with the cycle summary, a failed week 3
+  replayed from its identical saved start, poorVaccineCocci → *Replay Week 2* → week 3 passes, the two weeks
+  4–5 starts, a standard start in about 1 s, run start blobs 10–227 KB, a Phase 2 save continuing as a run).
+- Harness additions (`scripts/shoot.mjs`): `{"walkToExpr": "js"}` walks to a point worked out in the page (the
+  nearest dead bird or bird), `{"clickTextUntil": "One second more", "until": "js"}` presses a button until the
+  display shows the number (the farmer reading a sign and setting a control).
+- Package steps files (all pass on main): `p3-run-title/chain/replay/ui`, `p3-panels-plan/week2/heat/harvest/
+  clean/shots`, `p3-scene-look/events/perf`, `p3-design-stubs`.
+- **Integrator play-throughs**, generated by `node scripts/p3-cycle-steps.mjs` (helpers for the routes and the
+  daily rounds; `--dev <segment,...> <file>` writes one part, `start:<level>` begins at a standard start):
+  `scripts/p3-cycle.json` — title → *Start a new flock* → the planning day by walking (gate dip and sign,
+  guard hut, the planning sign, the contract letter, the tape at both end walls and across, the sheet typed in
+  and sent, the reply, signed) → `goto(7, 21, auto)` → **day 8 by real input** (every routine job, the light
+  program, lux with L at three places, the timer by the vent sign, the lines raised) → day 10 the curtain at
+  the winch → day 12 the vaccine at the water supply (main valve shut 1.5 h, stabiliser, open, the birds walked
+  up) → week 2 result → **day 16 by real input** (ten droppings checks in the hand, six fans for the warm
+  afternoon) → **day 25 by real input** (the hot afternoon: six fans, the pad) → day 27 the stopped fan found
+  by walking past it and fixed with E → the heat wave at the fan panel → **day 37 by real input** (the crew
+  booked on the phone) → the catching night watched from the house and the yard, the tickets read →
+  **day 44 by real input** (three washer passes, the lines disinfected, the pans washed, the fans to dry) →
+  `goto(67, 7, auto)` → every level passed, the cycle summary. `scripts/p3-replay.json` — week 2 from its
+  standard start, a poor vaccination by real clicks (no thirst, no stabiliser), week 3 with the coccidiosis
+  left untreated fails, the fail screen offers *Replay Week 2* with "vaccine drunk in … h on day 12", week 2
+  replayed with the vaccine by the plate, week 3 passes.
+- **Results on main** (960 × 600, seed 1): `p3-cycle.json` 154 PASS, 0 FAIL, no console or page errors — plan
+  3,611 birds a week at 28.0 kg/m² · brooding week 4.87 × · Week 2 492 g, 0.25 % · Week 3 985 g, 0.44 % · Weeks
+  4–5 2,294 g, 0.59 % · harvest 2,884 g live, FCR 1.58, EPEF 428, 2.28 % lost over the cycle · clean-out 0 of
+  10 swabs positive, 21 rest days · the cycle summary. `p3-replay.json` 16 PASS, 0 FAIL — the poor vaccine (4.5 h, coverage 0.39) and the untreated coccidiosis fail week 3 at 1.50 %; *Replay Week 2 from day 8* with "From Week 2: vaccine drunk in 4.5 h on day 12"; the vaccine by the plate (1.5 h, coverage 0.96); week 3 passes (980 g, 0.45 %).
+- **Every earlier run passes on main** (960 × 600, exit 0, no console errors): the Phase 1 `tour`, `cold-hot`,
+  `p2-hooks`, `phase1-jobs` (4 of 4), `p2-level1` (57/0, 4.87 ×), `p2-level1-find`, `p2-review2` and
+  `p2-review2-ui` (the skill tree check now expects the eleven earnable branches), every `p3-run-*`,
+  `p3-panels-*` and `p3-scene-*` file and `p3-design-stubs`. Scene budget on main: house view 118 draw calls,
+  570 k triangles, 55 shader programs (unchanged through a prop tour), frame step 1.9 ms.
+- **Play time of the real-input days** (the seconds the harness advanced the game — walking, panels and
+  carrying at their clock speeds — plus 2 s per click or key press, 0.4 s when it repeats the press before):
+
+  | Day | Jobs by real input | Play time | Game hours covered |
+  | --- | --- | --- | --- |
+  | −2 planning day | 9 (walking, tape, sheet, reply, sign) | 2.6 min | 2.6 h (then Next job) |
+  | 8 | 17 (routine, lights, lux, timer, lines raised) | 5.0 min | 10.0 h |
+  | 16 | 15 (routine, 10 droppings checks, fans, night) | 7.5 min | 12.7 h |
+  | 25 | 14 (routine, hot afternoon fans and pad, night) | 5.4 min | 12.7 h |
+  | 37 | 15 (routine, the phone booking, fans, night) | 6.0 min | 12.7 h |
+  | 44 | 5 (three washer passes, lines, pans, drying fans) | 4.9 min | 10.0 h |
+
+  Every flock day is over PHASE3.md's 4.5-minute ceiling. The time goes to walking (2.9–5 of the minutes: the
+  48 m house, the round to the silo and the bin, the office and back for the 18:00 fan check) and on day 16 to
+  the ten birds in the hand (about 2 min). **Before release (fewer `onDays`):** from Week 2 the four flow tests
+  every other morning (with `r-minvent`), the silo gauge on order days only, five birds instead of ten for the
+  droppings checks, and the evening ventilation job readable at the controller by the door; each of these saves
+  roughly 0.5–1 min. Not changed in Phase 3 (content for the farmer to confirm; PHASE3.md §17 question 14).
+- **The model as played** (found by the real-input days): 16-day-old birds chill under six fans with the pad
+  (house 28 °C, wind chill at 2.5 m/s: about 3 cold deaths an hour from 14:00) — the heat sign's "young birds:
+  as few tunnel fans as the heat allows"; six fans without the pad keep them comfortable with no deaths. Two hours
+  of few fans in the day-25 hot afternoon before the farmer's 13:00 round is enough for an abnormal-deaths
+  report; the scripted farmer sets six fans at the end of the morning round on hot days.
+
+### Open (Phase 4 and later)
+- **Day budget** over 4.5 min on every flock day (table above); the `onDays` cuts listed there wait for the farmer.
+- **noStep** (minimum ventilation never stepped up) costs little in the model (night RH +4 points, litter +3
+  points, NH3 +2.5 ppm, 0.4 % of the day-21 weight): the bands are relative for now; a stronger response to too
+  little air (wet litter, ammonia, intake) is Phase 4 tuning.
+- **Week 3 heat job:** `p-heat3`'s done test accepts all fans + pad, which chills 16-day-old birds; it also accepts
+  panting ≤ 10 % for 30 min (six fans without the pad). Phase 4: tie the pad part of `heat-handled` to age, or
+  soften cold deaths under tunnel air by age.
+- **Ideal profile points** the sim package could not reach (vent-band, warm-timer, heat-finish, damp-cleared,
+  comfort-fin, harvest-uniformity 66 %); every branch still reaches level 2.
+- **Records:** the week table's *Tunnel fans (most)* / *Pad on* are the farmer's own fan-panel readings (one per
+  opening, 2 s after it opens): a day without a reading, or with a reading taken before switching, shows less.
+- **Speed:** the brooding week's 24 h skip costs 40–130 ms in node (the limit is 150 ms; Phase 2's was 30 ms).
+- **Scene:** the catching crew walks fixed paths through the farmer and the stacks; the grown flock covers about
+  65 % of the floor at 2,950 g; the two board textures take about 46 MB of GPU memory; `ui-jobs.js` imports
+  `FAN_Z` from `house-fans.js` (could move to config with `LUX_RAMP` / `BROODER_RAMP`).
+- **Panels:** at 960 × 600 the water supply (Lines from day 8), the controller's Ventilation tab with the
+  calculator, the bird check with the guide and the fan panel with the stages scroll vertically (never sideways).
+- **Guide tags** stay provisional (PHASE3.md §5.1, open question 1).
+- **Phase 4:** the harder replay conditions (`config.CONDITIONS`, `available: false`) and the model tuning to the
+  guides' numbers; **Phase 5:** sound, settings, save slots, the farm overview map.

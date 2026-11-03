@@ -150,8 +150,14 @@ export function onBus(farm, env, type, p = {}) {
     case EV.CELL: {
       const v = farm.health.vaccine;
       if (v.state !== 'drinking') break;
-      const seen = v.cells || (v.cells = []), i = cellIndex(p.x ?? 0, p.z ?? 0);
-      if (!seen.includes(i)) { seen.push(i); vaccineWalk(farm, 1 / 576); }
+      // the birds he walks up to drink: the cells within his 2 m sight (as the walk jobs count them, sight 2)
+      const seen = v.cells || (v.cells = []), x0 = p.x ?? 0, z0 = p.z ?? 0;
+      for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+        const x = x0 + dx, z = z0 + dz;
+        if (dx * dx + dz * dz > 4 || x < -24 || x >= 24 || z < -6 || z >= 6) continue;
+        const i = cellIndex(x, z);
+        if (!seen.includes(i)) { seen.push(i); vaccineWalk(farm, 1 / 576); }
+      }
       break;
     }
     case EV.BIRD_PICK: {
