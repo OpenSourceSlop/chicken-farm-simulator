@@ -68,7 +68,8 @@ function feedBody(b) {
     b.box(1.62, 1.25, 2.3, xc, 2.66, 0, 0xc23a2a);
     b.box(0.5, 0.08, 0.5, xc, 3.33, 0, 0xe2e4df);                                     // lids
   }
-  b.box(x1 - x0, 0.12, 2.34, (x0 + x1) / 2, 3.32, 0, 0xe2e4df);
+  b.box(x1 - x0, 0.1, 2.34, (x0 + x1) / 2, 3.31, 0, 0xa8302a);
+  b.rod([x0 + 0.2, 3.5, -1.0], [x1 - 0.2, 3.5, -1.0], 0.02, 0xd8dcdf, 4);          // walkway rail
   b.box(x1 - x0, 0.1, 0.04, (x0 + x1) / 2, 2.2, 1.17, 0xf4f1ea);
   b.rod([x0, 1.2, 0.6], [x1, 1.2, 0.6], 0.09, 0x9aa3a8, 8);                          // bottom auger
   b.rod([x0 - 0.1, 1.2, 0.6], [x0 - 0.1, 3.5, 0.6], 0.11, 0x9aa3a8, 8);              // pipe riser at the rear
@@ -248,7 +249,13 @@ export function buildTrucks(mats, group) {
     stop: STOP,
     tail: { x: STOP.x - 3.7, z: STOP.z },
     feedStop: FEED_STOP,
-    arrive(kind = 'chicks', instant = false) { setState(kind, instant ? 'parked' : 'driving-in'); if (instant) st[kind].time = 5; },
+    // a second arrive (the farm's delivery event and the level both asking) does not restart it
+    arrive(kind = 'chicks', instant = false) {
+      const cur = st[kind].state;
+      if (!instant && (cur === 'driving-in' || cur === 'parked')) return;
+      setState(kind, instant ? 'parked' : 'driving-in');
+      if (instant) st[kind].time = 5;
+    },
     leave(kind = 'chicks', instant = false) { if (st[kind].state === 'away') return; setState(kind, instant ? 'away' : 'leaving'); },
     update,
     collider(kind) {

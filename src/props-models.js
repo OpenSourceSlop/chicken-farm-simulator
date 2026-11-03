@@ -99,11 +99,9 @@ export function wheelbarrow(b, { full = false } = {}) {
 
 /** White woven sack of rice husk lying on its side, centre at the origin, long axis along x. */
 export function sack(b) {
-  b.box(0.78, 0.26, 0.44, 0, 0, 0, C.sack);
-  b.box(0.7, 0.3, 0.38, 0, 0, 0, C.sack);
-  b.box(0.04, 0.24, 0.42, 0.4, 0, 0, C.sackSeam);                                // stitched end
-  b.box(0.3, 0.005, 0.22, -0.05, 0.152, 0, C.sackPrint);
-  for (const z of [-0.12, 0.12]) b.box(0.6, 0.004, 0.012, 0, 0.152, z, C.sackSeam);
+  b.add(new THREE.IcosahedronGeometry(0.5, 1), C.sack, mat(0, 0, 0, 0, 0, 0, 0.8, 0.27, 0.46));
+  b.box(0.05, 0.16, 0.34, 0.39, 0, 0, C.sackSeam);                              // stitched end
+  b.box(0.3, 0.01, 0.2, -0.05, 0.128, 0, C.sackPrint);
 }
 
 /** Black plastic bucket with a wire handle, base at the origin. n > 0 shows dead chicks in it. */

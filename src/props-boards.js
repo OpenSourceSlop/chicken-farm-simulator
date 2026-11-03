@@ -109,24 +109,24 @@ function paintBoard(g, id, ox, oy) {
   const w = PX_W, h = PX_H;
   g.fillStyle = '#f5efdc'; roundRect(g, 0, 0, w, h, 22); g.fill();
   g.strokeStyle = '#2f6b5b'; g.lineWidth = 12; roundRect(g, 10, 10, w - 20, h - 20, 14); g.stroke();
-  g.fillStyle = HEAD[id] || '#c4471d'; g.fillRect(24, 24, w - 48, 104);
+  g.fillStyle = HEAD[id] || '#c4471d'; g.fillRect(24, 24, w - 48, 128);
   g.fillStyle = '#fff6e6'; g.textBaseline = 'middle'; g.textAlign = 'left';
-  let size = 62;
+  let size = 84;
   g.font = `700 ${size}px ${FONT}`;
   const title = B.title.toUpperCase();
   while (g.measureText(title).width > w - 100 && size > 36) { size -= 2; g.font = `700 ${size}px ${FONT}`; }
-  g.fillText(title, 48, 78);
+  g.fillText(title, 48, 90);
   if (B.kicker) {
     g.font = `600 26px ${FONT}`;
     const kw = g.measureText(B.kicker).width + 28;
-    g.fillStyle = '#2f6b5b'; roundRect(g, 40, 140, kw, 38, 10); g.fill();
-    g.fillStyle = '#f5efdc'; g.fillText(B.kicker, 54, 160);
+    g.fillStyle = '#2f6b5b'; roundRect(g, 40, 164, kw, 38, 10); g.fill();
+    g.fillStyle = '#f5efdc'; g.fillText(B.kicker, 54, 184);
   }
   const pic = (B.items.find((it) => it.pic) || {}).pic || (id === 'sign-vent' ? 'fan' : null);
   const picW = 230;
-  if (pic) pictogram(g, pic, w - picW - 40, 150, picW, 240);
+  if (pic) pictogram(g, pic, w - picW - 40, 172, picW, 240);
   // facts: short lines with their source in small text, as many as fit
-  let y = 200;
+  let y = 222;
   const left = 46, maxW = (pic ? w - picW - 70 : w - 80) - left;
   const bottom = h - 74;
   let shown = 0;

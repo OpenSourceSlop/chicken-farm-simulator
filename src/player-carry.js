@@ -50,7 +50,7 @@ function build(kind) {
 // where each mesh sits on the farmer's root (he faces -z)
 const PLACE = {
   barrow: { p: [0, 0.2, -1.62], r: [-0.2, 0, 0] },
-  sack: { p: [0.2, 1.55, 0.02], r: [0, 0, 0] },
+  sack: { p: [0.3, 1.5, 0.2], r: [0.2, 0.15, -0.55] },
   boxes: { p: [0, 0.085, -1.15], r: [0, 0, 0] },
   bucket: { p: [0.34, 0.24, -0.04], r: [0, 0.3, 0] },
   frame: { p: [-0.36, 0.42, 0.02], r: [0, Math.PI / 2, 0.06] },

@@ -105,11 +105,12 @@ export function buildFloorStates(ctx, house, group) {
   // floor thermometer view: a plane 3 cm over the brooding floor
   const OW = 96, OH = 24;
   const otex = dataTexture(OW, OH);
+  otex.colorSpace = THREE.SRGBColorSpace;   // the ramp is written as sRGB colours
   const b = BROOD_BOUNDS;
   const ow = b.xMax - b.xMin, oh = b.zMax - b.zMin;
   const og = new THREE.PlaneGeometry(ow, oh);
   og.rotateX(-Math.PI / 2);
-  const omat = new THREE.MeshBasicMaterial({ map: otex, transparent: true, opacity: 0.68, depthWrite: false, toneMapped: false });
+  const omat = new THREE.MeshBasicMaterial({ map: otex, transparent: true, opacity: 0.72, depthWrite: false, toneMapped: false });
   const overlay = new THREE.Mesh(og, omat);
   overlay.position.set((b.xMin + b.xMax) / 2, 0.05, (b.zMin + b.zMax) / 2);
   overlay.renderOrder = 3;
