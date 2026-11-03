@@ -1,7 +1,7 @@
 // House climate and farm clock. Pure logic, no three.js.
 // Owner: systems/UI agent. Other modules read `env`; only ui.js and test hooks call the setters.
 import {
-  HEATERS, HOUSE, BIRD_BOUNDS, FAN_COUNT, TIME, WEATHER, MIN_DAY, AIR, EQUIP, targetTempAt, weightAt,
+  HEATERS, HOUSE, BIRD_BOUNDS, BROOD_BOUNDS, FAN_COUNT, TIME, WEATHER, MIN_DAY, AIR, EQUIP, targetTempAt, weightAt,
 } from './config.js';
 //
 // Phase 2 additions (package "sim", PHASE2.md §6.2). The level climate runs only while
@@ -41,6 +41,17 @@ const HEAT_RATE = 6.5;      // °C per hour from 8 brooders at full output
 // of brooder output) with a 30 h time constant and pulls the house air toward itself.
 const SLAB = { tauH: 30, brooderC: 1.0, sinkPerH: 0.3, kBare: 0.1, kPerCm: 0.02 };
 const RAMP_DAYS = 2 / 24;   // weather events ramp in and out over 2 h
+// A brooder that is out leaves the air around it cooler than the house mean: the other brooders'
+// heat reaches it only by mixing (model). Air there = house - OUT_AIR.c x output x (g - mean g),
+// g a Gaussian of OUT_AIR.sigma m around it; mean g over the brooding floor keeps the house mean.
+const OUT_AIR = { c: 3, sigma: 2.5 };
+const OUT_MEAN = HEATERS.map((h) => {
+  let s = 0, n = 0;
+  for (let x = BROOD_BOUNDS.xMin + 0.5; x < BROOD_BOUNDS.xMax; x += 1) for (let z = BROOD_BOUNDS.zMin + 0.5; z < BROOD_BOUNDS.zMax; z += 1) {
+    s += Math.exp(-((x - h.x) ** 2 + (z - h.z) ** 2) / (2 * OUT_AIR.sigma ** 2)); n++;
+  }
+  return s / n;
+});
 
 // The farm clock keeps `day` and `hour` in step: the whole number of `day` is the calendar day of
 // the flock (it changes at midnight) and the fraction is the time of day, so day = N + hour / 24.
@@ -113,6 +124,7 @@ export function createSim() {
     // running brooder, minus wind chill, slightly cooler beside the side walls and near the pad.
     localTemp(x, z) {
       let t = this.houseTemp - this.windChill + this.brooderHeat(x, z);
+      if (this.levelClimate && this.brooderOut.length) t += this.outAirDev(x, z);
       const wallDist = Math.min(z - BIRD_BOUNDS.zMin, BIRD_BOUNDS.zMax - z);
       if (wallDist < 1.5) t -= 1.0 * (1 - wallDist / 1.5);
       const fans = this.levelClimate ? this.fanMean : this.fansOn;
@@ -125,6 +137,16 @@ export function createSim() {
     },
     // Signed difference between what a bird feels at (x, z) and the target for its age.
     comfort(x, z) { return this.localTemp(x, z) - this.targetTemp; },
+    // Level only: how much cooler (negative) the air at (x, z) is because of brooders that are out.
+    outAirDev(x, z) {
+      let d = 0;
+      for (const i of this.brooderOut) {
+        const h = HEATERS[i];
+        if (!h) continue;
+        d -= OUT_AIR.c * this.heaterLevel * (Math.exp(-((x - h.x) ** 2 + (z - h.z) ** 2) / (2 * OUT_AIR.sigma ** 2)) - OUT_MEAN[i]);
+      }
+      return d;
+    },
     // Radiant part of localTemp at floor point (x, z): °C added by the running brooders
     // (Gaussian, sigma 1.6 m, up to +7 °C at full glow). 0 when the brooders are cold.
     brooderHeat(x, z) {
