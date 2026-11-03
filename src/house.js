@@ -28,9 +28,11 @@ export function buildHouse(ctx) {
   const chords = new Batch();    // truss tie beams: no shadows, cleared out of the camera's sight line
   const rafters = new Batch();   // rafters, webs, ridge: shown with the roof only
   const porch = new Batch();     // door portal, leaves and canopy: fade while the farmer is at the door
-  const kit = { group, mats, stat, statDS };
+  // ctx.farm (Phase 2): in level mode the lines, pans and brooders follow the farm model
+  const kit = { group, mats, stat, statDS, farm: ctx.farm };
 
-  group.add(buildFloor());
+  const floor = buildFloor();
+  group.add(floor);
   const walls = buildWalls(stat, mats, HOUSE.door, (north, south) => buildFrame(stat, chords, rafters, { [-1]: north, [1]: south }));
   for (const w of walls) group.add(w.group);
   walls[1].group.add(houseSign());
@@ -38,6 +40,7 @@ export function buildHouse(ctx) {
   buildApron(stat);
 
   const parts = [buildPad, buildFans, buildFeeders, buildDrinkers, buildBrooders, buildFittings].map((make) => make(kit));
+  const drinkerPart = parts[3];
 
   group.add(stat.mesh(mats.vc));
   group.add(statDS.mesh(mats.vcDS, { receive: false }));
@@ -101,12 +104,15 @@ export function buildHouse(ctx) {
 
   return {
     group,
+    floor,             // the litter plane (props paints the Level 1 floor states into its shader)
     colliders,
     interactables,
     // Line layout for other modules (e.g. birds eating and drinking): x positions of pans and
     // nipples, line z, and their height above the litter by flock age.
     feeders: { z: FEEDER_LINES_Z, panX: PAN_X, rimHeight: feederRim },
     drinkers: { z: DRINKER_LINES_Z, nippleX: NIPPLE_X, nippleHeight },
+    // nipple tip height of each drinker line now (m): the farm's heights in a level (props)
+    lineHeights: drinkerPart.heights,
     update(dt, env, view) {
       cutaway(dt, view);
       for (const p of parts) p.update(dt, env, view);

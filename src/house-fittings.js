@@ -157,10 +157,12 @@ export function buildFittings(kit) {
       const night = view && Number.isFinite(view.night)
         ? clamp01((view.night - 0.15) / 0.5)
         : (h >= 12 ? clamp01((h - 17.9) / 1.0) : clamp01((6.4 - h) / 0.9));
-      bulbK = smooth(bulbK, env.lightsOn ? 1 : 0, 6, dt);
+      // env.lightLevel: 0 in the dark period, the dimmer while lit (1 in the sandbox: Phase 1)
+      const lux = env.lightsOn ? env.lightLevel ?? 1 : 0;
+      bulbK = smooth(bulbK, lux, 6, dt);
       // The roof shade (house-roof.js) keeps the sun off the litter at every hour, so the house
       // lights help by day as well (23 h light programme): a third of their night strength.
-      lampK = smooth(lampK, env.lightsOn ? Math.max(0.35, night) : 0, 6, dt);
+      lampK = smooth(lampK, env.lightsOn ? Math.max(0.35, night) * lux : 0, 6, dt);
       bulbMat.emissiveIntensity = bulbK * (0.7 + 1.3 * night);
       // Tuned against the world's real night (hemisphere 1.25 at 22:00, the moon kept off the litter
       // by the roof shade): a warm fill that reads as "lights on" without washing the litter out.

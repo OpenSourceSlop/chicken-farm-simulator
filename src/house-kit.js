@@ -49,12 +49,15 @@ export class Batch {
     const p = geo.attributes.position;
     const index = geo.index;
     const base = this.pos.length / 3;
-    _c.set(color);
+    // color null: keep the geometry's own vertex colours (a merged sub-batch)
+    const ca = color == null ? geo.attributes.color : null;
+    if (!ca) _c.set(color ?? 0xffffff);
     for (let i = 0; i < p.count; i++) {
       _v.fromBufferAttribute(p, i);
       if (matrix) _v.applyMatrix4(matrix);
       this.pos.push(_v.x, _v.y, _v.z);
-      this.col.push(_c.r, _c.g, _c.b);
+      if (ca) this.col.push(ca.getX(i), ca.getY(i), ca.getZ(i));
+      else this.col.push(_c.r, _c.g, _c.b);
     }
     const flip = matrix && matrix.determinant() < 0;
     const n = index ? index.count : p.count;
