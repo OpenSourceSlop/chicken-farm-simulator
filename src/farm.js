@@ -1,30 +1,44 @@
 // Farm model: the flock as numbers (placement, growth, intake, uniformity, deaths), the water,
 // feed, litter, light and ventilation equipment, the problem events and the samples the farmer
 // takes. Pure logic (no three.js, no DOM): runs in node for scripts/test-sim.mjs.
-// Owner: package "sim" (phase2/sim). STUB: the shape below is the contract; the numbers are
-// placeholders until the package implements PHASE2.md "Flock simulation".
+// Owner: package "sim" (phase2/sim). PHASE2.md §6 (model), §7 (problems), §13 (contracts).
+// The parts live in farm-*.js: farm-flock (cohorts, deaths), farm-water, farm-feed, farm-litter,
+// farm-comfort (what the chicks feel), farm-problems, farm-act (every action id), farm-rng.
 //
 // createFarm(env, { events }) -> farm. main.js creates it before the house and the flock, puts it
 // on ctx.farm, and registers farm.step as an env stepper (it runs every <= 60 game s, also inside
 // env.skipHours). mode 'off' = Phase 1 sandbox: the farm does nothing and the house and flock use
 // their Phase 1 tables. mode 'level' = Level 1 is running: house, flock and props read the state.
 //
+// farm.start(level, { seed, keepClock }) puts env on the level's start (prep day 07:00, cool
+// season, cold brooders, no timer) and turns the level climate on; keepClock leaves day and hour.
+// The chick truck arrives by itself at LEVEL1.arrivalDay / arrivalHour (EV.FARM_DELIVERY chicks
+// arrive; 'leave' after the last tip); a feed order arrives at its day 09:00.
+//
 // Everything the player does to, or reads from, the farm goes through farm.act(id, args): it
 // changes the state, returns the result and emits EV.ACTION { id, ...args, result } so the job
-// engine and the records see it. Action ids: PHASE2.md §13.2. ONE payload shape for every action,
-// from the farm or from the ui: { id, ...args, result } (result undefined for ui-only actions).
+// engine and the records see it. Action ids: PHASE2.md §13.2.
 //
 // The farm is the only owner of: dead birds on the floor (deadOnFloor: += on each death, -= on
 // EV.DEAD_PICK), the problems and their weather (it adds and rebuilds env weather events, also on
 // restore), the symptom decision (EV.FARM_PROBLEM phase 'symptom' from an action it sees, an
 // EV.NEAR from props, or 'radio.listen'), and farm.stats (what skills.js needs, computed in node).
-import { DRINKER_LINES_Z, FEEDER_LINES_Z, FLOOR_GRID, LEVEL1, weightAt, flockAgeAt } from './config.js';
+import { LEVEL1, EQUIP, flockAgeAt } from './config.js';
 import { EV } from './events.js';
+import { createRng } from './farm-rng.js';
+import { createWater, updateAccess, drink, stepLines, recordMeter, waterPerKg } from './farm-water.js';
+import { createFeed, stepAugers, feedAccess, eat, meanPanFill } from './farm-feed.js';
+import { createLitter, stepLitter, serializeLitter, restoreLitter, cellIndex as litterCell, meanDepth } from './farm-litter.js';
+import { comfortNow, floorShareAbove } from './farm-comfort.js';
+import { createFlock, deliver, stepFlock, updateWeights, makeQuantile } from './farm-flock.js';
+import { createProblems, tickProblems, actionSymptoms, onNear, onListen, problemZones, forecast, observe,
+  installWeather, applyEffects } from './farm-problems.js';
+import { doAct } from './farm-act.js';
 
 /**
  * @typedef {{ heightCm: number, pressureCm: number, flowMlMin: number, access: number,
  *   flushing: boolean, flushClear: number, blocked: number, leakX: number|null }} DrinkerLine
- * @typedef {{ heightCm: number, running: boolean, flood: boolean, panFill: number }} FeederLine
+ * @typedef {{ heightCm: number, running: boolean, flood: boolean, panFill: number, kg: number }} FeederLine
  * @typedef {{ id: string, phase: 'pending'|'active'|'found'|'fixed', startedAt: number|null,
  *   foundAt: number|null, fixedAt: number|null, foundBy: string|null }} ProblemState   (times as env.day floats)
  * @typedef {{ problemId: string, x: number, z: number, r: number, dwellSec: number,
@@ -38,157 +52,239 @@ import { EV } from './events.js';
  *   comfortMinutes: number, levelMinutes: number,  // minutes with e in [-1.5, +2] / all minutes, age 0..7
  *   comfortShareByDay: number[],         // same per HUD day 0..7
  *   chickWeightMeasuredG: number|null,   // from sample.box: (gross - box) / 100, never typed
+ *   weighed: { t: number, sector: number, weightG: number }[],  // sample.weigh readings
+ *   pansEmptyAt: number|null,            // first time the pans ran empty (mean fill < 5 %)
  * }} FarmStats   read by skills.js and the result screen; never shown as a verdict
  */
 
+// ui-only actions the farm listens to (symptoms): the ui emits them with result undefined
+const UI_ACTIONS = new Set(['radio.listen', 'controller.read', 'phone.report', 'heat.setpoint', 'vent.fans', 'grade.submit', 'sign.read']);
+const freshStats = () => ({ truckAt: null, firstTipAt: null, lastTipAt: null, boxWeighedAt: null, floorShareAtFirstTip: null,
+  heightsAtFirstTip: null, flushDoneAt: null, ventReadings: [], cropFillTrue: null,
+  comfortMinutes: 0, levelMinutes: 0, comfortShareByDay: [], comfortByDay: [], chickWeightMeasuredG: null,
+  weighed: [], pansEmptyAt: null });
+
 export function createFarm(env, { events } = {}) {
-  const n = FLOOR_GRID.nx * FLOOR_GRID.nz;
   const emit = (t, p) => events && events.emit(t, p);
+  const spill = [0, 0, 0, 0];
 
   const farm = {
-    /** true while this file is the contract stub (scripts/test-sim.mjs skips the acceptance tests) */
-    stub: true,
+    /** false: the model runs (scripts/test-sim.mjs runs the acceptance tests) */
+    stub: false,
     /** 'off' (Phase 1 sandbox) or 'level' */
     mode: 'off',
     level: null,
-    flock: {
-      present: true,          // false before the chicks are placed (flock draws nothing)
-      delivered: 0,           // chicks that came on the truck
-      inBoxes: 0,             // still in the boxes
-      placed: 0,              // tipped onto the litter
-      alive: 0,
-      deadTotal: 0,
-      culls: 0,
-      deadByCause: {},        // { cold, heat, dehydration, weak, starveout, other, box }
-      deadOnFloor: 0,         // died and not yet picked up (flock draws them)
-      sick: 0,                // real birds that look sick now (flock shows ~sick / BIRDS_PER_INSTANCE)
-      chickWeightG: LEVEL1.chickWeightG,
-      meanWeightG: weightAt(env.day),
-      cv: 0.08,               // coefficient of variation of body weight
-      uniformityPct: 80,      // % within +-10 % of the mean
-      lateStarters: 0,        // real birds that did not find feed and water in the first 24 h
-      droppings: 'normal',    // 'normal' | 'watery' | 'few' (what the litter shows)
-      feedTodayKg: 0, waterTodayL: 0, cumFeedKg: 0,
-      fcr: 0,
-      /** Body weight (g) at quantile u (0..1) of the live flock; flock.js sizes birds with it. */
-      weightQuantile(u) { return farm.flock.meanWeightG * (1 + farm.flock.cv * 1.6 * (u - 0.5) * 2); },
-    },
-    water: {
-      /** @type {DrinkerLine[]} */
-      lines: DRINKER_LINES_Z.map(() => ({ heightCm: 12, pressureCm: 10, flowMlMin: 21, access: 1, flushing: false, flushClear: 1, blocked: 0, leakX: null })),
-      meterL: 0,
-      waterTempC: 27,
-      flushedAt: null,        // env.day when the last line finished flushing
-      filterFactor: 1,        // main filter at the water supply: 1 clean, 0.5 blocked (every line's flow x this)
-      leak: null,             // { line, x, cell } while a nipple leaks
-    },
-    feed: {
-      siloKg: LEVEL1.siloStartKg,
-      meterKg: 0,
-      /** @type {FeederLine[]} */
-      lines: FEEDER_LINES_Z.map(() => ({ heightCm: 5, running: true, flood: false, panFill: 1 })),
-      order: null,            // { kg, arriveDay } after the farmer ordered feed
-    },
-    litter: {
-      depthCm: 5,
-      cover: 1,                         // share of the floor covered with litter (0..1)
-      coverGrid: new Float32Array(n).fill(1),
-      moistureGrid: new Float32Array(n).fill(22),  // % moisture per FLOOR_GRID cell
-      meanMoisturePct: 22,
-      ammoniaPpm: 3,
-    },
-    light: { darkStart: 2, darkHours: 1, dimmer: 1, luxAtBirds: 40 },
+    seed: 1,
+    rng: createRng(1),
+    flock: createFlock(),
+    water: createWater(),
+    feed: createFeed(),
+    litter: createLitter(),
+    light: { darkStart: 2, darkHours: 1, dimmer: 1, luxAtBirds: EQUIP.luxMax },
     vent: { fans: 0, onSec: 0, cycleSec: 300 },
     /** @type {ProblemState[]} */
-    problems: [],
+    problems: createProblems(LEVEL1),
     /** @type {FarmStats} */
-    stats: { truckAt: null, firstTipAt: null, lastTipAt: null, boxWeighedAt: null, floorShareAtFirstTip: null,
-      heightsAtFirstTip: null, flushDoneAt: null, ventReadings: [], cropFillTrue: null,
-      comfortMinutes: 0, levelMinutes: 0, comfortShareByDay: [], chickWeightMeasuredG: null },
+    stats: freshStats(),
+    comfort: { e: 0, meanOver: 0, coldShare: 0, pantShare: 0 },
+    truckLeft: false,
+    drinkLh: 0,               // drinking smoothed over ~6 h, L/h (breath vapour)
+    ctlMem: null,             // controller min / max memory since the last controller.read
+    comfortH: 0, litAcc: { h: 0, drop: 0, leak: 0, spill: [0, 0, 0, 0] }, // slow parts: time and inputs since they last ran
+    emit,
     /** Flock age in days (env.day - PLACEMENT_DAY), negative before 08:00 on day 0. */
     get age() { return flockAgeAt(env.day); },
-    /** Zones where standing still is a symptom (the leak's wet patch, the cold brooder). @returns {ProblemZone[]} */
-    problemZones() { return []; },
+    problemZones() { return farm.mode === 'level' ? problemZones(farm) : []; },
     /** The office radio: tonight's forecast for HUD day `day` (the cold night shows here). */
-    forecast(day) { return { day, lowC: 19, highC: 29, text: 'Tonight: clear, low 19 °C' }; },
+    forecast(day = env.dayNumber) { return forecast(farm, env, day); },
     /** What the farmer sees and hears standing at (x, z): neutral words for the notebook. */
-    observe(x, z) { void x; void z; return { spread: 'evenly spread', droppings: 'firm, brown with a white cap', sounds: 'quiet chirping' }; },
+    observe(x, z) { return observe(farm, env, x, z); },
+    /** The climate controller's memory: house min / max (°C) since its last reading (controller.read). */
+    controllerMemory() { const m = farm.ctlMem; return m ? { minC: +m.minC.toFixed(1), maxC: +m.maxC.toFixed(1), since: m.since } : { minC: +env.houseTemp.toFixed(1), maxC: +env.houseTemp.toFixed(1), since: env.day }; },
 
     /** Start Level 1 from the prep day (bare floor, empty house, lines high, no chicks). */
-    start(level = LEVEL1, { seed = 1 } = {}) {
-      farm.mode = 'level'; farm.level = level; farm.seed = seed;
-      farm.flock.present = true; // STUB: stays true so the Phase 1 flock keeps showing
+    start(level = LEVEL1, { seed = 1, keepClock = false } = {}) {
+      Object.assign(farm, { mode: 'level', level, seed, rng: createRng(seed), flock: createFlock(), water: createWater(),
+        feed: createFeed(), litter: createLitter(), problems: createProblems(level), stats: freshStats(), truckLeft: false, drinkLh: 0, ctlMem: null, comfortH: 0, litAcc: { h: 0, drop: 0, leak: 0, spill: [0, 0, 0, 0] },
+        light: { darkStart: 2, darkHours: 1, dimmer: 1, luxAtBirds: EQUIP.luxMax }, vent: { fans: 0, onSec: 0, cycleSec: 300 } });
+      farm.flock.weightQuantile = makeQuantile(farm.flock);
+      if (!keepClock) { env.setDay(level.startDay); env.setHour(level.startHour); }
+      env.setWeather(level.weather);
+      env.forceHouseTemp(null);
+      env.houseTemp = 23; env.slabTemp = 23; env.heaterLevel = env.heaterDemand = 0;
+      env.setHeaterSetpoint(20); env.setFans(0); env.setPad(false); env.setVentTimer(null);
+      env.setLightProgram({ darkStart: 2, darkHours: 1, dimmer: 1 });
+      env.clearWeatherEvents(); installWeather(farm, env); env.setBrooderOut([]);
+      env.litterDepthAt = (x, z) => { const i = litterCell(x, z); return farm.litter.depthGrid[i] * farm.litter.coverGrid[i]; };
+      env.litterDepthCm = 0; env.flockHeatPerH = 0; env.vapourGh = 0; env.dryPotentialGh = 0;
+      env.setLevelClimate(true);
       emit(EV.LEVEL, { phase: 'farm-start', day: level.startDay });
     },
     /** Back to the Phase 1 sandbox. */
-    stop() { farm.mode = 'off'; farm.level = null; farm.flock.present = true; },
+    stop() {
+      farm.mode = 'off'; farm.level = null; farm.flock.present = true;
+      env.setLevelClimate(false); env.clearWeatherEvents(); env.setBrooderOut([]); env.setVentTimer(null);
+      env.litterDepthAt = null; env.flockHeatPerH = 0; env.vapourGh = 0; env.dryPotentialGh = 0;
+    },
 
     /** env stepper: integrate gameSeconds (<= 60). fast = inside skipHours. */
-    step(envIn, gameSeconds, fast) { // eslint-disable-line no-unused-vars
-      if (farm.mode !== 'level') return;
-      // STUB: package "sim" integrates growth, intake, litter, ammonia, deaths and problems here.
-      farm.flock.meanWeightG = weightAt(envIn.day);
+    step(e, gameSeconds) {
+      if (farm.mode !== 'level' || gameSeconds <= 0) return;
+      stepFarm(farm, e, gameSeconds / 3600, spill);
     },
 
     /**
      * Do or read something on the farm. Returns the result (a reading, a sample, true/false).
      * Emits EV.ACTION { id, ...args, result } unless args.quiet.
-     * @param {string} id  e.g. 'water.flowtest', 'sample.vent', 'litter.spread' (PHASE2.md "Actions")
-     * @param {object} [args]
      */
     act(id, args = {}) {
-      const result = stubAct(farm, env, id, args);
+      const result = doAct(farm, env, id, args);
+      if (farm.mode === 'level') actionSymptoms(farm, env, id, args, result);
       if (!args.quiet) emit(EV.ACTION, { id, ...args, result });
       return result;
     },
 
     /** Litter surface temperature at (x, z), °C (what the floor thermometer reads, no noise). */
     floorTempAt(x, z) { return env.floorTemp(x, z); },
+    floorShare28() { return floorShareAbove(env, 28); },
     /** Litter moisture % at (x, z). */
-    litterMoistureAt(x, z) { return farm.litter.moistureGrid[cellIndex(x, z)] ?? 22; },
-    /** Lux at bird level at (x, z). */
-    luxAt() { return env.lightsOn ? farm.light.luxAtBirds * (env.lightLevel ?? 1) : 0; },
+    litterMoistureAt(x, z) { return farm.litter.moistureGrid[litterCell(x, z)]; },
+    /** Lux at bird level while the lights are on (program dimmer). */
+    luxLit() { return EQUIP.luxMax * farm.light.dimmer; },
+    /** Lux at bird level at (x, z) now. */
+    luxAt() { return env.lightsOn ? farm.luxLit() : 0; },
 
     /** Hidden truth for tests and the debug tools only (never shown to the player). */
     debug: {
-      trigger(problemId) { emit(EV.FARM_PROBLEM, { id: problemId, phase: 'start' }); },
-      truth() { return { flock: { ...farm.flock }, problems: farm.problems.map((p) => ({ ...p })) }; },
+      trigger(problemId) {
+        const st = farm.problems.find((p) => p.id === problemId);
+        if (st && st.phase === 'pending') { st.phase = 'active'; st.startedAt = env.day; applyEffects(farm, env); emit(EV.FARM_PROBLEM, { id: problemId, phase: 'start' }); }
+      },
+      truth() { return { flock: { ...farm.flock }, problems: farm.problems.map((p) => ({ ...p })), comfort: { ...farm.comfort }, stats: farm.stats }; },
     },
 
-    serialize() { return { v: 1, mode: farm.mode }; }, // grids as integer arrays (moisture x 10)
-    restore(data) { if (data && data.mode) farm.mode = data.mode; },
+    serialize() { return serializeFarm(farm, env); }, // grids as integer arrays (moisture x 10)
+    restore(data) { restoreFarm(farm, env, data); },
   };
-  // The farm is the only owner of deadOnFloor (flock.dead mirrors it).
-  events && events.on(EV.DEAD_PICK, (p) => { farm.flock.deadOnFloor = Math.max(0, farm.flock.deadOnFloor - (p.n || 0)); });
+  farm.flock.weightQuantile = makeQuantile(farm.flock);
+
+  if (events) {
+    // The farm is the only owner of deadOnFloor (flock.dead mirrors it).
+    events.on(EV.DEAD_PICK, (p) => { farm.flock.deadOnFloor = Math.max(0, farm.flock.deadOnFloor - (p.n || 0)); });
+    events.on(EV.ACTION, (p) => {
+      if (farm.mode !== 'level' || p.result !== undefined || !UI_ACTIONS.has(p.id)) return;
+      actionSymptoms(farm, env, p.id, p, undefined);
+      if (p.id === 'controller.read') farm.ctlMem = null; // the controller's min / max memory restarts at each read
+    });
+    events.on(EV.NEAR, (p) => { if (farm.mode === 'level') onNear(farm, env, p); });
+    events.on(EV.LISTEN, () => { if (farm.mode === 'level') onListen(farm, env); });
+    events.on(EV.HOUSE_ENTER, (p) => { if (farm.mode === 'level' && p && p.dipped === false) farm.flock.lapses++; });
+  }
   return farm;
 }
 
-export function cellIndex(x, z) {
-  const cx = Math.max(0, Math.min(FLOOR_GRID.nx - 1, Math.floor((x - FLOOR_GRID.x0) / FLOOR_GRID.cell)));
-  const cz = Math.max(0, Math.min(FLOOR_GRID.nz - 1, Math.floor((z - FLOOR_GRID.z0) / FLOOR_GRID.cell)));
-  return cz * FLOOR_GRID.nx + cx;
+export const cellIndex = litterCell;
+
+/** One farm step of `hrs` game hours (PHASE2.md §6). */
+function stepFarm(farm, env, hrs, spill) {
+  const fl = farm.flock, water = farm.water, feed = farm.feed, st = farm.stats, lv = farm.level || LEVEL1;
+  tickProblems(farm, env);
+  const cm = farm.ctlMem || (farm.ctlMem = { minC: env.houseTemp, maxC: env.houseTemp, since: env.day });
+  if (env.houseTemp < cm.minC) cm.minC = env.houseTemp;
+  if (env.houseTemp > cm.maxC) cm.maxC = env.houseTemp;
+  if (st.truckAt == null && env.day >= lv.arrivalDay + lv.arrivalHour / 24 - 1e-9) {
+    deliver(farm, env);
+    femit(farm, EV.FARM_DELIVERY, { kind: 'chicks', phase: 'arrive' });
+  }
+  const o = feed.order;
+  if (o && env.day >= o.arriveDay + o.arriveHour / 24 - 1e-9) {
+    feed.siloKg = Math.min(EQUIP.siloCapacityKg, feed.siloKg + o.kg);
+    const rec = feed.orders.find((x) => x.orderedAt === o.orderedAt); if (rec) rec.arrivedAt = env.day;
+    feed.order = null;
+    femit(farm, EV.FARM_DELIVERY, { kind: 'feed', phase: 'arrive', kg: o.kg });
+    femit(farm, EV.FARM_DELIVERY, { kind: 'feed', phase: 'leave', kg: o.kg });
+  }
+  // equipment
+  stepAugers(feed, hrs);
+  const leakL = stepLines(water, env, hrs);
+  if (water.flushedAt != null && st.flushDoneAt == null) st.flushDoneAt = water.flushedAt;
+  const age = farm.age;
+  updateAccess(water, age);
+  recordMeter(water, env);
+  // flock
+  let drunkL = 0, breathL = 0;
+  const C = farm.comfort;
+  if (fl.placed > 0 && fl.alive > 0) {
+    // what the chicks feel changes with the house air: recomputed every 5 game minutes (and at once
+    // when the brooders that are out change)
+    farm.comfortH += hrs;
+    if (farm.comfortH >= SLOW_H - 1e-9 || C.out !== env.brooderOut.length || C.e == null) { comfortNow(env, C); C.out = env.brooderOut.length; farm.comfortH = 0; }
+    const io = { feedAccess: feedAccess(feed, age, env.dayNumber), eat: (kg) => eat(feed, kg), waterPerKg: waterPerKg(env.houseTemp) };
+    const r = stepFlock(farm, env, hrs, C, io);
+    drunkL = r.drunkL; breathL = r.breathL;
+    drink(water, drunkL, age, spill);
+  } else spill.fill(0);
+  if (st.pansEmptyAt == null && fl.placed > 0 && meanPanFill(feed) < 0.05) st.pansEmptyAt = env.day;
+  // litter, air
+  // the litter integrates what fell on it every 5 game minutes (moisture changes over hours)
+  const L = farm.litter, la = farm.litAcc;
+  la.h += hrs; la.drop += 0.5 * drunkL; la.leak += leakL;
+  for (let i = 0; i < 4; i++) la.spill[i] += spill[i] || 0;
+  if (la.h >= SLOW_H - 1e-9) {
+    stepLitter(L, { hrs: la.h, droppingsL: la.drop, spill: la.spill, leakL: la.leak, leakCell: water.leak ? water.leak.cell : null,
+      rh: env.houseRH, feedKg: feed.meterKg, airflow: env.airflowM3h });
+    la.h = 0; la.drop = 0; la.leak = 0; la.spill.fill(0);
+  }
+  // breath follows the day's drinking (smoothed over ~6 h: the birds breathe in the dark hour too)
+  farm.drinkLh += (breathL / hrs - farm.drinkLh) * (1 - Math.exp(-hrs / 6));
+  env.vapourGh = 0.4 * farm.drinkLh * 1000;
+  env.dryPotentialGh = L.dryPotentialGh;
+  const birds = fl.alive, w = fl.meanWeightG;
+  env.flockHeatPerH = birds > 0 ? (0.2 * birds) / 6000 + (1.3 * birds * w) / (6000 * 2850) : 0;
+  if (farm.depthVersion !== L.version) { farm.depthVersion = L.version; env.litterDepthCm = meanDepth(L); }
 }
 
-// STUB results so panels and props can be built against the contract before the model exists.
-function stubAct(farm, env, id, a) {
-  switch (id) {
-    case 'water.meter': return { litres: Math.round(farm.water.meterL), yesterdayLitres: null };
-    case 'water.flowtest': return { mlMin: farm.water.lines[a.line]?.flowMlMin ?? 0 };
-    case 'feed.meter': return { kg: Math.round(farm.feed.meterKg) };
-    case 'feed.silo': return { kg: Math.round(farm.feed.siloKg) };
-    case 'floor.probe': return { tempC: +env.floorTemp(a.x, a.z).toFixed(1) };
-    case 'litter.squeeze': { const m = farm.litterMoistureAt(a.x, a.z); return { moisturePct: Math.round(m), feel: m < 25 ? 'dry' : m <= 30 ? 'ok' : m <= 38 ? 'damp' : 'wet' }; }
-    case 'light.lux': return { lux: Math.round(farm.luxAt(a.x, a.z)) };
-    case 'sample.box': return { chicks: LEVEL1.chicksPerBox, weightKg: +(LEVEL1.chicksPerBox * farm.flock.chickWeightG / 1000 + 0.35).toFixed(2), boxKg: 0.35 };
-    case 'sample.grade': return { reflexSec: 1.5, navel: 'healed', hocks: 'clean', weightG: farm.flock.chickWeightG };
-    case 'sample.vent': return { tempC: 40.0 };
-    case 'sample.crop': return { crop: 'full' };
-    case 'sample.weigh': return { weightG: Math.round(farm.flock.meanWeightG) };
-    case 'litter.spread': return { cover: farm.litter.cover };
-    case 'water.filter': return { inBar: 2.5, outBar: +(2.5 * farm.water.filterFactor).toFixed(1) };
-    case 'water.clearFilter': return { fixed: farm.water.filterFactor < 1 };
-    case 'water.fixLeak': return { fixed: !!farm.water.leak };
-    case 'heat.relight': return { fixed: false };
-    default: return true;
-  }
+const femit = (farm, t, p) => farm.emit(t, p);
+const SLOW_H = 5 / 60; // comfort and litter update every 5 game minutes
+
+const clone = (o) => JSON.parse(JSON.stringify(o));
+function serializeFarm(farm, env) {
+  const fl = { ...farm.flock }; delete fl.weightQuantile; delete fl.qVersion;
+  return {
+    v: 1, mode: farm.mode, seed: farm.seed, rng: farm.rng.state, truckLeft: farm.truckLeft, drinkLh: farm.drinkLh, ctlMem: farm.ctlMem, comfortH: farm.comfortH, litAcc: clone(farm.litAcc),
+    flock: clone(fl),
+    water: clone({ ...farm.water, hist: farm.water.hist.map((v) => Math.round(v * 10) / 10) }),
+    feed: clone(farm.feed), litter: serializeLitter(farm.litter),
+    light: { ...farm.light }, vent: { ...farm.vent }, fansManual: env.fansManual,
+    problems: clone(farm.problems), stats: clone(farm.stats),
+  };
 }
+
+function restoreFarm(farm, env, d) {
+  if (!d) return;
+  farm.mode = d.mode || 'off';
+  if (farm.mode !== 'level') { farm.stop(); return; }
+  farm.level = LEVEL1; farm.seed = d.seed ?? 1;
+  farm.rng = createRng(1); farm.rng.state = d.rng ?? 1;
+  farm.truckLeft = !!d.truckLeft; farm.drinkLh = d.drinkLh || 0; farm.ctlMem = d.ctlMem ? { ...d.ctlMem } : null;
+  farm.comfortH = d.comfortH || 0; farm.litAcc = d.litAcc ? clone(d.litAcc) : { h: 0, drop: 0, leak: 0, spill: [0, 0, 0, 0] };
+  farm.flock = Object.assign(createFlock(), clone(d.flock));
+  farm.flock.weightQuantile = makeQuantile(farm.flock);
+  farm.water = Object.assign(createWater(), clone(d.water));
+  farm.feed = Object.assign(createFeed(), clone(d.feed));
+  farm.litter = createLitter(); restoreLitter(farm.litter, d.litter);
+  farm.light = { ...farm.light, ...d.light }; farm.vent = { ...farm.vent, ...d.vent };
+  farm.problems = clone(d.problems); farm.stats = Object.assign(freshStats(), clone(d.stats));
+  // env: the level climate, the timer, light, weather events and brooders rebuilt from the farm
+  env.setLevelClimate(true);
+  env.setVentTimer(farm.vent.fans > 0 && farm.vent.onSec > 0 ? farm.vent : null);
+  env.setLightProgram({ darkStart: farm.light.darkStart, darkHours: farm.light.darkHours, dimmer: farm.light.dimmer });
+  if (d.fansManual != null) { env.fansManual = d.fansManual; env.setFans(d.fansManual); }
+  env.clearWeatherEvents(); installWeather(farm, env); applyEffects(farm, env);
+  env.litterDepthAt = (x, z) => { const i = litterCell(x, z); return farm.litter.depthGrid[i] * farm.litter.coverGrid[i]; };
+  env.litterDepthCm = meanDepth(farm.litter);
+  updateAccess(farm.water, farm.age);
+  if (farm.flock.placed > 0) { updateWeights(farm.flock); comfortNow(env, farm.comfort); }
+}
+
+

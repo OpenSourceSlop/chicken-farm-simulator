@@ -36,6 +36,8 @@ export const PROFILE_TARGETS = {
 };
 
 const only = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null;
+// --seed N runs the profiles with another delivery and noise (the acceptance numbers are for seed 1)
+const SEED = process.argv.includes('--seed') ? +process.argv[process.argv.indexOf('--seed') + 1] : 1;
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 // Acceptance: skipped (reported as todo) while src/farm.js is the stub.
@@ -125,7 +127,7 @@ const inBand = (v, [a, b], what) => assert(v >= a && v <= b, `${what} ${v} not i
 for (const name of Object.keys(PROFILE_TARGETS)) {
   accept(`profile ${name}`, async () => {
     const { runProfile, checkProfile } = await import('../src/farm-profiles.js');
-    const run = runProfile(name, { seed: 1 });
+    const run = runProfile(name, { seed: SEED });
     checkProfile(name, run, PROFILE_TARGETS, { assert, inBand });
   });
 }
@@ -139,6 +141,132 @@ accept('determinism: same seed and inputs give identical records', async () => {
 test('contract: save store survives missing localStorage', () => {
   const s = createSaveStore();
   assert(s.available === false && s.save({ a: 1 }) === false && s.load() === null, 'no storage in node');
+});
+
+// ---- package checks (PHASE2.md §6.10 / §14.1) ----
+// Phase 1 sandbox climate, recorded from the Phase 1 sim.js before the level climate was added:
+// [day, hour, outsideTemp, outsideRH, houseTemp, houseRH, heaterLevel, heaterDemand, fansOn,
+//  airSpeed, targetTemp, windChill, feelsLike, bodyWeight, lightsOn, broodCurtain] after each step.
+const SANDBOX_BASELINE = [[1.541667, 13, 28.330127, 60, 34.017558, 60, 0.188729, 0.188729, 0, 0, 34, 0, 34.017558, 74.595238, true, true], [1.833333, 20, 34.294095, 55, 34.769458, 55, 0, 0, 3, 1.25, 34, 3.75, 31.019458, 80.761905, true, true], [3.083333, 2, 28.170371, 55, 21.777999, 93.25, 1, 1, 6, 2.5, 33.176471, 7.5, 14.277999, 107.190476, false, true], [20.166667, 4, 28.170371, 55, 28.157176, 55, 0, 0, 1, 0.416667, 26.176471, 0.936508, 27.220668, 894.047619, true, false], [20.720833, 17.3, 29.472379, 85, 30.257334, 85, 0, 0, 1, 0.416667, 26.176471, 0.923313, 29.33402, 931.255952, true, false], [29.263977, 28.427626, 3.055179]];
+test('package: sandbox climate unchanged (farm.mode off, Phase 1 digest)', () => {
+  const { env, farm } = makeFarm();
+  assert(farm.mode === 'off', 'farm starts in the sandbox');
+  const F = ['day', 'hour', 'outsideTemp', 'outsideRH', 'houseTemp', 'houseRH', 'heaterLevel', 'heaterDemand', 'fansOn', 'airSpeed', 'targetTemp', 'windChill', 'feelsLike', 'bodyWeight', 'lightsOn', 'broodCurtain'];
+  const snap = () => F.map((k) => (typeof env[k] === 'number' ? +env[k].toFixed(6) : env[k]));
+  const out = [];
+  env.setHeaterSetpoint(34); env.skipHours(5); out.push(snap());
+  env.setWeather('hot'); env.setFans(3); env.skipHours(7); out.push(snap());
+  env.setPad(true); env.setFans(6); env.skipHours(30); out.push(snap());
+  env.setPad(false); env.setFans(1); env.setDay(20); env.setHeaterSetpoint(25); for (let i = 0; i < 600; i++) env.update(1 / 30); out.push(snap());
+  env.setWeather('rainy'); env.skipHours(13.3); out.push(snap());
+  out.push([+env.localTemp(-13, 2).toFixed(6), +env.localTemp(5, -5.5).toFixed(6), +env.comfort(-19, -2.6).toFixed(6)]);
+  out.forEach((row, i) => row.forEach((v, j) => {
+    const b = SANDBOX_BASELINE[i][j];
+    assert(typeof v === 'number' ? Math.abs(v - b) <= 1e-6 : v === b, `sandbox step ${i} field ${F[j] || j}: ${v} vs Phase 1 ${b}`);
+  }));
+  // a level started and stopped leaves the sandbox climate as it was
+  farm.start(LEVEL1, { seed: 1 }); farm.stop();
+  assert(!env.levelClimate && env.weatherEvents.length === 0 && env.brooderOut.length === 0 && env.ventTimer === null, 'stop() restores the sandbox climate');
+});
+
+test('package: farm.step <= 0.3 ms, a 24 h skip <= 150 ms (placed flock)', async () => {
+  const { applyRound } = await import('../src/farm-profiles.js');
+  const { env, farm } = makeFarm();
+  farm.start(LEVEL1, { seed: 1 });
+  applyRound(farm, env, -1, 'prep');
+  env.skipHours(25); applyRound(farm, env, 0, 'am'); applyRound(farm, env, 0, 'truck');
+  env.skipHours(24); // warm up
+  const t0 = performance.now(); env.skipHours(24); const ms = performance.now() - t0;
+  const t1 = performance.now(); for (let i = 0; i < 200; i++) farm.step(env, 60); const per = (performance.now() - t1) / 200;
+  console.log(`     24 h skip ${ms.toFixed(1)} ms, farm.step ${per.toFixed(3)} ms`);
+  assert(ms <= 150, `24 h skip took ${ms.toFixed(1)} ms`);
+  assert(per <= 0.3, `farm.step took ${per.toFixed(3)} ms`);
+});
+
+test('package: save blob < 60 KB, restore -> serialize identical, play continues', async () => {
+  const { runProfile } = await import('../src/farm-profiles.js');
+  const run = runProfile('ideal', { seed: 1 });
+  const e = run.env;
+  const blob = { env: { day: e.day, hour: e.hour, weather: e.weather, houseTemp: e.houseTemp, slabTemp: e.slabTemp, heaterSetpoint: e.heaterSetpoint,
+    heaterLevel: e.heaterLevel, fansOn: e.fansOn, padOn: e.padOn, ventTimer: e.ventTimer, lightProgram: e.lightProgram },
+  farm: run.farm.serialize(), records: run.records.serialize(), skills: run.skills.serialize() };
+  const json = JSON.stringify(blob);
+  console.log(`     save blob ${(json.length / 1024).toFixed(1)} KB (farm ${(JSON.stringify(blob.farm).length / 1024).toFixed(1)}, records ${(JSON.stringify(blob.records).length / 1024).toFixed(1)})`);
+  assert(json.length < 60 * 1024, `save blob ${json.length} bytes`);
+  const w = makeFarm(), back = JSON.parse(json);
+  Object.assign(w.env, back.env);
+  w.farm.restore(back.farm); w.records.restore(back.records); w.skills.restore(back.skills);
+  assert(JSON.stringify(w.farm.serialize()) === JSON.stringify(blob.farm), 'farm serialize differs after restore');
+  assert(JSON.stringify(w.records.serialize()) === JSON.stringify(blob.records), 'records serialize differs after restore');
+  assert(JSON.stringify(w.skills.serialize()) === JSON.stringify(blob.skills), 'skills serialize differs after restore');
+  assert(w.env.levelClimate && w.env.weatherEvents.length === 2 && w.env.ventDuty === run.env.ventDuty, 'env rebuilt from the farm (climate, weather events, timer)');
+  w.env.skipHours(2);
+  assert(w.farm.flock.alive > 0 && Number.isFinite(w.farm.flock.meanWeightG), 'the restored farm runs on');
+});
+
+test('package: rows hold null for every reading not taken', async () => {
+  const { applyRound } = await import('../src/farm-profiles.js');
+  const { env, farm, records } = makeFarm();
+  farm.start(LEVEL1, { seed: 1 });
+  applyRound(farm, env, -1, 'prep');
+  env.skipHours(25); applyRound(farm, env, 0, 'truck'); // chicks placed, nothing read
+  env.skipHours(24);
+  const row = records.sign(1);
+  for (const k of ['feedKg', 'feedPerBirdG', 'waterL', 'waterPerBirdMl', 'waterFeedRatio', 'waterChangePct', 'uniformityPct', 'fcr',
+    'litterMoisturePct', 'houseMinC', 'houseMaxC', 'lightHours', 'cropFullPct', 'ventTempMeanC', 'chickWeightG', 'chickQualityNote', 'flowsMlMin', 'floorTempMeanC', 'cropTally']) {
+    assert(row[k] === null, `row.${k} = ${JSON.stringify(row[k])} although nothing was read`);
+  }
+  assert(row.weightSource === 'scale' && row.alive === 5999 - 0 || row.alive > 5900, 'alive from the tips, weight from the bird scale');
+  const prep = records.row(-1);
+  assert(prep && prep.signed === false, 'the prep day closed by itself at 06:00 (signed false)');
+});
+
+test('package: every action id answers with its result shape', () => {
+  const { env, farm, events } = makeFarm();
+  farm.start(LEVEL1, { seed: 1 });
+  const seen = [];
+  events.on(EV.ACTION, (p) => seen.push(p.id));
+  const shape = {
+    'heat.relight': ['fixed'], 'vent.timer': null, 'light.program': null, 'light.lux': ['lux'], 'litter.depth': null, 'litter.spread': ['cover'],
+    'litter.patch': null, 'litter.squeeze': ['moisturePct', 'feel'], 'floor.probe': ['tempC'], 'water.flush': ['flushClear'], 'water.pressure': null,
+    'water.height': null, 'water.flowtest': ['mlMin'], 'water.meter': ['litres', 'litres24h', 'per1000', 'changePct'], 'water.filter': ['inBar', 'outBar'],
+    'water.clearFilter': ['fixed'], 'water.fixLeak': ['fixed'], 'feed.line': null, 'feed.meter': ['kg'], 'feed.silo': ['kg'], 'feed.order': ['arriveDay', 'arriveHour'],
+    'sample.box': ['chicks', 'weightKg', 'boxKg'], 'sample.grade': ['reflexSec', 'navel', 'hocks', 'weightG'],
+  };
+  const args = { 'light.lux': { x: -10, z: 0 }, 'litter.spread': { x: -10, z: 0, r: 1.2 }, 'litter.squeeze': { x: -10, z: 0 }, 'floor.probe': { x: -10, z: 0 },
+    'water.flush': { line: 0, on: true }, 'water.flowtest': { line: 1 }, 'feed.order': { kg: 1000 }, 'sample.grade': { i: 0 }, 'heat.relight': { index: 5 } };
+  env.skipHours(25.5); // truck arrived (sample.grade needs the delivery)
+  for (const [id, keys] of Object.entries(shape)) {
+    const r = farm.act(id, args[id] || {});
+    if (keys) for (const k of keys) assert(r && k in r, `${id} result has no ${k}: ${JSON.stringify(r)}`);
+    else assert(r === true, `${id} result ${JSON.stringify(r)}, want true`);
+  }
+  const tip = farm.act('chicks.tip', { stack: 0, chicks: 1000, x: -16, z: -1 });
+  assert(tip.placed > 990 && 'deadInBoxes' in tip && farm.flock.present, 'chicks.tip');
+  for (const id of ['sample.vent', 'sample.crop', 'sample.weigh']) { const r = farm.act(id, { x: -16, z: -1, index: 0 }); assert(r && Object.keys(r).length === 1, `${id} ${JSON.stringify(r)}`); }
+  assert(farm.act('chicks.cull', { n: 1, reason: 'sick' }) === true && farm.act('dead.count', { n: 0, causes: {} }) === true, 'cull / count');
+  assert(seen.length === Object.keys(shape).length + 6 && !farm.act('water.meter', { quiet: true }) === false && seen.length === Object.keys(shape).length + 6, 'quiet actions are not emitted');
+});
+
+test('package: problems start silently, symptoms from actions and EV.NEAR, forecast and zones', () => {
+  const { env, farm, events } = makeFarm();
+  const got = [];
+  events.on(EV.FARM_PROBLEM, (p) => got.push(`${p.id}:${p.phase}`));
+  farm.start(LEVEL1, { seed: 1 });
+  env.skipHours(22 + 24); // day 1 05:00
+  assert(env.brooderOut.includes(5) && farm.problemZones().some((z) => z.problemId === 'brooder-out'), 'brooder 5 out with a zone');
+  events.emit(EV.NEAR, { problemId: 'brooder-out', x: -7, z: 2.6 });
+  assert(got.includes('brooder-out:symptom') && farm.problemZones().length === 0, 'EV.NEAR finds it, the zone goes');
+  assert(farm.act('heat.relight', { index: 5 }).fixed === true && env.brooderOut.length === 0 && got.includes('brooder-out:fixed'), 'relight fixes it');
+  assert(/13 °C/.test(farm.forecast(2).text) && /19 °C/.test(farm.forecast(1).text) && /33 °C/.test(farm.forecast(5).text), `forecasts: ${farm.forecast(2).text} | ${farm.forecast(5).text}`);
+  env.skipHours(24 + 24 + 6); // day 3 11:00: filter clogged
+  assert(farm.water.filterFactor < 1 && !got.includes('blocked-filter:symptom'), 'the filter clogs silently');
+  farm.act('water.meter');
+  assert(!got.includes('blocked-filter:symptom'), 'a meter reading alone opens nothing');
+  farm.act('water.flowtest', { line: 0 });
+  assert(got.includes('blocked-filter:symptom'), 'a low flow test is the symptom');
+  const o = farm.observe(-12, 0);
+  assert(o.spread && o.droppings && o.sounds, 'observe');
 });
 
 let failed = 0, todo = 0;

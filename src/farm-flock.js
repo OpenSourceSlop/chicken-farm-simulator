@@ -1,0 +1,306 @@
+// Farm model, the flock as numbers (PHASE2.md §6.3, §6.5, §6.6): delivery, boxes, placement and
+// late starters, intake and growth per cohort (good / late / weak), uniformity, deaths by cause,
+// culls, sick birds and droppings. Pure logic, package "sim".
+import { LEVEL1, broodSector, feedStdGAt } from './config.js';
+import { mixtureStats, mixtureQuantile } from './farm-rng.js';
+import { EV } from './events.js';
+
+// model constants
+export const FLOCK = {
+  chickSdG: 1,            // delivery mean = 41.5 +- 1 g (seeded)
+  cv: 0.08, weakCv: 0.1, weakShare: 0.008, weakWeight: 0.92, redHocks: 0.04,
+  boxHazard: 0.0001, boxHazardRise: 0.0005, boxFreeH: 3,       // per hour in the boxes
+  late: { base: 0.02, floor: 0.06, floorRef: 29, boxH: 0.004, flood: 0.06, water: 0.08, light: 0.03,
+    sectors: 0.03, coldH: 0.01, min: 0.02, max: 0.6 },
+  lateIntakeEarly: 0.55, lateIntakeAfter: 0.8, lateEarlyAge: 3, weakIntake: 0.6,
+  fpg0: 0.97, fpgPerDay: 0.03, coldGain: 0.04,
+  cvBase: 0.0002, cvTemp: 0.04, cvWater: 0.01, cvFeed: 0.015,  // tuned (PHASE2.md: 0.001 / 0.01 / 0.02 / 0.015)
+  // deaths per bird per hour
+  weakRate: [[2, 0.006], [4, 0.0025], [Infinity, 0.0005]],
+  starveRate: 0.001, starveFrom: 2, starveTo: 6,
+  coldRate: 0.0004, coldFrom: -4, heatRate: 0.0003, heatFrom: 4,
+  dehydRate: 0.0005, dehydBelow: 0.5,
+  otherRate: 0.00001, otherFromDay: 3, otherPerLapse: 0.3, otherBadWater: 2.0,
+};
+const CAUSES = ['cold', 'heat', 'dehydration', 'weak', 'starveout', 'other', 'box'];
+const RATE_CAUSES = ['weak', 'starveout', 'cold', 'heat', 'dehydration', 'other'];
+const RATES = new Float64Array(RATE_CAUSES.length); // reused every step (no garbage)
+
+export function createFlock() {
+  return {
+    present: false, delivered: 0, inBoxes: 0, placed: 0, alive: 0, deadTotal: 0, culls: 0,
+    deadByCause: Object.fromEntries(CAUSES.map((c) => [c, 0])),
+    deadOnFloor: 0, sick: 0, boxDead: 0, cullsInBoxes: 0, countedDead: 0, countedByDay: {}, lapses: 0,
+    chickWeightG: LEVEL1.chickWeightG, meanWeightG: LEVEL1.chickWeightG, cv: FLOCK.cv, uniformityPct: 0,
+    lateStarters: 0, lateShare: null, droppings: 'normal',
+    feedTodayKg: 0, waterTodayL: 0, cumFeedKg: 0, fcr: 0,
+    cohorts: { good: { n: 0, w: 0, cv: FLOCK.cv }, late: { n: 0, w: 0, cv: FLOCK.cv }, weak: { n: 0, w: 0, cv: FLOCK.weakCv } },
+    stacks: [],              // [{ chicks, weak }] still in the boxes
+    gradeBox: [],            // the ten chicks on the sample table
+    tips: { n: 0, floorDef: 0, boxH: 0, sectors: [] },
+    first24: { minutes: 0, aSum: 0, floodSum: 0, coldH: 0, lightLow: 0 },
+    acc: Object.fromEntries(CAUSES.map((c) => [c, 0])),
+    factors: { fT: 1, fL: 1, fF: 1, fW: 1, fAir: 1 },
+    qVersion: 0,
+  };
+}
+
+const fpg = (age) => FLOCK.fpg0 + FLOCK.fpgPerDay * Math.max(0, age);
+const cohortList = (fl) => [fl.cohorts.good, fl.cohorts.late, fl.cohorts.weak];
+
+/** The chick truck: 6,000 chicks in 6 stacks of 10 boxes (weak chicks spread over the stacks). */
+export function deliver(farm, env) {
+  const fl = farm.flock, rng = farm.rng, L = farm.level || LEVEL1;
+  fl.delivered = L.chicksPlaced; fl.inBoxes = L.chicksPlaced;
+  fl.chickWeightG = L.chickWeightG + (rng.next() * 2 - 1) * FLOCK.chickSdG;
+  fl.meanWeightG = fl.chickWeightG;
+  const weak = Math.round(L.chicksPlaced * FLOCK.weakShare), per = L.chicksPlaced / L.stacks;
+  fl.stacks = Array.from({ length: L.stacks }, () => ({ chicks: per, weak: 0 }));
+  for (let k = 0; k < weak; k++) fl.stacks[rng.int(L.stacks)].weak++;
+  fl.gradeBox = Array.from({ length: 10 }, () => gradeChick(fl, rng));
+  for (const c of CAUSES) fl.acc[c] = rng.next(); // seeded jitter: where each death counter starts
+  farm.stats.truckAt = env.day;
+}
+
+function gradeChick(fl, rng) {
+  const weak = rng.next() < FLOCK.weakShare * 4; // a sample box the hatchery packed: a few more weak ones show
+  const navel = weak ? (rng.next() < 0.6 ? (rng.next() < 0.5 ? 'open' : 'black button') : 'healed')
+    : (rng.next() < 0.97 ? 'healed' : 'not fully closed');
+  const reflexSec = +(weak ? (rng.next() < 0.7 ? rng.range(3.2, 6) : rng.range(1.5, 3)) : rng.range(0.8, 2.5)).toFixed(1);
+  const hocks = rng.next() < FLOCK.redHocks ? 'red' : 'clean';
+  const weightG = +(fl.chickWeightG * (weak ? FLOCK.weakWeight : 1) * (1 + FLOCK.cv * rng.normal())).toFixed(1);
+  return { weak, navel, reflexSec, hocks, weightG, culled: false };
+}
+
+/** Box hazard: share of chicks that die in the boxes after `h` hours. */
+const boxShare = (h) => FLOCK.boxHazard * Math.min(h, FLOCK.boxFreeH) + 0.5 * FLOCK.boxHazardRise * Math.max(0, h - FLOCK.boxFreeH) ** 2;
+
+/** Tip a stack onto the litter at (x, z). */
+export function tip(farm, env, { stack, chicks, x, z }) {
+  const fl = farm.flock, st = fl.stacks[stack];
+  if (!st || st.chicks <= 0) return { placed: 0, deadInBoxes: 0 };
+  const n = Math.max(0, Math.min(st.chicks, chicks ?? st.chicks));
+  const h = farm.stats.truckAt != null ? (env.day - farm.stats.truckAt) * 24 : 0;
+  const dead = Math.min(n, Math.floor(n * boxShare(h) + farm.rng.next()));
+  const weak = Math.min(st.weak, Math.round((st.weak * n) / st.chicks));
+  st.chicks -= n; st.weak -= weak; fl.inBoxes -= n;
+  const live = n - dead, liveWeak = Math.max(0, weak - Math.min(weak, Math.round(dead / 2)));
+  const tFloor = env.floorTemp(x, z);
+  const t = fl.tips;
+  t.floorDef += live * Math.max(0, FLOCK.late.floorRef - tFloor); t.boxH += live * h; t.n += live;
+  const sec = broodSector(x, z); if (!t.sectors.includes(sec)) t.sectors.push(sec);
+  // live chicks into the cohorts (late share from the running estimate, settled over 24 h)
+  const c = fl.cohorts, w0 = fl.chickWeightG;
+  addBirds(c.weak, liveWeak, w0 * FLOCK.weakWeight);
+  const rest = live - liveWeak, L = lateEstimate(farm, env);
+  addBirds(c.late, rest * L, w0); addBirds(c.good, rest * (1 - L), w0);
+  fl.placed += live; fl.boxDead += dead; fl.deadTotal += dead; fl.deadByCause.box += dead;
+  syncAlive(fl);
+  fl.present = true;
+  if (farm.stats.firstTipAt == null) firstTip(farm, env);
+  if (fl.inBoxes <= 0) farm.stats.lastTipAt = env.day;
+  if (dead > 0) farm.emit(EV.FARM_DEATH, { n: dead, cause: 'box', inBoxes: true });
+  farm.emit(EV.FARM_PLACED, { chicks: live, x, z, minutesInBox: Math.round(h * 60), stack });
+  return { placed: live, deadInBoxes: dead };
+}
+
+function firstTip(farm, env) {
+  const s = farm.stats;
+  s.firstTipAt = env.day;
+  s.floorShareAtFirstTip = farm.floorShare28();
+  s.heightsAtFirstTip = farm.water.lines.map((l) => l.heightCm);
+  farm.water.quality = farm.water.flushedAt != null && s.truckAt - farm.water.flushedAt <= 1 && farm.water.flushedAt <= s.truckAt + 1e-9 ? 1 : 0.85;
+}
+
+function addBirds(c, n, w) {
+  if (n <= 0) return;
+  c.w = c.n + n > 0 ? (c.n * c.w + n * w) / (c.n + n) : w;
+  c.n += n;
+}
+function moveBirds(from, to, n) {
+  n = Math.min(n, from.n);
+  if (n <= 0) return;
+  addBirds(to, n, from.w); from.n -= n;
+}
+
+/** Late starter share L from what happened so far in the first 24 h (PHASE2.md §6.3). */
+export function lateEstimate(farm, env) {
+  const fl = farm.flock, K = FLOCK.late, t = fl.tips, f = fl.first24;
+  if (fl.lateShare != null) return fl.lateShare;
+  const n = Math.max(1, t.n);
+  const A = f.minutes > 0 ? f.aSum / f.minutes : farm.water.access;
+  const flooded = f.minutes > 0 ? f.floodSum / f.minutes : farm.feed.lines.filter((l) => l.flood).length / farm.feed.lines.length;
+  const litH = 24 - (env.lightProgram?.darkHours ?? 1);
+  const L = K.base + K.floor * (t.floorDef / n) + K.boxH * (t.boxH / n) + K.flood * (1 - flooded)
+    + K.water * (1 - A) + K.light * (litH < 20 ? 1 : 0) + K.sectors * (fl.inBoxes <= 0 && t.sectors.length < 3 ? 1 : 0)
+    + K.coldH * f.coldH;
+  return Math.max(K.min, Math.min(K.max, L));
+}
+
+/** Remove `n` birds of a cause: weak / starve-out from their cohort, the rest from all alike. */
+function removeDead(fl, n, cause) {
+  const c = fl.cohorts;
+  if (cause === 'weak') { c.weak.n = Math.max(0, c.weak.n - n); return; }
+  if (cause === 'starveout') { c.late.n = Math.max(0, c.late.n - n); return; }
+  const all = c.good.n + c.late.n + c.weak.n;
+  if (all <= 0) return;
+  for (const k of cohortList(fl)) k.n = Math.max(0, k.n - (n * k.n) / all);
+}
+
+/** Culls: weak chicks at the table, sick birds on the floor (they leave the cohort that would die). */
+export function cull(farm, { n = 1, reason = 'sick', index } = {}) {
+  const fl = farm.flock;
+  n = Math.max(0, Math.round(n));
+  if (!n) return false;
+  if (reason === 'grading' && index != null && fl.gradeBox[index]) fl.gradeBox[index].culled = true;
+  const sample = index != null && reason === 'grading' ? fl.gradeBox[index] : null;
+  if (reason === 'grading' && fl.inBoxes > 0) {
+    // still in the boxes: out of a stack (out of its weak chicks when the sample chick was weak)
+    const weak = !sample || sample.weak;
+    const st = fl.stacks.find((s) => s.chicks >= n && (!weak || s.weak > 0)) || fl.stacks.find((s) => s.chicks >= n);
+    if (!st) return false;
+    st.chicks -= n; fl.inBoxes -= n;
+    if (weak && st.weak > 0) st.weak -= Math.min(st.weak, n);
+    fl.culls += n; fl.cullsInBoxes += n;
+    return true;
+  }
+  const c = fl.cohorts;
+  let left = n;
+  const order = sample && !sample.weak ? [c.good, c.late, c.weak] : [c.weak, c.late, c.good];
+  for (const k of order) { const t = Math.min(left, k.n); k.n -= t; left -= t; }
+  fl.culls += n;
+  syncAlive(fl);
+  return true;
+}
+
+/** Live birds on the litter: placed - deaths after placing - culls after placing (integers). */
+export function syncAlive(fl) {
+  fl.alive = Math.max(0, fl.placed - (fl.deadTotal - fl.boxDead) - (fl.culls - fl.cullsInBoxes));
+}
+
+const weakRate = (age) => FLOCK.weakRate.find(([to]) => age < to)[1];
+
+/**
+ * One step of the placed flock. `C` = comfortNow(). Returns { eatenKg, drunkL } for the equipment.
+ * Feed comes from the pans (farm-feed eat), water through the lines (farm-water drink).
+ */
+export function stepFlock(farm, env, hrs, C, io) {
+  const fl = farm.flock, c = fl.cohorts, age = farm.age, s = farm.stats;
+  // ---- factors (PHASE2.md §6.5) ----
+  let fT = 1;
+  if (C.e < -1.5) fT *= 1 - 0.12 * (-1.5 - C.e);
+  if (C.meanOver > 1.5) fT *= 1 - 0.08 * (C.meanOver - 1.5);
+  fT = Math.max(0.2, Math.min(1, fT));
+  const lp = env.lightProgram || { darkHours: 1 };
+  const darkH = Math.max(0, lp.darkHours || 0), litH = Math.max(1, 24 - darkH);
+  const fL = Math.min(1, (farm.luxLit() < 20 ? 0.9 : 1) * (1 - 0.04 * (darkH - 1)));
+  const fF = io.feedAccess;
+  const A = farm.water.access, fW = Math.pow(Math.max(0, A), 0.8);
+  const fAir = Math.max(0, 1 - 0.01 * Math.max(0, farm.litter.ammoniaPpm - 20));
+  const FX = fl.factors; FX.fT = fT; FX.fL = fL; FX.fF = fF; FX.fW = fW; FX.fAir = fAir;
+  const f = fT * fL * fF * fW * fAir;
+  // ---- intake, spread over the lit hours ----
+  const lit = env.lightsOn ? 24 / litH : 0;
+  const std = feedStdGAt(age) / 1000 * (hrs / 24) * lit;  // kg per bird this step at full rate
+  const lateK = age < FLOCK.lateEarlyAge ? FLOCK.lateIntakeEarly : FLOCK.lateIntakeAfter;
+  const wGood = c.good.n * std * f, wLate = c.late.n * std * f * lateK, wWeak = c.weak.n * std * f * FLOCK.weakIntake;
+  const wantKg = wGood + wLate + wWeak;
+  const gotKg = wantKg > 0 ? io.eat(wantKg) : 0;
+  const k = wantKg > 0 ? gotKg / wantKg : 0;
+  const coldDef = Math.max(0, -1.5 - C.e);
+  const gainK = (1000 * k * Math.max(0, 1 - FLOCK.coldGain * coldDef)) / fpg(age);
+  if (c.good.n > 0) c.good.w += (wGood / c.good.n) * gainK;
+  if (c.late.n > 0) c.late.w += (wLate / c.late.n) * gainK;
+  if (c.weak.n > 0) c.weak.w += (wWeak / c.weak.n) * gainK;
+  const fEff = f * (wantKg > 0 ? k : 1);
+  const dcv = (FLOCK.cvBase + FLOCK.cvTemp * (1 - fT) + FLOCK.cvWater * (1 - A) + FLOCK.cvFeed * (1 - Math.min(1, fF * (wantKg > 0 ? k : 1)))) * (hrs / 24);
+  c.good.cv += dcv; c.late.cv += dcv; c.weak.cv += dcv;
+  fl.cumFeedKg += gotKg; fl.feedTodayKg += gotKg;
+  const drunkL = gotKg * io.waterPerKg;
+  fl.waterTodayL += drunkL;
+  // ---- first 24 h after the first tip: what decides the late starters ----
+  if (fl.lateShare == null && s.firstTipAt != null) {
+    const F = fl.first24, m = hrs * 60;
+    F.minutes += m; F.aSum += A * m;
+    F.floodSum += (farm.feed.lines.filter((l) => l.flood && l.kg > 1).length / farm.feed.lines.length) * m;
+    if (C.e < -2) F.coldH += hrs;
+    const L = lateEstimate(farm, env), nonWeak = c.good.n + c.late.n, want2 = L * nonWeak;
+    if (want2 > c.late.n) moveBirds(c.good, c.late, want2 - c.late.n); else moveBirds(c.late, c.good, c.late.n - want2);
+    if (env.day - s.firstTipAt >= 1) {
+      fl.lateShare = L;
+      s.cropFillTrue = Math.max(0, 1 - L - 0.5 * (c.weak.n / Math.max(1, c.good.n + c.late.n + c.weak.n)));
+    }
+  }
+  // ---- deaths (expected per hour, fractional counters per cause) ----
+  const alive = c.good.n + c.late.n + c.weak.n;
+  const rates = RATES;
+  rates[0] = c.weak.n * weakRate(age);
+  rates[1] = age >= FLOCK.starveFrom && age < FLOCK.starveTo ? c.late.n * FLOCK.starveRate : 0;
+  rates[2] = C.e < FLOCK.coldFrom ? alive * FLOCK.coldRate * (FLOCK.coldFrom - C.e) ** 2 : 0;
+  rates[3] = C.meanOver > FLOCK.heatFrom ? alive * FLOCK.heatRate * (C.meanOver - FLOCK.heatFrom) ** 2 : 0;
+  rates[4] = A < FLOCK.dehydBelow ? alive * FLOCK.dehydRate * ((FLOCK.dehydBelow - A) / FLOCK.dehydBelow) : 0;
+  rates[5] = env.dayNumber >= FLOCK.otherFromDay ? alive * FLOCK.otherRate * (1 + FLOCK.otherPerLapse * fl.lapses) * (farm.water.quality < 1 ? FLOCK.otherBadWater : 1) : 0;
+  let next12 = 0;
+  for (let ci = 0; ci < RATE_CAUSES.length; ci++) {
+    const cause = RATE_CAUSES[ci], r = rates[ci];
+    next12 += r * 12;
+    if (r <= 0) continue;
+    fl.acc[cause] += r * hrs;
+    if (fl.acc[cause] >= 1) {
+      const n = Math.min(Math.floor(fl.acc[cause]), Math.floor(alive));
+      fl.acc[cause] -= n;
+      if (n > 0) {
+        removeDead(fl, n, cause);
+        fl.deadTotal += n; fl.deadByCause[cause] += n; fl.deadOnFloor += n;
+        farm.emit(EV.FARM_DEATH, { n, cause });
+      }
+    }
+  }
+  syncAlive(fl);
+  fl.sick = Math.min(24, Math.round(next12));
+  // ---- what the litter shows, comfort minutes for the stats ----
+  const ratio = io.waterPerKg;
+  fl.droppings = C.meanOver > 2 || ratio > 2.0 ? 'watery' : fEff < 0.7 && env.lightsOn ? 'few' : 'normal';
+  if (age >= 0 && age < 7) {
+    const m = hrs * 60, ok = C.e >= -1.5 && C.e <= 2 ? m * C.groupShare : 0; // flock e in the band, weighted by the groups that find comfort
+    s.levelMinutes += m; s.comfortMinutes += ok;
+    const d = env.dayNumber;
+    const byDay = s.comfortByDay || (s.comfortByDay = []);
+    const row = byDay[d] || (byDay[d] = [0, 0]);
+    row[0] += ok; row[1] += m;
+    s.comfortShareByDay[d] = +(row[0] / row[1]).toFixed(4);
+  }
+  updateWeights(fl);
+  // breath: the water the birds turn over at their intake, also when the lines limit them (they dry out)
+  return { eatenKg: gotKg, drunkL, breathL: drunkL / Math.max(0.3, fW) };
+}
+
+/** Flock mean, CV and uniformity from the cohort mixture. */
+export function updateWeights(fl) {
+  const m = mixtureStats(cohortList(fl));
+  if (m.n > 0) { fl.meanWeightG = m.mean; fl.cv = m.cv; fl.uniformityPct = 100 * m.uniformity; }
+  fl.lateStarters = Math.round(fl.cohorts.late.n);
+  fl.qVersion++;
+}
+
+/** weightQuantile(u) with a small table rebuilt only when the flock changed. */
+export function makeQuantile(fl) {
+  let ver = -1, table = null;
+  return (u) => {
+    if (fl.placed <= 0) return fl.meanWeightG;
+    if (ver !== fl.qVersion) {
+      ver = fl.qVersion;
+      table = Array.from({ length: 33 }, (_, i) => mixtureQuantile(cohortList(fl), i / 32));
+    }
+    const x = Math.max(0, Math.min(1, u)) * 32, i = Math.min(31, Math.floor(x));
+    return table[i] + (table[i + 1] - table[i]) * (x - i);
+  };
+}
+
+/** One live bird of the flock (cohort by share, normal within it), grams. */
+export function drawBird(fl, rng) {
+  const cs = cohortList(fl), n = cs.reduce((a, k) => a + Math.max(0, k.n), 0);
+  let r = rng.next() * n, co = cs[0];
+  for (const k of cs) { if (k.n <= 0) continue; co = k; if ((r -= k.n) <= 0) break; }
+  return Math.max(10, co.w * (1 + co.cv * rng.normal()));
+}
