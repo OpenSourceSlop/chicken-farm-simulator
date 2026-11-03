@@ -15,7 +15,7 @@
 //   runCycle (farm-profiles-cycle-run.js): the trace scripts/test-cycle.mjs checkCycle measures.
 // The ideal's fans and pads follow scripts/cycle-refs.mjs idealFans / idealPad (re-stated below: the
 // browser cannot import a script) at its stops, base controls only (no vent.stages).
-import { EQUIP, LIGHT_PRESETS, HARVEST, CLEAN, WEATHER, feedStdGAt, flowTargetAt, nippleHeightCmAt, feederRimCmAt, targetTempAt, PLACEMENT_DAY, feedTypeForDay, HEAT } from './config.js';
+import { EQUIP, LIGHT_PRESETS, HARVEST, CLEAN, WEATHER, LEVEL1, PLAN_LEVEL, levelOfDay, feedStdGAt, flowTargetAt, nippleHeightCmAt, feederRimCmAt, targetTempAt, PLACEMENT_DAY, feedTypeForDay, HEAT } from './config.js';
 import { signTimer } from './farm-profiles.js';
 import { feedLeftKg } from './farm-silos.js';
 
@@ -168,10 +168,17 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
   const P = cycleProfileOf(profile), done = [];
   const act = (id, args = {}) => { const result = farm.act(id, args); done.push({ id, args, result }); return result; };
   if (farm.mode !== 'level') return done;
+  // the level of the day (a no-op inside a run, which enters each level at its 06:00 start; level.debug.freeRun
+  // and other callers that never entered it get the level's problems, weather and the cycle climate here)
+  const lv = levelOfDay(day);
+  if (lv && lv !== LEVEL1 && lv !== PLAN_LEVEL && (!farm.cycleLevel || farm.cycleLevel.id !== lv.id) && env.day >= lv.startDay + lv.startHour / 24 - 1e-9) farm.enterLevel(lv);
   farm.profileGrower = P.grower;
   const fl = farm.flock, age = env.day - PLACEMENT_DAY, alive = fl.alive > 0;
   const lines = [0, 1, 2, 3];
   const listen = () => { for (const [x, z] of SPOTS) farm.listen(x, z); };
+  // the round names of PHASE3.md §14.1 that cycleStops spells differently
+  const ALIAS = { eve: 'night', noon: 'fans', heatwave: env.hour < 14 ? 'feedersUp' : 'feedersDown', clean4: 'swabs' };
+  if (ALIAS[round]) { done.push(...applyCycleRound(farm, env, day, ALIAS[round], P)); if (round === 'clean4') done.push(...applyCycleRound(farm, env, day, 'close', P)); return done; }
   switch (round) {
     case 'am': {
       if (!alive) return done;
@@ -400,5 +407,5 @@ function rewash(farm, env, act, P, day) {
 /** Kept for level.js (PHASE3.md §13.8) until the run package's merge: the ideal runs the fans at its stops now. */
 export function climateCare() { return () => {}; }
 
-export { runCycle, cycleWorld } from './farm-profiles-cycle-run.js';
+export { runCycle, cycleWorld, saveBlob, ENV_SAVE } from './farm-profiles-cycle-run.js';
 void EQUIP; void feedTypeForDay;

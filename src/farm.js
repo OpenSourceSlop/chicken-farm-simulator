@@ -295,7 +295,8 @@ function serializeFarm(farm, env) {
   return {
     v: 1, mode: farm.mode, seed: farm.seed, rng: farm.rng.state, truckLeft: farm.truckLeft, drinkLh: farm.drinkLh, ctlMem: farm.ctlMem, comfortH: farm.comfortH, litAcc: clone(farm.litAcc),
     flock: clone(fl),
-    water: clone({ ...farm.water, hist: farm.water.hist.map((v) => Math.round(v * 10) / 10) }),
+    water: clone({ ...farm.water, hist: farm.water.hist.map((v) => Math.round(v * 10) / 10), access: +farm.water.access.toFixed(9),
+      lines: farm.water.lines.map((l) => ({ ...l, access: +l.access.toFixed(9), flowMlMin: +l.flowMlMin.toFixed(6) })) }),
     feed: clone(farm.feed), litter: serializeLitter(farm.litter),
     light: { ...farm.light }, vent: { ...farm.vent }, fansManual: env.fansManual,
     problems: clone(farm.problems), stats: clone(farm.stats),

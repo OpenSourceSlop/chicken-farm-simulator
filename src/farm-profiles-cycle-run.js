@@ -74,6 +74,14 @@ function restoreSnap(world, snap, trace) {
   trace.hourly.push(...s.hourly); Object.assign(trace.levels, s.levels); Object.assign(trace.levelEnds, s.levelEnds);
 }
 
+/** The farm's part of a save (what level.saveBlob carries from the sim: env values, farm, records, skills). */
+export const ENV_SAVE = ['day', 'hour', 'weather', 'houseTemp', 'slabTemp', 'houseRH', 'heaterSetpoint', 'heaterLevel', 'fansOn', 'fansManual', 'padOn', 'ventTimer',
+  'lightProgram', 'maxDay', 'curtainForced', 'cycleClimate', 'fansBroken', 'padWorking', 'fanStages', 'broodersUp'];
+export function saveBlob(world) {
+  const { env, farm, records, skills } = world;
+  return JSON.parse(JSON.stringify({ env: Object.fromEntries(ENV_SAVE.map((k) => [k, env[k]])), farm: farm.serialize(), records: records.serialize(), skills: skills.serialize() }));
+}
+
 // ---------------- the trace ----------------
 function hourRow(world) {
   const { env, farm } = world, fl = farm.flock, C = farm.comfort, L = farm.litter;
@@ -91,7 +99,7 @@ function hourRow(world) {
 }
 
 /** Run a profile from a standard start of `from` through `to`. */
-export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = false } = {}) {
+export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = false, keepStarts = false } = {}) {
   const P = cycleProfileOf(name === 'determinism' ? 'ideal' : name);
   const [f0, t0] = RANGE[name] || ['plan', 'cleanout'];
   from = from ?? f0; to = to ?? t0;
@@ -114,6 +122,7 @@ export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = fal
   for (let i = Math.max(0, i0); i <= i1; i++) {
     const def = LEVELS[i];
     prepare(world, def, seed, i === i0 && i0 > 1, trace, keep);
+    if (keepStarts) (trace.starts ||= {})[def.id] = saveBlob(world);
     if (stopAtStart && i === i1) break;
     const res = def === PLAN_LEVEL ? playPlan(world, P) : def === LEVEL1 ? playBrooding(world, P) : playCycleLevel(world, def, P, trace);
     trace.levels[def.id] = res;

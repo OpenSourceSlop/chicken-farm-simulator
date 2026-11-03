@@ -141,7 +141,8 @@ export function actionSymptoms(farm, env, id, args, result) {
 export function deathsCounted(farm, env, countedToday) {
   const st = stateOf(farm, 'abnormal-deaths');
   if (!st || st.phase !== 'pending' || farm.flock.placed <= 0) return;
-  if (countedToday > 0.003 * farm.flock.placed) {
+  // more than 0.3 % of the placed chicks in one day in week 1, more than 0.15 % from day 8 (PHASE3.md §6.8)
+  if (countedToday > (env.dayNumber >= 8 ? 0.0015 : 0.003) * farm.flock.placed) {
     st.phase = 'active'; st.startedAt = env.day;
     farm.emit(EV.FARM_PROBLEM, { id: st.id, phase: 'start' });
     findProblem(farm, env, st.id, 'bin');

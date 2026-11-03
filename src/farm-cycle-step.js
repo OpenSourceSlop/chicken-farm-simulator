@@ -58,6 +58,10 @@ export function cycleFactors(farm, env, age) {
 export function cyclePost(farm, env, hrs, r) {
   const X = farm.cyc, fl = farm.flock, feed = farm.feed, st = farm.stats, age = farm.age;
   st.gasKg = (st.gasKg || 0) + gasKg(env, hrs);
+  // the company's letters on the office desk (EV.LETTER): the contract on the planning day, the reply an hour after the plan went
+  const plan = farm.plan;
+  if (farm.cycleLevel && farm.cycleLevel.id === 'plan' && !st.contractLetter) { st.contractLetter = env.dayNumber; farm.emit(EV.LETTER, { kind: 'contract', day: env.dayNumber }); }
+  if (plan && plan.replyAt != null && !plan.replyLetter && env.day >= plan.replyAt - 1e-9) { plan.replyLetter = env.day; farm.emit(EV.LETTER, { kind: 'reply', day: env.dayNumber }); }
   if (!X.on) { reconcileSilos(feed); dailyStats(farm, env, hrs, age); return; }
   if (farm.health.mainClosed) farm.health.dryH = (farm.health.dryH || 0) + hrs;
   const L = farm.litter, C = farm.comfort;

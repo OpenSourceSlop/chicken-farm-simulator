@@ -16,7 +16,12 @@ import { targetTempAt, weightAt } from './config.js';
  *   chickWeightG: number|null, chickQualityNote: string|null,
  *   looks: string[], skillLines: string[], notes: string[], jobsDone: number, jobsMissed: number,
  *   flowsMlMin: (number|null)[]|null, floorTempMeanC: number|null, cropTally: { full: number, of: number }|null,
- *   settings: object, prepChecks: string[]|null
+ *   settings: object, prepChecks: string[]|null,
+ *   // Phase 3 (PHASE3.md §8.1), null when not measured that day:
+ *   darkHours: number|null, luxMeasured: number|null, houseRhMin: number|null, houseRhMax: number|null,
+ *   airSpeedMs: number|null, fansMax: number|null, padOn: boolean|null, lameCulled: number|null,
+ *   feedType: 'starter'|'grower'|'finisher'|null, vaccine: { hours: number }|null, medication: boolean|null,
+ *   gasKgUsed: number|null, deadByLook: { back, thin, wingsOut, hunched }|null
  * }} RecordRow   (waterPerBirdMl = litres per 1,000 birds: the same number)
  */
 
@@ -41,6 +46,7 @@ export function settingsNow(farm, env) {
     nippleHeightsCm: farm ? farm.water.lines.map((l) => l.heightCm) : null,
     pressuresCm: farm ? farm.water.lines.map((l) => l.pressureCm) : null,
     panHeightsCm: farm ? farm.feed.lines.map((l) => l.heightCm) : null,
+    ...(farm && farm.cyc && farm.cyc.on ? { curtainOpen: !!farm.house.curtainOpen, fansManual: env.fansManual, padOn: !!env.padOn, valves: farm.feed.valves ? farm.feed.valves.slice() : null } : {}),
   };
 }
 
@@ -94,6 +100,8 @@ export function buildRow(day, { notebook, extras, farm, env }, signed) {
   for (const n of of('order')) if (n.value && n.value.arriveDay != null) notes.push(`Feed ordered, arrives day ${n.value.arriveDay} ${String(n.value.arriveHour).padStart(2, '0')}:00`);
   for (const n of of('text')) notes.push(n.value);
   if (ex.lapses) notes.push(`House entered without the foot dip: ${ex.lapses}`);
+  // ---- Phase 3: the cycle's readings (null when not taken) ----
+  const cyc = cycleFields(day, of, notebook, farm);
   const s = sheet && sheet.value && sheet.value.sheet;
   const sheetNote = s ? `Grading sheet: navel not closed ${s.navelBad ?? 0}, red hocks ${s.redHocks ?? 0}, slow to right ${s.slowReflex ?? 0}, culled ${s.culled ?? 0}` : null;
   return {
@@ -115,5 +123,36 @@ export function buildRow(day, { notebook, extras, farm, env }, signed) {
     cropTally: crops.length ? { full: crops.filter((c) => c === 'full-soft').length, of: crops.length } : null,
     settings: settingsNow(farm, env),
     prepChecks: day < 0 ? notebook.filter((n) => n.day === day && n.kind === 'setting').map((n) => n.value.id).filter((v, i, a) => a.indexOf(v) === i) : null,
+    ...cyc,
+  };
+}
+
+/** The Phase 3 fields of a row (PHASE3.md §8.1): what the farmer read and did with the cycle's instruments. */
+function cycleFields(day, of, notebook, farm) {
+  const ctl = of('controller'), last = ctl.length ? ctl[ctl.length - 1].value : null;
+  const lux = of('lux').map((n) => n.value.lux).filter(Number.isFinite);
+  const air = of('air').map((n) => n.value.speedMs).filter(Number.isFinite);
+  const fans = of('fans');
+  const lame = of('cull').filter((n) => n.value && n.value.reason === 'lame').reduce((a, n) => a + (n.value.n || 0), 0);
+  const meter = of('feed.meter').find((n) => n.hour < 12 && n.value.type);
+  const med = of('medicine');
+  const gas = notebook.filter((n) => n.kind === 'gas' && n.day <= day);
+  const gasToday = gas.filter((n) => n.day === day), gasPrev = gas.filter((n) => n.day < day);
+  const look = of('dead').map((n) => n.value && n.value.byLook).filter(Boolean);
+  const v = farm && farm.health && farm.health.vaccine;
+  const darkFromCtl = last && last.light && last.light.darkHours != null ? last.light.darkHours : null;
+  const sum = (k) => look.reduce((a, b) => a + (b[k] || 0), 0);
+  return {
+    darkHours: darkFromCtl, luxMeasured: lux.length ? r1(mean(lux)) : null,
+    houseRhMin: last && Number.isFinite(last.rhMin) ? last.rhMin : null, houseRhMax: last && Number.isFinite(last.rhMax) ? last.rhMax : null,
+    airSpeedMs: air.length ? r2(mean(air)) : null,
+    fansMax: fans.length ? Math.max(...fans.map((n) => n.value.fans ?? 0)) : null,
+    padOn: fans.length ? fans.some((n) => n.value.pad === true || n.value.padOn === true) || !!(farm && farm.stats && farm.stats.daily && farm.stats.daily[day] && farm.stats.daily[day].padSeen) : null,
+    lameCulled: lame || null,
+    feedType: meter ? meter.value.type : null,
+    vaccine: v && v.state === 'drunk' && v.drunkAt != null && Math.floor(v.drunkAt) === day ? { hours: v.hours } : null,
+    medication: med.length ? med.some((n) => n.value.on) : farm && farm.health && farm.health.medication.on && Math.floor(farm.health.medication.from) <= day ? true : null,
+    gasKgUsed: gasToday.length && gasPrev.length ? Math.round(gasToday[gasToday.length - 1].value.kgUsed - gasPrev[gasPrev.length - 1].value.kgUsed) : null,
+    deadByLook: look.length ? { back: sum('back'), thin: sum('thin'), wingsOut: sum('wingsOut'), hunched: sum('hunched') } : null,
   };
 }

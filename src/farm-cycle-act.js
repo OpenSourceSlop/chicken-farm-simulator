@@ -120,6 +120,7 @@ export function cycleAct(farm, env, id, a = {}) {
     }
     case 'vent.stages': env.setFanStages(a.stages ? { stages: a.stages, padOverC: a.padOverC } : null); return true;
     case 'water.flush': {
+      if (cyc && (!farm.clean.disinfectant || !a.on)) return { ...doAct(farm, env, 'water.flush', a), disinfected: false };
       if (!farm.clean.disinfectant || !a.on) return undefined;
       const r = doAct(farm, env, 'water.flush', a);
       return { ...r, disinfected: flushDisinfect(farm, Math.round(a.line ?? 0)) };

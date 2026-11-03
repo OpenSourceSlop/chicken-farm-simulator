@@ -26,6 +26,7 @@ import { createHealth } from './farm-health.js';
 import { createHarvest } from './farm-harvest.js';
 import { createClean, serializeClean, restoreClean } from './farm-clean.js';
 import { ensureSilos } from './farm-silos.js';
+import { updateAccess } from './farm-water.js';
 import { addLevelProblems, installCycleWeather, applyCycleEffects } from './farm-cycle-problems.js';
 import { cycleAct as act, onBus } from './farm-cycle-act.js';
 
@@ -53,10 +54,11 @@ function resetCycle(farm, { keepPlan = null } = {}) {
 }
 
 /** The env settings the farm owns (the curtain, cycle climate, last day, brooders, fans, pad), from the farm. */
-function syncEnv(farm, env) {
+function syncEnv(farm, env, { fresh = false } = {}) {
   const on = !!farm.cyc.on;
   env.setCycleClimate(on);
-  env.setMaxDay(farm.cycleLevel && farm.cycleLevel.id === 'cleanout' ? CYCLE.lastDay : 42);
+  // the clean-out runs the clock to day 70; a fresh start goes back to 42 (entering a level never lowers it)
+  if (farm.cycleLevel && farm.cycleLevel.id === 'cleanout') env.setMaxDay(CYCLE.lastDay); else if (fresh) env.setMaxDay(42);
   env.setBroodCurtain(!farm.house.curtainOpen);
   env.setBroodersUp(!!farm.house.broodersUp);
   applyCycleEffects(farm, env);
@@ -85,7 +87,8 @@ export function installCycle(farm, env) {
     farm.stats.gasKg = 0; farm.stats.daily = {}; farm.stats.feedAtStartKg = farm.feed.siloKg;
     farm.stats.levelStart = levelStartOf(farm, env, level.id);
     env.setFanStages(null);
-    syncEnv(farm, env);
+    syncEnv(farm, env, { fresh: !opts.keepClock });
+    updateAccess(farm.water, farm.age); // the lines' flow at the start (a save taken before the first step restores the same)
   };
   farm.stop = () => {
     stop();
@@ -111,6 +114,7 @@ export function installCycle(farm, env) {
       Object.assign(farm.harvest, clone(c.harvest)); farm.clean = restoreClean(c.clean); Object.assign(farm.cyc, clone(c.cyc));
     }
     ensureSilos(farm.feed);
+    farm.flock.lameOnFloor = (farm.health.lame || []).length;
     if (farm.health.mainClosed || farm.water.mainClosed != null) farm.water.mainClosed = !!farm.health.mainClosed;
     if (farm.cycleLevel && farm.cyc.on) { installCycleWeather(farm, env); }
     syncEnv(farm, env);
@@ -127,7 +131,10 @@ export function installCycle(farm, env) {
     if (def === LEVEL1 || def === PLAN_LEVEL) { farm.cycleLevel = def === PLAN_LEVEL ? PLAN_LEVEL : null; farm.cyc.on = false; syncEnv(farm, env); return true; }
     farm.cycleLevel = def; farm.cyc.on = true;
     const fl = farm.flock;
+    const first = !CYCLE_CAUSES.every((k) => fl.deadByCause[k] != null);
     for (const k of [...CYCLE_CAUSES, 'doa']) { if (fl.deadByCause[k] == null) fl.deadByCause[k] = 0; if (fl.acc[k] == null) fl.acc[k] = farm.rng.next(); }
+    // the cycle's heat and cold rates replace Phase 2's from here: their counters restart with them
+    if (first) { fl.acc.heat = 0; fl.acc.cold = 0; }
     addLevelProblems(farm, def);
     if (def.weather) env.setWeather(def.weather);
     env.clearWeatherEvents(); installCycleWeather(farm, env);

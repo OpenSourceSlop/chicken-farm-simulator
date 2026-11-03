@@ -4,7 +4,7 @@
 // EV.FARM_DELIVERY { kind: 'catch', phase: 'arrive'|'leave', truck }.
 import { HARVEST, HOUSE_BOUNDS, PLACEMENT_DAY, weightAt } from './config.js';
 import { EV } from './events.js';
-import { syncAlive } from './farm-flock.js';
+import { syncAlive, updateWeights } from './farm-flock.js';
 import { feedLeftKg } from './farm-silos.js';
 
 // model constants (PHASE3.md §6.9)
@@ -93,7 +93,7 @@ function loadBirds(farm, n) {
   const k = Math.max(0, (fl.alive - n) / Math.max(1, fl.alive)), co = fl.cohorts;
   for (const key of ['good', 'late', 'weak']) if (co[key]) co[key].n *= k;
   fl.caught = (fl.caught || 0) + n;
-  syncAlive(fl);
+  syncAlive(fl); updateWeights(fl);
   let left = n;
   for (let i = 0; i < hv.trucks.length && left > 0; i++) {
     const t = hv.trucks[i], room = i === hv.trucks.length - 1 ? left : HARVEST.cratesPerTruck * HARVEST.birdsPerCrate - t.birds, put = Math.min(room, left);
