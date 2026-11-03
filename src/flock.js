@@ -26,11 +26,11 @@
 //   flock-metrics.js   metrics()
 // Two draw calls (+ two shadow draws) for the whole flock.
 import * as THREE from 'three';
-import { COLORS, FLOCK_COUNT, HEATERS, HOUSE_BOUNDS, weightAt } from './config.js';
+import { COLORS, FLOCK_COUNT, HEATERS, HOUSE, HOUSE_BOUNDS, weightAt } from './config.js';
 import { PART } from './flock-geometry.js';
 import { createFlockRender } from './flock-render.js';
 import { createBirdMaterials, createBirdUniforms, setMorphUniforms } from './flock-shader.js';
-import { createState, makeHuddleSites, placeFlock, usableBounds } from './flock-state.js';
+import { ACT, createState, makeHuddleSites, placeFlock, releaseRes, usableBounds } from './flock-state.js';
 import { createBirdGrid, createComfortField } from './flock-field.js';
 import { thinkBird } from './flock-think.js';
 import { personalSpace, steerAll } from './flock-steer.js';
@@ -78,8 +78,17 @@ export function createFlock(ctx, { house } = {}) {
     S.day = day; S.curtain = curtain; S.bounds = usableBounds(curtain);
     if (!S.sites || curtain !== prevCurtain || force) { S.sites = makeHuddleSites(S.bounds); S.site.fill(-1); }
     if (lifted && !reset) {
+      // the curtain lifted with the clock running: the share of the flock that belongs on the new
+      // floor walks out to an even spread over it (cold or hot birds still follow the climate)
       S.spreadT = 80;
-      for (let i = 0; i < n; i++) S.actT[i] = Math.min(S.actT[i], S.rand() * 4);
+      const b = S.bounds, x0 = HOUSE.broodCurtainX, share = (b.xMax - x0) / (b.xMax - b.xMin);
+      for (let i = 0; i < n; i++) {
+        if (S.therm[i] !== 0 || S.rand() > share) { S.actT[i] = Math.min(S.actT[i], S.rand() * 4); continue; }
+        releaseRes(S, i);
+        S.act[i] = ACT.WANDER; S.actT[i] = 70;
+        S.tx[i] = x0 + 0.3 + S.rand() * (b.xMax - x0 - 0.3); S.tz[i] = b.zMin + S.rand() * (b.zMax - b.zMin);
+        S.arrived[i] = 0; S.stuck[i] = 0;
+      }
     }
 
     S.L = 0.6 * Math.cbrt(weightAt(day) / 2850);  // ~0.17 m on day 1, 0.6 m at day 42

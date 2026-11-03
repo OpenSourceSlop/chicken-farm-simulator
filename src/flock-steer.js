@@ -2,7 +2,10 @@
 // integration and facing. Owner: flock agent. All typed arrays, no allocation per frame.
 // Stability: separation is a capped positional correction, velocities are low-pass filtered,
 // and sitting birds have "static friction", so long fixed-step runs settle without jitter.
-import { ACT, COLD, HOT, releaseRes } from './flock-state.js';
+import { FEEDER_LINES_Z, FEEDER_PAN_SPACING, FEEDER_PAN_X } from './config.js';
+import { ACT, COLD, HOT, PAN_RADIUS, releaseRes } from './flock-state.js';
+
+const PAN_X0 = FEEDER_PAN_X[0], PAN_LAST = FEEDER_PAN_X.length - 1;
 
 // Personal space for this frame (metres, centre to centre). Returns the largest, which sets the
 // spatial hash cell size: dense huddles get small cells, so neighbour loops stay short.
@@ -34,6 +37,7 @@ export function steerAll(S, grid, dt, fctx) {
   const slowR = 0.08 + 1.0 * L;
   const kv = Math.min(1, dt * 5);
   const kSep = Math.min(0.5, dt * 9);
+  const panKeep = PAN_RADIUS + 0.22 * L; // centre distance a non-eating bird keeps from a pan
   const invDt = 1 / dt;
   const fOn = fctx.farmerOn, ffx = fctx.fx, ffz = fctx.fz, fR = fctx.farmerR;
   const fsx = fctx.vx * 0.5, fsz = fctx.vz * 0.5, fl2 = fsx * fsx + fsz * fsz; // look-ahead segment
@@ -138,6 +142,21 @@ export function steerAll(S, grid, dt, fctx) {
       if (m <= thr) { mx = 0; mz = 0; vx[i] *= 0.5; vz[i] *= 0.5; } else { mx *= 1 - thr / m; mz *= 1 - thr / m; }
     }
     let nx = px[i] + mx, nz = pz[i] + mz;
+    if (a !== ACT.EAT) {
+      // only eaters stand at a pan: everyone else is eased off the pan's footprint
+      for (let l = 0; l < FEEDER_LINES_Z.length; l++) {
+        const dz = nz - FEEDER_LINES_Z[l];
+        if (dz > panKeep || dz < -panKeep) continue;
+        let j = Math.round((nx - PAN_X0) / FEEDER_PAN_SPACING);
+        j = j < 0 ? 0 : j > PAN_LAST ? PAN_LAST : j;
+        const dx = nx - FEEDER_PAN_X[j], d2 = dx * dx + dz * dz;
+        if (d2 < panKeep * panKeep && d2 > 1e-8) {
+          const d = Math.sqrt(d2), push = (panKeep - d) * Math.min(1, dt * 6) / d;
+          nx += dx * push; nz += dz * push;
+        }
+        break;
+      }
+    }
     nx = nx < b.xMin ? b.xMin : nx > b.xMax ? b.xMax : nx;
     nz = nz < b.zMin ? b.zMin : nz > b.zMax ? b.zMax : nz;
     const mvx = nx - px[i], mvz = nz - pz[i];
