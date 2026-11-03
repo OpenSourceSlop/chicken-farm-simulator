@@ -173,7 +173,7 @@ export const JOB_WHERE = {
   'prep-preheat': 'Climate controller, inside on the north wall across from the door: the Temperature section.',
   'prep-litter': 'Rice husk heap west of the door: pick a depth, take the barrow and push it over the whole floor.',
   'prep-drinkers': 'Regulator at the west end of each drinker line: winch the line up or down.',
-  'prep-feeders': 'Feeder control box, north wall, west end: run and flood each line.',
+  'prep-feeders': 'Feeder control box, north wall, between the water lines sign and the brooder sign: run and flood each line.',
   'prep-silo': 'Feed silos outside, north of the house: read the level gauge.',
   'prep-lights': 'Climate controller: the Lights section.',
   'prep-vent': 'Climate controller: the Ventilation section. The minimum ventilation sign hangs beside it.',

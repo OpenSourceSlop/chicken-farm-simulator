@@ -24,6 +24,16 @@
 //   {"viewport": [400, 800]}
 //   {"reload": true}         reload the page (localStorage kept: autosave tests) and wait for __game.ready
 //   {"clearStorage": true}   remove this page's localStorage (a fresh player)
+// Real-input steps for play-throughs (steps files that stopped the loop with __game.stop()):
+//   {"walkTo": [x, z], "tol": 0.6, "max": 60}   walk there by real mouse clicks on the ground (the
+//                            farmer's click-to-walk and path finding): clicks the target, or a point
+//                            toward it that is on screen and not under the HUD, advances until he
+//                            gets there, repeats; prints where he ended and the game time it took
+//   {"clickText": "Take the barrow", "in": ".panel", "times": 1}  real mouse click(s) on the centre of
+//                            the first visible button / label / tab whose text (or aria-label)
+//                            starts with this (default scope: the whole HUD)
+//   {"advanceUntil": "js expr", "max": 120, "step": 0.5}  advance in steps until the expression is truthy
+//   {"expect": "js expr", "label": "..."}   evaluate; print PASS / FAIL (a FAIL makes the exit code 1)
 import { createRequire } from 'node:module';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -150,8 +160,36 @@ async function main() {
   }
 
   const center = () => [page.viewportSize().width / 2, page.viewportSize().height / 2];
+  let expectFails = 0;
   for (const step of loadSteps()) {
-    if (step.holdKey) {
+    if (step.walkTo) console.log(`walkTo [${step.walkTo}] ->`, await walkTo(page, step.walkTo, step));
+    else if (step.clickText) {
+      const at = await page.evaluate(([text, scope]) => {
+        const els = [...document.querySelectorAll(`${scope} button, ${scope} label, ${scope} [role=tab]`)];
+        const b = els.find((x) => x.offsetParent !== null && !x.disabled && (x.textContent.replace(/\s+/g, ' ').trim().startsWith(text) || (x.getAttribute('aria-label') || '').startsWith(text)));
+        if (!b) return null;
+        b.scrollIntoView({ block: 'center' });
+        const r = b.getBoundingClientRect();
+        return [r.left + r.width / 2, r.top + r.height / 2];
+      }, [step.clickText, step.in || '#hud']);
+      if (!at) console.log(`clickText "${step.clickText}": NOT FOUND`);
+      else {
+        for (let i = 0; i < (step.times ?? 1); i++) await page.mouse.click(at[0], at[1]);
+        console.log(`clickText "${step.clickText}"${step.times ? ` x${step.times}` : ''}`);
+      }
+    } else if (step.advanceUntil) {
+      const r = await page.evaluate(([expr, max, dt]) => {
+        const f = new Function(`return (${expr});`);
+        let t = 0;
+        while (!f() && t < max) { window.__game.advance(dt); t += dt; }
+        return { ok: !!f(), t };
+      }, [step.advanceUntil, step.max ?? 120, step.step ?? 0.5]);
+      console.log(`advanceUntil ${step.advanceUntil} -> ${r.ok ? 'met' : 'NOT MET'} after ${r.t.toFixed(1)} s`);
+    } else if (step.expect) {
+      const r = await page.evaluate(step.expect);
+      if (!r) expectFails++;
+      console.log(`${r ? 'PASS' : 'FAIL'} ${step.label || step.expect}${typeof r === 'string' ? `: ${r}` : ''}`);
+    } else if (step.holdKey) {
       await page.keyboard.down(step.holdKey);
       await page.evaluate((s) => window.__game.advance(s), step.for ?? 0.5);
       await page.keyboard.up(step.holdKey);
@@ -192,9 +230,51 @@ async function main() {
   const fps = await page.evaluate(async () => { const f0 = window.__game.frames; await new Promise((r) => setTimeout(r, 2000)); return (window.__game.frames - f0) / 2; });
   console.log(`frames per second in headless SwiftShader (software, far slower than a real GPU): ${fps.toFixed(1)}`);
   console.log(problems.length ? `PROBLEMS (${problems.length}):\n${problems.join('\n')}` : 'No console errors or page errors.');
+  if (expectFails) console.log(`${expectFails} expectation(s) FAILED`);
   await browser.close();
   server.close();
-  process.exit(problems.some((p) => p.startsWith('[pageerror]')) ? 1 : 0);
+  process.exit(problems.some((p) => p.startsWith('[pageerror]')) || expectFails ? 1 : 0);
+}
+
+// Walk the farmer to (tx, tz) with real mouse clicks (click-to-walk), leg by leg: each leg clicks the
+// target, or the farthest point toward it that is on screen and on the canvas (not under the HUD).
+async function walkTo(page, [tx, tz], { tol = 0.6, max = 60 } = {}) {
+  const t0 = await page.evaluate(() => window.__game.env.day);
+  let spent = 0, legs = 0, stuck = 0;
+  while (spent < max && legs < 24) {
+    const pick = await page.evaluate(([tx, tz, tol]) => {
+      const g = window.__game, p = g.player.position;
+      if (Math.hypot(tx - p.x, tz - p.z) <= tol) return { done: true };
+      g.player.update(0); // camera matrices for this position
+      const cv = g.renderer.domElement, rect = cv.getBoundingClientRect();
+      for (let f = 1; f > 0.04; f *= 0.8) {
+        const wx = p.x + (tx - p.x) * f, wz = p.z + (tz - p.z) * f;
+        const v = new g.THREE.Vector3(wx, 0, wz).project(g.camera);
+        if (Math.abs(v.x) > 0.92 || Math.abs(v.y) > 0.92 || v.z > 1) continue;
+        const px = rect.left + ((v.x + 1) / 2) * rect.width, py = rect.top + ((1 - v.y) / 2) * rect.height;
+        if (document.elementFromPoint(px, py) !== cv) continue;
+        return { px, py, wx, wz };
+      }
+      return { fail: true };
+    }, [tx, tz, tol]);
+    if (pick.done) break;
+    if (pick.fail) return `NO CLICKABLE POINT toward ${tx},${tz}`;
+    legs++;
+    const from = await page.evaluate(() => { const p = window.__game.player.position; return [p.x, p.z]; });
+    await page.mouse.click(pick.px, pick.py);
+    let last = null, still = 0;
+    for (let i = 0; i < 60 && spent < max; i++) {
+      const s = await page.evaluate(([wx, wz]) => { window.__game.advance(0.5); const p = window.__game.player.position; return [Math.hypot(wx - p.x, wz - p.z), p.x, p.z]; }, [pick.wx, pick.wz]);
+      spent += 0.5;
+      if (s[0] < 0.4) break;
+      if (last && Math.hypot(s[1] - last[0], s[2] - last[1]) < 0.05) { if (++still >= 2) break; } else still = 0;
+      last = [s[1], s[2]];
+    }
+    const to = await page.evaluate(() => { const p = window.__game.player.position; return [p.x, p.z]; });
+    if (Math.hypot(to[0] - from[0], to[1] - from[1]) < 0.15 && ++stuck >= 2) break; // the goal is as close as he gets
+  }
+  const end = await page.evaluate(([tx, tz, t0]) => { const g = window.__game, p = g.player.position; return { x: p.x, z: p.z, d: Math.hypot(tx - p.x, tz - p.z), gameMin: (g.env.day - t0) * 1440, inside: g.player.isInside }; }, [tx, tz, t0]);
+  return `at ${end.x.toFixed(1)},${end.z.toFixed(1)} (${end.d.toFixed(2)} m off${end.d > tol + 0.3 ? ' NOT REACHED' : ''}${end.inside ? ', inside' : ''}) after ${spent.toFixed(1)} s real, ${end.gameMin.toFixed(1)} game min, ${legs} click(s)`;
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

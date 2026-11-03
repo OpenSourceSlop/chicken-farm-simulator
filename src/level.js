@@ -151,7 +151,7 @@ export function createLevel(ctx, deps = {}) {
     const ratio = chick ? weightG / chick : null;
     const pass = ratio != null && ratio >= LEVEL1.fail.weightRatioMin && deathsPct <= LEVEL1.fail.mortalityMaxPct;
     const failText = deathsPct > LEVEL1.fail.mortalityMaxPct ? `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}` : `day 7 weight ${two(ratio)} × chick weight`;
-    const floor = records?.timeline?.()?.find?.((e) => e.day === 0)?.floorAtArrival ?? null;
+    const floor = records?.timeline?.()?.find?.((e) => e.day === 0)?.floorAtArrivalC ?? null;
     const { day, hour } = splitDay(env.day);
     return { pass, reason, early: reason === 'mortality', endedAt: `day ${day}, ${hhmm(hour)}`, day, hour,
       ratio, weightG, weighedByHand: !!wr, chickWeightG: chick, chickSource: measured != null ? 'box' : 'delivery',
@@ -220,6 +220,43 @@ export function createLevel(ctx, deps = {}) {
     emitLevel({ phase });
   }
 
+  // ---------------- debug.goto auto: the ideal farmer's rounds (farm-profiles.applyRound) ----------------
+  function autoStops(target) {
+    const st = farm.stats, out = [];
+    const firstTip = st.firstTipAt ?? LEVEL1.arrivalDay + 8.1 * H;
+    const add = (d, hr, r, t = d + hr * H) => { if (t > env.day + 1e-9 && t < target) out.push({ d, r, t }); };
+    const prepDone = !!records?.row?.(LEVEL1.startDay)?.signed;
+    for (let d = env.dayNumber; d <= Math.min(Math.floor(target), LEVEL1.endDay); d++) {
+      if (d < LEVEL1.arrivalDay) {
+        if (!prepDone) { add(d, 7.25, 'prep'); add(d, 20, 'eve'); add(d, 21, 'sign'); }
+        continue;
+      }
+      add(d, d === 1 ? 6.5 : 6.25, 'am');
+      if (d === LEVEL1.arrivalDay) { add(d, 8.1, 'truck'); add(d, 0, 'vent', firstTip + 2.6 * H); }
+      if (d === 1) add(d, 0, 'crop', firstTip + 23 * H);
+      if (d === 6) { add(d, 12, 'noon'); add(d, 17, 'late'); }
+      if (d === LEVEL1.endDay) add(d, 9, 'weigh');
+      add(d, d === 4 ? 15 : 13.25, 'pm');   // day 4: the leak shows by the afternoon (10:00 + 5 h)
+      add(d, 20, 'sign');
+    }
+    return out.sort((a, b) => a.t - b.t);
+  }
+  function autoRound(s) {
+    const jobOpen = (id) => engine.list().some((i) => i.id === id && i.status === 'open');
+    let r = s.r;
+    if (r === 'sign') { if (!records?.row?.(s.d)?.signed) records?.sign?.(s.d); return; }
+    if (r === 'truck' && !(farm.flock.inBoxes > 0)) return;
+    if (r === 'vent' && !jobOpen('d0-vent')) return;
+    if (r === 'crop' && !jobOpen('d1-crop')) return;
+    if (r === 'weigh' && !jobOpen('d7-weigh')) return;
+    try { applyRound(farm, env, s.d, r, 'ideal'); } catch (err) { console.error('applyRound failed', err); }
+    if (r === 'am' || r === 'pm') {
+      // the dead birds of the round: picked up (the flock mirrors the farm's count) and counted at the bin
+      const n = farm.flock.deadOnFloor;
+      if (n > 0) { events?.emit(EV.DEAD_PICK, { n, causes: {}, carried: n }); farm.act('dead.count', { n, causes: {} }); }
+    }
+  }
+
   const level = {
     mode: 'sandbox',
     engine,
@@ -267,19 +304,21 @@ export function createLevel(ctx, deps = {}) {
       resetRun();
       ui?.closePanel?.();
       const e = data.env;
-      // restore order (PHASE2.md §11): env -> farm -> records -> props -> flock -> level
+      // restore order (PHASE2.md §11): env -> farm -> records -> props -> flock -> level.
+      // farm.start (keepClock) first: it puts the level climate on with the prep-day equipment;
+      // the saved env values go on top of it and farm.restore rebuilds timer, light and weather.
       env.reset();
       env.setWeather(e.weather || LEVEL1.weather);
       env.setDay(Math.floor(e.day - (e.hour ?? 0) * H + 1e-6));
       env.setHour(e.hour ?? 0);
-      env.setFans(e.fansOn ?? 0); env.setPad(!!e.padOn);
+      farm.start(LEVEL1, { seed: data.level.seed ?? 1, keepClock: true });
+      env.setFans(e.fansManual ?? e.fansOn ?? 0); env.setPad(!!e.padOn);
       env.setVentTimer(e.ventTimer ?? null);
       env.setLightProgram(e.lightProgram || { darkStart: 2, darkHours: 1, dimmer: 1 });
       env.setHeaterSetpoint(e.heaterSetpoint ?? 20);
       if (e.houseTemp != null) env.houseTemp = e.houseTemp;
       if (e.slabTemp != null) env.slabTemp = e.slabTemp;
       if (e.heaterLevel != null) { env.heaterLevel = e.heaterLevel; env.heatersOn = e.heaterLevel > 0.02; }
-      farm.start(LEVEL1, { seed: data.level.seed ?? 1 });
       farm.restore(data.farm);
       if (farm.mode !== 'level') { farm.mode = 'level'; farm.level = LEVEL1; }
       records?.restore?.(data.records);
@@ -379,7 +418,7 @@ export function createLevel(ctx, deps = {}) {
       return {
         level: level.serialize(),
         env: { day: env.day, hour: env.hour, weather: env.weather, houseTemp: env.houseTemp, slabTemp: env.slabTemp,
-          heaterSetpoint: env.heaterSetpoint, heaterLevel: env.heaterLevel, fansOn: env.fansOn, padOn: env.padOn,
+          heaterSetpoint: env.heaterSetpoint, heaterLevel: env.heaterLevel, fansOn: env.fansOn, fansManual: env.fansManual, padOn: env.padOn,
           ventTimer: env.ventTimer, lightProgram: env.lightProgram },  // weatherEvents: rebuilt by the farm
         farm: farm?.serialize() ?? null,
         records: records?.serialize() ?? null,
@@ -389,36 +428,32 @@ export function createLevel(ctx, deps = {}) {
       };
     },
     debug: {
-      /** Jump to day + hour. auto: the ideal farmer's management (farm-profiles.applyRound) for every
-       *  round passed, then the jobs still open are completed and logged, the evening record signed. */
+      /** Jump to day + hour. auto: the ideal farmer's management (farm-profiles.applyRound, the same
+       *  rounds scripts/test-sim.mjs plays) at each round passed: the prep (unless the prep record is
+       *  signed already), the flush, the morning and afternoon rounds, the truck, vent and crop
+       *  samples, the day 6 tunnel fan, the day 7 weigh-in; dead birds picked up and counted after
+       *  each round, the evening record signed, and the jobs still open completed and logged. */
       goto(day, hour, { auto = false } = {}) {
         if (level.mode !== 'level') level.start({ seed });
         const target = day + hour * H;
         if (target <= env.day + 1e-9) return false;
         if (auto) {
-          const stops = [];
-          for (let d = env.dayNumber; d <= Math.min(day, LEVEL1.endDay); d++) {
-            const rounds = d < LEVEL1.arrivalDay ? [['prep', 7.25], ['eve', 20]] : [['am', d === LEVEL1.arrivalDay ? 8.1 : 6.25], ['pm', 13.25], ['eve', 20]];
-            for (const [r, hr] of rounds) { const t = d + hr * H; if (t > env.day + 1e-9 && t < target) stops.push({ d, r, t }); }
-          }
-          for (const s of stops) {
-            skip((s.t - env.day) * 24);
-            try { applyRound(farm, env, s.d, s.r, 'ideal'); } catch (err) { console.error('applyRound failed', err); }
+          for (const s of autoStops(target)) {
+            if (s.t > env.day + 1e-9) skip((s.t - env.day) * 24);
+            if (ended) return true;
+            autoRound(s);
             engine.tick(); checks();
             if (ended) return true;
-            if (s.r === 'eve' && !records?.row?.(s.d)?.signed) records?.sign?.(s.d);
             for (const i of engine.open()) engine.complete(i.key, { auto: true });
+            engine.tick(); checks();
             if (ended) return true;
           }
         }
-        skip((target - env.day) * 24);
+        if (target > env.day + 1e-9) skip((target - env.day) * 24);
         return true;
       },
-      trigger(id) {
-        farm.debug?.trigger?.(id);
-        // the contract stub never decides a symptom: say it was met, so the problem job opens
-        if (farm.stub) events?.emit(EV.FARM_PROBLEM, { id, phase: 'symptom' });
-      },
+      /** Start a problem now (the farm decides the symptom when the farmer meets it). */
+      trigger(id) { farm.debug?.trigger?.(id); },
       /** Show the result screen now. forcePass true / false makes a passing / failing week for the harness. */
       result(forcePass) {
         const r = computeResult('debug');

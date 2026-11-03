@@ -180,10 +180,10 @@ export function buildProps(ctx, { house } = {}) {
     const stack = props.carryOpts?.stack ?? 0;
     // the boxes go down in front of him
     const x = p.x - Math.sin(yaw) * 0.2, z = p.z - Math.cos(yaw) * 0.2;
+    const s = boxes.stacks[stack];
+    if (s) s.state = 'tipped';       // before the action: the listener below only handles other tips
     ctx.farm?.act('chicks.tip', { stack, chicks: CHICKS_PER_STACK, x, z });
     emit(EV.BOX_TIP, { stack, chicks: CHICKS_PER_STACK, x, z });
-    const s = boxes.stacks[stack];
-    if (s) s.state = 'tipped';
     boxes.startTip(stack, p.x, p.z, yaw);
     pl()?.pose?.('crouch', 1.8);
     props.drop();
@@ -210,6 +210,16 @@ export function buildProps(ctx, { house } = {}) {
   }
   if (ev) {
     ev.on(EV.PANEL_CLOSE, () => pickFrame());
+    // a stack tipped without the hand truck (level.debug.goto auto, farm-profiles): its boxes go
+    // straight to the pile of empties, so the yard matches the farm
+    ev.on(EV.ACTION, (p) => {
+      if (!st.level || p.id !== 'chicks.tip' || !(p.result?.placed > 0)) return;
+      const s = boxes.stacks[p.stack];
+      if (!s || s.state === 'tipped') return;
+      if (props.carrying === 'boxes' && props.carryOpts?.stack === p.stack) props.drop();
+      s.state = 'tipped';
+      boxes.pile += LEVEL1.boxes / LEVEL1.stacks;
+    });
     ev.on(EV.FARM_DELIVERY, (d) => {
       if (!st.level || !d) return;
       if (d.kind === 'chicks' && d.phase === 'arrive') props.truck.arrive();

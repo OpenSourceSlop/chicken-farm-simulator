@@ -426,6 +426,10 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .caption-text { margin: 0; padding: 9px 16px; border-radius: 8px; background: var(--panel); border: 1px solid var(--panel-edge); box-shadow: var(--shadow); font-size: 14.5px; line-height: 1.45; color: var(--ink); text-align: center; }
 .caption.is-in .caption-text { animation: cap-in 0.25s ease-out; }
 @keyframes cap-in { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+.floor-legend { position: absolute; right: var(--gutter); bottom: var(--bottom); width: 220px; padding: 8px 12px 6px; border-radius: 8px; background: var(--panel); border: 1px solid var(--panel-edge); box-shadow: var(--shadow); color: var(--ink); pointer-events: none; z-index: 3; }
+.floor-legend-k { margin: 0 0 6px; font: 600 11px/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
+.floor-legend-bar { height: 12px; border-radius: 3px; }
+.floor-legend-ticks { display: flex; justify-content: space-between; margin-top: 4px; font: 600 12px/1 var(--font-display); }
 .float-read { position: absolute; left: 0; top: 0; padding: 5px 11px; border-radius: 6px; background: var(--lcd); color: var(--lcd-ink); font: 700 17px/1 var(--font-display); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), inset 0 0 0 2px var(--plate-edge); white-space: nowrap; pointer-events: none; z-index: 4; }
 
 /* Level 1 boards (content-signs.js) */

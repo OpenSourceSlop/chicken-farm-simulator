@@ -25,20 +25,24 @@ function yourWeek(L, res) {
   const notes = (d, kinds) => (L.records.notesOf?.(d) || []).filter((n) => kinds.includes(n.kind));
   const rows = [];
   for (let d = 0; d <= LEVEL1.endDay; d++) {
+    // records.timeline(): { setpointC, flowsMlMin, nippleHeightsCm, ventTimer, ventTimerM3h, ventSignM3h,
+    // lightHours, floorAtArrivalC, cropTally: { full, of } } per day (null where nothing was done)
     const e = byDay.get(d) || {};
-    const flows = e.flows || notes(d, ['water.flow', 'water.flowtest']).map((n) => n.value?.mlMin ?? n.value?.result?.mlMin).filter(Number.isFinite);
-    const heights = e.heights || [];
-    const sp = e.setpoint ?? notes(d, ['controller', 'controller.read']).map((n) => n.value?.setpoint).filter(Number.isFinite).pop();
+    const flows = (e.flowsMlMin || notes(d, ['water.flow', 'water.flowtest']).map((n) => n.value?.mlMin ?? n.value?.result?.mlMin)).filter(Number.isFinite);
+    const heights = (e.nippleHeightsCm || []).filter(Number.isFinite);
+    const sp = e.setpointC ?? notes(d, ['controller', 'controller.read']).map((n) => n.value?.setpoint).filter(Number.isFinite).pop();
     const timer = e.ventTimer ?? notes(d, ['controller', 'controller.read']).map((n) => n.value?.timer).filter(Boolean).pop();
-    const air = timer ? Math.round((timer.fans * EQUIP.fanM3h * timer.onSec) / timer.cycleSec) : null;
-    const need = Math.round((minVentM3hPer1000(weightAt(d)) * LEVEL1.chicksPlaced) / 1000);
+    const air = e.ventTimerM3h ?? (timer ? Math.round((timer.fans * EQUIP.fanM3h * timer.onSec) / timer.cycleSec) : null);
+    const need = e.ventSignM3h ?? Math.round((minVentM3hPer1000(weightAt(d)) * LEVEL1.chicksPlaced) / 1000);
+    const floor = e.floorAtArrivalC ?? res.floorAtArrival;
+    const crops = e.cropTally && typeof e.cropTally === 'object' ? `${e.cropTally.full} of ${e.cropTally.of} crops full and soft` : e.cropTally;
     rows.push(h('tr', null, h('th', { scope: 'row' }, String(d)),
       h('td', null, sp != null ? `${one(sp)}` : '—', h('small', null, ` sign ${one(Math.round(targetTempAt(d) * 2) / 2)}`)),
       h('td', null, flows.length ? flows.map((f) => fmt0(f)).join(' / ') : '—', h('small', null, ` sign ${flowTargetAt(d)}`)),
       h('td', null, heights.length ? heights.map((x) => fmt0(x)).join(' / ') : '—', h('small', null, ` about ${fmt0(nippleHeightCmAt(d))}`)),
       h('td', null, air != null ? int(air) : '—', h('small', null, ` sign ≈ ${int(need)}`)),
       h('td', null, e.lightHours != null ? one(e.lightHours) : '—'),
-      h('td', null, d === 0 ? (e.floorAtArrival != null ? `${one(e.floorAtArrival)} °C` : res.floorAtArrival != null ? `${one(res.floorAtArrival)} °C` : '—') : d === 1 ? (e.cropTally || res.cropTally || '—') : '')));
+      h('td', null, d === 0 ? (floor != null ? `${one(floor)} °C` : '—') : d === 1 ? (crops || '—') : '')));
   }
   return h('div', { class: 'ledger-scroll', tabindex: '0', role: 'region', 'aria-label': 'Your week' },
     h('table', { class: 'ledger ledger--dark' }, h('thead', null, h('tr', null, ['Day', 'Thermostat °C', 'Flow ml/min (lines)', 'Nipples cm', 'Timer air m³/h', 'Light h', 'Floor at arrival · crops'].map((t) => h('th', { scope: 'col' }, t)))),

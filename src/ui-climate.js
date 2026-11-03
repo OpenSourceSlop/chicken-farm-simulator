@@ -44,7 +44,9 @@ export function buildLevelControllerPanel(L) {
   const chart = h('div', { class: 'ctrl-chart' });
   secs[0].append(row('Brooder thermostat', heatState, key('Lower the brooder thermostat by 0.5 °C', ICONS.minus, () => setpoint(-0.5)), spOut, key('Raise the brooder thermostat by 0.5 °C', ICONS.plus, () => setpoint(0.5))), chart);
 
-  // Ventilation
+  // Ventilation. In a level env.fansOn also counts the timer fans while they run: step the fans
+  // switched on by hand (env.fansManual).
+  const manualFans = (d) => { env.setFans((env.fansManual ?? env.fansOn) + d); L.uiAct('vent.fans', { n: env.fansManual ?? env.fansOn }); refresh(); };
   const fanOut = out(), padBtn = button({ class: 'key key--wide', 'aria-pressed': 'false' });
   padBtn.addEventListener('click', () => { env.setPad(!env.padOn); refresh(); });
   const draft = { fans: env.ventTimer?.fans ?? 1, onSec: env.ventTimer?.onSec ?? 0, cycleSec: env.ventTimer?.cycleSec ?? 300 };
@@ -54,14 +56,13 @@ export function buildLevelControllerPanel(L) {
   const timerOff = button({ class: 'key key--wide' }, 'Timer off');
   applyTimer.addEventListener('click', () => {
     const t = { ...draft };
-    L.act('vent.timer', t);
-    if (farm.stub) env.setVentTimer(t.onSec > 0 ? t : null); // the model sets it itself once sim merges
+    L.act('vent.timer', t); // the farm sets env.setVentTimer itself
     refresh();
   });
-  timerOff.addEventListener('click', () => { const t = { fans: draft.fans, onSec: 0, cycleSec: draft.cycleSec }; draft.onSec = 0; L.act('vent.timer', t); if (farm.stub) env.setVentTimer(null); refresh(); });
+  timerOff.addEventListener('click', () => { const t = { fans: draft.fans, onSec: 0, cycleSec: draft.cycleSec }; draft.onSec = 0; L.act('vent.timer', t); refresh(); });
   secs[1].append(
-    row('Tunnel fans', 'Running all the time', key('One tunnel fan fewer', ICONS.minus, () => { env.setFans(env.fansOn - 1); L.uiAct('vent.fans', { n: env.fansOn }); refresh(); }), fanOut,
-      key('One tunnel fan more', ICONS.plus, () => { env.setFans(env.fansOn + 1); L.uiAct('vent.fans', { n: env.fansOn }); refresh(); })),
+    row('Tunnel fans', 'Running all the time', key('One tunnel fan fewer', ICONS.minus, () => manualFans(-1)), fanOut,
+      key('One tunnel fan more', ICONS.plus, () => manualFans(1))),
     h('div', { class: 'ctrl-timer' },
       h('p', { class: 'ctrl-timer-k' }, 'Minimum ventilation timer'),
       row('Fans on the timer', null, key('One timer fan fewer', ICONS.minus, step('fans', -1, 1, FAN_COUNT)), tFans, key('One timer fan more', ICONS.plus, step('fans', 1, 1, FAN_COUNT))),
@@ -75,7 +76,7 @@ export function buildLevelControllerPanel(L) {
   const lStart = out(), lHours = out(), lDim = out(), lux = h('span', { class: 'ctrl-air' });
   const lstep = (k, d, lo, hi, wrap) => () => { let v = lp[k] + d; if (wrap) v = (v + 24) % 24; lp[k] = Math.max(lo, Math.min(hi, Math.round(v * 10) / 10)); refresh(); };
   const applyLights = button({ class: 'key key--wide key--apply' }, 'Set the program');
-  applyLights.addEventListener('click', () => { const p = { ...lp }; L.act('light.program', p); if (farm.stub) env.setLightProgram(p); refresh(); });
+  applyLights.addEventListener('click', () => { const p = { ...lp }; L.act('light.program', p); refresh(); });
   const luxBtn = button({ class: 'key key--wide' }, 'Measure lux here');
   luxBtn.addEventListener('click', () => { const p = L.player.position; const r = L.act('light.lux', { x: p.x, z: p.z }); setText(lux, `${int(r?.lux)} lux at chick level here`); });
   const lightsPlate = buildPlate('controller-lights');
@@ -131,7 +132,7 @@ export function buildLevelControllerPanel(L) {
     flags.pad.classList.toggle('is-on', env.padOn);
     setText(spOut, `${fmt1(env.heaterSetpoint)} °C`);
     setText(heatState, env.heatersOn ? 'Brooders burning' : 'Brooders off');
-    setText(fanOut, `${env.fansOn} / ${FAN_COUNT}`);
+    setText(fanOut, `${env.fansManual ?? env.fansOn} / ${FAN_COUNT}`);
     padBtn.setAttribute('aria-pressed', String(env.padOn)); setText(padBtn, env.padOn ? 'Pad on' : 'Pad off');
     setText(tFans, String(draft.fans)); setText(tOn, `${draft.onSec} s`); setText(tCycle, `${draft.cycleSec} s`);
     const air = Math.round((draft.fans * EQUIP.fanM3h * draft.onSec) / Math.max(1, draft.cycleSec));

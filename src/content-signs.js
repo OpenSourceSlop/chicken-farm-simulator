@@ -112,7 +112,7 @@ export const BOARDS = {
   },
   // ---- plates inside equipment panels ----
   'feeder-box': {
-    title: 'Feeder lines', where: 'Feeder control box, north wall, west end',
+    title: 'Feeder lines', where: 'Feeder control box, north wall, beside the water lines sign',
     items: [
       { text: 'Days 0–3: pans on the litter (rim about 5 cm) and flooded, so the feed is easy to reach.', source: 'general', pic: 'pan-on-litter' },
       { text: 'From day 4: pan rim at the height of the birds’ backs.', source: 'general' },

@@ -8,7 +8,7 @@
 // the grids changed. In the sandbox (farm.mode 'off') uLevel = 0 and the shader leaves the
 // Phase 1 litter exactly as it was.
 import * as THREE from 'three';
-import { FLOOR_GRID, BROOD_BOUNDS, HOUSE_BOUNDS } from './config.js';
+import { FLOOR_GRID, BROOD_BOUNDS, HOUSE_BOUNDS, FLOOR_TEMP_RAMP } from './config.js';
 import { dataTexture, clamp01 } from './props-kit.js';
 
 const NX = FLOOR_GRID.nx, NZ = FLOOR_GRID.nz;
@@ -77,8 +77,8 @@ ${NOISE}`)
   material.customProgramCacheKey = () => 'house-floor-level';
 }
 
-// Blue (cool) -> orange (warm), continuous, no good / bad colours.
-const RAMP = [[24, [0.18, 0.37, 0.82]], [27, [0.42, 0.66, 0.92]], [30, [0.95, 0.85, 0.58]], [33, [0.95, 0.62, 0.3]], [36, [0.86, 0.36, 0.1]]];
+// Blue (cool) -> orange (warm), continuous, no good / bad colours (config: the ui legend uses it too).
+const RAMP = FLOOR_TEMP_RAMP;
 export function tempColor(t, out) {
   if (t <= RAMP[0][0]) { out[0] = RAMP[0][1][0]; out[1] = RAMP[0][1][1]; out[2] = RAMP[0][1][2]; return out; }
   for (let i = 1; i < RAMP.length; i++) {

@@ -17,7 +17,9 @@
 // while carrying boxes). A provider returns null when it cannot act now (e.g. the farmer's hands
 // are full), so it never hides another one.
 //
-// Choice (nearest): of everything in reach, the highest `priority` wins, then the nearest.
+// Choice (nearest): of everything in reach, the highest `priority` wins, then the nearest, where
+// "nearest" counts what the farmer faces as up to FACING_M closer (player.yaw given: facing is
+// (-sin yaw, -cos yaw)). So of two machines side by side the one he turns to answers.
 // Defaults: fixed interactables 10, providers 0, so boards and machines beat providers as in
 // Phase 1. Phase 2 priorities (PHASE2.md §13.3): tip / patch / frame (only while carrying the
 // matching thing) 20, dead-bird 6, sick-bird and chick 5. The litter squeeze is not on E (key Q).
@@ -26,6 +28,8 @@
  * @typedef {{ id: string, label: string, x: number, z: number, radius: number, inside?: boolean,
  *   verb?: string, use?: () => void, enabled?: () => boolean, priority?: number }} Interactable
  */
+
+const FACING_M = 0.45;
 
 /** @param {Interactable[]} [initial] */
 export function createInteract(initial = []) {
@@ -51,13 +55,16 @@ export function createInteract(initial = []) {
      */
     nearest(player, accept) {
       const p = player.position, inside = player.isInside;
+      const fx = Number.isFinite(player.yaw) ? -Math.sin(player.yaw) : 0, fz = Number.isFinite(player.yaw) ? -Math.cos(player.yaw) : 0;
       let best = null, bestP = -Infinity, bestD = Infinity;
       const consider = (it, defaultPriority) => {
         if (!it || !usable(it, inside) || (accept && !accept(it))) return;
         const d = Math.hypot(it.x - p.x, it.z - p.z);
         if (d > it.radius) return;
         const pr = it.priority ?? defaultPriority;
-        if (pr > bestP || (pr === bestP && d < bestD)) { best = it; bestP = pr; bestD = d; }
+        const face = d > 0.2 ? (FACING_M * ((it.x - p.x) * fx + (it.z - p.z) * fz)) / d : 0;
+        const score = d - face;
+        if (pr > bestP || (pr === bestP && score < bestD)) { best = it; bestP = pr; bestD = score; }
       };
       for (const it of fixed) consider(it, 10);
       for (const fn of providers.values()) {

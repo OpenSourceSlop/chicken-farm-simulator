@@ -257,7 +257,8 @@ export const feedStdGAt = (age) => (age < 0 ? 0 : 12 + 4 * age);
 // Interactive spots added in Phase 2. house/world/props build the objects here; ui/jobs read them.
 // Boards on the north wall face south like Phase 1's (stand at z ~ -4.6 and press E).
 export const SPOTS2 = {
-  feederBox: { x: -22.0, z: -5.8, label: 'Feeder control box', inside: true },
+  // between the water and brooder signs: clear of the line 1 drinker regulator at x -22.2
+  feederBox: { x: -18.0, z: -5.8, label: 'Feeder control box', inside: true },
   signWater: { x: -20.0, z: -5.8, label: 'Water lines sign', inside: true },
   signVent: { x: -8.0, z: -5.8, label: 'Minimum ventilation sign', inside: true },
   signLitter: { x: 0.0, z: -5.8, label: 'Litter sign', inside: true },
@@ -300,6 +301,11 @@ export const UNLOCKS = {
   waterTrend: { branch: 'water', level: 1, name: 'Water meter trend graph' },
   lineOverview: { branch: 'water', level: 2, name: 'All-lines water overview' },
 };
+
+// Floor thermometer view (unlock floorOverlay): litter surface °C -> sRGB colour, continuous blue
+// (cool) to orange (warm), no good / bad colours. props-floor paints the floor with it; the ui
+// draws the same ramp as the °C legend.
+export const FLOOR_TEMP_RAMP = [[24, [0.18, 0.37, 0.82]], [27, [0.42, 0.66, 0.92]], [30, [0.95, 0.85, 0.58]], [33, [0.95, 0.62, 0.3]], [36, [0.86, 0.36, 0.1]]];
 
 // localStorage keys (always inside try/catch, see save.js)
 export const SAVE = { key: 'chickenFarm.level1.v1', profileKey: 'chickenFarm.profile.v1', version: 1 };

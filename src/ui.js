@@ -32,7 +32,7 @@ import { createTitle } from './ui-title.js';
 import { createJobCard } from './ui-jobs.js';
 import { createCaption, createFloatLabel } from './ui-caption.js';
 import { int, one, feelWords } from './ui-format.js';
-import { broodSector } from './config.js';
+import { broodSector, FLOOR_TEMP_RAMP } from './config.js';
 
 const MOVE_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
 const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift']);
@@ -112,6 +112,13 @@ export function createUI(ctx, deps) {
   const trL = h('div', { class: 'hud-tr hud-tr--level', hidden: true });
   root.appendChild(trL);
   const caption = createCaption(root);
+  // floor thermometer view (F, unlock floorOverlay): its °C legend, the same ramp props paints
+  const rampCss = FLOOR_TEMP_RAMP.map(([t, c]) => `rgb(${c.map((v) => Math.round(v * 255)).join(' ')}) ${(((t - 24) / 12) * 100).toFixed(0)}%`).join(', ');
+  const floorLegend = h('div', { class: 'floor-legend', hidden: true, role: 'img', 'aria-label': 'Floor thermometer view: litter surface temperature, blue 24 °C to orange 36 °C' },
+    h('p', { class: 'floor-legend-k' }, 'Floor thermometer view · F'),
+    h('div', { class: 'floor-legend-bar', style: `background: linear-gradient(90deg, ${rampCss})` }),
+    h('div', { class: 'floor-legend-ticks' }, FLOOR_TEMP_RAMP.map(([t], i) => h('span', null, i === FLOOR_TEMP_RAMP.length - 1 ? `${t} °C` : `${t}`))));
+  root.appendChild(floorLegend);
   const floatRead = createFloatLabel(root, ctx);
   const narrow = createNarrowNotice(root);
 
@@ -132,7 +139,8 @@ export function createUI(ctx, deps) {
     level: () => ctx.level,
     engine: () => ctx.level?.engine ?? null,
     jobs: () => ctx.level?.engine?.list() ?? [],
-    minmax: () => mm,
+    // the controller's min / max memory is the farm's (saved with it; controller.read restarts it)
+    minmax: () => { const m = farm.controllerMemory?.(); return m ? { min: m.minC, max: m.maxC } : mm; },
     resetMinMax: () => { mm.min = mm.max = env.houseTemp; },
     history: () => hist,
     lastFlows: () => lastFlows,
@@ -342,6 +350,7 @@ export function createUI(ctx, deps) {
         if (mode === 'level' || mode === 'result') jobCard.update(dt, !!panels.openId);
       }
       panels.update(dt);
+      floorLegend.hidden = !(mode === 'level' && props?.overlay?.floorTemp);
       caption.update(dt);
       floatRead.update(dt);
       prompt.show(panels.openId || narrow.open || title.open ? null : nearestTarget());

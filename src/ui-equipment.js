@@ -68,8 +68,9 @@ export function buildFeederPanel(L) {
   const { farm } = L;
   const shell = equipShell({ cls: 'equip--feeder', icon: ICONS.sliders, title: 'Feeder control box', sub: 'Three pan feeder lines · auger from the silos', plates: ['feeder-box'], onClose: L.close });
   const rows = FEEDER_LINES_Z.map((z, i) => {
-    const run = toggleKey('Running', 'Stopped', () => { const l = farm.feed.lines[i]; L.act('feed.line', { line: i, running: !l.running }); refresh(); });
-    const flood = toggleKey('Flood on', 'Flood off', () => { const l = farm.feed.lines[i]; L.act('feed.line', { line: i, flood: !l.flood }); refresh(); });
+    // a running auger fills the pans over farm time: the plate folds so the clock runs
+    const run = toggleKey('Running', 'Stopped', () => { const l = farm.feed.lines[i]; if (!l.running) shell.foldPlates(); L.act('feed.line', { line: i, running: !l.running }); refresh(); });
+    const flood = toggleKey('Flood on', 'Flood off', () => { const l = farm.feed.lines[i]; if (!l.flood) shell.foldPlates(); L.act('feed.line', { line: i, flood: !l.flood }); refresh(); });
     const height = stepper(`Line ${i + 1} pan height`, 'cm', (d) => {
       const [lo, hi] = EQUIP.feederHeightCm;
       const cm = Math.max(lo, Math.min(hi, Math.round(farm.feed.lines[i].heightCm + d)));
