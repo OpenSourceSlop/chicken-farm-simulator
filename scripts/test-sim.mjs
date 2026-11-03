@@ -36,6 +36,8 @@ export const PROFILE_TARGETS = {
 };
 
 const only = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null;
+// --seed N runs the profiles with another delivery and noise (the acceptance numbers are for seed 1)
+const SEED = process.argv.includes('--seed') ? +process.argv[process.argv.indexOf('--seed') + 1] : 1;
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 // Acceptance: skipped (reported as todo) while src/farm.js is the stub.
@@ -125,7 +127,7 @@ const inBand = (v, [a, b], what) => assert(v >= a && v <= b, `${what} ${v} not i
 for (const name of Object.keys(PROFILE_TARGETS)) {
   accept(`profile ${name}`, async () => {
     const { runProfile, checkProfile } = await import('../src/farm-profiles.js');
-    const run = runProfile(name, { seed: 1 });
+    const run = runProfile(name, { seed: SEED });
     checkProfile(name, run, PROFILE_TARGETS, { assert, inBand });
   });
 }

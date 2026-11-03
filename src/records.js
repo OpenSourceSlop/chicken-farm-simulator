@@ -168,7 +168,7 @@ function timelineOf(row) {
   const s = row.settings || {};
   const d = row.day;
   const birds = row.alive ?? (d >= 0 ? LEVEL1.chicksPlaced : 0);
-  const w = row.weightG ?? (d >= 0 ? null : null);
+  const w = row.weightG;
   return {
     day: d,
     setpointC: s.setpointC ?? null, signSetpointC: Math.round(targetTempAt(d) * 2) / 2,
