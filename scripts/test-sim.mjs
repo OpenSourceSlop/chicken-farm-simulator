@@ -18,7 +18,7 @@ import { LEVEL1, SKILL_BRANCHES } from '../src/config.js';
 // Expected results per management profile (PHASE2.md §6.10). [min, max] bands; ratio = weighed
 // mean / measured chick weight at the weigh-in (day 7 09:00 = flock age 7.04).
 export const PROFILE_TARGETS = {
-  ideal: { ratio: [4.6, 4.95], uniformityPct: [70, 80], deathsPct: [0.4, 0.9], fcr: [0.83, 0.92],
+  ideal: { ratio: [4.6, 4.95], uniformityPct: [70, 80], weighedUniformityNearModel: 3, deathsPct: [0.4, 0.9], fcr: [0.83, 0.92],
     litterMeanPct: [0, 28], nh3Day7: [3, 9], cropFill: [0.95, 1], floorShare28AtTip: [0.9, 1],
     meterChangePct: { 1: [5, 60], 2: [5, 40], 3: [5, 40], 4: [-20, -4], 5: [5, 60], 6: [5, 40], 7: [5, 40] },
     skillLevels: { brooding: 2, water: 2 }, passes: true },

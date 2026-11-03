@@ -470,7 +470,7 @@ clamped 37.5–42 · `sample.crop` full-soft with p = crop fill; else hard (wate
 watery (feed was), or empty · `sample.grade` a chick of the true delivery (weak: navel open/black
 button 60 %, reflex > 3 s 70 %; others healed 97 %, reflex 0.8–2.5 s; red hocks 4 %) · `sample.box`
 100 chicks + 0.35 kg box (sets `stats.chickWeightMeasuredG` = net ÷ 100, `stats.boxWeighedAt`) ·
-`sample.weigh` a bird of its cohort ± 1 g · `water.flowtest` ± 0.5 ml · `water.meter` integer litres ·
+`sample.weigh` a bird of the flock ± 1 g, stratified (final check: bird k at the quantile frac(offset + k · 0.618) of the weight mixture, so 50 birds read the flock's uniformity within a few points; a plain random draw of 50 strays ± 6 points and seed 1 read 68 % against 73 %) · `water.flowtest` ± 0.5 ml · `water.meter` integer litres ·
 `feed.meter` integer kg · `feed.silo` ± 2 %, to 10 kg · `litter.squeeze` cell ± 1 % with the feel
 (< 25 'dry', 25–30 'holds, then breaks', 30–38 'sticks', > 38 'wet', caked 'wet and caked') ·
 `light.lux` ± 2.

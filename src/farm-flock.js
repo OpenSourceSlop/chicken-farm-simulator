@@ -345,6 +345,18 @@ export function makeQuantile(fl) {
   };
 }
 
+/**
+ * The k-th bird of a hand weigh-in (model), grams: a stratified draw over the flock's weight mixture.
+ * Bird k sits at the quantile frac(offset + k x 0.618...) (a golden-ratio sequence, a little jitter),
+ * so 50 birds from five frames spread over the flock as the flock itself does: the sample's mean and
+ * uniformity stay within a few points of the model's. (A plain random draw of 50 strays about
+ * +-6 points of uniformity, and seed 1 read 68 % against the model's 73 %.)
+ */
+export function weighInBird(fl, rng, k, offset) {
+  const u = (((offset + k * 0.6180339887 + (rng.next() - 0.5) * 0.015) % 1) + 1) % 1;
+  return Math.max(10, mixtureQuantile(cohortList(fl), Math.min(0.995, Math.max(0.005, u))));
+}
+
 /** One live bird of the flock (cohort by share, normal within it), grams. */
 export function drawBird(fl, rng) {
   const cs = cohortList(fl), n = cs.reduce((a, k) => a + Math.max(0, k.n), 0);

@@ -95,6 +95,7 @@ export function runProfile(name, { seed = 1, onStep = null } = {}) {
     if (kind === 'weigh') {
       const w = farm.stats.weighed.map((x) => x.weightG);
       snaps.weighMeanG = w.reduce((a, b) => a + b, 0) / Math.max(1, w.length);
+      snaps.weighedUniformityPct = (100 * w.filter((x) => Math.abs(x - snaps.weighMeanG) <= 0.1 * snaps.weighMeanG).length) / Math.max(1, w.length);
       snaps.uniformityPct = farm.flock.uniformityPct;
       snaps.fcr = farm.flock.cumFeedKg / Math.max(1e-9, (farm.flock.alive * farm.flock.meanWeightG) / 1000);
       snaps.nh3Day7 = farm.litter.ammoniaPpm;
@@ -123,6 +124,7 @@ export function checkProfile(name, run, targets, { assert, inBand }) {
     switch (k) {
       case 'ratio': inBand(S.ratio, v, 'ratio'); break;
       case 'uniformityPct': inBand(S.uniformityPct, v, 'uniformity %'); break;
+      case 'weighedUniformityNearModel': assert(Math.abs(S.weighedUniformityPct - S.uniformityPct) <= v, `50 birds weighed: uniformity ${S.weighedUniformityPct.toFixed(0)} % vs the model ${S.uniformityPct.toFixed(1)} %, want within ${v}`); break;
       case 'deathsPct': inBand(S.deathsPct, v, 'deaths + culls %'); break;
       case 'fcr': inBand(S.fcr, v, 'FCR'); break;
       case 'litterMeanPct': inBand(S.litterMax, v, 'mean litter % (highest afternoon)'); break;

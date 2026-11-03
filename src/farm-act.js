@@ -6,7 +6,7 @@ import { EV } from './events.js';
 import { updateAccess, meterAt, filterGauges, clampPressure, clampHeight } from './farm-water.js';
 import { clampPanHeight, FEED } from './farm-feed.js';
 import { spread, patch, cellIndex, meanDepth } from './farm-litter.js';
-import { tip, cull, drawBird, lateEstimate } from './farm-flock.js';
+import { tip, cull, drawBird, weighInBird, lateEstimate } from './farm-flock.js';
 import { fixProblem, deathsCounted } from './farm-problems.js';
 
 const r1 = (v) => Math.round(v * 10) / 10;
@@ -169,7 +169,9 @@ export function doAct(farm, env, id, a) {
       return { crop };
     }
     case 'sample.weigh': {
-      const weightG = Math.round(drawBird(fl, rng) + (rng.next() * 2 - 1));
+      // stratified over the flock (farm-flock weighInBird): the weigh-in reads the flock's uniformity
+      if (st.weighOffset == null) st.weighOffset = rng.next();
+      const weightG = Math.round(weighInBird(fl, rng, st.weighed.length, st.weighOffset) + (rng.next() * 2 - 1));
       st.weighed.push({ t: +env.day.toFixed(5), sector: broodSector(a.x ?? 0, a.z ?? 0), weightG });
       return { weightG };
     }
