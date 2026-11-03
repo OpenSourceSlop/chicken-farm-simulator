@@ -12,7 +12,7 @@ import { createCameraRig, ZOOM_DEFAULT } from './player-camera.js';
 import { createInput } from './player-input.js';
 import { moveAndSlide } from './player-collide.js';
 import { findPath, freeSpot } from './player-path.js';
-import { createTargetMarker, createDust } from './player-fx.js';
+import { createTargetMarker, createDust, createContactShadow } from './player-fx.js';
 
 const RADIUS = 0.35;
 const WALK = 4.0; // m/s
@@ -21,7 +21,7 @@ const ACCEL = 24; // m/s^2
 const DECEL = 30;
 const TURN_RATE = 13; // 1/s, body turn toward the movement direction
 const ORBIT_PER_PX = 0.0055; // rad per dragged pixel
-const KEY_TURN = 1.9; // rad/s with the arrow keys
+const KEY_TURN = 1.7; // rad/s with the arrow keys
 const KEY_ZOOM = 1.3; // zoom speed with + and - (log units per second)
 const WHEEL_ZOOM = 0.0015; // per wheel pixel (a notch of 100 = 16 %)
 const ARRIVE = 0.15; // click-to-walk stops this close to the target
@@ -42,6 +42,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
   const input = createInput(canvas);
   const marker = createTargetMarker(scene);
   const dust = createDust(scene);
+  createContactShadow(root);
 
   const st = {
     yaw: FARM.spawn.yaw ?? 0,
@@ -106,7 +107,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
     // Click to walk
     for (let c = input.takeClick(); c; c = input.takeClick()) {
       const g = input.enabled && groundPoint(c.x, c.y);
-      if (g) walkTo(g.x, g.z, c.shift);
+      if (g) walkTo(g.x, g.z, c.shift || c.double);
     }
 
     // Desired direction and speed

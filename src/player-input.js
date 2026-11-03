@@ -9,6 +9,8 @@ const ROTATE = { ArrowLeft: 1, ArrowRight: -1 };
 const ZOOM_IN = new Set(['Equal', 'NumpadAdd']);
 const ZOOM_OUT = new Set(['Minus', 'NumpadSubtract']);
 const DRAG_PX = 5;
+const DOUBLE_MS = 380;
+const DOUBLE_PX = 24;
 
 function isFormTarget(t) {
   if (!t || t === window || t === document) return false;
@@ -34,6 +36,7 @@ export function createInput(canvas) {
     wheel: 0, // accumulated wheel delta in pixels (consumed each frame)
     clicks: [], // pending walk clicks in client pixels
     drag: null,
+    lastClick: null,
   };
 
   const releaseAll = () => { held.clear(); };
@@ -91,7 +94,14 @@ export function createInput(canvas) {
   function onPointerUp(e) {
     const d = st.drag;
     if (!d || e.pointerId !== d.id) return;
-    if (d.button === 0 && !d.moved && st.enabled) st.clicks.push({ x: e.clientX, y: e.clientY, shift: e.shiftKey });
+    if (d.button === 0 && !d.moved && st.enabled) {
+      // A quick second click near the first one means "run there".
+      const now = performance.now();
+      const lc = st.lastClick;
+      const double = !!lc && now - lc.t < DOUBLE_MS && Math.hypot(e.clientX - lc.x, e.clientY - lc.y) < DOUBLE_PX;
+      st.lastClick = double ? null : { t: now, x: e.clientX, y: e.clientY };
+      st.clicks.push({ x: e.clientX, y: e.clientY, shift: e.shiftKey, double });
+    }
     endDrag();
   }
 

@@ -24,7 +24,7 @@ export function createCameraRig(camera) {
   const goal = new THREE.Vector3();
 
   const zoomT = (d) => clamp((d - ZOOM_MIN) / (ZOOM_MAX - ZOOM_MIN), 0, 1);
-  const pitchFor = (d) => PITCH_NEAR + (PITCH_FAR - PITCH_NEAR) * Math.sqrt(zoomT(d));
+  const pitchFor = (d) => PITCH_NEAR + (PITCH_FAR - PITCH_NEAR) * zoomT(d);
   const focusHeight = (d) => 1.0 - 0.5 * zoomT(d);
 
   function place() {

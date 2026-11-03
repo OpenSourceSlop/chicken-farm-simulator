@@ -14,7 +14,7 @@ const C = {
   sole: 0x8d918c,
   skin: COLORS.skin,
   skinDark: 0xa86f47,
-  hair: 0x221913,
+  hair: 0x2a1f17,
   eye: 0x1a120d,
   mouth: 0x7c3a2b,
   cap: 0xf1ede2,
@@ -114,7 +114,7 @@ export function buildFarmerModel() {
     .box(0.056, 0.013, 0.012, C.mouth, 0, 0.105, -0.108)
     .box(0.03, 0.06, 0.05, C.skin, -0.11, 0.18, 0.005)
     .box(0.03, 0.06, 0.05, C.skin, 0.11, 0.18, 0.005)
-    .box(0.205, 0.1, 0.035, C.hair, 0, 0.225, 0.108)
+    .frustum(0.19, 0.03, 0.212, 0.035, 0.15, C.hair, 0, 0.2, 0.106)
     .box(0.02, 0.045, 0.06, C.hair, -0.106, 0.24, 0.07)
     .box(0.02, 0.045, 0.06, C.hair, 0.106, 0.24, 0.07)
     // cap: domed crown (two tiers), button, front logo, brim

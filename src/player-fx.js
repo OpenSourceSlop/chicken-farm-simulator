@@ -97,3 +97,29 @@ export function createDust(scene) {
     },
   };
 }
+
+// Soft dark disc under the boots, so the farmer stays grounded when the sun shadow is faint.
+export function createContactShadow(parent) {
+  const size = 64;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(0,0,0,1)');
+  grad.addColorStop(0.55, 'rgba(0,0,0,0.55)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, opacity: 0.28, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.0), mat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = 0.025;
+  m.renderOrder = 1;
+  m.name = 'contactShadow';
+  parent.add(m);
+  return m;
+}
