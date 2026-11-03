@@ -26,6 +26,9 @@ const FAN_Z_OF = (i) => FAN_Z[Math.max(0, Math.min(5, i | 0))];
 
 /** The level's problems on the farm (pending), the recurring ones re-armed (enterLevel). */
 export function addLevelProblems(farm, def) {
+  // the earlier levels' problems that never came to an end (their weather is over): ended, so no later
+  // reading finds them again
+  for (const st of farm.problems) if ((st.phase === 'active' || st.phase === 'pending') && !RECURRING.includes(st.id) && !(def.problems || []).some((p) => p.id === st.id)) st.phase = 'ended';
   for (const id of RECURRING) { const st = stateOf(farm, id); if (st) Object.assign(st, fresh(id)); else farm.problems.push(fresh(id)); }
   for (const p of def.problems || []) { const st = stateOf(farm, p.id); if (st) Object.assign(st, fresh(p.id)); else farm.problems.push(fresh(p.id)); }
 }

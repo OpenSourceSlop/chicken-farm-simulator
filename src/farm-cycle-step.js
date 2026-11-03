@@ -28,7 +28,11 @@ export function cyclePre(farm, env, hrs) {
   }
   if (farm.house.padFloatStuck) { const def = (farm.cycleLevel.problems || []).find((p) => p.id === 'pad-overflow'); const l = (def ? def.litresPerCellH : 0.8) * hrs; for (const i of PAD_CELLS) addWater(farm.litter, i, l); }
   // drying: moving air over the litter dries it faster (model): x (1 + 0.4 x air speed m/s)
-  farm.litter.dryBoost = 1 + 0.4 * env.airSpeed;
+  // ... fresh air over the floor dries it (sqrt of the airflow over the minimum ventilation sign's, 0.5..1.2) and a
+  // crowded floor (birds sitting on it) dries slower: / the density over the allowed density
+  const fl = farm.flock, table = fl.alive > 0 ? (minVentM3hPer1000(fl.meanWeightG) * fl.alive) / 1000 : 0;
+  const ventK = table > 0 ? Math.max(0.5, Math.min(1.2, Math.sqrt(env.airflowM3h / table))) : 1;
+  farm.litter.dryBoost = ((1 + 0.3 * env.airSpeed) * ventK) / Math.max(1, (X.crowd && X.crowd.ratio) || 1);
 }
 
 export function cycleComfort(farm, env, C, age) { return houseComfort(env, farm, C, age, farm.flock.meanWeightG); }
@@ -41,7 +45,7 @@ export function cycleFactors(farm, env, age) {
   fx.fSpace = cr.fSpace; fx.fForm = form.fForm; fx.fpgK = form.fpgK; fx.fHeat = C.fHeat ?? 1;
   fx.shock = X.shockUntil != null && env.day < X.shockUntil ? SILO_MODEL.shockIntake : 1;
   const lame = fl.alive > 0 ? 1 - (0.5 * (fl.lameOnFloor || 0)) / fl.alive : 1;
-  fx.f = fx.fSpace * fx.fForm * fx.fHeat * (fx.fHealth ?? 1) * fx.shock * lame * (fx.debt ?? 1);
+  fx.f = fx.fSpace * fx.fForm * fx.fHeat * (fx.fHealth ?? 1) * fx.shock * lame;
   fx.dcv = cr.dcv;
   // a short dry spell (the vaccine's thirst) is no dehydration: deaths only after 4 h with the main shut
   const h = farm.health;
@@ -60,7 +64,8 @@ export function cyclePost(farm, env, hrs, r) {
   // feed: the withdrawal, the heat-wave feeder lift, the change shock, the birds' missed feed eaten back
   stepWithdrawal(feed, env);
   const up = fl.alive > 0 && feedersUpInHeat(feed, env);
-  if (up) X.feedersUpSince = X.feedersUpSince ?? env.day; else X.feedersUpSince = null;
+  if (up) X.feedersUpSince = X.feedersUpSince ?? env.day; else { X.feedersUpSince = null; X.fFPrev = feed.access; }
+  X.liftOn = up;
   X.heatK = up && env.day - X.feedersUpSince >= H ? SILO_MODEL.heatK : 1;
   X.shockUntil = checkShock(feed, env, X.shockUntil);
   // the 7-day feed and the air (ammonia, dust)
@@ -132,6 +137,8 @@ function dailyStats(farm, env, hrs, age) {
       setpoint: env.heaterSetpoint, sign: Math.round(targetTempAt(d) * 2) / 2, rim: Math.round(feederRimCmAt(Math.max(0, age)) * 10) / 10,
       pans: farm.feed.lines.map((l) => l.heightCm), flooded: farm.feed.lines.every((l) => l.flood), dark: env.lightProgram ? env.lightProgram.darkHours : null, lux: Math.round(farm.luxLit()) };
   }
+  // the automatic bird scale (reads about 2 % high) at 08:00 each day: the level result's weight when nobody weighed
+  if (fl.placed > 0 && fl.alive > 0 && h >= 8) { const sc = st.scaleAt || (st.scaleAt = {}); if (sc[d] == null) sc[d] = +(fl.meanWeightG * 1.02).toFixed(1); }
   if (st.firstTipAt != null && st.lightAtTip == null) st.lightAtTip = { on: env.lightsOn, dimmer: env.lightProgram ? env.lightProgram.dimmer : 1, dark: env.lightProgram ? env.lightProgram.darkHours : 1 };
   if (st.preheatAt == null && env.heaterSetpoint >= 30 && env.heaterLevel > 0.05) st.preheatAt = +env.day.toFixed(4);
   // the feed eaten from the first step of the day (the next day's feed0 minus this one is the day's intake)

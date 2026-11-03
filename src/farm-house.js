@@ -16,8 +16,8 @@ import { LITTER_FEEL, comfortNow } from './farm-comfort.js';
 // model constants (PHASE3.md §6.2, §6.4; tuning log §6.16)
 export const HOUSE_MODEL = {
   crowdA0: 30, crowdPerDay: 1.2, crowdMin: 11, crowdSlope: 0.15, crowdMinF: 0.7, crowdCv: 0.01,   // A(a) = max(11, 30 - 1.2a)
-  gasKgPerH: 0.15,                 // per brooder at full output (8 brooders: 1.2 kg/h)
-  nh3K: 0.2, nh3WetFrom: 28, nh3WetPerPct: 0.5,   // Week 2 on: x (1 + 0.5 x (m - 28)) above 28 % (wet litter releases far more)
+  gasKgPerH: 0.2,                  // per brooder at full output (8 brooders: 1.6 kg/h; tuned from 0.15 so the ideal burns 200-300 kg to day 21)
+  nh3K: 0.2, nh3WetFrom: 28, nh3WetPerPct: 0.25,  // Week 2 on: x (1 + 0.25 x (m - 28)) above 28 % (wet litter releases far more)
 };
 
 const N = ALL_CELLS.length, NH = HEATERS.length;

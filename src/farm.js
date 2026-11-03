@@ -34,6 +34,7 @@ import { createFlock, deliver, stepFlock, stepBoxes, updateWeights, makeQuantile
 import { createProblems, tickProblems, actionSymptoms, onNear, onListen, problemZones, forecast, observe,
   installWeather, applyEffects } from './farm-problems.js';
 import { doAct } from './farm-act.js';
+import { absHumSat } from './sim.js';
 // Phase 3 (PHASE3.md §6, §13): the cycle state, its actions and the per-step model of Week 2 on
 import { installCycle, cycleAct } from './farm-cycle.js';
 import { cyclePre, cycleComfort, cycleFactors, cyclePost } from './farm-cycle-step.js';
@@ -263,13 +264,14 @@ function stepFarm(farm, env, hrs, spill) {
   for (let i = 0; i < 4; i++) la.spill[i] += spill[i] || 0;
   if (la.h >= SLOW_H - 1e-9) {
     stepLitter(L, { hrs: la.h, droppingsL: la.drop, spill: la.spill, leakL: la.leak, leakCell: water.leak ? water.leak.cell : null,
-      rh: env.houseRH, feedKg: feed.meterKg, airflow: env.airflowM3h });
+      rh: X ? litterRh(env, fl) : env.houseRH, feedKg: feed.meterKg, airflow: env.airflowM3h });
     la.h = 0; la.drop = 0; la.leak = 0; la.spill.fill(0);
   }
   // breath follows the day's drinking (smoothed over ~6 h: the birds breathe in the dark hour too)
   farm.drinkLh += (breathL / hrs - farm.drinkLh) * (1 - Math.exp(-hrs / 6));
   env.vapourGh = 0.4 * farm.drinkLh * 1000;
-  env.dryPotentialGh = L.dryPotentialGh;
+  // Phase 3: the climate sees the litter's actual drying at the house RH (the warm litter under big birds dries more)
+  env.dryPotentialGh = X ? L.vapourGh / Math.max(0.05, 1 - env.houseRH / 100) : L.dryPotentialGh;
   const birds = fl.alive, w = fl.meanWeightG;
   env.flockHeatPerH = birds > 0 ? ((0.2 * birds) / 6000 + (1.3 * birds * w) / (6000 * 2850)) * (X ? X.heatK : 1) : 0;
   if (farm.depthVersion !== L.version) { farm.depthVersion = L.version; env.litterDepthCm = meanDepth(L); }
@@ -277,6 +279,14 @@ function stepFarm(farm, env, hrs, spill) {
 }
 
 const femit = (farm, t, p) => farm.emit(t, p);
+// Phase 3 (model): the litter under big birds is warmer than the house air (their heat, the litter's own), so
+// it dries against the air's water as if the air were less humid: RH x sat(air) / sat(litter), litter = house
+// + LITTER_WARM_C x (weight / 2 kg, at most 1).
+const LITTER_WARM_C = 4;
+function litterRh(env, fl) {
+  const tl = env.houseTemp + LITTER_WARM_C * Math.min(1, (fl.meanWeightG || 0) / 2000);
+  return (env.houseRH * absHumSat(env.houseTemp)) / absHumSat(tl);
+}
 const SLOW_H = 5 / 60; // comfort and litter update every 5 game minutes
 
 const clone = (o) => JSON.parse(JSON.stringify(o));

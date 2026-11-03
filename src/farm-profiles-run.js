@@ -23,7 +23,7 @@ export function makeWorld() {
 }
 
 /** The day's schedule of a profile: [day, hour, what] in time order. */
-function schedule(P) {
+export function schedule(P) {
   const s = [[-1, 7, 'prep']];
   if (!(P.preheat.day === -1 && P.preheat.hour === 7)) s.push([P.preheat.day, P.preheat.hour, 'preheat']);
   s.push([-1, 20, 'eve'], [-1, 21, 'sign']);

@@ -28,8 +28,12 @@ export const FLOCK = {
   coldRate: 0.0004, coldFrom: -4, heatRate: 0.0003, heatFrom: 4,
   dehydRate: 0.0005, dehydBelow: 0.5,
   otherRate: 0.00001, otherFromDay: 3, otherPerLapse: 0.3, otherBadWater: 2.0,
+  // Phase 3 (from Week 2; PHASE3.md §6.16)
+  cvCycleK: 0.25, liftKeep: 0.88, liftCatchUp: 0.9,
 };
 const CAUSES = ['cold', 'heat', 'dehydration', 'weak', 'starveout', 'other', 'box'];
+/** Tuning aid (node only): per-day CV terms and intake factors while on. */
+export const FLOCK_DEBUG = { on: false, acc: {} };
 const RATE_CAUSES = ['weak', 'starveout', 'cold', 'heat', 'dehydration', 'other'];
 const RATES = new Float64Array(RATE_CAUSES.length); // reused every step (no garbage)
 
@@ -274,17 +278,37 @@ export function stepFlock(farm, env, hrs, C, io) {
   const lateK = age < FLOCK.lateEarlyAge ? FLOCK.lateIntakeEarly : FLOCK.lateIntakeAfter;
   const wGood = c.good.n * std * f, wLate = c.late.n * std * f * lateK, wWeak = c.weak.n * std * f * FLOCK.weakIntake;
   const wantKg = wGood + wLate + wWeak;
-  const gotKg = wantKg > 0 ? io.eat(wantKg) : 0;
+  let gotKg = wantKg > 0 ? io.eat(wantKg) : 0;
+  // Phase 3: feed missed while the feeders were lifted in the heat is eaten back after (88 % of it, PHASE3.md §6.6)
+  if (X) {
+    const S = X.lift || (X.lift = { debtKg: 0 });
+    if (X.liftOn) {
+      const full = (c.good.n + c.late.n * lateK + c.weak.n * FLOCK.weakIntake) * std * fT * fL * fW * fAir * X.fx.f * Math.min(1, X.fFPrev ?? 1);
+      S.debtKg = Math.min(S.debtKg + Math.max(0, full - gotKg), (fl.alive * feedStdGAt(age)) / 1000);
+    } else if (S.debtKg > 0 && wantKg > 0) {
+      const extra = io.eat(Math.min(S.debtKg * FLOCK.liftKeep, FLOCK.liftCatchUp * wantKg));
+      S.debtKg = Math.max(0, S.debtKg - extra / FLOCK.liftKeep); gotKg += extra;
+    }
+  }
   const k = wantKg > 0 ? gotKg / wantKg : 0;
   const gainK = (1000 * k * gainC) / (fpg(age) * (X ? X.fx.fpgK : 1));
   if (c.good.n > 0) c.good.w += (wGood / c.good.n) * gainK;
   if (c.late.n > 0) c.late.w += (wLate / c.late.n) * gainK;
   if (c.weak.n > 0) c.weak.w += (wWeak / c.weak.n) * gainK;
   const fEff = f * (wantKg > 0 ? k : 1);
-  const dcv = (FLOCK.cvBase + FLOCK.cvTemp * (1 - fT) + FLOCK.cvGroup * fTsd + FLOCK.cvWater * (1 - A)
-    + FLOCK.cvFeed * (1 - Math.min(1, fF * (wantKg > 0 ? k : 1))) + FLOCK.cvCaked * (farm.litter.cakedShare || 0) + FLOCK.cvAir * (1 - fAir)
+  // Phase 3: older birds' spread grows less from the same stress (model: Phase 2's terms x cvCycleK from Week 2)
+  const dcv = (FLOCK.cvBase + (FLOCK.cvTemp * (1 - fT) + FLOCK.cvGroup * fTsd + FLOCK.cvWater * (1 - A)
+    + FLOCK.cvFeed * (1 - Math.min(1, fF * (wantKg > 0 ? Math.min(1, k) : 1))) + FLOCK.cvCaked * (farm.litter.cakedShare || 0) + FLOCK.cvAir * (1 - fAir)) * (X ? FLOCK.cvCycleK : 1)
     + (X ? X.fx.dcv : 0)) * (hrs / 24);
   c.good.cv += dcv; c.late.cv += dcv; c.weak.cv += dcv;
+  if (FLOCK_DEBUG.on && X) {
+    const D = FLOCK_DEBUG.acc[env.dayNumber] || (FLOCK_DEBUG.acc[env.dayNumber] = { temp: 0, group: 0, water: 0, feed: 0, caked: 0, air: 0, crowd: 0, f: 0, n: 0, fT: 0, fF: 0, fW: 0, fAir: 0, fL: 0, fx: 0, k: 0 });
+    const w = hrs / 24;
+    D.temp += FLOCK.cvTemp * (1 - fT) * w; D.group += FLOCK.cvGroup * fTsd * w; D.water += FLOCK.cvWater * (1 - A) * w;
+    D.feed += FLOCK.cvFeed * (1 - Math.min(1, fF * (wantKg > 0 ? k : 1))) * w; D.caked += FLOCK.cvCaked * (farm.litter.cakedShare || 0) * w;
+    D.air += FLOCK.cvAir * (1 - fAir) * w; D.crowd += X.fx.dcv * w;
+    if (env.lightsOn) { D.n++; D.f += f; D.fT += fT; D.fF += fF; D.fW += fW; D.fAir += fAir; D.fL += fL; D.fx += X.fx.f; D.k += wantKg > 0 ? k : 1; }
+  }
   fl.cumFeedKg += gotKg; fl.feedTodayKg += gotKg;
   const drunkL = gotKg * io.waterPerKg;
   fl.waterTodayL += drunkL;

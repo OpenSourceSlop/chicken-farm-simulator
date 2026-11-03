@@ -10,10 +10,10 @@ import { zoneOfX } from './farm-heat.js';
 export const HEALTH = {
   linesL: 85,                    // plain water standing in the four drinker lines (drunk first when the main stayed open)
   tankHours: 2,                  // the header tank takes 2 h of today's water at the plate's rate
-  thirstBoost: 0.25, thirstMaxH: 2, dryAfterH: 0.5,
-  cov: { base: 0.98, perHourOver2: 0.07, shortThirst: 0.15, shortThirstH: 0.75, noStabiliser: 0.15, access: 0.3, noWalk: 0.1, walkShare: 0.3, min: 0.3, max: 0.99 },
+  thirstBoost: 0.2, thirstMaxH: 2, dryAfterH: 0.5,
+  cov: { base: 0.97, perHourOver2: 0.07, shortThirst: 0.15, shortThirstH: 0.75, noStabiliser: 0.15, access: 0.3, noWalk: 0.1, walkShare: 0.3, min: 0.3, max: 0.99 },
   gumboro: { below: 0.85, span: 0.45, days: 5, ratePerH: 0.00008, intakeK: 0.35 },
-  cocci: { ratePerH: 0.00008, growthPerDay: 1.5, litterRef: 28, litterPer: 10, perLapse: 0.05, treatHours: 36, intakeK: 0.08, intakeMaxG: 2 },
+  cocci: { ratePerH: 0.00012, growthPerDay: 1.5, litterRef: 28, litterPer: 10, perLapse: 0.05, treatHours: 24, intakeK: 0.15, intakeMaxG: 2, minSev: 0.6 },
   resp: { nh3: 25, dust: 1.5, riseH: 6, fallH: 24, ratePerH: 0.00002, intakeK: 0.03 },
   sds: { ratePerH: 4.5e-6, fromAge: 8, toAge: 42 },
   lame: { ratePerH: 8e-6, fromAge: 10, toAge: 42, dieAfterH: 72, litterFrom: 30 },
@@ -61,7 +61,7 @@ export function startGumboro(farm, env) { farm.health.gumboroAt = env.day; }
 export function startCocci(farm, env) {
   const C = HEALTH.cocci, h = farm.health;
   h.cocciAt = env.day;
-  h.cocciSev0 = Math.max(0.3, (1 + (farm.litter.meanMoisturePct - C.litterRef) / C.litterPer) * (1 + C.perLapse * (farm.flock.lapses || 0)));
+  h.cocciSev0 = Math.max(C.minSev, (1 + (farm.litter.meanMoisturePct - C.litterRef) / C.litterPer) * (1 + C.perLapse * (farm.flock.lapses || 0)));
 }
 
 /**

@@ -129,6 +129,7 @@ export function installCycle(farm, env) {
     const fl = farm.flock;
     for (const k of [...CYCLE_CAUSES, 'doa']) { if (fl.deadByCause[k] == null) fl.deadByCause[k] = 0; if (fl.acc[k] == null) fl.acc[k] = farm.rng.next(); }
     addLevelProblems(farm, def);
+    if (def.weather) env.setWeather(def.weather);
     env.clearWeatherEvents(); installCycleWeather(farm, env);
     farm.stats.levelStart = levelStartOf(farm, env, def.id);
     syncEnv(farm, env);
