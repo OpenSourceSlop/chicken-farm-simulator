@@ -251,9 +251,12 @@ feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
   flock lays one drawn bird per death by cause and mirrors the count after 1 s (oldest go first).
 - **Floor thermometer view** (F, unlock `floorOverlay`): `config.FLOOR_TEMP_RAMP` (24 → 36 °C, blue
   to orange, sRGB) is painted by props-floor and drawn as the HUD legend by ui.js.
-- **Job engine save** (`engine.serialize`): id and day come from the key, times to ~1 s, closed jobs
-  keep rule state only for sample counts and no result (`records.logJob` has it). A count job's
-  logged result is `{ n, sectors, values }`.
+- **Autosave size**: the job engine saves closed jobs as `[key, status, opensAt, closesAt, doneAt]`
+  (rule state only for sample counts; results live in `records.logJob`, a count job's as
+  `{ n, sectors, values }`); records save notebook lines as `[day, hour, kind, value, where?]`, make
+  one setting line of a control stepped many times in a row, and skip a look note with the same
+  words as the last one within the hour. Measured after the real-input play-through: see
+  PHASE2.md §11 (target 60 KB; localStorage holds megabytes, so a bigger save still works).
 - **Resume** (`level.resume(blob)`): clock → `farm.start(LEVEL1, { keepClock: true })` → saved env
   values (setpoint, house, slab, heater level, manual fans, pad) → `farm.restore` (timer, light,
   weather events, brooders out) → records → props → flock → level jobs. `saveBlob().env` carries

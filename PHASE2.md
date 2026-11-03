@@ -954,6 +954,16 @@ sign, result screen (expected: pass, ratio 4.6–4.95 because auto plays the ide
 clogged filter by the day 4 flow tests (both problem jobs open from real symptoms); plus the four
 Phase 1 scenarios. Then ARCHITECTURE.md and a play-through recording for the farmer.
 
+**Integration status (done on main).** The four packages are merged (sim, flock, props, level) and
+wired; the stub fallbacks are gone (`farm.stub` is false; the controller no longer sets the timer or
+light program itself; `level.debug.trigger` only starts a problem). Contract changes made at
+integration are listed in ARCHITECTURE.md "Phase 2 (Level 1) — as integrated". Both integrator runs
+pass with real walking (click-to-walk), real E / Q / F key presses and real panel clicks:
+`scripts/p2-level1.json` (title → prep day → truck → six tips by walking, last tip 35 game min after
+the truck → vent → weigh 50 → sign → result: pass, ≈ 4.8 × chick weight, deaths ≈ 0.6 %, both earnable
+branches at level 2) and `scripts/p2-level1-find.json` (brooder out, clogged filter, leak, low silo
+found from real symptoms and fixed). `node scripts/test-level.mjs` checks the same level flow in node.
+
 ## 17. Open questions for the farmer
 1. **Skill branches:** settled. config.js uses the 11 names from the plan doc (Farm Planning, Biosecurity & Health,
    Chick Arrival & Brooding, Body Temperature & Comfort, Heat & Ventilation, Moisture & Minimum Ventilation,

@@ -123,7 +123,7 @@ export function createRecords({ farm, env, events } = {}) {
             if (JSON.stringify(n.value) === js) return;
             // stepping the same control again right away (a winch or thermostat key pressed many
             // times): one line with the value it ends on
-            if (i === notebook.length - 1 && n.day === today() && env && env.hour - n.hour >= 0 && env.hour - n.hour < 0.25) { n.value = v; n.hour = r2(env.hour); return; }
+            if (i === notebook.length - 1 && n.day === today() && env && Math.abs(env.hour - n.hour) < 0.25) { n.value = v; n.hour = r2(env.hour); return; }
             break;
           }
         }
@@ -143,7 +143,15 @@ export function createRecords({ farm, env, events } = {}) {
     events.on(EV.LISTEN, (p) => {
       if (!live() || !farm) return;
       const o = farm.observe(p.x, p.z);
-      records.note('look', `You see: chicks ${o.spread}; droppings ${o.droppings}. You hear: ${o.sounds}.`, [r2(p.x), r2(p.z)]);
+      const text = `You see: chicks ${o.spread}; droppings ${o.droppings}. You hear: ${o.sounds}.`;
+      // the same words again within the hour (he stood still twice in the same flock): one line
+      for (let i = notebook.length - 1; i >= 0; i--) {
+        const n = notebook[i];
+        if (n.kind !== 'look') continue;
+        if (n.value === text && n.day === today() && env && Math.abs(env.hour - n.hour) < 1) return;
+        break;
+      }
+      records.note('look', text, [r2(p.x), r2(p.z)]);
     });
     events.on(EV.FARM_PROBLEM, (p) => {
       if (!live() || !PROBLEM_WORDS[p.id]) return;
