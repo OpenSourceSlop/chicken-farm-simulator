@@ -312,8 +312,10 @@ feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
   the drip replaces the nipple, a sack of husk patches the cell.
 - Package steps files: `p2-level-*.json` (level; written against the stubs, they now start from a
   `goto(auto)` level; `p2-level-prep` / `p2-level-day0` say at the top that they are panel demos
-  that check nothing), `p2-flock-events.json` (drives the real farm: 20 `expect` checks, a FAIL sets
-  the exit code), `p2-flock-look/perf.json`, `p2-props-*.json`. Review round 2:
+  that check nothing), `p2-flock-events.json` (drives the real farm: 22 `expect` checks, a FAIL sets
+  the exit code; the clock held by the HUD pause hook, which now sets `env.paused` at once; the chick
+  provider checked while the *Next job* skip has the vent window open, then five vent samples close
+  it so the sick-bird check is not shadowed by the sampling chick provider), `p2-flock-look/perf.json`, `p2-props-*.json`. Review round 2:
   `scripts/p2-review2.json` (spawn and gate dip, Replay resets the grading table and chart, flock
   spread after a skip, a save with a chick in the hand) and `scripts/p2-review2-ui.json` (drinker
   view, water supply at 960 × 600, sign sources, HUD rate slot, job card, notebook words, week

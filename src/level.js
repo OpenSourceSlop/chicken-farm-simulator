@@ -272,7 +272,8 @@ export function createLevel(ctx, deps = {}) {
     sampling: null,
     get fast() { return fast; },
     hudHooks: {
-      togglePause() { userPaused = !userPaused; },
+      // the pause holds at once (not from the next frame): env.paused is set here too
+      togglePause() { userPaused = !userPaused; if (level.mode === 'level' && userPaused) env.paused = true; },
       setFast(on) { fast = !!on; userPaused = false; },
       get fast() { return fast; },
       get userPaused() { return userPaused; },
