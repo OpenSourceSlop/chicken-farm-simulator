@@ -25,7 +25,7 @@ export function createState(n) {
   const rand = makeRand(20240611);
   const F = () => new Float32Array(n);
   const S = {
-    n, rand,
+    n, cap: n, rand,
     px: F(), pz: F(), vx: F(), vz: F(), fx: F(), fz: F(), tx: F(), tz: F(),
     size: F(), phase: F(), tint: F(), sitPref: F(), boldness: F(),
     act: new Uint8Array(n), actT: F(), thinkT: F(),

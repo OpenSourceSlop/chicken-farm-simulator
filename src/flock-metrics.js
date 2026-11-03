@@ -40,6 +40,10 @@ function nearestNeighbor(S, grid, i) {
 // Returns a shared object (no allocation); copy it if you keep it.
 export function computeMetrics(S, grid) {
   const n = S.n, hb = HOUSE_BOUNDS, b = S.bounds;
+  if (n === 0) { // an empty house (a level before the chicks come)
+    for (const k of Object.keys(out)) out[k] = 0;
+    return out;
+  }
   let dh = 0, dw = 0, nn = 0, hud = 0, pant = 0, comf = 0;
   // spreadIndex: split the usable floor (brooding area while the curtain is down, else the whole
   // bird floor) into ~1.5 m cells and count birds per cell c_k. The participation ratio

@@ -1,0 +1,17 @@
+[
+  {"wait": 800},
+  {"eval": "__game.stop(), 'render loop stopped: steps drive the game with advance'"},
+  {"eval": "(() => { const g = __game, f = g.flock, up = f.update; const t = window.__p = { ms: 0, n: 0 }; f.update = function (...a) { const t0 = performance.now(); up.apply(this, a); t.ms += performance.now() - t0; t.n++; }; t.run = (sec) => { t.ms = 0; t.n = 0; g.advance(sec); return t.ms / t.n; }; return 'flock.update timer installed (wall time of flock.update per frame, all phases incl. the level parts)'; })()"},
+  {"state": {"day": 1, "hour": 9, "setpoint": 34, "houseTemp": 34, "paused": true, "farmer": {"x": -12, "z": 0.8, "yaw": 0}, "zoom": 22}},
+  {"advance": 5},
+  {"eval": "(window.__p.a1 = window.__p.run(10)), 'sandbox, 1,800 birds: ' + window.__p.a1.toFixed(3) + ' ms per frame'"},
+  {"eval": "__game.farm.start(), __game.setState({ day: 0, hour: 8.5, setpoint: 34, houseTemp: 34, paused: true }), Object.assign(__game.farm.flock, { meanWeightG: 41.5, cv: 0.1, alive: 0, placed: 0, deadOnFloor: 0, sick: 0 }), [[-19,-2.5],[-19,2.5],[-11,-2.5],[-11,2.5],[-3,-2.5],[-3,2.5]].forEach(([x,z]) => __game.events.emit('farm:placed', { chicks: 1000, x, z, minutesInBox: 60 })), 'level: six stacks'"},
+  {"advance": 20},
+  {"eval": "(() => { const C = ['cold','heat','dehydration','weak','starveout','other','box']; Object.assign(__game.farm.flock, { placed: 6000, alive: 6000, sick: 12 }); for (let k = 0; k < 30; k++) { __game.farm.flock.deadOnFloor++; __game.events.emit('farm:death', { n: 1, cause: C[k % 7] }); } __game.farm.water.lines[1].access = 0.5; __game.flock.catchGroup(-8, 1, 10); return 'level: 1,800 birds, 12 sick, 30 dead, a low line, a frame of 10'; })()"},
+  {"advance": 10},
+  {"eval": "(window.__p.b1 = window.__p.run(10)), 'level, ' + __game.flock.count + ' birds: ' + window.__p.b1.toFixed(3) + ' ms per frame'"},
+  {"eval": "__game.flock.releaseGroup(), __game.farm.stop(), 'back to the sandbox'"},
+  {"advance": 5},
+  {"eval": "(window.__p.a2 = window.__p.run(10)), 'sandbox again: ' + window.__p.a2.toFixed(3) + ' ms per frame'"},
+  {"eval": "(() => { const p = window.__p, a = (p.a1 + p.a2) / 2, d = p.b1 - a; return (d <= 1 ? 'PASS' : 'FAIL') + ' level costs ' + d.toFixed(3) + ' ms per frame over the sandbox at 1,800 birds (budget +1 ms): sandbox ' + a.toFixed(3) + ', level ' + p.b1.toFixed(3); })()"}
+]
