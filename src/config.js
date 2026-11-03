@@ -277,20 +277,19 @@ export const SPOTS2 = {
   truckStop: { x: -9.5, z: 14.0, yaw: 0 },  // chick truck parks on the farm road, tail at the path
 };
 
-// Skill tree: 11 branches. Phase 2 makes two earnable; the rest show as "later levels".
-// Names of the nine later branches: to confirm against the plan doc (PHASE2.md, open questions).
+// Skill tree: the 11 branches from the plan doc. Phase 2 makes two earnable; the rest show as "later levels".
 export const SKILL_BRANCHES = [
+  { id: 'planning', name: 'Farm Planning', earnable: false },
+  { id: 'biosecurity', name: 'Biosecurity & Health', earnable: false },
   { id: 'brooding', name: 'Chick Arrival & Brooding', earnable: true },
+  { id: 'comfort', name: 'Body Temperature & Comfort', earnable: false },
+  { id: 'ventilation', name: 'Heat & Ventilation', earnable: false },
+  { id: 'moisture', name: 'Moisture & Minimum Ventilation', earnable: false },
+  { id: 'heating', name: 'Heating', earnable: false },
   { id: 'water', name: 'Water', earnable: true },
-  { id: 'feed', name: 'Feed & Feeders', earnable: false },
-  { id: 'ventilation', name: 'Ventilation & Cooling', earnable: false },
-  { id: 'litter', name: 'Litter & Air Quality', earnable: false },
+  { id: 'feed', name: 'Feed & Digestion', earnable: false },
   { id: 'lighting', name: 'Lighting', earnable: false },
-  { id: 'biosecurity', name: 'Biosecurity', earnable: false },
-  { id: 'health', name: 'Flock Health', earnable: false },
-  { id: 'growth', name: 'Growth & Weighing', earnable: false },
-  { id: 'records', name: 'Records & Costs', earnable: false },
-  { id: 'harvest', name: 'Catching & Harvest', earnable: false },
+  { id: 'growth', name: 'Growth & Performance', earnable: false },
 ];
 // Points needed for branch levels 1, 2, 3 (level 3 is not reachable in Level 1).
 export const SKILL_LEVEL_POINTS = [4, 9, 15];

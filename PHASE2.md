@@ -933,9 +933,9 @@ clogged filter by the day 4 flow tests (both problem jobs open from real symptom
 Phase 1 scenarios. Then ARCHITECTURE.md and a play-through recording for the farmer.
 
 ## 17. Open questions for the farmer
-1. **Skill branches:** the plan has 11; this build uses nine placeholder names (Feed & Feeders,
-   Ventilation & Cooling, Litter & Air Quality, Lighting, Biosecurity, Flock Health, Growth & Weighing,
-   Records & Costs, Catching & Harvest). Which names does the plan use?
+1. **Skill branches:** settled. config.js uses the 11 names from the plan doc (Farm Planning, Biosecurity & Health,
+   Chick Arrival & Brooding, Body Temperature & Comfort, Heat & Ventilation, Moisture & Minimum Ventilation,
+   Heating, Water, Feed & Digestion, Lighting, Growth & Performance).
 2. **Day numbering:** arrival day = day 0 and the prep day = day −1 ("days 0–7")? Then the guide's
    "34 °C on day 1" sits on day 1 and day 0 also shows 34 °C (general). Phase 1 called arrival "day 1".
 3. **Flock size:** 6,000 chicks in a 48 × 12 m house. Your houses are likely bigger; fine for learning?
