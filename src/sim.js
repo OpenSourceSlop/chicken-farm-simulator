@@ -1,8 +1,21 @@
 // House climate and farm clock. Pure logic, no three.js.
 // Owner: systems/UI agent. Other modules read `env`; only ui.js and test hooks call the setters.
 import {
-  HEATERS, HOUSE, BIRD_BOUNDS, FAN_COUNT, TIME, WEATHER, targetTempAt, weightAt,
+  HEATERS, HOUSE, BIRD_BOUNDS, FAN_COUNT, TIME, WEATHER, MIN_DAY, targetTempAt, weightAt,
 } from './config.js';
+//
+// Phase 2 additions (package "sim", see PHASE2.md). Contract, already callable:
+//   env.addStepper(fn(env, gameSeconds, fast))  called after every <= 60 game-second step (the farm
+//                                               model integrates here, also during skipHours)
+//   env.setVentTimer({ fans, onSec, cycleSec } | null)   minimum ventilation fan timer
+//   env.ventTimer, env.ventDuty (0..1 share of the cycle the timer fans run)
+//   env.setLightProgram({ darkStart, darkHours, dimmer }) light program (Phase 1 default: dark 02-03)
+//   env.lightProgram, env.lightLevel (0..1: dimmer while lit, 0 in the dark period)
+//   env.addWeatherEvent({ id, fromDay, toDay, outsideDrop })   e.g. the cold night (day = N + h/24)
+//   env.slabTemp (°C, concrete under the litter), env.floorTemp(x, z) litter surface °C
+//   env.litterDepthCm (set by the farm model; 0 = bare concrete), env.airflowM3h (fresh air m3/h)
+//   env.dayNumber may be MIN_DAY (-1) on the prep day.
+// STUB: the vent timer, slab and weather events are inert until package "sim" implements them.
 
 const HOUR = 3600;
 export const MAX_DAY = 42;  // the last day of the flock; after it the clock keeps day 42
@@ -44,12 +57,21 @@ function initialState() {
     feelsLike: 27,
     bodyWeight: weightAt(TIME.startDay),
     broodCurtain: true,
+    // Phase 2 (see the contract at the top)
+    ventTimer: null,               // { fans, onSec, cycleSec } or null (manual fans only)
+    ventDuty: 0,
+    lightProgram: { darkStart: 2, darkHours: 1, dimmer: 1 },
+    lightLevel: 1,
+    weatherEvents: [],
+    slabTemp: 27,
+    airflowM3h: 250,               // fresh air through the house (infiltration + fans), m3/h
+    litterDepthCm: 5,
   };
 }
 
 // Calendar day number (0..MAX_DAY). Robust to float drift in `hour`.
 function dayNumberOf(env) {
-  return Math.max(0, Math.min(MAX_DAY, Math.round(env.day - env.hour / 24)));
+  return Math.max(MIN_DAY, Math.min(MAX_DAY, Math.round(env.day - env.hour / 24)));
 }
 
 export function createSim() {
@@ -92,7 +114,7 @@ export function createSim() {
     },
 
     // setDay picks the calendar day (whole number, 0..42) and keeps the time of day.
-    setDay(d) { const n = Math.max(0, Math.min(MAX_DAY, Math.floor(d))); this.day = n + this.hour / 24; derive(this); emit('day'); },
+    setDay(d) { const n = Math.max(MIN_DAY, Math.min(MAX_DAY, Math.floor(d))); this.day = n + this.hour / 24; derive(this); emit('day'); },
     setHour(h) { const n = dayNumberOf(this); this.hour = ((h % 24) + 24) % 24; this.day = n + this.hour / 24; derive(this); emit('time'); },
     setWeather(w) { if (WEATHER[w]) { this.weather = w; derive(this); emit('weather'); } },
     setHeaterSetpoint(t) {
@@ -132,10 +154,25 @@ export function createSim() {
       if (dayNumberOf(this) !== d0) emit('day');
     },
 
+    // ---- Phase 2 contract (see the top of the file) ----
+    addStepper(fn) { steppers.push(fn); return () => { const i = steppers.indexOf(fn); if (i >= 0) steppers.splice(i, 1); }; },
+    setVentTimer(t) {
+      this.ventTimer = t && t.fans > 0 && t.cycleSec > 0 ? { fans: Math.min(FAN_COUNT, Math.round(t.fans)), onSec: Math.max(0, Math.min(t.cycleSec, t.onSec)), cycleSec: t.cycleSec } : null;
+      this.ventDuty = this.ventTimer ? this.ventTimer.onSec / this.ventTimer.cycleSec : 0;
+      emit('controls');
+    },
+    setLightProgram(p) { this.lightProgram = { ...this.lightProgram, ...p }; derive(this); emit('controls'); },
+    addWeatherEvent(ev) { this.weatherEvents.push({ ...ev }); derive(this); },
+    clearWeatherEvents() { this.weatherEvents.length = 0; derive(this); },
+    // STUB: the litter surface follows the felt air; package "sim" adds the slab and litter depth.
+    floorTemp(x, z) { return this.houseTemp + this.brooderHeat(x, z) * 0.6; },
+
     on(name, fn) { (listeners[name] ||= []).push(fn); return () => { listeners[name] = listeners[name].filter((f) => f !== fn); }; },
   };
 
   const listeners = {};
+  const steppers = [];
+  env._steppers = steppers; // stepGame runs them
   function emit(name) { for (const fn of listeners[name] || []) fn(env); for (const fn of listeners['*'] || []) fn(env, name); }
 
   derive(env);
@@ -161,8 +198,11 @@ function derive(env) {
   const ageK = 3.0 - 1.6 * Math.max(0, Math.min(1, (env.day - 7) / 28));
   env.windChill = env.airSpeed * ageK;
   env.feelsLike = env.houseTemp - env.windChill;
-  // Light program: 23 hours of light, dark 02:00–03:00 (week 1 guide)
-  env.lightsOn = !(env.hour >= 2 && env.hour < 3);
+  // Light program: 23 hours of light, dark 02:00–03:00 (week 1 guide) unless the farm sets another
+  const lp = env.lightProgram || { darkStart: 2, darkHours: 1, dimmer: 1 };
+  const intoDark = (((env.hour - lp.darkStart) % 24) + 24) % 24;
+  env.lightsOn = !(lp.darkHours > 0 && intoDark < lp.darkHours);
+  env.lightLevel = env.lightsOn ? (lp.dimmer ?? 1) : 0;
 }
 
 // Brooder thermostat, measured on the house air: proportional output across HEAT_BAND.
@@ -203,5 +243,7 @@ function stepGame(env, gs, fast) {
       env.houseRH = Math.max(35, Math.min(98, env.outsideRH + padDrop * 5 * (env.fansOn > 0 ? 1 : 0)));
     }
     env.feelsLike = env.houseTemp - env.windChill;
+    const st = env._steppers;
+    if (st) for (let i = 0; i < st.length; i++) st[i](env, s, fast);
   }
 }

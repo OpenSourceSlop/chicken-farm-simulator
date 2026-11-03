@@ -8,6 +8,15 @@ import { buildHouse } from './house.js';
 import { createPlayer } from './player.js';
 import { createFlock } from './flock.js';
 import { createUI } from './ui.js';
+// Phase 2 (PHASE2.md): shared bus and registry, farm model, records, skills, save, props, level
+import { createEvents } from './events.js';
+import { createInteract } from './interact.js';
+import { createFarm } from './farm.js';
+import { createRecords } from './records.js';
+import { createSkills } from './skills.js';
+import { createSaveStore } from './save.js';
+import { buildProps } from './props.js';
+import { createLevel } from './level.js';
 
 function webglAvailable() {
   try {
@@ -62,13 +71,36 @@ function start(saved = {}) {
   ctx.env = env;
   if (saved.env) Object.assign(env, saved.env);
 
+  // Phase 2 core, created before any 3D module so they can all read ctx.events and ctx.farm.
+  const events = createEvents();
+  ctx.events = events;
+  const farm = createFarm(env, { events });
+  ctx.farm = farm;
+  env.addStepper(farm.step);         // the farm integrates with every climate step, skips included
+  const records = createRecords({ farm, env, events });
+  const skills = createSkills({ events, records, farm });
+  const save = createSaveStore();
+  ctx.records = records;
+  ctx.skills = skills;
+
   const world = buildWorld(ctx);
   const house = buildHouse(ctx);
-  const colliders = [...world.colliders, ...house.colliders];
+  // ctx.interact: every module registers what E can reach; Phase 1 boards are its first entries.
+  const interact = createInteract([...world.interactables, ...house.interactables]);
+  ctx.interact = interact;
+  const props = buildProps(ctx, { house, world });
+  // ctx.colliders: the one array the farmer collides with; props may add / remove its own entries.
+  const colliders = [...world.colliders, ...house.colliders, ...props.colliders];
+  ctx.colliders = colliders;
   const player = createPlayer(ctx, { colliders });
+  ctx.player = player;
   const flock = createFlock(ctx, { house });
-  const interactables = [...world.interactables, ...house.interactables];
-  const ui = createUI(ctx, { player, flock, house, world, interactables });
+  ctx.flock = flock;
+  const interactables = interact.list;
+  const deps = { farm, records, skills, save, player, flock, props, interact, events };
+  const ui = createUI(ctx, { ...deps, house, world, interactables });
+  const level = createLevel(ctx, { ...deps, ui });
+  ctx.level = level;
 
   if (saved.player) player.teleport(saved.player.x, saved.player.z, saved.player.yaw);
 
@@ -94,8 +126,10 @@ function start(saved = {}) {
     world.update(dt, env, view);
     view.night = world.night; // the world's day/night state drives the house lights too
     house.update(dt, env, view);
+    props.update(dt, env, view);
     flock.update(dt, env, player.position);
     ui.update(dt);
+    level.update(dt);
   }
 
   // Frame-time governor: if the median frame over 2 s is slower than about 28 fps, step quality
@@ -158,6 +192,11 @@ function start(saved = {}) {
   const game = {
     ready: true,
     THREE, scene, camera, renderer, env, world, house, player, flock, ui,
+    // Phase 2 (PHASE2.md "Test hooks")
+    events, farm, records, skills, save, props, interact, level,
+    startLevel(opts = {}) { return level.start(opts); },
+    nextJob() { return level.nextJob(); },
+    jobs() { return level.jobs.list().map((j) => ({ key: j.key, status: j.status, progress: j.progress })); },
     get frames() { return frames; },
     // Run the simulation forward `seconds` of real time without rendering, at a fixed step.
     advance(seconds, dt = 1 / 30) {
@@ -195,6 +234,8 @@ function start(saved = {}) {
       const out = {};
       for (const k of keys) out[k] = env[k];
       out.player = { x: player.position.x, z: player.position.z, inside: player.isInside };
+      out.mode = level.mode;
+      out.farmMode = farm.mode;
       return out;
     },
     stop() { running = false; },
@@ -208,6 +249,7 @@ function start(saved = {}) {
       heaterSetpoint: env.heaterSetpoint, fansOn: env.fansOn, padOn: env.padOn, timeScale: env.timeScale,
     },
     player: { x: player.position.x, z: player.position.z, yaw: player.yaw },
+    levelSave: level.mode === 'level' ? level.serialize() : null,
   }));
 
   // Compile every shader program now, behind the boot card. Otherwise the first look into the
@@ -230,6 +272,7 @@ function start(saved = {}) {
         world.update(0, env, view);
         view.night = world.night;
         house.update(0, env, view);
+        props.update(0, env, view);
         flock.update(0, env, player.position);
         showAll(); // the updates hide some things again (glow, stars): one real frame with all of it
         renderer.render(scene, camera);
@@ -246,10 +289,14 @@ function start(saved = {}) {
       world.update(0, env, view);
       view.night = world.night;
       house.update(0, env, view);
+      props.update(0, env, view);
       flock.update(0, env, player.position);
     }
   }
   warmUp();
+  // Title card / sandbox (level.js). A hot reload of a running level resumes it instead.
+  if (saved.levelSave) level.resume(saved.levelSave);
+  else level.boot();
 
   const boot = document.getElementById('boot');
   if (boot) boot.hidden = true;

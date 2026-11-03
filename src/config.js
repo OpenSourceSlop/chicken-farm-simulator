@@ -137,3 +137,149 @@ export const COLORS = {
   farmerBoots: 0xf0f0ea,
   skin: 0xc68b5c,
 };
+
+// ================================================================================================
+// Phase 2 (Level 1, the brooding week). Shared constants: every package reads these, nobody edits
+// them without the integrator. See PHASE2.md for what each one means and where it comes from.
+// Values a farmer would read off a sign carry their source in PHASE2.md / content-signs.js;
+// numbers marked "model" are tuning constants of the simulation, never shown as facts.
+// ================================================================================================
+
+// Flock days: day 0 = placement day (the chicks arrive at LEVEL1.arrivalHour), day -1 = prep day.
+// sim.js clamps env.dayNumber to MIN_DAY..MAX_DAY. Phase 1 (sandbox) keeps using days 1..42.
+export const MIN_DAY = -1;
+
+// The six guides. Every sign fact carries one of these keys, or 'general'.
+export const GUIDES = {
+  week1: 'Week 1 guide',
+  week2: 'Week 2 guide',
+  week3: 'Week 3 guide',
+  week4: 'Week 4 guide',
+  vent: 'Broiler Ventilation',
+  bm101: 'Broiler Management 101',
+  general: 'general practice',
+};
+
+// Level 1: from the prep day to the day 7 weigh-in.
+export const LEVEL1 = {
+  id: 'level1',
+  title: 'Level 1 – The brooding week',
+  startDay: -1, startHour: 7,         // prep day, 07:00 at the farm gate
+  arrivalDay: 0, arrivalHour: 8,      // chick truck at the house door
+  endDay: 7,                          // the level ends when the day 7 record is signed
+  weather: 'cool',
+  chicksPlaced: 6000,                 // 60 boxes of 100; FLOCK_COUNT instances draw them
+  boxes: 60, chicksPerBox: 100, stacks: 6, // boxes come in 6 stacks of 10; one carry = one stack
+  chickWeightG: 41.5,                 // mean day-old weight of this delivery (model; seeded +-1 g)
+  // Clock: game seconds per real second while the level runs (Phase 1 sandbox keeps TIME).
+  clock: { work: 120, fast: 480, panel: 30 }, // panel: while an equipment/inspection panel is open
+  // Job rounds (game hours). A job is open inside its window; when the window ends it is "missed".
+  rounds: {
+    am: { from: 6, to: 12, label: 'Morning round' },
+    pm: { from: 13, to: 18, label: 'Afternoon round' },
+    eve: { from: 16, to: 24, label: 'Evening' },
+  },
+  // Level result thresholds. Week 1 target 4-5 x chick weight is the Week 1 guide; the mortality
+  // limit is general practice.
+  targetRatio: [4, 5],
+  fail: { weightRatioMin: 4.0, mortalityMaxPct: 2.0 },
+  // Problem events of the slice (day, game hour they start). PHASE2.md "Problem events".
+  problems: [
+    { id: 'cold-night', day: 2, hour: 19, outsideDrop: 6, until: { day: 3, hour: 7 } },
+    { id: 'blocked-line', day: 3, hour: 2, line: 1 },           // drinker line index into DRINKER_LINES_Z
+    { id: 'leaking-nipple', day: 4, hour: 10, line: 2, x: -9.15 },
+    { id: 'low-silo', day: 5, hour: 6, siloKg: 260 },
+  ],
+};
+
+// One drawn bird stands for this many real birds in the records.
+export const BIRDS_PER_INSTANCE = LEVEL1.chicksPlaced / FLOCK_COUNT;
+
+// Grid the farm model keeps over the house floor (litter cover, moisture, floor temperature).
+export const FLOOR_GRID = { cell: 1.0, nx: 48, nz: 12, x0: HOUSE_BOUNDS.xMin, z0: HOUSE_BOUNDS.zMin };
+
+// Equipment (model values; flow and heights are what the farmer sets on the panels).
+export const EQUIP = {
+  fanM3h: 36000,                      // one 50-inch tunnel fan, m3/h (general practice)
+  nippleHeightCm: [5, 60],            // winch range of a drinker line (tip above litter)
+  feederHeightCm: [0, 45],            // pan rim range
+  pressureCm: [2, 40],                // regulator sight-tube column
+  litterDepthCm: [2, 5, 8, 10],       // choices at the litter heap
+  siloCapacityKg: 6000,
+  luxMax: 60,                         // at bird level with the dimmer at 100 %
+};
+
+// Interactive spots added in Phase 2. house/world/props build the objects here; ui/jobs read them.
+// Boards on the north wall face south like Phase 1's (stand at z ~ -4.6 and press E).
+export const SPOTS2 = {
+  feederBox: { x: -22.0, z: -5.8, label: 'Feeder control box', inside: true },
+  signWater: { x: -20.0, z: -5.8, label: 'Water lines sign', inside: true },
+  signVent: { x: -8.0, z: -5.8, label: 'Minimum ventilation sign', inside: true },
+  lightPanel: { x: -4.0, z: -5.8, label: 'Light control', inside: true },
+  signLitter: { x: 0.0, z: -5.8, label: 'Litter sign', inside: true },
+  waterSupply: { x: -23.2, z: 5.0, label: 'Water meter and flush valves', inside: true },
+  // drinker line regulators at the west end of each line (one per DRINKER_LINES_Z entry)
+  drinkers: DRINKER_LINES_Z.map((z, i) => ({ x: -22.2, z, label: `Drinker line ${i + 1}`, inside: true })),
+  birdScale: { x: -6.0, z: -1.0, label: 'Bird scale', inside: true },
+  // outside the house
+  signChicks: { x: -17.0, z: 6.4, label: 'Chick arrival sign', inside: false },
+  signHealth: { x: -11.0, z: 6.4, label: 'Flock health sign', inside: false },
+  deadBin: { x: -10.4, z: 7.9, label: 'Dead bird bin', inside: false },
+  chickTable: { x: -11.8, z: 9.2, label: 'Chick sample table', inside: false },
+  boxStacks: { x: -15.6, z: 9.6, dx: 0.75, label: 'Chick boxes', inside: false }, // 6 stacks along +x
+  litterHeap: { x: -19.0, z: 8.8, label: 'Rice husk heap', inside: false },
+  silo: { x: -18.25, z: -8.1, label: 'Feed silos', inside: false },
+  officeDesk: { x: -34.1, z: 26.3, label: 'Office: flock records', inside: false },
+  truckStop: { x: -9.5, z: 14.0, yaw: 0 },  // chick truck parks on the farm road, tail at the path
+};
+
+// Skill tree: 11 branches. Phase 2 makes two earnable; the rest show as "later levels".
+// Names of the nine later branches: to confirm against the plan doc (PHASE2.md, open questions).
+export const SKILL_BRANCHES = [
+  { id: 'brooding', name: 'Chick Arrival & Brooding', earnable: true },
+  { id: 'water', name: 'Water', earnable: true },
+  { id: 'feed', name: 'Feed & Feeders', earnable: false },
+  { id: 'ventilation', name: 'Ventilation & Cooling', earnable: false },
+  { id: 'litter', name: 'Litter & Air Quality', earnable: false },
+  { id: 'lighting', name: 'Lighting', earnable: false },
+  { id: 'biosecurity', name: 'Biosecurity', earnable: false },
+  { id: 'health', name: 'Flock Health', earnable: false },
+  { id: 'growth', name: 'Growth & Weighing', earnable: false },
+  { id: 'records', name: 'Records & Costs', earnable: false },
+  { id: 'harvest', name: 'Catching & Harvest', earnable: false },
+];
+// Points needed for branch levels 1, 2, 3 (level 3 is not reachable in Level 1).
+export const SKILL_LEVEL_POINTS = [4, 9, 15];
+// What a branch level unlocks (tool or view). Keys are read by props (overlay) and ui (graphs).
+export const UNLOCKS = {
+  floorOverlay: { branch: 'brooding', level: 1, name: 'Floor thermometer view' },
+  brooderChart: { branch: 'brooding', level: 2, name: '24-hour temperature chart on the controller' },
+  waterTrend: { branch: 'water', level: 1, name: 'Water meter trend graph' },
+  lineOverview: { branch: 'water', level: 2, name: 'All-lines water overview' },
+};
+
+// localStorage keys (always inside try/catch, see save.js)
+export const SAVE = { key: 'chickenFarm.level1.v1', profileKey: 'chickenFarm.profile.v1', version: 1 };
+
+// Sample spread: the brooding floor in 6 sectors (west / middle / east x north / south half).
+// Vent, crop and weighing samples count how many different sectors they came from.
+export function broodSector(x, z) {
+  const b = BROOD_BOUNDS, t = (x - b.xMin) / (b.xMax - b.xMin);
+  const col = t < 1 / 3 ? 0 : t < 2 / 3 ? 1 : 2;
+  return col * 2 + (z < 0 ? 0 : 1);
+}
+
+// Nipple tip height (cm above the litter) a line should have at a flock age: chick eye level on
+// day 0, then raised so the birds stretch up to drink (general practice; same curve as Phase 1's
+// automatic line height in house-drinkers.js).
+const NIPPLE_CM = [[0, 11], [1, 12], [7, 17], [14, 24], [21, 31], [28, 37], [35, 42], [42, 45]];
+export function nippleHeightCmAt(day) {
+  const d = Math.max(0, Math.min(42, day));
+  for (let i = 1; i < NIPPLE_CM.length; i++) {
+    const [d1, h1] = NIPPLE_CM[i], [d0, h0] = NIPPLE_CM[i - 1];
+    if (d <= d1) return h0 + ((h1 - h0) * (d - d0)) / (d1 - d0);
+  }
+  return 45;
+}
+// Water flow a nipple should give: age in days + 20 ml/min (Broiler Management 101 / Week 1 guide).
+export const flowTargetAt = (day) => Math.max(0, day) + 20;

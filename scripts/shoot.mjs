@@ -22,6 +22,8 @@
 //   {"metrics": "label"}     print flock metrics + climate snapshot
 //   {"shot": "name"}         screenshot to <out>/<name>.png
 //   {"viewport": [400, 800]}
+//   {"reload": true}         reload the page (localStorage kept: autosave tests) and wait for __game.ready
+//   {"clearStorage": true}   remove this page's localStorage (a fresh player)
 import { createRequire } from 'node:module';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -79,6 +81,15 @@ const SCENARIOS = {
     { settle: 20 }, { metrics: 'cold' }, { shot: 'cold' },
     { state: { houseTemp: 34 } }, { settle: 25 }, { metrics: 'right' }, { shot: 'right' },
     { state: { houseTemp: 38, heaterLevel: 0 } }, { settle: 25 }, { metrics: 'hot' }, { shot: 'hot' },
+  ],
+  // Phase 2 contract smoke test: every hook exists and a level can be asked for (PHASE2.md)
+  'p2-hooks': [
+    { wait: 500 },
+    { eval: "['events','farm','records','skills','save','props','interact','level'].map(k => k + ':' + typeof window.__game[k]).join(' ')" },
+    { eval: "'mode ' + __game.level.mode + ', farm ' + __game.farm.mode + ', save available ' + __game.save.available" },
+    { eval: "__game.startLevel({ seed: 1 }), 'startLevel -> mode ' + __game.level.mode + ', jobs ' + __game.jobs().length" },
+    { eval: "JSON.stringify(__game.farm.act('water.flowtest', { line: 0 }))" },
+    { shot: 'p2-hooks' },
   ],
   walk: [
     { wait: 1000 }, { shot: 'walk-0' },
@@ -172,6 +183,10 @@ async function main() {
       await page.screenshot({ path: file });
       console.log('shot', path.relative(root, file));
     } else if (step.viewport) await page.setViewportSize({ width: step.viewport[0], height: step.viewport[1] });
+    else if (step.reload) {
+      await page.reload();
+      await page.waitForFunction(() => window.__game && window.__game.ready, null, { timeout: 120000 });
+    } else if (step.clearStorage) await page.evaluate(() => { try { localStorage.clear(); } catch { /* blocked */ } });
   }
 
   const fps = await page.evaluate(async () => { const f0 = window.__game.frames; await new Promise((r) => setTimeout(r, 2000)); return (window.__game.frames - f0) / 2; });

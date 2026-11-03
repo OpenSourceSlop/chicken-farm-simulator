@@ -6,6 +6,12 @@ flock that reacts to temperature. The farmer (the user, who runs a broiler farm 
 the art style and the controls. Nothing beyond that is in scope yet: no saving, sound, levels, skill
 tree or full content.
 
+> **Phase 2 (Level 1, the brooding week) is specified in `PHASE2.md`.** Its shared contracts are in
+> code: Phase 2 constants at the end of `src/config.js`, the event bus `src/events.js`, the
+> interactable registry `src/interact.js`, the stub modules `farm.js`, `records.js`, `skills.js`,
+> `save.js`, `level.js`, `content-jobs.js`, `props.js`, and the Phase 2 members of `sim.js`,
+> `flock.js` and `player.js`. Main.js wires them all; the Phase 1 farm below is the "sandbox" mode.
+
 ## Decisions already made (from the plan doc)
 
 - Low-poly 3D, angled top-down camera that follows the farmer and can turn and zoom.

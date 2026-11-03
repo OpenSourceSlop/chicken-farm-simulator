@@ -207,6 +207,26 @@ export function createFlock(ctx, { house } = {}) {
       if (!built) { grid.build(S.px, S.pz, n, S.maxR, S.perM2, S.bounds.zMax - S.bounds.zMin); built = true; }
       return { ...computeMetrics(S, grid) };
     },
+    // ---- Phase 2 contract (package "flock"). STUB: inert until phase2/flock implements it. ----
+    // The flock reads ctx.farm itself in update(): farm.mode 'off' = Phase 1 behaviour. In 'level'
+    // mode it draws round(farm.flock.alive / BIRDS_PER_INSTANCE) birds once placed (none before),
+    // sizes them from farm.flock.weightQuantile(), shows ~farm.flock.sick sick birds, keeps the
+    // dead ones (farm EV.FARM_DEATH) lying where they died until picked up, and follows per-line
+    // water and feed access. PHASE2.md "Package flock".
+    /** Chicks from a tipped stack: count real chicks spill out at (x, z) and spread. */
+    placeBatch(x, z, chicks) { void x; void z; void chicks; },
+    /** Catch the nearest live bird within maxDist of (x, z) for a sample: { index, x, z } | null. */
+    catchNearest(x, z, maxDist = 1.2) { void x; void z; void maxDist; return null; },
+    /** Up to n birds caught around (x, z) with a catching frame (weighing): [{ index, x, z }]. */
+    catchGroup(x, z, n) { void x; void z; void n; return []; },
+    /** Put a caught bird back (it walks off). */
+    releaseBird(index) { void index; },
+    /** Dead birds on the floor: { count, near(x, z, r) -> [{ id, x, z, cause }], pickUp(x, z, r) -> { n, causes } }. */
+    dead: { count: 0, near() { return []; }, pickUp() { return { n: 0, causes: {} }; } },
+    /** What the farmer hears standing in the house (0..1 each): distress peeping, contented chirping, snicking. */
+    sounds() { return { distress: 0, contented: 1, snick: 0 }; },
+    /** Wipe the level's birds (prep day: empty house). */
+    resetLevel() {},
     // test tools only: true = birds ignore the farmer (to film them up close)
     debugIgnoreFarmer: false,
     _state: S, // internal, for debugging only

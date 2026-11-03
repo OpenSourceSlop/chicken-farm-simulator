@@ -241,6 +241,13 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
       cam.snapTo(root.position);
     },
     walkTo(x, z, run = false) { if (input.enabled) walkTo(x, z, run); },
+    // Phase 2 contract (package "props"). STUB: no visible change yet.
+    // carry(kind): what the farmer holds in his hands: null | 'barrow' | 'boxes' | 'dead' | 'scale'
+    // | 'chick' (a chick in his hands while a sample panel is open). pose(name, seconds): a short
+    // action pose, 'crouch' (probe, squeeze, pick up) | 'reach' (nipple, valve) | null.
+    carrying: null,
+    carry(kind) { api.carrying = kind || null; },
+    pose(name, seconds = 1) { void name; void seconds; },
     update,
     dispose() {
       input.dispose();
