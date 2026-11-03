@@ -30,12 +30,18 @@ export function createState(n) {
     size: F(), phase: F(), tint: F(), sitPref: F(), boldness: F(),
     act: new Uint8Array(n), actT: F(), thinkT: F(),
     therm: new Int8Array(n), tIdx: F(), tAmb: F(), arrived: new Uint8Array(n), res: new Int32Array(n).fill(-1),
+    // own heat tolerance: starts panting this far above target (1.5 .. 4.5 °C), so the share of
+    // panting birds grows with the heat instead of the whole flock switching at once
+    hotTh: F(),
+    site: new Int16Array(n).fill(-1), // huddle site of a cold bird when no brooder is running
     rad: F(), spd: F(), scare: F(), stuck: F(),
     sitA: F(), wingA: F(), hp: F(), hl: F(), ht: F(), beak: F(), stride: F(),
     // flock-wide values, refreshed when the day changes
     day: -1, L: 0.15, morph: 0, baseSpeed: 0.25, curtain: true, bounds: BROOD_BOUNDS,
     rRight: 0.35, rHot: 0.42, rHuddle: 0.08, maxR: 0.5, perM2: 6, time: 0,
     lightsOn: true,
+    sites: null, siteR: 0.6, // huddle sites (x, z pairs) for the usable floor, see makeHuddleSites
+    spreadT: 0,              // seconds left of the "curtain just lifted" spreading phase
   };
   for (let i = 0; i < n; i++) {
     // ±8 % size spread (roughly normal), slight colour tint, personality
@@ -45,6 +51,7 @@ export function createState(n) {
     S.tint[i] = (rand() + rand()) - 1;
     S.sitPref[i] = rand();
     S.boldness[i] = rand();
+    S.hotTh[i] = 1.5 + 3.0 * rand();
   }
   buildResources(S);
   return S;
@@ -72,6 +79,17 @@ export function releaseRes(S, i) {
 }
 
 export function usableBounds(curtain) { return curtain ? BROOD_BOUNDS : BIRD_BOUNDS; }
+
+// Where cold birds pile up when no brooder is running (shared body heat): a staggered grid of spots
+// in the gaps between the feeder and drinker lines, clear of the side walls and the pad, about one
+// per 120-130 birds in the brooding area. Returns [x0, z0, x1, z1, ...].
+const SITE_ROWS = [-2.95, -0.98, 0.98, 2.95];
+export function makeHuddleSites(b) {
+  const out = [];
+  const x0 = b.xMin + 2.6, x1 = b.xMax - 1.6;
+  SITE_ROWS.forEach((z, r) => { for (let x = x0 + (r % 2) * 3; x <= x1 + 1e-6; x += 6) out.push(x, z); });
+  return Float32Array.from(out);
+}
 
 // Place the whole flock. Young chicks are "just placed" along the feeder and drinker lines of the
 // brooding area; an older flock (e.g. restored on reload) is scattered over the usable floor.
@@ -101,6 +119,7 @@ export function placeFlock(S) {
     S.thinkT[i] = rand() * 0.5;
     S.therm[i] = RIGHT;
     S.tIdx[i] = 0; S.tAmb[i] = 0;
+    S.site[i] = -1;
     S.arrived[i] = 1;
     S.res[i] = -1;
     S.sitA[i] = 0; S.wingA[i] = 0; S.hp[i] = 0; S.hl[i] = 0; S.ht[i] = 0; S.beak[i] = 0;

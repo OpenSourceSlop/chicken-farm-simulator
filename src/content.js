@@ -81,7 +81,7 @@ export const TASKS = [
   {
     id: 'watch-chicks',
     title: 'Watch how the chicks spread under the brooders',
-    where: 'Stand near one of the round gas brooders hanging over the chicks for a few seconds.',
+    where: 'Stand by one of the round gas brooders hanging over the chicks and watch them while the house warms up.',
   },
 ];
 
@@ -92,7 +92,8 @@ export const HELP_KEYS = [
   { keys: ['W', 'A', 'S', 'D'], what: 'Walk, or click the ground' },
   { keys: ['Shift'], what: 'Run (hold)' },
   { keys: ['←', '→'], what: 'Turn, or right-drag' },
-  { keys: ['Wheel'], what: 'Zoom in and out' },
+  { keys: ['Wheel', '+', '−'], what: 'Zoom in and out' },
+  { keys: ['Double-click'], what: 'Run to that spot' },
   { keys: ['E'], what: 'Read a sign, use a machine' },
   { keys: ['Esc'], what: 'Close a sign or panel' },
   { keys: ['H'], what: 'Show or hide this help' },

@@ -57,8 +57,9 @@ export function buildHouse(ctx) {
   ];
 
   const interactables = [
-    { id: 'controller', label: SPOTS.controller.label, x: SPOTS.controller.x, z: SPOTS.controller.z, radius: 2.0 },
-    { id: 'sign-brooder', label: SPOTS.signBrooder.label, x: SPOTS.signBrooder.x, z: SPOTS.signBrooder.z, radius: 2.0 },
+    // inside: true = only usable from inside the house (not through the north wall)
+    { id: 'controller', label: SPOTS.controller.label, x: SPOTS.controller.x, z: SPOTS.controller.z, radius: 2.0, inside: SPOTS.controller.inside },
+    { id: 'sign-brooder', label: SPOTS.signBrooder.label, x: SPOTS.signBrooder.x, z: SPOTS.signBrooder.z, radius: 2.0, inside: SPOTS.signBrooder.inside },
   ];
 
   // Wall cutaway: a side wall slides down to the stub when the farmer is inside or within ~6 m of

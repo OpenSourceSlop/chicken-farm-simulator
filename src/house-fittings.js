@@ -3,7 +3,8 @@
 // camera reads them), temperature probes at bird height, two lines of LED bulbs and warm night
 // lights. Owner: house agent.
 import * as THREE from 'three';
-import { SPOTS, HOUSE_BOUNDS, targetTempAt } from './config.js';
+import { SPOTS, HOUSE_BOUNDS } from './config.js';
+import { SIGNS, SOURCES, brooderTableRows } from './content.js';
 import { Batch, mat, canvasTexture, roundRect, smooth, clamp01, FONT } from './house-kit.js';
 import { TRUSS_Y } from './house-shell.js';
 import { nippleHeight } from './house-drinkers.js';
@@ -35,16 +36,19 @@ function signTexture() {
     g.fillStyle = '#23302a'; g.textAlign = 'left';
     g.font = `600 26px ${FONT}`;
     g.fillText('Target house temperature', 160, 118);
-    g.font = `500 24px ${FONT}`;
-    const days = [1, 7, 14, 21, 28, 35];
-    days.forEach((d, i) => {
+    // The same rows and sources as the E panel (content.js): approximate rows carry a "~"
+    g.font = `500 22px ${FONT}`;
+    brooderTableRows().forEach((r, i) => {
       const col = i < 3 ? 0 : 1, row = i % 3;
-      g.fillText(`Day ${d}`, 160 + col * 170, 160 + row * 36);
-      g.fillText(`${targetTempAt(d).toFixed(0)} °C`, 245 + col * 170, 160 + row * 36);
+      g.fillText(`Day ${r.day}`, 156 + col * 170, 160 + row * 36);
+      g.fillText(`${r.approx ? '~' : ''}${r.temp.toFixed(1).replace('.0', '')} °C`, 226 + col * 170, 160 + row * 36);
     });
+    const sign = SIGNS['sign-brooder'];
     g.fillStyle = '#5b6a62'; g.font = `500 17px ${FONT}`;
-    g.fillText('Watch the chicks: huddled = cold, spread at walls = hot', 30, 290);
-    g.fillText('Source: general practice', 30, 322);
+    g.fillText('Watch the chicks: huddled = cold, along the walls = hot', 30, 270);
+    g.font = `500 14px ${FONT}`;
+    g.fillText(`~ = approx.   Table: ${sign.table.source}`, 30, 302);
+    g.fillText(`Reading the chicks: ${sign.readSource || SOURCES.week1}`, 30, 326);
   });
 }
 

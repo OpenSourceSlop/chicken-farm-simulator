@@ -27,7 +27,10 @@ export function poseAll(S, dt, stage) {
       else if (a === ACT.PANT && S.sitPref[i] < 0.72) sitT = 1;
     }
     sitA[i] += (sitT - sitA[i]) * Math.min(1, dt * (sitT > sitA[i] ? 1.6 : 5));
-    const wingT = hot ? (S.spd[i] > 0.3 * base ? 0.55 : 1) : 0;
+    // heat stress shows in degrees: wings held further out and harder panting the hotter the bird
+    let heat = 0;
+    if (hot) { heat = (S.tIdx[i] - 1.5) / 4; heat = heat < 0.3 ? 0.3 : heat > 1 ? 1 : heat; }
+    const wingT = hot ? heat * (S.spd[i] > 0.3 * base ? 0.55 : 1) : 0;
     wingA[i] += (wingT - wingA[i]) * kWing;
 
     // walking cycle: small fast steps for chicks, slower strides for broilers
@@ -67,10 +70,10 @@ export function poseAll(S, dt, stage) {
       turn = 0.6 * Math.sin(t * 0.6 + ph * 5) * Math.sin(t * 0.31 + ph);
     }
     if (hot) {
-      // panting: open beak, fast shallow head bob (gular flutter)
-      const w = Math.sin(t * 28 + ph * 7);
-      beakT = 0.8 + 0.2 * w;
-      lift += 0.016 * w; pitch += 0.06 * w;
+      // panting: open beak, fast shallow head bob (gular flutter), stronger with the heat
+      const w = Math.sin(t * (20 + 8 * heat) + ph * 7);
+      beakT = (0.45 + 0.45 * heat) + 0.15 * w;
+      lift += 0.016 * heat * w; pitch += 0.06 * heat * w;
     }
     hp[i] += (pitch - hp[i]) * kHead;
     hl[i] += (lift - hl[i]) * kHead;

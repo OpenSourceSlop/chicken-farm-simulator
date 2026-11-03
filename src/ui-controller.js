@@ -14,10 +14,25 @@ function lcdCell(label, unitText) {
   return { el, value, unit };
 }
 
+// A membrane key. Press and hold repeats (after 400 ms, every 120 ms). The mouse press acts on
+// pointerdown; the click that follows it is then ignored, so Enter / Space still work for keyboards.
 function key(label, icon, onPress) {
   const b = button({ class: 'key', 'aria-label': label, title: label });
   b.innerHTML = icon;
-  b.addEventListener('click', onPress);
+  let wait = 0, rep = 0, fromPointer = false;
+  const stop = () => { clearTimeout(wait); clearInterval(rep); wait = rep = 0; };
+  b.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    stop();
+    fromPointer = true;
+    onPress();
+    wait = setTimeout(() => { rep = setInterval(onPress, 120); }, 400);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel', 'blur']) b.addEventListener(ev, stop);
+  b.addEventListener('click', () => {
+    if (fromPointer) { fromPointer = false; return; }
+    onPress();
+  });
   return b;
 }
 

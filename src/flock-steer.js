@@ -43,7 +43,8 @@ export function steerAll(S, grid, dt, fctx) {
     // 1. seek the target
     let dvx = 0, dvz = 0, want = 0;
     const dxT = tx[i] - x, dzT = tz[i] - z, dT = Math.sqrt(dxT * dxT + dzT * dzT);
-    const hurry = th !== 0 && !arrived[i] && dT > 1 ? 1.6 : 1; // cold/hot birds hurry, then slow in the crowd
+    // cold/hot birds hurry, then slow in the crowd; so do the walkers spreading out after the curtain lifts
+    const hurry = !arrived[i] && dT > 1 && (th !== 0 || (S.spreadT > 0 && a === ACT.WANDER)) ? 1.6 : 1;
     const maxSp = base * si * hurry;
     if (!arrived[i]) {
       if (dT < arriveR) arrived[i] = 1;

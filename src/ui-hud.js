@@ -1,5 +1,6 @@
 // HUD: farm clock card, gauge strip (measured values only) and time controls. Owner: systems/UI agent.
 import { FAN_COUNT, TIME, WEATHER } from './config.js';
+import { MAX_DAY } from './sim.js';
 import { h, button, setText, setAttr, fmt1, fmt0 } from './ui-dom.js';
 import { ICONS, weatherIcon } from './ui-icons.js';
 
@@ -55,14 +56,18 @@ export function createHud(parent, env) {
   });
   const skipBtn = button({ class: 'btn', title: 'Move the farm clock on by one hour', 'aria-label': 'Skip 1 hour' });
   skipBtn.innerHTML = `${ICONS.skip}<span>Skip 1 hour</span>`;
-  skipBtn.addEventListener('click', () => { env.skipHours(1); refresh(); });
+  skipBtn.addEventListener('click', () => { if (!passesLastDay(1)) env.skipHours(1); refresh(); });
   const morningBtn = button({ class: 'btn', title: 'Jump to 06:00 tomorrow morning', 'aria-label': 'Next morning (06:00)' });
   morningBtn.innerHTML = `${ICONS.sunrise}<span>Next morning (06:00)</span>`;
   morningBtn.addEventListener('click', () => {
-    const hrs = ((TIME.sunrise - env.hour + 24) % 24) || 24;
+    let hrs = (TIME.sunrise - env.hour + 24) % 24;
+    if (hrs < 1 / 60) hrs += 24; // already 06:00: go to tomorrow's
+    if (passesLastDay(hrs)) return;
     env.skipHours(hrs);
     refresh();
   });
+  // The flock ends on day MAX_DAY: no jump may run the clock past its last midnight.
+  const passesLastDay = (hrs) => env.dayNumber >= MAX_DAY && env.hour + hrs >= 24 - 1e-6;
   const timebar = h('section', { class: 'card timebar', 'aria-label': 'Time controls' },
     playBtn, h('div', { class: 'seg', role: 'group', 'aria-label': 'Clock speed' }, speedBtns),
     h('div', { class: 'timebar-sep', 'aria-hidden': 'true' }), skipBtn, morningBtn);
@@ -106,7 +111,16 @@ export function createHud(parent, env) {
     setText(burnerText, env.heatersOn ? 'On' : 'Off');
     burner.el.classList.toggle('is-on', env.heatersOn);
 
-    // time controls
+    // time controls: at the end of the flock the jumps stop
+    const endMorning = passesLastDay(((TIME.sunrise - env.hour + 24) % 24) || 24), endSkip = passesLastDay(1);
+    if (morningBtn.disabled !== endMorning) {
+      morningBtn.disabled = endMorning;
+      setAttr(morningBtn, 'title', endMorning ? `End of the flock (day ${MAX_DAY})` : 'Jump to 06:00 tomorrow morning');
+    }
+    if (skipBtn.disabled !== endSkip) {
+      skipBtn.disabled = endSkip;
+      setAttr(skipBtn, 'title', endSkip ? `End of the flock (day ${MAX_DAY})` : 'Move the farm clock on by one hour');
+    }
     if (env.paused !== lastPaused) {
       lastPaused = env.paused;
       playBtn.innerHTML = env.paused ? ICONS.play : ICONS.pause;

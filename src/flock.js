@@ -30,7 +30,7 @@ import { COLORS, FLOCK_COUNT, HEATERS, HOUSE_BOUNDS, weightAt } from './config.j
 import { PART } from './flock-geometry.js';
 import { createFlockRender } from './flock-render.js';
 import { createBirdMaterials, createBirdUniforms, setMorphUniforms } from './flock-shader.js';
-import { createState, placeFlock, usableBounds } from './flock-state.js';
+import { createState, makeHuddleSites, placeFlock, usableBounds } from './flock-state.js';
 import { createBirdGrid, createComfortField } from './flock-field.js';
 import { thinkBird } from './flock-think.js';
 import { personalSpace, steerAll } from './flock-steer.js';
@@ -71,8 +71,16 @@ export function createFlock(ctx, { house } = {}) {
     const day = env.day, curtain = !!env.broodCurtain;
     if (!force && Math.abs(day - S.day) < 0.02 && curtain === S.curtain) return;
     const prevDay = S.day, prevCurtain = S.curtain;
-    const reset = force || (curtain && !prevCurtain) || day < prevDay - 1 || day > prevDay + 3.5;
+    // The curtain lifting during a time jump (Next morning, Skip, the test tools) re-places the flock
+    // over the whole house at once; lifting while the clock runs starts a spreading phase instead.
+    const lifted = !curtain && prevCurtain && S.day >= 0;
+    const reset = force || (curtain && !prevCurtain) || day < prevDay - 1 || day > prevDay + 3.5 || (lifted && day > prevDay + 0.04);
     S.day = day; S.curtain = curtain; S.bounds = usableBounds(curtain);
+    if (!S.sites || curtain !== prevCurtain || force) { S.sites = makeHuddleSites(S.bounds); S.site.fill(-1); }
+    if (lifted && !reset) {
+      S.spreadT = 80;
+      for (let i = 0; i < n; i++) S.actT[i] = Math.min(S.actT[i], S.rand() * 4);
+    }
 
     S.L = 0.6 * Math.cbrt(weightAt(day) / 2850);  // ~0.17 m on day 1, 0.6 m at day 42
     const growth = Math.min(1, Math.max(0, (S.L - 0.15) / 0.45));
@@ -108,6 +116,8 @@ export function createFlock(ctx, { house } = {}) {
     S.huddleR = 0.4 + 5 * S.L; // a cold bird blocked this close to its warm spot settles there
     // radius of one brooder's share of the flock packed at huddle spacing: targets scatter over it
     S.huddleSpread = 0.9 * Math.sqrt(((n / HEATERS.length) * 0.866 * S.rHuddle * S.rHuddle) / Math.PI);
+    // radius of one huddle site's share of the flock (cold, no brooder running)
+    S.siteR = 0.95 * Math.sqrt(((n / (S.sites.length / 2)) * 0.866 * S.rHuddle * S.rHuddle) / Math.PI);
     S.maxR = 1.15 * Math.max(S.rHot, S.rRight);
 
     if (reset) {
@@ -116,7 +126,7 @@ export function createFlock(ctx, { house } = {}) {
     }
   }
 
-  const fctx = { farmerOn: false, wasOn: false, fx: 0, fz: 0, vx: 0, vz: 0, farmerR: 1.6, field, grid, anyTemp: false };
+  const fctx = { farmerOn: false, wasOn: false, fx: 0, fz: 0, vx: 0, vz: 0, farmerR: 1.6, field, grid, anyTemp: false, padPull: 0 };
   let built = false;
 
   function update(dt, env, farmerPos) {
@@ -130,6 +140,7 @@ export function createFlock(ctx, { house } = {}) {
     }
     if (dt > 0) {
       S.time += dt;
+      if (S.spreadT > 0) S.spreadT -= dt;
       const hb = HOUSE_BOUNDS;
       fctx.farmerOn = !api.debugIgnoreFarmer && !!farmerPos && farmerPos.x > hb.xMin - 0.3 && farmerPos.x < hb.xMax + 0.3 &&
         farmerPos.z > hb.zMin - 0.3 && farmerPos.z < hb.zMax + 0.3;

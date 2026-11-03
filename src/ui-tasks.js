@@ -5,8 +5,14 @@ import { TASKS, TASKS_DONE_LINE } from './content.js';
 import { h, setText, uniqueId, reducedMotion } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 
-const WATCH_RADIUS = 4;     // metres from a brooder
-const WATCH_SECONDS = 5;    // real seconds
+// Job 4 counts while the farmer stands within WATCH_RADIUS of a brooder with no panel open (the
+// two boards are more than 2 m from the nearest brooder, so reading them does not count). It needs
+// WATCH_SECONDS, and the house within WARM_BAND of the setpoint so the chicks have really moved;
+// after WATCH_MAX seconds of watching it counts anyway.
+const WATCH_RADIUS = 2.0;   // metres from a brooder
+const WATCH_SECONDS = 8;    // real seconds
+const WATCH_MAX = 25;       // real seconds
+const WARM_BAND = 1.0;      // °C
 
 function cssColor(name, fallback) {
   try {
@@ -57,6 +63,7 @@ export function createTasks(parent, ctx, { player, root, avoid }) {
       if (current) it.li.setAttribute('aria-current', 'step'); else it.li.removeAttribute('aria-current');
       it.mark.innerHTML = done ? ICONS.check : String(it.n);
       setText(it.state, done ? 'Done: ' : current ? 'Now: ' : 'Later: ');
+      it.li.classList.toggle('is-later', i > index + 1);
       it.where.hidden = !current;
       it.progress.hidden = !(current && i === 3);
     });
@@ -72,6 +79,8 @@ export function createTasks(parent, ctx, { player, root, avoid }) {
     li.classList.remove('just-done');
     void li.offsetWidth; // restart the flash
     li.classList.add('just-done');
+    clearTimeout(li.__doneTimer);
+    li.__doneTimer = setTimeout(() => li.classList.remove('just-done'), 2400); // then it folds into the count
     live.textContent = index < TASKS.length ? `Done: ${done.title}. Next: ${TASKS[index].title}.` : `Done: ${done.title}. ${TASKS_DONE_LINE}`;
     render();
   }
@@ -125,9 +134,12 @@ export function createTasks(parent, ctx, { player, root, avoid }) {
     else if (index === 1 && (flags.sign || openId === 'sign-brooder')) complete();
     else if (index === 2 && flags.setpoint) complete();
     else if (index === 3) {
-      if (nearestHeater(p).dist <= WATCH_RADIUS) watched += dt;
-      items[3].bar.style.transform = `scaleX(${Math.min(1, watched / WATCH_SECONDS).toFixed(3)})`;
-      if (watched >= WATCH_SECONDS) complete();
+      if (!openId && nearestHeater(p).dist <= WATCH_RADIUS) watched += dt;
+      const env = ctx.env;
+      const warm = !env || Math.abs(env.houseTemp - env.heaterSetpoint) <= WARM_BAND;
+      const need = warm ? WATCH_SECONDS : WATCH_MAX;
+      items[3].bar.style.transform = `scaleX(${Math.min(1, watched / need).toFixed(3)})`;
+      if (watched >= need) complete();
     }
 
     marker.visible = index < TASKS.length;

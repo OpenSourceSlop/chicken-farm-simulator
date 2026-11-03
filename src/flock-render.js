@@ -33,7 +33,9 @@ export function createFlockRender(scene, camera, n, material, depth) {
     mesh.name = lod === 0 ? 'flock-near' : 'flock-far';
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.customDepthMaterial = depth;
-    mesh.castShadow = true;
+    // The house's shadow roof keeps the litter in shade at every hour, so the birds' own sun shadows
+    // would never show: no shadow pass for the flock (it was 1800 birds drawn a second time).
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     // one fixed sphere around the house: never culled as a whole while the house is in view
     mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.5, 0), 26);

@@ -3,9 +3,13 @@
 import { DRINKER_LINES_Z, FEEDER_LINES_Z, FEEDER_PAN_SPACING, FEEDER_PAN_X, HEATERS, NIPPLE_SPACING, NIPPLE_X } from './config.js';
 import { ACT, COLD, HOT, PAN_RADIUS, RIGHT, releaseRes } from './flock-state.js';
 
-// Hysteresis (°C from target): enter cold below -1.5, leave above -1.0; enter hot above +1.5,
-// leave below +1.1 (the floor near a running brooder is rarely below +1, so a wider band traps birds).
-const ENTER = 1.5, LEAVE_COLD = 1.0, LEAVE_HOT = 1.1;
+// Hysteresis (°C from target): enter cold below -1.5, leave above -1.0. Hot is graded: each bird
+// starts panting at its own S.hotTh (1.5 .. 4.5 °C above target) and stops 0.4 °C below that, so
+// +2 °C sets about one bird in six panting and +4.5 °C the whole flock.
+const ENTER = 1.5, LEAVE_COLD = 1.0, HOT_BAND = 0.4;
+// Below this brooder output there is no warm spot worth walking to: cold birds pile up on each
+// other at huddle sites instead (shared body heat).
+const RADIANT_MIN = 0.15;
 
 function clampX(S, x) { const b = S.bounds; return x < b.xMin ? b.xMin : x > b.xMax ? b.xMax : x; }
 function clampZ(S, z) { const b = S.bounds; return z < b.zMin ? b.zMin : z > b.zMax ? b.zMax : z; }
@@ -58,11 +62,39 @@ function tryWarm(S, field, ctx, cx, cz) {
   if (s > bs) { bs = s; bx = cx; bz = cz; }
 }
 
+// Cold with the brooders off: go to the nearest huddle site (S.sites) that the farmer is not
+// standing on, aim at a point scattered over the site's share of the flock, sit packed there.
+function huddleSite(S, i, ctx, fresh) {
+  const { rand, sites } = S;
+  const x = S.px[i], z = S.pz[i];
+  if (!fresh && S.site[i] >= 0) {
+    if (S.arrived[i]) return; // settled in the pile: stay
+    const k = S.site[i], dx = S.tx[i] - sites[k * 2], dz = S.tz[i] - sites[k * 2 + 1];
+    if (dx * dx + dz * dz < (S.siteR + 0.3) ** 2 && !farmerPenalty(ctx, sites[k * 2], sites[k * 2 + 1])) return; // on the way
+  }
+  let best = -1, bd = 1e9;
+  for (let k = 0; k < sites.length; k += 2) {
+    const dx = sites[k] - x, dz = sites[k + 1] - z;
+    const d = dx * dx + dz * dz + farmerPenalty(ctx, sites[k], sites[k + 1]) * 4;
+    if (d < bd) { bd = d; best = k >> 1; }
+  }
+  S.site[i] = best;
+  const a = rand() * 6.283, r = Math.sqrt(rand()) * S.siteR;
+  setTarget(S, i, sites[best * 2] + Math.cos(a) * r, sites[best * 2 + 1] + Math.sin(a) * r);
+}
+
 // Cold: the warmest reachable floor (where |comfort| is smallest), usually right under a brooder.
 // fresh = the bird just turned cold (any old target is meaningless).
 function warmSpot(S, i, field, env, ctx, fresh) {
   const { rand } = S;
   const x = S.px[i], z = S.pz[i];
+  if (env.heaterLevel <= RADIANT_MIN && S.sites) {
+    // a bird already settled in a pile at a brooder that just went out stays in that pile
+    if (!fresh && S.arrived[i] && S.site[i] < 0) return;
+    huddleSite(S, i, ctx, fresh);
+    return;
+  }
+  S.site[i] = -1;
   const settled = !fresh && S.arrived[i];
   // bias to stay put, strong once settled in the huddle (no endless pushing to the middle)
   bx = x; bz = z; bs = warmScore(field, ctx, ctx.grid, x, z) + (settled ? 1.0 : 0.15);
@@ -94,12 +126,14 @@ function warmSpot(S, i, field, env, ctx, fresh) {
 
 // Lower is better: comfort, keep clear of the brooders, prefer the side walls, tolerate a fairly
 // dense band along the walls but not a pile-up.
+// With the tunnel fans running, hot birds also drift toward the pad end (west, the cooler inlet air):
+// ctx.padPull °C-equivalents per metre east.
 function coolScore(S, field, ctx, grid, cx, cz) {
   const h = HEATERS[nearestHeater(cx, cz)];
   const hd = Math.hypot(cx - h.x, cz - h.z);
   const wall = Math.min(cz - S.bounds.zMin, S.bounds.zMax - cz);
   return field.sample(cx, cz) + 1.6 * Math.max(0, 1 - hd / 3.2) + 0.35 * Math.min(wall, 3) +
-    1.0 * Math.max(0, grid.crowd(cx, cz) - 2.2) + farmerPenalty(ctx, cx, cz);
+    1.0 * Math.max(0, grid.crowd(cx, cz) - 2.2) + farmerPenalty(ctx, cx, cz) + ctx.padPull * (cx - S.bounds.xMin);
 }
 
 function tryCool(S, field, ctx, grid, cx, cz) {
@@ -113,10 +147,14 @@ function coolSpot(S, i, field, env, ctx, grid) {
   const { rand } = S;
   const b = S.bounds;
   const x = S.px[i], z = S.pz[i];
+  ctx.padPull = env.fansOn > 0 ? 0.1 * (env.fansOn / 6) : 0;
   bx = x; bz = z; bs = coolScore(S, field, ctx, grid, x, z) - 0.2;
   const wallZ = z > 0 ? b.zMax - 0.15 - rand() * 1.2 : b.zMin + 0.15 + rand() * 1.2;
   tryCool(S, field, ctx, grid, x + (rand() - 0.5) * 3, wallZ);
-  if (env.fansOn > 0) tryCool(S, field, ctx, grid, x - 2 - rand() * 4, z + (rand() - 0.5) * 2);
+  if (env.fansOn > 0) {
+    tryCool(S, field, ctx, grid, x - 2 - rand() * 4, z + (rand() - 0.5) * 2);
+    tryCool(S, field, ctx, grid, x - 4 - rand() * 8, wallZ);
+  }
   for (let k = 0; k < 3; k++) {
     const a = rand() * 6.283, r = 0.6 + rand() * 3;
     tryCool(S, field, ctx, grid, x + Math.cos(a) * r, z + Math.sin(a) * r);
@@ -132,7 +170,7 @@ function wanderSpot(S, i, field, ctx, grid, reach) {
   // If this part of the house is fuller than the rest, also try far spots toward the emptier end:
   // this is how the flock fills the whole house once the brooding curtain goes
   const here = grid.slice(x), east = grid.slice(x + 7), west = grid.slice(x - 7);
-  const far = here > 1.1 && Math.min(east, west) < here - 0.15 ? 2 : 0;
+  const far = here > 1.1 && Math.min(east, west) < here - 0.15 ? (S.spreadT > 0 ? 3 : 2) : 0;
   const dir = east < west ? 1 : -1;
   for (let k = 0; k < 4 + far; k++) {
     let cx, cz;
@@ -231,6 +269,12 @@ function startActivity(S, i, act, dur) {
 function chooseRight(S, i, field, env, ctx, grid) {
   const { rand } = S;
   if (!S.lightsOn) { startActivity(S, i, ACT.REST, 20 + rand() * 30); setTarget(S, i, S.px[i], S.pz[i]); return; }
+  if (S.spreadT > 0 && grid.slice(S.px[i]) > 1.05 && rand() < 0.75) {
+    // the curtain just lifted: the crowded old brooding end walks out into the new floor
+    startActivity(S, i, ACT.WANDER, 10);
+    wanderSpot(S, i, field, ctx, grid, 3 + rand() * 4);
+    return;
+  }
   const age = Math.min(1, Math.max(0, (S.day - 1) / 34));
   // weights: eat, drink, wander, idle, rest
   const explore = Math.max(0, grid.slice(S.px[i]) - 1.1); // a fuller part of the house: roam more
@@ -260,10 +304,11 @@ export function thinkBird(S, i, field, env, ctx, grid) {
   const tt = 0.85 * S.tIdx[i] + 0.15 * S.tAmb[i]; // hot index
   const prev = S.therm[i];
   let th = prev;
-  if (prev === COLD) { if (tc > -LEAVE_COLD) th = tt > ENTER ? HOT : RIGHT; }
-  else if (prev === HOT) { if (tt < LEAVE_HOT) th = tc < -ENTER ? COLD : RIGHT; }
+  const hotIn = S.hotTh[i];
+  if (prev === COLD) { if (tc > -LEAVE_COLD) th = tt > hotIn ? HOT : RIGHT; }
+  else if (prev === HOT) { if (tt < hotIn - HOT_BAND) th = tc < -ENTER ? COLD : RIGHT; }
   else if (tc < -ENTER) th = COLD;
-  else if (tt > ENTER) th = HOT;
+  else if (tt > hotIn) th = HOT;
   S.therm[i] = th;
   const changed = th !== prev;
   const a = S.act[i];

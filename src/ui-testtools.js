@@ -17,7 +17,7 @@ export function createTestTools(env, { flock, onReset }) {
 
   // flock age
   const ageId = uniqueId('t-age');
-  const age = range(ageId, 0, 42, 1);
+  const age = range(ageId, 1, 42, 1); // day 1 = the chicks' arrival day
   const ageOut = h('output', { for: ageId });
   age.addEventListener('input', () => env.setDay(Number(age.value)));
 

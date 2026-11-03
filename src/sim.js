@@ -5,7 +5,12 @@ import {
 } from './config.js';
 
 const HOUR = 3600;
-const MAX_DAY = 42;
+export const MAX_DAY = 42;  // the last day of the flock; after it the clock keeps day 42
+// Modulating brooders: the burner output follows the house air across a 1.5 °C band (full heat
+// 1.2 °C below the setpoint, none 0.3 °C above it, so the house settles close to the setpoint).
+// A steady output instead of an on/off relay that would flip every few real seconds at game speed.
+const HEAT_BAND = 1.5, HEAT_OFF_ABOVE = 0.3;
+const HEAT_RATE = 6.5;      // °C per hour from 8 brooders at full output
 
 // The farm clock keeps `day` and `hour` in step: the whole number of `day` is the calendar day of
 // the flock (it changes at midnight) and the fraction is the time of day, so day = N + hour / 24.
@@ -25,8 +30,9 @@ function initialState() {
     houseTemp: 27,
     houseRH: 60,
     heaterSetpoint: 27,
-    heatersOn: false,
-    heaterLevel: 0,                // 0..1 smoothed, for glow visuals
+    heatersOn: false,              // burners lit (output above 2 %)
+    heaterDemand: 0,               // 0..1 burner output the thermostat asks for
+    heaterLevel: 0,                // 0..1 actual output (follows the demand within a few game minutes)
     fansOn: 0,                     // 0..FAN_COUNT tunnel fans running
     padOn: false,
     airSpeed: 0,                   // m/s at bird level
@@ -91,15 +97,23 @@ export function createSim() {
     setWeather(w) { if (WEATHER[w]) { this.weather = w; derive(this); emit('weather'); } },
     setHeaterSetpoint(t) {
       this.heaterSetpoint = Math.max(15, Math.min(40, Math.round(t * 2) / 2));
-      thermostat(this); // the burner relay answers at once, even while the clock is paused
+      thermostat(this); // the burner valve answers at once, even while the clock is paused
       emit('controls');
     },
+    // Test hook: jump the burner output straight to what the thermostat asks for now (setState
+    // uses it after changing the setpoint or the house temperature with the clock paused).
+    settleHeaters() { thermostat(this); this.heaterLevel = this.heaterDemand; },
     setFans(n) { this.fansOn = Math.max(0, Math.min(FAN_COUNT, Math.round(n))); derive(this); emit('controls'); },
     setPad(on) { this.padOn = !!on; emit('controls'); },
     forceHouseTemp(t) { this.forcedHouseTemp = t == null ? null : t; if (t != null) this.houseTemp = t; derive(this); emit('controls'); },
     skipHours(h) {
       const d0 = dayNumberOf(this);
       stepGame(this, h * HOUR, true);
+      // land on a whole minute: float drift (05:59.99999) must not make the next jump to 06:00 a no-op
+      let n = dayNumberOf(this), hr = Math.round(this.hour * 60) / 60;
+      if (hr >= 24) { hr -= 24; n = Math.min(MAX_DAY, n + 1); }
+      this.hour = hr; this.day = n + hr / 24;
+      derive(this);
       emit('time');
       if (dayNumberOf(this) !== d0) emit('day');
     },
@@ -151,10 +165,11 @@ function derive(env) {
   env.lightsOn = !(env.hour >= 2 && env.hour < 3);
 }
 
-// Brooder thermostat with 0.3 °C hysteresis, measured on the house air.
+// Brooder thermostat, measured on the house air: proportional output across HEAT_BAND.
 function thermostat(env) {
-  if (env.houseTemp < env.heaterSetpoint - 0.3) env.heatersOn = true;
-  else if (env.houseTemp > env.heaterSetpoint + 0.3) env.heatersOn = false;
+  const d = (env.heaterSetpoint + HEAT_OFF_ABOVE - env.houseTemp) / HEAT_BAND;
+  env.heaterDemand = d < 0 ? 0 : d > 1 ? 1 : d;
+  env.heatersOn = env.heaterDemand > 0.02;
 }
 
 // Advance the farm by `gs` game seconds in steps of at most one game minute.
@@ -171,8 +186,8 @@ function stepGame(env, gs, fast) {
     derive(env);
 
     thermostat(env);
-    const k = 1 - Math.exp(-hrs * 12); // glow follows the burner within a few game minutes
-    env.heaterLevel += ((env.heatersOn ? 1 : 0) - env.heaterLevel) * (fast ? 1 : k);
+    const k = 1 - Math.exp(-hrs * 12); // output (and glow) follows the valve within a few game minutes
+    env.heaterLevel += (env.heaterDemand - env.heaterLevel) * (fast ? 1 : k);
 
     if (env.forcedHouseTemp != null) {
       env.houseTemp = env.forcedHouseTemp;
@@ -181,7 +196,7 @@ function stepGame(env, gs, fast) {
       const padDrop = env.padOn && env.fansOn > 0 ? Math.min(9, (100 - env.outsideRH) / 5) * 0.85 : 0;
       const inlet = env.outsideTemp - padDrop;
       const birdHeat = 0.2 + 1.3 * (env.bodyWeight / 2850);    // °C per hour from the flock
-      const heat = env.heatersOn ? 6.5 : 0;                      // °C per hour from 8 brooders
+      const heat = HEAT_RATE * env.heaterLevel;                  // °C per hour from 8 brooders
       const leak = 0.25 + env.fansOn * 0.9;                      // air exchanges toward inlet temp
       const dT = heat + birdHeat - leak * (env.houseTemp - inlet);
       env.houseTemp += dT * hrs;

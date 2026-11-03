@@ -29,7 +29,8 @@ export function createComfortField() {
     refresh(env, dt) {
       age += dt;
       const s0 = env.houseTemp, s1 = env.heaterLevel, s2 = env.targetTemp, s3 = env.windChill, s4 = env.fansOn;
-      const big = Math.abs(s0 - sig[0]) > 0.5 || Math.abs(s1 - sig[1]) > 0.15 || Math.abs(s2 - sig[2]) > 0.5 ||
+      // (the brooder output drifts slowly with the modulating thermostat; only a real jump counts)
+      const big = Math.abs(s0 - sig[0]) > 0.5 || Math.abs(s1 - sig[1]) > 0.25 || Math.abs(s2 - sig[2]) > 0.5 ||
         Math.abs(s3 - sig[3]) > 0.5 || s4 !== sig[4] || Number.isNaN(sig[0]);
       const small = s0 !== sig[0] || s1 !== sig[1] || s2 !== sig[2] || s3 !== sig[3];
       if (!big && !(small && age > 0.25)) return 0;

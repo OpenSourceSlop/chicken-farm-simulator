@@ -12,9 +12,14 @@ import { buildControllerPanel } from './ui-controller.js';
 import { createTestTools } from './ui-testtools.js';
 import { createHelp, createNarrowNotice, createPrompt } from './ui-help.js';
 
-// Keys the farmer listens to. While a panel is open (or a slider has focus) they stop here.
+// Keys the farmer listens to, by physical position (KeyboardEvent.code) like player-input.js, so
+// they work with a Thai (Kedmanee) or any other layout; e.key is the fallback. While a panel is open
+// (or a slider has focus) they stop here.
+const MOVE_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
 const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift']);
 const ARROW_KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
+const isKeyE = (e, k) => e.code === 'KeyE' || k === 'e';
+const isKeyHelp = (e, k) => e.code === 'KeyH' || k === 'h' || k === '?' || (e.code === 'Slash' && e.shiftKey);
 
 export function createUI(ctx, { player, flock, interactables = [] }) {
   const { env, canvas } = ctx;
@@ -59,7 +64,8 @@ export function createUI(ctx, { player, flock, interactables = [] }) {
   const panels = createPanelHost(root, {
     player,
     canvas,
-    onOpen: (id) => { tasks.notify(`open:${id}`); prompt.show(null); },
+    onOpen: (id) => { tasks.notify(`open:${id}`); prompt.show(null); root.classList.add('has-panel'); },
+    onClose: () => root.classList.remove('has-panel'),
   });
   const closePanel = () => panels.close();
   for (const id of Object.keys(SIGNS)) panels.register(id, () => buildSignPanel(id, env, closePanel));
@@ -67,11 +73,14 @@ export function createUI(ctx, { player, flock, interactables = [] }) {
 
   const narrow = createNarrowNotice(root);
 
+  // Nearest board within reach on the farmer's side of the wall: the indoor boards (inside: true)
+  // cannot be used from outside the north wall, and outdoor ones not from inside the house.
   function nearestInteractable() {
     const p = player.position;
     let best = null, bestD = Infinity;
     for (const it of interactables) {
       if (!panels.has(it.id)) continue;
+      if (it.inside != null && it.inside !== !!player.isInside) continue;
       const d = Math.hypot(it.x - p.x, it.z - p.z);
       if (d <= it.radius && d < bestD) { bestD = d; best = it; }
     }
@@ -91,21 +100,21 @@ export function createUI(ctx, { player, flock, interactables = [] }) {
     const k = (e.key || '').toLowerCase();
     if (narrow.open) return;
     if (panels.openId) {
-      if (MOVE_KEYS.has(k)) e.stopImmediatePropagation(); // typed WASD must not walk the farmer
+      if (MOVE_CODES.has(e.code) || MOVE_KEYS.has(k)) e.stopImmediatePropagation(); // typed WASD must not walk the farmer
       if (k === 'escape') { e.preventDefault(); panels.close(); }
-      else if (k === 'e' && !e.repeat && !typingInControl(e.target)) { e.preventDefault(); panels.close(); }
+      else if (isKeyE(e, k) && !e.repeat && !typingInControl(e.target)) { e.preventDefault(); panels.close(); }
       return;
     }
-    if (inFormControl(e.target) && ARROW_KEYS.has(k)) {
+    if (inFormControl(e.target) && (ARROW_KEYS.has(k) || (e.code || '').startsWith('Arrow'))) {
       e.stopImmediatePropagation(); // arrows move the slider or select, not the camera
       return;
     }
     if (typingInControl(e.target)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (k === 'e' && !e.repeat) {
+    if (isKeyE(e, k) && !e.repeat) {
       const target = nearestInteractable();
       if (target) { e.preventDefault(); panels.open(target.id); }
-    } else if ((k === 'h' || k === '?') && !e.repeat) {
+    } else if (isKeyHelp(e, k) && !e.repeat) {
       helpAuto = false;
       help.toggle();
     } else if (k === 'escape' && help.visible) {
