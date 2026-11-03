@@ -518,6 +518,37 @@ The constants live in `src/farm-*.js` (`FLOCK`, `WATER`, `FEED`, `LITTER`) and `
 - **Deaths** (`FLOCK`): cold 0.04 %/h × (−4 − e)² (spec 0.02); "other" × 2.0 when q < 1 (spec 1.5).
 All §6.10 profiles pass with these values (`node scripts/test-sim.mjs`).
 
+**Review round 2 (the mistakes must show in the records).** The code wins over §6.2–§6.7 here too:
+- **Box time** runs while chicks wait: `stepBoxes` applies max(0.01 %/h, 0.05 %/h × (h − 3)) per hour
+  to the chicks still in each stack; they are counted dead at once (`deadTotal`, `boxDead`) and shown
+  at the tip ("n dead in these boxes"). Chicks never taken out die in the boxes (the level fails on
+  deaths at the day 0 or day 1 close).
+- **Late starters** get a feed-reach term: L += 0.4 × (1 − mean pan reach over the first 24 h), reach =
+  pan fill × rim factor (`feed.reach`, no flood factor). Pans left winched up: crop fill ≈ 57 %.
+- **Starvation**: hours with f_F < 0.3 (or the pans giving < 30 % of what the birds want) count up
+  (`flock.hungryH`, down 2× as fast when fed); after 48 h the flock dies at up to 0.4 %/h (ramp 24 h),
+  cause 'starveout', late starters first.
+- **Temperature per chick group** (`farm-comfort` `eG`, one group per brooder, weighted by floor): the
+  cold side of f_T, the cold gain penalty, cold deaths and the first-24 h cold hours are per group;
+  CV growth adds 0.08 × the spread (sd) of the group factors. Comfort minutes = share of the chicks
+  whose group e is within −1.5..+2 °C (`groupShare`). The air round an out brooder: 6 °C × output
+  (`sim.js OUT_AIR`, was 3).
+- **Litter on the chicks**: a cell over 35 % moisture feels 0.1 °C colder per % over 30; litter under
+  5 cm feels 0.4 °C colder per missing cm, fading out by age 10. Caked floor adds 0.03 × caked share to
+  the CV growth per day; f_air = 1 − 0.015 × (NH3 − 12 ppm), ≥ 0.5, and adds 0.05 × (1 − f_air).
+- **Over-flow**: spill = drunk × (0.02 + 0.7 × (f / need − 1.25)⁺ + 0.02 per cm too low); on days 0–3
+  a nipple jetting more than 1.5 × need wets the chicks: a_i × clamp(1 − 0.5 × (f / need − 1.5), 0.5, 1).
+- **Warm afternoon**: outside +7 °C (≈ 36 °C at 15:00); `pantShare` counts cells over target + 2 when
+  e > 1.5 (or half of them when the mean is over 1.5). The ideal profile runs two tunnel fans
+  12:00–17:00 (one fan with the hotter air leaves the chicks panting).
+- New profiles and targets in `PROFILE_TARGETS`: `pressure20` (≥ 0.12 under the ideal ratio, litter
+  under the lines 35–70 % on day 6), `pansUp` (crop fill < 85 %, deaths ≥ 2 %, fails), `neverPlaced`
+  (deaths ≥ 2 %, fails, no low-mortality / steady-heat / crop / weight points), `litter2cm` (comfort
+  share ≥ 5 points and uniformity ≥ 5 points under the ideal, no steady-heat), `warmNoFan` (house
+  2–6 °C over target and ≥ 20 % panting at 15:00 day 6); `noMinVent` now also ≥ 0.15 under the ideal
+  ratio and ≥ 3 points of uniformity; `brooderNeverRelit` ≥ 3 points of uniformity, ≥ 0.02 ratio and
+  4 points of comfort share under the ideal, no steady-heat. Seeds 1–3 pass.
+
 Also (contract tests, written): action payload shape, award deltas, farm owns `deadOnFloor`, flock
 age 7.0 at 08:00 day 7, save info day from `env.day`. Package checks: sandbox unchanged (with
 `farm.mode === 'off'` the cold-hot metrics match Phase 1 within ±0.02); `farm.step` ≤ 0.3 ms in node, a
@@ -543,7 +574,7 @@ for the cause.
 | `blocked-filter` | day 3 10:00 | main filter at the water supply: every line's flow × 0.5 (`filterFactor`); intake × 0.72 | `water.flowtest` result < 0.8 × (day + 20) while active; `water.filter` with out < 0.8 × in | water supply panel: *Clean the filter* (a 5-game-minute bar in the panel, then `water.clearFilter` → `{ fixed: true }`) | drop-spotted if found by 12:00 day 4 |
 | `leaking-nipple` | day 4 10:00 | line 3 nipple at x −9.15 drips 0.6 L/h into its cell | zone r 1.5 m, dwell 2 s, `minMoisture` 35 (props `EV.NEAR`); `litter.squeeze` within 2 m reading ≥ 35 % | E at the drip (props `leak`): *Replace the nipple* → `water.fixLeak`; then a husk sack on the patch → `litter.patch` (cell to 15 %, caking gone) | leak-fixed if replaced before the cell caked |
 | `low-silo` | from day 4 06:00 (no event: the silo runs down from 1,100 kg) | — | `feed.silo` reading < 2 × today's need (6,000 × `feedStdGAt`) | office phone: *Order feed* kg → `feed.order` | — |
-| `warm-afternoon` | day 6 11:00 → 17:00 | outside +4 °C (≈ 33 °C at 15:00) | `controller.read` with house ≥ target + 2; a listen stop while > 20 % of birds pant | a tunnel fan or more timer; done when house ≤ target + 1.5 for 30 min | — |
+| `warm-afternoon` | day 6 11:00 → 17:00 | outside +7 °C (≈ 36 °C at 15:00; review round 2, was +4) | `controller.read` with house ≥ target + 2; a listen stop while > 20 % of birds pant | tunnel fans, the timer or the cooling pad (`vent.fans` / `vent.timer` / `vent.pad` after the job opened) **and** the air the chicks feel (house − wind chill) ≤ target + 1.5 for 30 min; with no action the problem ends 'weather' and the job stays open | — |
 | `abnormal-deaths` | conditional | — | dead birds counted at the bin in one day > 0.3 % of placed | office phone: *Report to the company vet* (`phone.report`) | — |
 
 `farm.problemZones()` → `[{ problemId, x, z, r, dwellSec, minMoisture? }]`, only for active,
@@ -605,8 +636,9 @@ Milestones (`MILESTONES` in `src/skills.js`, rules there): **Brooding** (max 14)
 (floor ≥ 28 °C on ≥ 90 % at the first tip), chick-weight 1 (box weighed before the first tip),
 placed-fast 1 (last tip ≤ 90 game min after the truck), vent-checked 1 (≥ 5 readings in the vent
 window, 3 sectors), crop-fill 1 / 2 (true fill ≥ 85 % / ≥ 95 %), brooder-relit 1 (by 12:00 day 1),
-steady-heat 2 (e within −1.5..+2 °C for ≥ 85 % of the minutes, ages 0–7), day7-weight 1 / 3 (≥ 4.0 /
-≥ 4.5 ×), low-mortality 1 (≤ 1.0 %). **Water** (max 11) — flushed-on-time 2 (last line clear 6–18 h
+steady-heat 2 (the chicks' group e within −1.5..+2 °C for ≥ 95 % of the chick-minutes, ages 0–7;
+review round 2, was 85 % of the minutes of the flock e), day7-weight 1 / 3 (≥ 4.0 / ≥ 4.5 ×),
+low-mortality 1 (≤ 1.0 %, only for a week that was lived: chicks placed and flock age ≥ 7.0). **Water** (max 11) — flushed-on-time 2 (last line clear 6–18 h
 before the truck; the job window 16:00–02:00 lies inside it), nipples-day0 1 (within 2 cm of 11 cm
 at the first tip), flow-matched 2 (morning flows within 3 ml/min of day + 20 on ≥ 6 days), drop-
 spotted 2, leak-fixed 1, meter-daily 1, raised-with-flock 1 (within 3 cm of 17 cm at the weigh-in),
@@ -622,7 +654,11 @@ result screen; the Skill tree button gets a dot. No pop-up praise.
 ## 10. Level end and fail rules
 
 - The level ends when the **day 7 record is signed** after the weigh-in, or at day 8 06:00 by itself
-  (then the bird-scale weight is used and the result says "not weighed by hand").
+  (then the bird-scale weight is used and the result says "not weighed by hand"). That weight is the
+  automatic scale **at the weigh-in age** (08:00 day 7 = age 7.0, `farm.stats.scaleAtWeighInG`, mean ×
+  1.02), never the flock at the moment the level ends (review round 2).
+- After the end, *Keep walking the farm* runs the clock to 23:59 on day 7 and stops there (the farm
+  stops with it).
 - **Pass**: day 7 mean ≥ `LEVEL1.fail.weightRatioMin` (4.0) × chick weight **and** deaths + culls
   ≤ `LEVEL1.fail.mortalityMaxPct` (2.0 %) of chicks placed (true counts). Chick weight =
   `farm.stats.chickWeightMeasuredG` (box gross − box, ÷ 100, as measured), or the delivery note (true
@@ -657,6 +693,9 @@ from `env.day`.
 - **Measured at integration** (`scripts/p2-level1.json`, real play, just before the day 7 signing, the
   largest point of the week): 64.3 KB (records 34.0, level 18.1, farm 11.5, flock and props < 1);
   under 60 KB through day 6. localStorage holds megabytes, so this only matters as a budget.
+- **Review round 2**: the job log is saved as `[key, day]` (its results were never read): the day 7
+  save at 15:00 is 53.0 KB in node (records 25.8, level 15.0, farm 11.7). The env part carries
+  `houseRH`; a carried chick is never saved.
 
 ## 12. New 3D content
 
@@ -1015,3 +1054,39 @@ found from real symptoms and fixed). `node scripts/test-level.mjs` checks the sa
 | 18 | save contract | `level.saveBlob()` for autosave and hot reload; `info()` from `env.day` (fixed, tested); weather events owned by the farm, not saved |
 | 19 | feederRim in a three.js file; content-signs missing | `feederRimCmAt` in config; `content-signs.js` committed |
 | 20 | page text, tags, grep, two source tables | ARCHITECTURE.md and content.js say "guide name or general, no pages"; brooder rows tagged; gate line split; grep and `test-contracts.mjs` cover skills/records texts; `SOURCES = GUIDES` |
+
+## 19. Review round 2 (fixer) — where each finding is handled
+| # | Finding | Fix |
+| --- | --- | --- |
+| 1 | notebook settings read like a debug log | `ui-format.settingText` / `placeWords`; notebook label "Set"; places in words |
+| 2 | week table rows hundreds of px tall | notes in a full-width row under each day's numbers; house and light columns first |
+| 3 | drinker line out of the picture at 50 cm | line drawn at the top with "▲ line at 50 cm"; Shift steps winch / pans 5 cm |
+| 4, 27 | brooder sign source tags run into the value | own Source column, guide name, 11.5 px after a 14 px gap (CSS specificity fixed) |
+| 5 | no hand weighing gave a better result | `farm.stats.scaleAtWeighInG` (scale at age 7.0) in `computeResult`; test-level case |
+| 6 | pans out of reach / never placed left no trace | feed reach in L, starvation after 48 h, box hazard while waiting, low-mortality needs a lived week; profiles `pansUp`, `neverPlaced` |
+| 7 | over-pressure was the best strategy | spill 0.7 × over-flow, wet-chick access penalty days 0–3; profile `pressure20` |
+| 8 | a brooder out all week left no trace | per-group comfort, CV from the group spread, out-brooder air 6 °C × output, steady-heat 95 % of chick-minutes |
+| 9 | wet litter / no min vent did nothing | wet and thin litter chill, caked floor and bad air widen the CV, f_air from 12 ppm; profiles `litter2cm`, `noMinVent` targets |
+| 10 | day 6 warm afternoon never showed; job done by the weather | outside +7 °C; p-warm needs a fan / timer / pad action and the felt air near target; 'weather' fix; profile `warmNoFan` |
+| 11 | wet patch done with the sack anywhere | `litter.patch` → `{ onLeak }`; p-wet-patch matches it; the sack snaps to the patch |
+| 12 | missed jobs as ids on the wrong day | filed on their own day by title; "Not done: n jobs" with the list |
+| 13 | Replay kept the old run's UI | `ui.newRun()` from `level.start` / `resume` |
+| 14 | a chick in the hand in a save | never serialized; dropped on resume |
+| 15 | piles after a skip read as cold huddles | `flock.afterSkip(hours)` from `level.skip` |
+| 16 | hot reload lost the skill profile; result reappeared | `resume` loads the profile; snapshot only while the level runs |
+| 17 | drinker right column past the plate | one-column grid, wrapping button |
+| 18 | water supply cut at 960 × 600 | valves 2 × 2 and compact boxes under `max-height: 700px` |
+| 19 | HUD jumps with the rate label | fixed rate slot |
+| 20 | job card too long | later jobs one line per round, missed jobs folded, card ≤ 64 vh with a fade and "more" |
+| 21 | time-bar Next job hid the skip | it shows the card's label ("Skip to 10:13") |
+| 22 | later branches empty; shared badges | `LATER_UNLOCKS` shown dimmed; shield, sack and trend badges |
+| 23 | edge pointer under the E prompt | the prompt and captions are in the avoid list |
+| 24 | text and chart polish | Today header time, "6,000", F key chip, full-width graph with a 0–3 ratio axis |
+| 25 | fail at 3 % beside a book at 0.03 % | result splits bin / floor / boxes / culls; fail text names the birds not picked up |
+| 26 | raised-with-flock against a hidden 17 cm | drinker plate: "about 1 cm a day … about 17 cm on day 7" (general) |
+| 28 | gate dip beside the gateway | level spawn outside the gate, dip across the gateway |
+| 29 | keep walking looped day 7 | clock stops at 23:59 day 7 |
+| 30 | late goto dropped the prep; props missed tips | past-due prep played at once; props listeners gated on `farm.mode` |
+| 31 | humidity not saved | `houseRH` in the env save |
+| 32 | job log in the save | `[key, day]` tuples |
+| 33 | package checks that never fail | `p2-flock-events.json` on the real farm with `expect` steps; stub demos marked |

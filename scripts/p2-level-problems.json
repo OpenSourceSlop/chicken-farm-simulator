@@ -1,7 +1,7 @@
 [
   {"wait": 600},
   {"eval": "__game.stop(), window.__click = (t) => { const b = [...document.querySelectorAll('.panel:not([hidden]) button, .panel:not([hidden]) label')].find((x) => x.offsetParent !== null && x.textContent.trim().startsWith(t)); if (!b) return 'NOT FOUND ' + t; b.click(); return 'clicked ' + t; }, window.__p = () => __game.jobs().filter((j) => j.key.startsWith('p-')).map((j) => j.key + ':' + j.status).join(' ') || 'no problem jobs', window.__walk = (z) => { for (let x = -22.7; x <= 1.8; x += 1) __game.events.emit('farmer:cell', { x, z }); return z; }, 'helpers set'"},
-  {"eval": "__game.startLevel({ seed: 1 }), __game.level.debug.goto(1, 6.2), __game.farm.flock.placed = 6000, __game.farm.flock.inBoxes = 0, __game.farm.flock.alive = 5980, 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ': ' + __p()"},
+  {"eval": "__game.startLevel({ seed: 1 }), __game.level.debug.goto(1, 6.2, { auto: true }), __game.farm.flock.placed = 6000, __game.farm.flock.inBoxes = 0, __game.farm.flock.alive = 5980, 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ': ' + __p()"},
   {"eval": "__game.events.emit('action', { id: 'heat.relight', index: 5, result: { fixed: true } }), 'a relight before the symptom: ' + __p()"},
   {"eval": "__game.events.emit('farm:problem', { id: 'brooder-out', phase: 'symptom' }), 'brooder symptom: ' + __p() + '; current ' + __game.level.jobs.current().id"},
   {"state": {"farmer": {"x": -9.5, "z": 4.2, "yaw": 0}, "zoom": 15}},
@@ -39,7 +39,7 @@
 
   {"eval": "__game.level.debug.goto(6, 13.5), __game.events.emit('farm:problem', { id: 'warm-afternoon', phase: 'symptom' }), __game.env.forceHouseTemp(__game.env.targetTemp + 3), 'house above target: ' + __p()"},
   {"advance": 4},
-  {"eval": "__game.env.forceHouseTemp(__game.env.targetTemp + 0.5), 'fans on, house down'"},
+  {"eval": "__game.env.setFans(1), __game.events.emit('action', { id: 'vent.fans', n: 1 }), __game.env.forceHouseTemp(__game.env.targetTemp + 0.5), 'a tunnel fan on (vent.fans), house down'"},
   {"advance": 16},
   {"eval": "__game.env.forceHouseTemp(null), 'warm afternoon: ' + __game.jobs().find((j) => j.key.startsWith('p-warm')).status"},
 

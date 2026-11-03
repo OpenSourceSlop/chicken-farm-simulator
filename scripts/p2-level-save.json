@@ -2,7 +2,7 @@
   {"wait": 600},
   {"clearStorage": true},
   {"eval": "__game.stop(), 'loop stopped; save available ' + __game.save.available"},
-  {"eval": "__game.startLevel({ seed: 1 }), __game.level.debug.goto(3, 10 + 40 / 60), __game.events.emit('footdip', { where: 'gate' }), [0, 1].map((line) => __game.farm.act('water.flowtest', { line })).length + ' flow tests; day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel"},
+  {"eval": "__game.startLevel({ seed: 1 }), __game.level.debug.goto(3, 10 + 40 / 60, { auto: true }), __game.events.emit('footdip', { where: 'gate' }), [0, 1].map((line) => __game.farm.act('water.flowtest', { line })).length + ' flow tests; day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel"},
   {"advance": 2.6},
   {"eval": "window.__before = JSON.stringify({ day: __game.env.dayNumber, time: __game.env.timeLabel, jobs: __game.jobs() }), localStorage.setItem('__p2test', window.__before), 'saved: ' + JSON.stringify(__game.save.info()) + '; ' + __game.jobs().length + ' jobs'"},
   {"reload": true},

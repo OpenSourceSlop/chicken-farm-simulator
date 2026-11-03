@@ -1,7 +1,7 @@
 [
   {"wait": 600},
   {"eval": "__game.stop(), window.__click = (t) => { const b = [...document.querySelectorAll('.panel:not([hidden]) button, .panel:not([hidden]) label')].find((x) => x.offsetParent !== null && x.textContent.trim().startsWith(t)); if (!b) return 'NOT FOUND ' + t; b.click(); return 'clicked ' + t; }, window.__d = () => { const l = __game.jobs().filter((j) => j.key.endsWith('@2')); return l.length + ' jobs: ' + l.map((j) => j.key.replace('@2', '') + ':' + j.status).join(' '); }, window.__walk = (z) => { for (let x = -22.7; x <= 1.8; x += 1) __game.events.emit('farmer:cell', { x, z, cx: Math.floor(x + 24), cz: Math.floor(z + 6) }); return 'walked z ' + z; }, 'helpers set'"},
-  {"eval": "__game.startLevel({ seed: 1 }), __game.farm.flock.deadOnFloor = 4, __game.level.debug.goto(2, 6.1), __game.farm.flock.placed = 6000, __game.farm.flock.inBoxes = 0, __game.farm.flock.alive = 5970, __game.level.engine.tick(), 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + '; ' + __d()"},
+  {"eval": "__game.startLevel({ seed: 1 }), __game.farm.flock.deadOnFloor = 4, __game.level.debug.goto(2, 6.1, { auto: true }), __game.farm.flock.placed = 6000, __game.farm.flock.inBoxes = 0, __game.farm.flock.alive = 5970, __game.level.engine.tick(), 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + '; ' + __d()"},
   {"advance": 0.6},
   {"shot": "routine-0-morning"},
   {"eval": "__game.events.emit('footdip', { where: 'gate' }), __game.events.emit('house:enter', { dipped: true }), 'dips: ' + __game.level.jobs.byKey('r-dips@2').status"},

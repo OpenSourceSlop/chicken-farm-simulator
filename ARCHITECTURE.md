@@ -257,11 +257,32 @@ feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
   one setting line of a control stepped many times in a row, and skip a look note with the same
   words as the last one within the hour. Measured after the real-input play-through: see
   PHASE2.md §11 (target 60 KB; localStorage holds megabytes, so a bigger save still works).
-- **Resume** (`level.resume(blob)`): clock → `farm.start(LEVEL1, { keepClock: true })` → saved env
-  values (setpoint, house, slab, heater level, manual fans, pad) → `farm.restore` (timer, light,
-  weather events, brooders out) → records → props → flock → level jobs. `saveBlob().env` carries
-  `fansManual`.
-- **`level.debug.goto(day, hour, { auto })`**: auto plays the ideal profile through
+- **Resume** (`level.resume(blob)`): skill profile (`loadProfile`, so Continue and the hot reload
+  never start from empty skills) → `ui.newRun()` → clock → `farm.start(LEVEL1, { keepClock: true })`
+  → saved env values (setpoint, house, slab, humidity, heater level, manual fans, pad) →
+  `farm.restore` (timer, light, weather events, brooders out) → records → props → flock (a carried
+  chick is dropped: it is not in the flock's save, and `props.serialize` never saves one) → level
+  jobs. `saveBlob().env` carries `fansManual` and `houseRH`. main.js snapshots `levelSave` for the
+  hot reload only while a level runs (not after its end).
+- **A new run** (`ui.newRun()`, called by `level.start` and `level.resume`): every built panel is
+  rebuilt, the job card, captions, the controller chart and memory, the last flows and the weighings
+  of the run before are cleared (Replay and Back to the title then Start).
+- **Skips** (`level.skip`): after `env.skipHours` the level calls `flock.afterSkip(hours)`; a jump of
+  30 game minutes or more flushes the spill queue and re-places the free drawn birds over the floor
+  (penned and sick birds stay), so the flock never shows tip piles as cold huddles after *Next job*.
+- **Keep walking** after the end: the clock runs to 23:59 on day 7 and stands (no day wrap; the farm
+  stops with it).
+- **Spawn**: a level starts and each morning begins outside the gate (`FARM.spawn` −40, 40.5,
+  facing north) and the gate foot dip lies across the gateway (`FARM.footDipGate` −40, 36.9, half
+  sizes 2.2 × 0.5 m), so walking onto the farm crosses it. The sandbox keeps its Phase 1 start just
+  inside the gate (`FARM.spawnSandbox`).
+- **Records** (review round 2): the notebook writes each control as the farmer would ("Line 2 winch:
+  nipples at 11 cm", "Min. vent timer: 1 fan, 9 s in every 300 s") and places as "west part, south
+  side"; a missed job goes on the row of its own day by title; the week table shows one line of
+  numbers per day and the day's notes in a full-width row under it; the job log is saved as
+  `[key, day]` (nothing reads its results).
+- **`level.debug.goto(day, hour, { auto })`** (a prep round already past due when goto is called
+  is played at once): auto plays the ideal profile through
   `farm-profiles.applyRound` at the rounds test-sim plays (prep unless the prep record is signed,
   flush, morning 06:15 / 06:30, truck 08:06, vent first tip + 2.6 h, crop first tip + 23 h,
   afternoon, day 6 tunnel fan 12:00–17:00, day 7 weigh 09:00), picks up and counts the dead birds
@@ -272,7 +293,9 @@ feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
   `scripts/test-sim.mjs` (§6.10 profiles, determinism, timing, save) + `scripts/test-jobs.mjs` (job
   engine) + `scripts/test-level.mjs` (level.js with the real farm, records and skills in node:
   `goto(7, 21, auto)` ends on the day 7 signing with a pass at 4.6–4.95 ×, both branches level 2,
-  no routine job missed; a week without care fails; save → resume keeps clock, jobs and farm).
+  no routine job missed; a week without care fails; save → resume keeps clock, jobs, farm and
+  humidity; no hand weighing uses the scale at age 7.0; a late goto still pre-heats; resume keeps
+  the skill profile; keep walking stops at 23:59).
 - Harness steps for play-throughs (`scripts/shoot.mjs`, with `__game.stop()`): `walkTo [x, z]`
   (real mouse clicks on the ground: the farmer's click-to-walk and path finding, leg by leg),
   `clickText` (real click on a visible HUD button / tab by its text or aria-label, `times`),
@@ -285,10 +308,15 @@ feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
   `scripts/p2-level1-find.json` — day 4: the meter shows the drop, a flow test opens *Low water flow*,
   cleaning the filter closes it; walking past the wet patch at 15:00 opens *Wet litter here*, E at
   the drip replaces the nipple, a sack of husk patches the cell.
-- Package steps files: `p2-level-*.json` (level; written against the stubs: they force farm fields
-  the real model now owns, so some of their printed job states differ), `p2-flock-*.json`,
-  `p2-props-*.json`. Phase 1: `tour`, `cold-hot`, `walk`, `p2-hooks` scenarios and
-  `scripts/phase1-jobs.json` in the sandbox.
+- Package steps files: `p2-level-*.json` (level; written against the stubs, they now start from a
+  `goto(auto)` level; `p2-level-prep` / `p2-level-day0` say at the top that they are panel demos
+  that check nothing), `p2-flock-events.json` (drives the real farm: 20 `expect` checks, a FAIL sets
+  the exit code), `p2-flock-look/perf.json`, `p2-props-*.json`. Review round 2:
+  `scripts/p2-review2.json` (spawn and gate dip, Replay resets the grading table and chart, flock
+  spread after a skip, a save with a chick in the hand) and `scripts/p2-review2-ui.json` (drinker
+  view, water supply at 960 × 600, sign sources, HUD rate slot, job card, notebook words, week
+  table rows, skill tree, floor legend). Phase 1: `tour`, `cold-hot`, `walk`, `p2-hooks` scenarios,
+  `scripts/phase1-jobs.json`, `systems-phone.json`, `systems-tasks.json` in the sandbox.
 - `window.__game` Phase 2 hooks: `events, farm, records, skills, save, props, interact, level`,
   `startLevel({ seed })`, `nextJob()`, `jobs()` (key, status, progress), `snapshot()` with `mode` and
   `farmMode`, `ui.openPanel(id)`, `level.debug.goto / trigger / result`, `farm.debug.trigger /
