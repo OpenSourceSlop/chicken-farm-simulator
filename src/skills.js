@@ -1,7 +1,7 @@
 // Skill tree logic: points per branch from milestones (results of play, never questions),
 // branch levels and the tools they unlock. Pure logic. Owner: package "sim" (phase2/sim).
-// STUB: the milestone table is the contract (ids are referenced by PHASE2.md and the UI);
-// evaluate() awards nothing yet.
+// The milestone table is the contract (ids are referenced by PHASE2.md and the UI); the measured
+// conditions live in skills-rules.js. evaluate() runs only while farm.mode is 'level'.
 //
 // createSkills({ events, records, farm }) -> skills
 //   Skills subscribe to the bus themselves; nobody calls evaluate() from outside:
@@ -16,6 +16,7 @@
 //   Milestone texts are what the player sees: results in plain words, never praise or verdicts.
 import { SKILL_BRANCHES, SKILL_LEVEL_POINTS, UNLOCKS } from './config.js';
 import { EV } from './events.js';
+import { RULES } from './skills-rules.js';
 
 /**
  * @typedef {{ id: string, branch: string, checkpoint: string, text: string,
@@ -94,7 +95,19 @@ export function createSkills({ events, records, farm } = {}) {
     unlocked(key) { const u = UNLOCKS[key]; return !!u && levelOf(u.branch) >= u.level; },
     /** STUB: package "sim" checks the milestones of this checkpoint here (reads farm.stats,
      *  farm.problems, records). Returns the awards made: [{ id, tier, delta }]. */
-    evaluate(checkpoint, ctx = {}) { void checkpoint; void ctx; void records; void farm; return []; },
+    evaluate(checkpoint, ctx = {}) {
+      void ctx;
+      const out = [];
+      if (!farm || farm.mode !== 'level') return out;
+      for (const m of MILESTONES) {
+        if (checkpoint !== 'level-end' && m.checkpoint !== checkpoint) continue;
+        const r = RULES[m.id] ? RULES[m.id](farm, records) : null;
+        if (!r || r.tier == null) continue;
+        const before = earned.has(m.id) ? m.tiers[earned.get(m.id)].points : 0;
+        if (skills.award(m.id, r.tier, r.detail || '')) out.push({ id: m.id, tier: r.tier, delta: m.tiers[r.tier].points - before });
+      }
+      return out;
+    },
     /** Award directly (used by evaluate and tests). Returns true when it raised the tier. */
     award(id, tier = 0, detail = '') {
       const m = MILESTONES.find((x) => x.id === id);
@@ -114,7 +127,7 @@ export function createSkills({ events, records, farm } = {}) {
   // The bus drives the checkpoints (PHASE2.md §9): nobody else calls evaluate().
   if (events) {
     events.on(EV.LEVEL, (p) => { if (p.phase === 'checkpoint') skills.evaluate(p.name, p); });
-    events.on(EV.FARM_PROBLEM, (p) => { if (p.phase === 'found' || p.phase === 'fixed') skills.evaluate('problem', p); });
+    events.on(EV.FARM_PROBLEM, (p) => { if (p.phase === 'symptom' || p.phase === 'found' || p.phase === 'fixed') skills.evaluate('problem', p); });
     events.on(EV.RECORD_CLOSED, (p) => skills.evaluate('day', p));
   }
   return skills;
