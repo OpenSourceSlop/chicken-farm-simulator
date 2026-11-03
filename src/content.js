@@ -42,7 +42,7 @@ export const SIGNS = {
       caption: 'House temperature by flock age',
       colAge: 'Flock age',
       colTemp: 'House temperature',
-      approxNote: 'approx. = a straight line between the guide’s day 1 and day 35 values, until the full table is loaded.',
+      approxNote: 'approx. = read off a straight line between the guide’s day 1 and day 35 values. The guide’s full table comes in a later version.',
       source: `${SOURCES.week1} / ${SOURCES.vent}`,
     },
     readTitle: 'Read the chicks',

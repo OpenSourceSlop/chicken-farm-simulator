@@ -63,6 +63,20 @@
   --led-pad: #52c3f2;
   --led-run: #8fe36a;
   --led-off: #3b4145;
+  --key-hover: #67737b;
+  --key-edge: #161b1f;
+  --key-sub: #a8b1b5;
+  --key-on-hi: #3f87ab;
+  --key-on-lo: #2b6787;
+  --screw-hi: #f6f3ea;
+  --screw-lo: #8e8979;
+  --sign-shade: rgba(0, 0, 0, 0.16);
+  /* boot hen (matches the 3D broiler palette in config.js) */
+  --hen: #f4f1ea;
+  --hen-shade: #ddd7c7;
+  --hen-tail: #d9d3c2;
+  --hen-comb: #d8322f;
+  --hen-beak: #f2a33a;
   /* type */
   --font-display: "Chakra Petch", "Bahnschrift", "DIN Alternate", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
   --font-body: "Sarabun", "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
@@ -287,7 +301,7 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 /* ---------- climate controller hardware ---------- */
 .ctrl { width: min(640px, calc(100% - 2 * var(--gutter))); }
 .ctrl-case { position: relative; padding: 16px 18px 18px; border-radius: 12px; color: var(--case-ink); background: linear-gradient(180deg, var(--case-hi), var(--case-lo)); box-shadow: 0 20px 46px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -3px 0 rgba(0, 0, 0, 0.18); }
-.screw { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #f6f3ea, #8e8979 76%); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
+.screw { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, var(--screw-hi), var(--screw-lo) 76%); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
 .screw::after { content: ""; position: absolute; left: 2px; right: 2px; top: 5px; height: 2px; background: rgba(0, 0, 0, 0.42); transform: rotate(35deg); }
 .screw--tl { top: 8px; left: 8px; } .screw--tr { top: 8px; right: 8px; } .screw--bl { bottom: 8px; left: 8px; } .screw--br { bottom: 8px; right: 8px; }
 .ctrl-brand { display: flex; align-items: center; gap: 10px; padding: 2px 150px 12px 14px; }
@@ -310,14 +324,14 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .ctrl-rows { display: grid; gap: 8px; margin-top: 12px; }
 .ctrl-row { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 12px; padding: 8px 10px 8px 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); color: var(--key-ink); }
 .ctrl-label > span { display: block; font: 600 14px/1.2 var(--font-display); letter-spacing: 0.07em; text-transform: uppercase; }
-.ctrl-label small { display: block; margin-top: 2px; font-size: 12.5px; color: #a8b1b5; }
+.ctrl-label small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--key-sub); }
 .ctrl-keys { display: flex; align-items: center; gap: 8px; }
-.key { display: grid; place-items: center; width: 46px; height: 40px; border: 0; border-radius: 7px; background: linear-gradient(180deg, var(--key-hi), var(--key)); color: var(--key-ink); box-shadow: 0 3px 0 #161b1f, inset 0 1px 0 rgba(255, 255, 255, 0.18); font: 700 13px/1 var(--font-display); cursor: pointer; }
+.key { display: grid; place-items: center; width: 46px; height: 40px; border: 0; border-radius: 7px; background: linear-gradient(180deg, var(--key-hi), var(--key)); color: var(--key-ink); box-shadow: 0 3px 0 var(--key-edge), inset 0 1px 0 rgba(255, 255, 255, 0.18); font: 700 13px/1 var(--font-display); cursor: pointer; }
 .key .icon { font-size: 18px; }
-.key:hover { background: linear-gradient(180deg, #67737b, var(--key-hi)); }
-.key:active { transform: translateY(2px); box-shadow: 0 1px 0 #161b1f, inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+.key:hover { background: linear-gradient(180deg, var(--key-hover), var(--key-hi)); }
+.key:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--key-edge), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
 .key--wide { width: auto; min-width: 112px; padding: 0 14px; letter-spacing: 0.07em; text-transform: uppercase; }
-.key--wide[aria-pressed="true"] { background: linear-gradient(180deg, #3f87ab, #2b6787); }
+.key--wide[aria-pressed="true"] { background: linear-gradient(180deg, var(--key-on-hi), var(--key-on-lo)); }
 .lcd-mini { min-width: 96px; padding: 8px 10px; border-radius: 4px; background: var(--lcd); color: var(--lcd-ink); text-align: center; font: 700 20px/1 var(--font-display); box-shadow: inset 0 0 0 2px var(--plate-edge), inset 0 0 10px rgba(50, 80, 15, 0.4); }
 .led { width: 12px; height: 12px; border-radius: 50%; background: var(--led-off); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6); }
 .led--heat.is-on { background: var(--led-heat); box-shadow: 0 0 9px var(--led-heat); }
@@ -377,15 +391,15 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
   <div id="boot" role="status">
     <div class="boot-card">
       <svg class="boot-mark" viewBox="0 0 64 48" aria-hidden="true">
-        <polygon points="8,21 14,33 11,24" fill="#d9d3c2"/>
-        <polygon points="11,24 20,17 38,15 48,22 47,34 35,40 19,38 13,31" fill="#f4f1ea"/>
-        <polygon points="21,25 36,22 33,33 21,33" fill="#ddd7c7"/>
-        <polygon points="38,15 43,6 51,6 54,13 48,22" fill="#f4f1ea"/>
-        <polygon points="43,6 45,1 48,4 51,1 52,6" fill="#d8322f"/>
-        <polygon points="54,9 60,11 54,13" fill="#f2a33a"/>
-        <polygon points="50,14 53,14 52,19" fill="#d8322f"/>
-        <circle cx="49" cy="9.5" r="1.3" fill="#18241e"/>
-        <path d="M27 39v6M24 45h6M34 38v7M31 45h6" stroke="#f2a33a" stroke-width="1.8" stroke-linecap="round"/>
+        <polygon points="8,21 14,33 11,24" style="fill: var(--hen-tail)"/>
+        <polygon points="11,24 20,17 38,15 48,22 47,34 35,40 19,38 13,31" style="fill: var(--hen)"/>
+        <polygon points="21,25 36,22 33,33 21,33" style="fill: var(--hen-shade)"/>
+        <polygon points="38,15 43,6 51,6 54,13 48,22" style="fill: var(--hen)"/>
+        <polygon points="43,6 45,1 48,4 51,1 52,6" style="fill: var(--hen-comb)"/>
+        <polygon points="54,9 60,11 54,13" style="fill: var(--hen-beak)"/>
+        <polygon points="50,14 53,14 52,19" style="fill: var(--hen-comb)"/>
+        <circle cx="49" cy="9.5" r="1.3" style="fill: var(--panel-solid)"/>
+        <path d="M27 39v6M24 45h6M34 38v7M31 45h6" style="stroke: var(--hen-beak)" stroke-width="1.8" stroke-linecap="round"/>
       </svg>
       <p class="boot-title">Chicken Farm</p>
       <p class="boot-sub">Opening the farm gate&hellip;</p>

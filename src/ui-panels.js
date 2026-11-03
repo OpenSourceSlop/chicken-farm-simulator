@@ -112,12 +112,13 @@ function chickDiagram(kind) {
       if (Math.hypot(x - cx, y - cy) > 8) dots.push([x, y]);
     }
   }
-  const glow = kind === 'cold' ? '<circle cx="66" cy="39" r="17" fill="var(--accent)" opacity="0.22"/>' : '';
+  // Brooder glow only in the cold picture: the burner is running and the chicks crowd under it.
+  const glow = kind === 'cold' ? '<circle cx="66" cy="39" r="17" style="fill: var(--accent)" opacity="0.22"/>' : '';
   const chicks = dots.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.3"/>`).join('');
   return `<svg class="sign-diagram" viewBox="0 0 ${W} ${H}" aria-hidden="true" focusable="false">
-    <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="3" fill="rgba(0,0,0,0.16)" stroke="var(--sign-paint)" stroke-width="1.6"/>
-    ${glow}<circle cx="66" cy="39" r="9" fill="none" stroke="var(--sign-paint)" stroke-width="1.4" stroke-dasharray="3 2.4"/>
-    <g fill="var(--chick)">${chicks}</g></svg>`;
+    <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="3" style="fill: var(--sign-shade); stroke: var(--sign-paint)" stroke-width="1.6"/>
+    ${glow}<circle cx="66" cy="39" r="9" style="fill: none; stroke: var(--sign-paint)" stroke-width="1.4" stroke-dasharray="3 2.4"/>
+    <g style="fill: var(--chick)">${chicks}</g></svg>`;
 }
 
 function bolts() {

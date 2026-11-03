@@ -4,7 +4,7 @@
 // and the farmer takes no keyboard input while a panel is open.
 import { FARM } from './config.js';
 import { SIGNS } from './content.js';
-import { h, typingInControl } from './ui-dom.js';
+import { h, inFormControl, typingInControl } from './ui-dom.js';
 import { createHud } from './ui-hud.js';
 import { createTasks } from './ui-tasks.js';
 import { createPanelHost, buildSignPanel } from './ui-panels.js';
@@ -14,6 +14,7 @@ import { createHelp, createNarrowNotice, createPrompt } from './ui-help.js';
 
 // Keys the farmer listens to. While a panel is open (or a slider has focus) they stop here.
 const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift']);
+const ARROW_KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
 
 export function createUI(ctx, { player, flock, interactables = [] }) {
   const { env, canvas } = ctx;
@@ -87,10 +88,11 @@ export function createUI(ctx, { player, flock, interactables = [] }) {
       else if (k === 'e' && !e.repeat && !typingInControl(e.target)) { e.preventDefault(); panels.close(); }
       return;
     }
-    if (typingInControl(e.target)) {
-      if (MOVE_KEYS.has(k)) e.stopImmediatePropagation(); // arrows move the slider, not the camera
+    if (inFormControl(e.target) && ARROW_KEYS.has(k)) {
+      e.stopImmediatePropagation(); // arrows move the slider or select, not the camera
       return;
     }
+    if (typingInControl(e.target)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (k === 'e' && !e.repeat) {
       const target = nearestInteractable();

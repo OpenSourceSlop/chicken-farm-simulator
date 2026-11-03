@@ -8,6 +8,15 @@ import { ICONS } from './ui-icons.js';
 const WATCH_RADIUS = 4;     // metres from a brooder
 const WATCH_SECONDS = 5;    // real seconds
 
+function cssColor(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function createTasks(parent, ctx, { player }) {
   const { THREE, scene } = ctx;
   let index = 0;            // current task; TASKS.length = all done
@@ -67,12 +76,13 @@ export function createTasks(parent, ctx, { player }) {
   }
 
   // ---------- 3D marker: a bobbing diamond and a ground ring over the current job ----------
-  const accent = 0xf28c28;
+  // Same orange as the HUD: read the --accent token so there is one source for the colour.
+  const accent = new THREE.Color(cssColor('--accent', '#f28c28'));
   const marker = new THREE.Group();
   marker.name = 'task-marker';
   const gem = new THREE.Mesh(
     new THREE.OctahedronGeometry(0.28, 0),
-    new THREE.MeshLambertMaterial({ color: accent, emissive: 0x8a3c08, flatShading: true, transparent: true, depthTest: false }),
+    new THREE.MeshLambertMaterial({ color: accent, emissive: accent.clone().multiplyScalar(0.45), flatShading: true, transparent: true, depthTest: false }),
   );
   gem.scale.set(1, 1.5, 1);
   gem.renderOrder = 20;

@@ -28,8 +28,6 @@ export function createHud(parent, env) {
 
   // ---- gauges ----
   const house = gauge('gauge--main', ICONS.thermometer, 'House');
-  const houseSub = h('div', { class: 'gauge-sub' });
-  house.el.appendChild(houseSub);
   const outside = gauge('', ICONS.outside, 'Outside');
   const humid = gauge('', ICONS.droplet, 'Humidity');
   const humidSub = h('div', { class: 'gauge-sub' });
@@ -100,8 +98,6 @@ export function createHud(parent, env) {
 
     // gauges: measured values only
     setGauge(house.value, fmt1(env.houseTemp), '°C');
-    setText(houseSub, `feels ${fmt1(env.feelsLike)} °C`);
-    houseSub.hidden = env.airSpeed < 0.05;
     setGauge(outside.value, fmt1(env.outsideTemp), '°C');
     setGauge(humid.value, fmt0(env.houseRH), '%');
     setText(humidSub, `outside ${fmt0(env.outsideRH)} %`);

@@ -66,7 +66,11 @@ export function fmt0(n) {
   return v < 0 ? `−${Math.abs(v)}` : String(v);
 }
 
-// True when keyboard focus sits in a form control (slider, select, checkbox) inside the HUD.
-export function typingInControl(target) {
+// Focus in a form control (slider, select, checkbox): arrow keys belong to the control.
+export function inFormControl(target) {
   return !!(target && target.closest && target.closest('input, select, textarea'));
+}
+// Focus in a place where letters are typed as text (none in Phase 1, kept for safety).
+export function typingInControl(target) {
+  return !!(target && target.matches && target.matches('textarea, input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="button"])'));
 }
