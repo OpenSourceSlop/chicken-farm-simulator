@@ -175,4 +175,3 @@ export function treeGeometry(kind, seed = 1) {
   return b.geometry();
 }
 
-export { GeoBuilder };

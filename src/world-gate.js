@@ -2,7 +2,7 @@
 // Owner: world agent.
 import * as THREE from 'three';
 import { COLORS, FARM, SPOTS } from './config.js';
-import { GeoBuilder, unitCone, unitCyl, rng } from './world-util.js';
+import { GeoBuilder, unitCone, unitCyl } from './world-util.js';
 import { F, GATE, CORRIDOR, PUBLIC_ROAD_Z, SPRAY_Z } from './world-layout.js';
 
 const CONCRETE = 0xbdb7aa, POST = 0xc9c3b6, STEEL = COLORS.steel, STEEL_DK = COLORS.steelDark;
@@ -107,7 +107,6 @@ export function buildFence(group, mats, colliders) {
 // Guard hut, spray arch, foot dip and the gate sign
 export function buildGateArea(group, mats, colliders, signTex) {
   const flat = new GeoBuilder(), metal = new GeoBuilder(), hut = new GeoBuilder(), hutM = new GeoBuilder();
-  const r = rng(9);
 
   // Guard hut: low brick wall, window band facing the gate and road, red hip roof
   const H = FARM.guardHut, x0 = H.x - H.w / 2, x1 = H.x + H.w / 2, z0 = H.z - H.d / 2, z1 = H.z + H.d / 2;
@@ -195,5 +194,4 @@ export function buildGateArea(group, mats, colliders, signTex) {
   group.add(metal.mesh(mats.metal, { name: 'gate-metal' }));
   group.add(hut.mesh(mats.flatFade, { name: 'guard-hut' }));
   group.add(hutM.mesh(mats.glass, { cast: false, name: 'guard-hut-glass' }));
-  return { r };
 }
