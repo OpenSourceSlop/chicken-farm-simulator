@@ -71,7 +71,7 @@ export function createComfortField() {
 
 // Grid covers the bird floor with a 1 m margin.
 const GX0 = FX0 - 1, GZ0 = FZ0 - 1, GW = FX1 - FX0 + 2, GD = FZ1 - FZ0 + 2;
-const MIN_CELL = 0.25;
+const MIN_CELL = 0.12;
 
 export function createBirdGrid(n) {
   const maxCells = (Math.ceil(GW / MIN_CELL) + 1) * (Math.ceil(GD / MIN_CELL) + 1);
@@ -81,17 +81,19 @@ export function createBirdGrid(n) {
   const cellOf = new Int32Array(n);
   // density grid, 1 m cells
   const dnx = Math.ceil(GW), dnz = Math.ceil(GD);
+  const raw = new Float32Array(dnx * dnz);
   const dens = new Float32Array(dnx * dnz);
+  const col = new Float32Array(dnx), colS = new Float32Array(dnx); // birds per 1 m slice along x
   const g = {
     cell: 0.5, inv: 2, nx: 1, nz: 1, cellStart, items, dens, densNorm: 1,
     // Rebuild from positions; cell = interaction radius (>= MIN_CELL). perM2 = mean birds per m².
-    build(px, pz, count, cell, perM2) {
+    build(px, pz, count, cell, perM2, depth) {
       cell = Math.max(MIN_CELL, cell);
       g.cell = cell; g.inv = 1 / cell;
       const nx = (g.nx = Math.ceil(GW / cell) + 1), nz = (g.nz = Math.ceil(GD / cell) + 1);
       const nc = nx * nz;
       cellStart.fill(0, 0, nc + 1);
-      dens.fill(0);
+      raw.fill(0);
       for (let i = 0; i < count; i++) {
         let cx = ((px[i] - GX0) * g.inv) | 0, cz = ((pz[i] - GZ0) * g.inv) | 0;
         if (cx < 0) cx = 0; else if (cx >= nx) cx = nx - 1;
@@ -102,15 +104,51 @@ export function createBirdGrid(n) {
         let dx = (px[i] - GX0) | 0, dz = (pz[i] - GZ0) | 0;
         if (dx < 0) dx = 0; else if (dx >= dnx) dx = dnx - 1;
         if (dz < 0) dz = 0; else if (dz >= dnz) dz = dnz - 1;
-        dens[dz * dnx + dx] += 1;
+        raw[dz * dnx + dx] += 1;
       }
       for (let c = 0; c < nc; c++) { cellStart[c + 1] += cellStart[c]; cellFill[c] = cellStart[c]; }
       for (let i = 0; i < count; i++) items[cellFill[cellOf[i]]++] = i;
+      // 3 x 3 m box average: a smooth crowding field with a real gradient across the house
+      for (let z = 0; z < dnz; z++) {
+        for (let x = 0; x < dnx; x++) {
+          let sum = 0, w = 0;
+          for (let qz = z - 1; qz <= z + 1; qz++) {
+            if (qz < 0 || qz >= dnz) continue;
+            for (let qx = x - 1; qx <= x + 1; qx++) {
+              if (qx < 0 || qx >= dnx) continue;
+              sum += raw[qz * dnx + qx]; w++;
+            }
+          }
+          dens[z * dnx + x] = sum / w;
+        }
+      }
       g.densNorm = 1 / Math.max(0.05, perM2);
+      // profile along the house (5 m running mean), relative to an even spread over depth D
+      for (let x = 0; x < dnx; x++) { let c = 0; for (let z = 0; z < dnz; z++) c += raw[z * dnx + x]; col[x] = c; }
+      for (let x = 0; x < dnx; x++) {
+        let sum = 0, w = 0;
+        for (let q = x - 2; q <= x + 2; q++) if (q >= 0 && q < dnx) { sum += col[q]; w++; }
+        colS[x] = sum / w;
+      }
+      g.colNorm = 1 / Math.max(0.05, perM2 * depth);
     },
     cellX(x) { const c = ((x - GX0) * g.inv) | 0; return c < 0 ? 0 : c >= g.nx ? g.nx - 1 : c; },
     cellZ(z) { const c = ((z - GZ0) * g.inv) | 0; return c < 0 ? 0 : c >= g.nz ? g.nz - 1 : c; },
-    // Crowding at (x, z): birds per m² in that 1 m cell relative to the flock mean (1 = average)
+    colNorm: 1,
+    // Crowding along the house at x (5 m wide slice, full depth) relative to an even spread
+    slice(x) {
+      let dx = (x - GX0) | 0;
+      if (dx < 0) dx = 0; else if (dx >= dnx) dx = dnx - 1;
+      return colS[dx] * g.colNorm;
+    },
+    // Crowding in the 1 m cell at (x, z), relative to the flock mean (sharp, for huddling)
+    crowdLocal(x, z) {
+      let dx = (x - GX0) | 0, dz = (z - GZ0) | 0;
+      if (dx < 0) dx = 0; else if (dx >= dnx) dx = dnx - 1;
+      if (dz < 0) dz = 0; else if (dz >= dnz) dz = dnz - 1;
+      return raw[dz * dnx + dx] * g.densNorm;
+    },
+    // Crowding at (x, z): 3 x 3 m average birds per m² relative to the flock mean (1 = average)
     crowd(x, z) {
       let dx = (x - GX0) | 0, dz = (z - GZ0) | 0;
       if (dx < 0) dx = 0; else if (dx >= dnx) dx = dnx - 1;

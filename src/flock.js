@@ -21,7 +21,7 @@ import { createBirdMaterials, createBirdUniforms, setMorphUniforms } from './flo
 import { createState, placeFlock, usableBounds } from './flock-state.js';
 import { createBirdGrid, createComfortField } from './flock-field.js';
 import { thinkBird } from './flock-think.js';
-import { steerAll } from './flock-steer.js';
+import { personalSpace, steerAll } from './flock-steer.js';
 import { poseAll } from './flock-pose.js';
 import { computeMetrics } from './flock-metrics.js';
 
@@ -40,9 +40,14 @@ export function createFlock(ctx, { house } = {}) {
 
   // Palette (linear colours for the shader)
   const C = (hex) => new THREE.Color(hex);
+  // COLORS.chick with a little more saturation: tone mapping and flat light wash small yellow
+  // birds out to cream against the rice-husk litter
+  const hsl = { h: 0, s: 0, l: 0 };
   const chick = C(COLORS.chick), white = C(COLORS.broiler);
-  const chickHead = chick.clone().lerp(white, 0.18);
-  const chickWing = chick.clone().multiplyScalar(0.94);
+  chick.getHSL(hsl);
+  chick.setHSL(hsl.h, Math.min(1, hsl.s * 1.25), hsl.l * 0.96);
+  const chickHead = chick.clone().lerp(white, 0.08);
+  const chickWing = chick.clone().multiplyScalar(0.93);
   const beakChick = C(0xf3c27a), beakAdult = C(COLORS.beak);
   const legChick = C(0xf0b27a), legAdult = C(0xf0bf4a);
   const combYoung = C(0xeba08f), combAdult = C(COLORS.comb);
@@ -93,11 +98,11 @@ export function createFlock(ctx, { house } = {}) {
 
     if (reset) {
       placeFlock(S);
-      grid.build(S.px, S.pz, n, S.maxR, S.perM2);
+      grid.build(S.px, S.pz, n, S.maxR, S.perM2, S.bounds.zMax - S.bounds.zMin);
     }
   }
 
-  const fctx = { farmerOn: false, fx: 0, fz: 0, farmerR: 1.6, field, anyTemp: false };
+  const fctx = { farmerOn: false, fx: 0, fz: 0, farmerR: 1.6, field, grid, anyTemp: false };
   let built = false;
 
   function update(dt, env, farmerPos) {
@@ -115,9 +120,11 @@ export function createFlock(ctx, { house } = {}) {
       fctx.farmerOn = !!farmerPos && farmerPos.x > hb.xMin - 0.3 && farmerPos.x < hb.xMax + 0.3 &&
         farmerPos.z > hb.zMin - 0.3 && farmerPos.z < hb.zMax + 0.3;
       if (fctx.farmerOn) { fctx.fx = farmerPos.x; fctx.fz = farmerPos.z; }
-      fctx.farmerR = 1.6 + 1.6 * Math.max(0, S.L - 0.15);
-      grid.build(S.px, S.pz, n, S.maxR, S.perM2);
+      fctx.farmerR = 1.6 + 1.0 * Math.max(0, S.L - 0.15); // about 1.6 m for chicks, 2 m for broilers
+      const t0 = prof.on ? performance.now() : 0;
+      grid.build(S.px, S.pz, n, personalSpace(S), S.perM2, S.bounds.zMax - S.bounds.zMin);
       built = true;
+      const t1 = prof.on ? performance.now() : 0;
       const { thinkT, actT, scare, stuck } = S;
       for (let i = 0; i < n; i++) {
         actT[i] -= dt;
@@ -129,11 +136,17 @@ export function createFlock(ctx, { house } = {}) {
         }
         if (S.arrived[i]) stuck[i] = 0;
       }
+      const t2 = prof.on ? performance.now() : 0;
       steerAll(S, grid, dt, fctx);
+      if (prof.on) { const t3 = performance.now(); prof.grid += t1 - t0; prof.think += t2 - t1; prof.steer += t3 - t2; }
     }
+    const t4 = prof.on ? performance.now() : 0;
     poseAll(S, dt, render.stage);
+    if (prof.on) prof.pose += performance.now() - t4;
     render.markDirty();
   }
+  // optional phase timing for the test tools: flock.profile.on = true, read the ms totals
+  const prof = { on: false, grid: 0, think: 0, steer: 0, pose: 0 };
 
   // initial flock at the current climate
   applyDay(ctx.env, true);
@@ -148,10 +161,11 @@ export function createFlock(ctx, { house } = {}) {
     setCulling: render.setCulling,
     update,
     metrics() {
-      if (!built) { grid.build(S.px, S.pz, n, S.maxR, S.perM2); built = true; }
+      if (!built) { grid.build(S.px, S.pz, n, S.maxR, S.perM2, S.bounds.zMax - S.bounds.zMin); built = true; }
       return { ...computeMetrics(S, grid) };
     },
     _state: S, // internal, for debugging only
+    profile: prof,
     // debugging aid for the test tools: activity and thermal-state counts
     debugCounts() {
       const acts = new Array(7).fill(0), th = { cold: 0, right: 0, hot: 0 };

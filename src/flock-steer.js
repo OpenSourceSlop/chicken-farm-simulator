@@ -4,6 +4,26 @@
 // and sitting birds have "static friction", so long fixed-step runs settle without jitter.
 import { ACT, COLD, HOT, releaseRes } from './flock-state.js';
 
+// Personal space for this frame (metres, centre to centre). Returns the largest, which sets the
+// spatial hash cell size: dense huddles get small cells, so neighbour loops stay short.
+export function personalSpace(S) {
+  const { n, act, therm, arrived, rad, size } = S;
+  const minR = 0.6 * S.L;
+  let maxR = 0;
+  for (let i = 0; i < n; i++) {
+    const a = act[i];
+    let r = S.rRight;
+    if (a === ACT.HUDDLE) r = S.rHuddle;
+    else if (therm[i] === HOT) r = S.rHot;
+    else if ((a === ACT.EAT || a === ACT.DRINK) && arrived[i]) r = 0.55 * S.rRight;
+    else if (a === ACT.REST) r = 0.75 * S.rRight;
+    r = (r > minR ? r : minR) * size[i];
+    rad[i] = r;
+    if (r > maxR) maxR = r;
+  }
+  return maxR;
+}
+
 export function steerAll(S, grid, dt, fctx) {
   const n = S.n, b = S.bounds, rand = S.rand;
   const { px, pz, vx, vz, fx, fz, tx, tz, rad, size, act, arrived, therm, stuck, scare, sitA } = S;
@@ -15,17 +35,6 @@ export function steerAll(S, grid, dt, fctx) {
   const kSep = Math.min(0.5, dt * 9);
   const invDt = 1 / dt;
   const fOn = fctx.farmerOn, ffx = fctx.fx, ffz = fctx.fz, fR = fctx.farmerR;
-
-  // personal space for this frame
-  for (let i = 0; i < n; i++) {
-    const a = act[i];
-    let r = S.rRight;
-    if (a === ACT.HUDDLE) r = S.rHuddle;
-    else if (therm[i] === HOT) r = S.rHot;
-    else if ((a === ACT.EAT || a === ACT.DRINK) && arrived[i]) r = 0.55 * S.rRight;
-    else if (a === ACT.REST) r = 0.75 * S.rRight;
-    rad[i] = Math.max(r, 0.6 * L) * size[i];
-  }
 
   for (let i = 0; i < n; i++) {
     const x = px[i], z = pz[i], si = size[i], a = act[i], th = therm[i];
@@ -49,6 +58,7 @@ export function steerAll(S, grid, dt, fctx) {
     // 2. neighbours
     const ri = rad[i];
     let sx = 0, sz = 0, cx = 0, cz = 0, cn = 0;
+    const coh = th === COLD && !arrived[i]; // cold birds on the move draw together
     const gx = grid.cellX(x), gz = grid.cellZ(z);
     const z0 = gz > 0 ? gz - 1 : 0, z1 = gz < gnz - 1 ? gz + 1 : gz;
     const x0 = gx > 0 ? gx - 1 : 0, x1 = gx < gnx - 1 ? gx + 1 : gx;
@@ -65,11 +75,11 @@ export function steerAll(S, grid, dt, fctx) {
             if (d2 < 1e-10) { sx += (rand() - 0.5) * rij; sz += (rand() - 0.5) * rij; }
             else { const d = Math.sqrt(d2); const o = (rij - d) / d; sx += dx * o; sz += dz * o; }
           }
-          if (th === COLD) { cx += dx; cz += dz; cn++; }
+          if (coh) { cx += dx; cz += dz; cn++; }
         }
       }
     }
-    // cold birds draw together (they huddle even where there is no heat source)
+    // (so they huddle even where there is no heat source)
     if (cn > 0) {
       const k = (0.35 * base * si) / Math.max(0.3, Math.sqrt(cx * cx + cz * cz) / cn);
       dvx -= (cx / cn) * k; dvz -= (cz / cn) * k;
@@ -78,7 +88,8 @@ export function steerAll(S, grid, dt, fctx) {
     // 3. farmer: a moving clearing around him
     if (fOn) {
       const dx = x - ffx, dz = z - ffz, d2 = dx * dx + dz * dz;
-      const R = fR * (0.9 + 0.2 * S.boldness[i]);
+      // cold birds are loath to leave the warmth: they only shuffle out of his way
+      const R = fR * (0.9 + 0.2 * S.boldness[i]) * (th === COLD ? 0.75 : 1);
       if (d2 < R * R) {
         const d = Math.sqrt(d2) + 1e-6, k = 1 - d / R, ux = dx / d, uz = dz / d;
         const flee = base * si * (1.4 + 3.0 * k);
@@ -86,7 +97,7 @@ export function steerAll(S, grid, dt, fctx) {
         scare[i] = 1.2;
         if (k > 0.2 && (a !== ACT.WANDER || arrived[i])) {
           if (th !== COLD && a !== ACT.PANT) { releaseRes(S, i); act[i] = ACT.WANDER; S.actT[i] = 4 + rand() * 4; }
-          const r = R - d + 0.4 + rand() * 0.8, side = (rand() - 0.5) * 0.8;
+          const r = R - d + 0.25 + rand() * 0.5, side = (rand() - 0.5) * 0.8;
           tx[i] = x + (ux - uz * side) * r; tz[i] = z + (uz + ux * side) * r;
           tx[i] = tx[i] < b.xMin ? b.xMin : tx[i] > b.xMax ? b.xMax : tx[i];
           tz[i] = tz[i] < b.zMin ? b.zMin : tz[i] > b.zMax ? b.zMax : tz[i];

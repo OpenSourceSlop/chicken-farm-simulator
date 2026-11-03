@@ -14,7 +14,8 @@ function nearestNeighbor(S, grid, i) {
   const gx = grid.cellX(x), gz = grid.cellZ(z);
   const { items, cellStart, nx, nz } = grid;
   let best = Infinity;
-  for (let ring = 1; ring <= 3; ring++) {
+  const rings = Math.min(16, Math.max(3, Math.ceil(2 / grid.cell)));
+  for (let ring = 1; ring <= rings; ring++) {
     const z0 = Math.max(0, gz - ring), z1 = Math.min(nz - 1, gz + ring);
     const x0 = Math.max(0, gx - ring), x1 = Math.min(nx - 1, gx + ring);
     for (let qz = z0; qz <= z1; qz++) {
@@ -33,7 +34,7 @@ function nearestNeighbor(S, grid, i) {
     // a neighbour found within this ring is the true nearest once the ring covers its distance
     if (best <= (ring * grid.cell) ** 2) break;
   }
-  return best === Infinity ? 3 * grid.cell : Math.sqrt(best);
+  return best === Infinity ? rings * grid.cell : Math.sqrt(best);
 }
 
 // Returns a shared object (no allocation); copy it if you keep it.

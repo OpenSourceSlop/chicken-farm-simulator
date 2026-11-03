@@ -86,7 +86,7 @@ const COLOR_CODE = /* glsl */`
   float feather = (pi <= 1 || pi == 4 || pi == 5 || pi == 8) ? 1.0 : 0.0;
   float tint = aAnimC.z;
   col *= aShade * (1.0 + 0.06 * tint * feather);
-  col.b *= 1.0 + 0.3 * tint * feather;
+  col.b *= 1.0 + 0.3 * tint * feather * (1.0 - 0.8 * uMorph); // chicks vary in yellow, broilers stay white
   vBirdColor = col;
 }
 `;

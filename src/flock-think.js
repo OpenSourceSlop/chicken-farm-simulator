@@ -33,7 +33,7 @@ function sampleThermal(S, i, field) {
 
 function farmerPenalty(ctx, x, z) {
   if (!ctx.farmerOn) return 0;
-  const dx = x - ctx.fx, dz = z - ctx.fz, r = ctx.farmerR + 0.6;
+  const dx = x - ctx.fx, dz = z - ctx.fz, r = ctx.farmerR + 0.2;
   return dx * dx + dz * dz < r * r ? 50 : 0;
 }
 
@@ -45,9 +45,16 @@ function setTarget(S, i, x, z) {
 // Scratch "best candidate" shared by the spot finders (no closures, no allocation per call)
 let bx = 0, bz = 0, bs = 0;
 
+// Cold: warmth first; then company (shared body heat), which bunches the flock up even where
+// there is no heater.
+function warmScore(field, ctx, grid, cx, cz) {
+  const crowd = grid.crowdLocal(cx, cz);
+  return -Math.abs(field.sample(cx, cz)) + 0.35 * (crowd < 3 ? crowd : 3) - farmerPenalty(ctx, cx, cz);
+}
+
 function tryWarm(S, field, ctx, cx, cz) {
   cx = clampX(S, cx); cz = clampZ(S, cz);
-  const s = -Math.abs(field.sample(cx, cz)) - farmerPenalty(ctx, cx, cz);
+  const s = warmScore(field, ctx, ctx.grid, cx, cz);
   if (s > bs) { bs = s; bx = cx; bz = cz; }
 }
 
@@ -55,7 +62,7 @@ function tryWarm(S, field, ctx, cx, cz) {
 function warmSpot(S, i, field, env, ctx) {
   const { rand } = S;
   const x = S.px[i], z = S.pz[i];
-  bx = x; bz = z; bs = -Math.abs(field.sample(x, z)) + 0.3; // small bias to stay put
+  bx = x; bz = z; bs = warmScore(field, ctx, ctx.grid, x, z) + 0.3; // small bias to stay put
   if (env.heaterLevel > 0.05) {
     const h = HEATERS[nearestHeater(x, z)];
     if (h.x <= S.bounds.xMax) {
@@ -111,9 +118,21 @@ function wanderSpot(S, i, field, ctx, grid, reach) {
   const { rand } = S;
   const x = S.px[i], z = S.pz[i];
   bx = x; bz = z; bs = 1e9;
-  for (let k = 0; k < 4; k++) {
-    const a = rand() * 6.283, r = reach * (0.3 + 0.7 * rand());
-    const cx = clampX(S, x + Math.cos(a) * r), cz = clampZ(S, z + Math.sin(a) * r);
+  // where it is crowded, also look far along the house: this is how the flock fills the whole
+  // house once the brooding curtain goes
+  // If this part of the house is fuller than the rest, also try far spots toward the emptier end
+  const here = grid.slice(x), east = grid.slice(x + 7), west = grid.slice(x - 7);
+  const far = here > 1.1 && Math.min(east, west) < here - 0.15 ? 2 : 0;
+  const dir = east < west ? 1 : -1;
+  for (let k = 0; k < 4 + far; k++) {
+    let cx, cz;
+    if (k < 4) {
+      const a = rand() * 6.283, r = reach * (0.3 + 0.7 * rand());
+      cx = x + Math.cos(a) * r; cz = z + Math.sin(a) * r;
+    } else {
+      cx = x + dir * (3 + rand() * 12); cz = S.bounds.zMin + rand() * (S.bounds.zMax - S.bounds.zMin);
+    }
+    cx = clampX(S, cx); cz = clampZ(S, cz);
     const c = Math.abs(field.sample(cx, cz));
     const s = 2 * Math.max(0, c - 1.0) + 0.8 * grid.crowd(cx, cz) + farmerPenalty(ctx, cx, cz);
     if (s < bs) { bs = s; bx = cx; bz = cz; }
@@ -136,9 +155,10 @@ function feederSpot(S, i, ctx) {
   const line = nearestLine(FEEDER_LINES_Z, S.pz[i], rand);
   const per = S.panPerLine, cap = S.L < 0.3 ? 7 : 5;
   const j0 = Math.round((S.px[i] - LINE_X.start) / FEEDER_PAN_SPACING);
+  const spread = 8 + 16 * Math.max(0, ctx.grid.crowd(S.px[i], S.pz[i]) - 1); // crowded: look further
   let best = -1, use = 255;
   for (let k = 0; k < 3; k++) {
-    const j = j0 + Math.round((rand() - 0.5) * 8);
+    const j = j0 + Math.round((rand() - 0.5) * spread);
     if (j < 0 || j >= per) continue;
     const r = line * per + j;
     const px = S.pans[r * 2];
@@ -162,9 +182,10 @@ function drinkerSpot(S, i, ctx) {
   const line = nearestLine(DRINKER_LINES_Z, S.pz[i], rand);
   const per = S.nipPerLine;
   const j0 = Math.round((S.px[i] - LINE_X.start) / NIPPLE_SPACING);
+  const spread = 12 + 30 * Math.max(0, ctx.grid.crowd(S.px[i], S.pz[i]) - 1);
   let best = -1, use = 255;
   for (let k = 0; k < 3; k++) {
-    const j = j0 + Math.round((rand() - 0.5) * 12);
+    const j = j0 + Math.round((rand() - 0.5) * spread);
     if (j < 0 || j >= per) continue;
     const r = line * per + j;
     const nx = S.nips[r * 2];
@@ -192,7 +213,8 @@ function chooseRight(S, i, field, env, ctx, grid) {
   if (!S.lightsOn) { startActivity(S, i, ACT.REST, 20 + rand() * 30); setTarget(S, i, S.px[i], S.pz[i]); return; }
   const age = Math.min(1, Math.max(0, (S.day - 1) / 34));
   // weights: eat, drink, wander, idle, rest
-  const wE = 0.26, wD = 0.14, wW = 0.32 - 0.12 * age, wI = 0.14 - 0.04 * age, wR = 0.14 + 0.36 * age;
+  const explore = Math.max(0, grid.slice(S.px[i]) - 1.1); // a fuller part of the house: roam more
+  const wE = 0.26, wD = 0.14, wW = 0.32 - 0.12 * age + 0.6 * explore, wI = 0.14 - 0.04 * age, wR = 0.14 + 0.36 * age;
   let r = rand() * (wE + wD + wW + wI + wR);
   if ((r -= wE) < 0) {
     startActivity(S, i, ACT.EAT, 12 + rand() * 20);
