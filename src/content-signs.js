@@ -152,6 +152,7 @@ export const BOARDS = {
     items: [
       { text: 'Water flow per nipple = age in days + 20 ml/min.', source: ['bm101', 'week1'] },
       { text: 'Day 0: nipple tip at chick eye level, about 10–12 cm above the litter. Raise the line as the birds grow.', source: 'general' },
+      { text: 'In week 1 raise the line about 1 cm a day, a little above the chicks\' eyes: about 17 cm on day 7.', source: 'general' },
       { text: 'Higher pressure (taller water column in the sight tube) gives more flow per nipple.', source: 'general' },
     ],
   },

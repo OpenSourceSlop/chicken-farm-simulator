@@ -164,9 +164,15 @@ export function buildProps(ctx, { house } = {}) {
       const cx = Math.floor((p.x - FLOOR_GRID.x0) / FLOOR_GRID.cell), cz = Math.floor((p.z - FLOOR_GRID.z0) / FLOOR_GRID.cell);
       const cov = L && L.coverGrid ? L.coverGrid[cz * FLOOR_GRID.nx + cx] ?? 0 : 1;
       if (cov < 0.3) return null;
+      // standing at the wet patch the leak made: the husk goes on it (its cell centre)
+      const def = LEVEL1.problems.find((q) => q.id === 'leaking-nipple');
+      const lp = def && ctx.farm?.problems?.find((q) => q.id === 'leaking-nipple');
+      const lx = def ? def.x : 0, lz = def ? DRINKER_LINES_Z[def.line] : 0;
+      const onLeak = !!(lp && lp.startedAt != null && Math.hypot(p.x - lx, p.z - lz) <= 1.5);
+      const at = onLeak ? { x: lx, z: lz } : { x: p.x, z: p.z };
       return {
-        id: 'patch', label: 'fresh litter here', verb: 'Spread', x: p.x, z: p.z, radius: 1, priority: 20,
-        use() { ctx.farm?.act('litter.patch', { x: p.x, z: p.z }); pl()?.pose?.('crouch', 1.0); props.drop(); },
+        id: 'patch', label: onLeak ? 'fresh litter on the wet patch' : 'fresh litter here', verb: 'Spread', x: at.x, z: at.z, radius: onLeak ? 1.6 : 1, priority: 20,
+        use() { ctx.farm?.act('litter.patch', at); pl()?.pose?.('crouch', 1.0); props.drop(); },
       };
     });
     ctx.interact.addProvider('frame', (p, inside) => {

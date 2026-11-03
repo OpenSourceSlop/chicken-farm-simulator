@@ -10,7 +10,8 @@ export const WATER = {
   accessFull: 0.75, accessExp: 0.88,     // a_i = min(1, (f / need) / 0.8)^0.88 x hf (tuned, see report)
   highPerCm: 0.12, highMin: 0.05,       // nipple above the birds: hf = 1 - 0.12 x cm, >= 0.05
   lowPerCm: 0.03, lowMin: 0.7,          // nipple below the birds: hf = 1 - 0.03 x cm, >= 0.7
-  spillBase: 0.02, spillOverflow: 0.15, spillPerCmLow: 0.02,
+  spillBase: 0.02, spillOverflow: 0.7, spillPerCmLow: 0.02,   // spill: 0.7 x the drunk water per unit of flow above 1.25 x need (a jetting nipple)
+  wetAbove: 1.5, wetPer: 0.5, wetMin: 0.5, wetUntilAge: 4,  // days 0-3: a nipple jetting > 1.5 x need wets the chicks, they keep off it
   leakLh: 0.5,
   flushMin: 10,                         // minutes until a flushed line runs clear
   flushLPerLine: 28,                    // litres through the meter while a line flushes (10 min)
@@ -55,7 +56,9 @@ export function updateAccess(water, age) {
   for (let i = 0; i < water.lines.length; i++) {
     const l = water.lines[i];
     l.flowMlMin = lineFlow(water, i);
-    const a = Math.pow(Math.max(0, Math.min(1, l.flowMlMin / need / WATER.accessFull)), WATER.accessExp) * heightFactor(l.heightCm, age);
+    const r = l.flowMlMin / need;
+    let a = Math.pow(Math.max(0, Math.min(1, r / WATER.accessFull)), WATER.accessExp) * heightFactor(l.heightCm, age);
+    if (age < WATER.wetUntilAge && r > WATER.wetAbove) a *= Math.max(WATER.wetMin, Math.min(1, 1 - WATER.wetPer * (r - WATER.wetAbove)));
     l.access = a;
     sum += a; if (a > max) max = a;
   }

@@ -56,9 +56,10 @@ export function tickProblems(farm, env) {
   }
   const warm = stateOf(farm, 'warm-afternoon');
   if (warm && warm.phase === 'found') {
-    const ok = env.houseTemp <= env.targetTemp + 1.5;
+    // the chicks feel the house air less the wind chill; cooled by his fans / pad, or by the weather
+    const ok = env.houseTemp - (env.windChill || 0) <= env.targetTemp + 1.5;
     warm.okSince = ok ? (warm.okSince ?? env.day) : null;
-    if (ok && env.day - warm.okSince >= 0.5 / 24 - 1e-9) fixProblem(farm, env, 'warm-afternoon', 'house');
+    if (ok && env.day - warm.okSince >= 0.5 / 24 - 1e-9) fixProblem(farm, env, 'warm-afternoon', warm.acted ? 'fans' : 'weather');
   }
 }
 
@@ -110,6 +111,11 @@ export function actionSymptoms(farm, env, id, args, result) {
       const cold = defOf(farm, 'cold-night'), house = args.houseC ?? env.houseTemp;
       if (cold && env.dayNumber === cold.day && env.hour >= 20 && house < env.targetTemp - 1) findProblem(farm, env, 'cold-night', 'controller', true);
       if (isActive(farm, 'warm-afternoon') && house >= env.targetTemp + 2) findProblem(farm, env, 'warm-afternoon', 'controller');
+      break;
+    }
+    case 'vent.fans': case 'vent.timer': case 'vent.pad': {
+      const warm = stateOf(farm, 'warm-afternoon');
+      if (warm && warm.phase === 'found') warm.acted = true; // he changed the air after he saw it
       break;
     }
     case 'phone.report':

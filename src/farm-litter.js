@@ -29,6 +29,13 @@ for (const i of BROOD_CELLS) if (LINE_ROWS.includes(cz(i))) UNDER_LINE[i] = 1;
 const LINE_CELLS = LINE_ROWS.map((row) => BROOD_CELLS.filter((i) => cz(i) === row));
 const W_SUM = BROOD_CELLS.length + (1.5 - 1) * BROOD_CELLS.filter((i) => UNDER_LINE[i]).length; // LITTER.underLine
 
+/** Mean moisture % of the brooding cells under the drinker lines (what a squeeze there reads). */
+export function underLineMoisture(L) {
+  let s = 0, n = 0;
+  for (const cells of LINE_CELLS) for (const i of cells) { s += L.moistureGrid[i]; n++; }
+  return n ? s / n : 0;
+}
+
 export function cellIndex(x, z) {
   const ix = Math.max(0, Math.min(FLOOR_GRID.nx - 1, Math.floor((x - FLOOR_GRID.x0) / FLOOR_GRID.cell)));
   const iz = Math.max(0, Math.min(FLOOR_GRID.nz - 1, Math.floor((z - FLOOR_GRID.z0) / FLOOR_GRID.cell)));
@@ -46,6 +53,7 @@ export function createLitter() {
     cakedHours: new Float32Array(N),     // hours above 40 %
     cakedGrid: new Uint8Array(N),
     meanMoisturePct: LITTER.freshPct,
+    cakedShare: 0,                       // share of the brooding cells that are caked
     ammoniaPpm: 0,
     vapourGh: 0,
     version: 0,                          // bumps when the grids change (props repaint)
@@ -141,6 +149,9 @@ export function stepLitter(L, { hrs, droppingsL, spill, leakL, leakCell, rh, fee
     }
   }
   L.meanMoisturePct = nM ? sumM / nM : LITTER.freshPct;
+  let caked = 0;
+  for (let k = 0; k < BROOD_CELLS.length; k++) caked += L.cakedGrid[BROOD_CELLS[k]];
+  L.cakedShare = caked / BROOD_CELLS.length; // the chicks keep off caked litter (crowding, farm-flock)
   L.vapourGh = (vap * 1000) / hrs;
   L.dryPotentialGh = pot * 1000; // drying at 0 % RH (the climate solves RH with it)
   L.ammoniaPpm = (LITTER.nh3K * feedKg * (0.4 + L.meanMoisturePct / 20)) / Math.sqrt(Math.max(1, airflow));
@@ -169,6 +180,9 @@ export function restoreLitter(L, d) {
   }
   const c = d.caked || [];
   for (let k = 0; k + 2 < c.length; k += 3) { L.cakedHours[c[k]] = c[k + 1] / 100; L.cakedGrid[c[k]] = c[k + 2]; }
+  let caked = 0;
+  for (const i of BROOD_CELLS) caked += L.cakedGrid[i];
+  L.cakedShare = caked / BROOD_CELLS.length;
   updateCover(L); L.version++;
 }
 

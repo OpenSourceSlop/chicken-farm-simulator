@@ -1,7 +1,7 @@
 // Farm model, everything the farmer does to or reads from the farm: the switch behind
 // farm.act(id, args) (PHASE2.md §13.2) with the readings of §6.8. Pure logic, package "sim".
 // The caller (farm.act) then lets the problems see the action and emits EV.ACTION.
-import { EQUIP, FAN_COUNT, LEVEL1, broodSector } from './config.js';
+import { EQUIP, FAN_COUNT, LEVEL1, DRINKER_LINES_Z, broodSector } from './config.js';
 import { EV } from './events.js';
 import { updateAccess, meterAt, filterGauges, clampPressure, clampHeight } from './farm-water.js';
 import { clampPanHeight, FEED } from './farm-feed.js';
@@ -47,10 +47,14 @@ export function doAct(farm, env, id, a) {
       return { cover: +c.toFixed(3) };
     }
     case 'litter.patch': {
-      patch(L, a.x ?? 0, a.z ?? 0);
+      // onLeak: the sack went on the patch the leaking nipple wet (within 1.5 m of its cell)
+      const x = a.x ?? 0, z = a.z ?? 0;
+      const def = (farm.level || LEVEL1).problems.find((p) => p.id === 'leaking-nipple');
       const leak = farm.problems.find((p) => p.id === 'leaking-nipple');
-      if (leak && leak.phase === 'fixed' && !leak.patchedAt) leak.patchedAt = env.day;
-      return true;
+      const onLeak = !!(def && leak && leak.startedAt != null && Math.hypot(x - def.x, z - DRINKER_LINES_Z[def.line]) <= 1.5);
+      patch(L, x, z);
+      if (onLeak && leak.phase === 'fixed' && !leak.patchedAt) leak.patchedAt = env.day;
+      return { onLeak };
     }
     case 'litter.squeeze': {
       const i = cellIndex(a.x ?? 0, a.z ?? 0);

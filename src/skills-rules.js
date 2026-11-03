@@ -44,7 +44,7 @@ export const RULES = {
     const s = farm.stats;
     if (!s.levelMinutes) return null;
     const share = s.comfortMinutes / s.levelMinutes;
-    return { tier: share >= 0.85 ? 0 : null, detail: `chicks in their comfort band ${Math.round(share * 100)} % of the week` };
+    return { tier: share >= 0.95 ? 0 : null, detail: `chicks in their comfort band ${Math.round(share * 100)} % of the week` };
   },
   'day7-weight': (farm) => {
     const w = farm.stats.weighed;
@@ -54,7 +54,8 @@ export const RULES = {
   },
   'low-mortality': (farm) => {
     const f = farm.flock;
-    if (!f.delivered) return null;
+    // only a week that was lived: chicks placed and the flock brought to the weigh-in age (7.0)
+    if (!f.delivered || !(f.placed > 0) || farm.age < 7 - 1e-9) return null;
     const pct = (100 * (f.deadTotal + f.culls)) / f.delivered;
     return { tier: pct <= 1.0 + 1e-9 ? 0 : null, detail: `deaths and culls ${pct.toFixed(1)} % of the chicks` };
   },

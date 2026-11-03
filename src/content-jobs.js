@@ -51,7 +51,8 @@ const SIGNED = { type: 'event', event: EV.RECORD_CLOSED, match: { signed: true }
 //   lines-flushed    every farm.water.lines[i].flushClear >= 0.99
 //   all-placed       farm.flock.inBoxes === 0 and farm.flock.placed > 0
 //   dead-cleared     farm.flock.deadOnFloor === 0 and props.carrying !== 'bucket'
-//   house-near-target  env.houseTemp <= env.targetTemp + 1.5 for 30 game min
+//   house-near-target  env.houseTemp - env.windChill (what the chicks feel) <= env.targetTemp + 1.5
+//                      for 30 game min
 export const STATE_TEST_IDS = ['preheat-on', 'litter-covered', 'pans-flooded', 'lines-flushed', 'all-placed', 'dead-cleared', 'house-near-target'];
 
 export const JOBS = [
@@ -153,13 +154,16 @@ export const JOBS = [
     done: { type: 'action', id: 'water.fixLeak', match: { result: { fixed: true } } } }),
   P('p-wet-patch', 'Put fresh litter on the wet patch', {
     problem: 'leaking-nipple', after: 'p-leak', spot: 'leak', signs: ['sign-litter'], branch: null,
-    done: { type: 'action', id: 'litter.patch' } }),
+    done: { type: 'action', id: 'litter.patch', match: { result: { onLeak: true } } } }),
   P('p-order-feed', 'Order feed for the silos', {
     problem: 'low-silo', spot: 'officeDesk', signs: ['silo', 'feeder-box'], branch: null,
     done: { type: 'action', id: 'feed.order' } }),
   P('p-warm', 'The house is above its target this afternoon', {
     problem: 'warm-afternoon', spot: 'controller', signs: ['sign-brooder', 'sign-vent'], branch: null,
-    done: { type: 'state', test: 'house-near-target' } }),
+    // done once he changed the air (tunnel fans, the timer or the pad) and the chicks feel it
+    done: { type: 'all', of: [
+      { type: 'any', of: [{ type: 'action', id: 'vent.fans' }, { type: 'action', id: 'vent.timer' }, { type: 'action', id: 'vent.pad' }] },
+      { type: 'state', test: 'house-near-target' }] } }),
   P('p-report', 'Report the deaths to the company vet', {
     problem: 'abnormal-deaths', spot: 'officeDesk', signs: ['sign-health'], branch: null,
     done: { type: 'action', id: 'phone.report' } }),
@@ -204,6 +208,6 @@ export const JOB_WHERE = {
   'p-leak': 'The wet patch on the litter: look at the line above it.',
   'p-wet-patch': 'Rice husk heap: take a sack of husk, then E on the wet patch.',
   'p-order-feed': 'Office desk on the porch: the phone.',
-  'p-warm': 'Climate controller: fans and the timer. Watch the house temperature.',
+  'p-warm': 'Climate controller: tunnel fans, the cooling pad and the timer. Watch the house and the chicks.',
   'p-report': 'Office desk on the porch: the phone.',
 };

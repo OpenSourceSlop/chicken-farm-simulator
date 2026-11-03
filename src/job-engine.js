@@ -199,8 +199,9 @@ function stateTest(test, st, { env, farm, props }) {
     case 'all-placed': return farm.flock.inBoxes === 0 && farm.flock.placed > 0;
     case 'dead-cleared': return farm.flock.deadOnFloor === 0 && props?.carrying !== 'bucket';
     case 'house-near-target': {
-      // house at or below target + 1.5 °C for 30 game minutes in a row
-      if (env.houseTemp <= env.targetTemp + 1.5) { if (st.since == null) st.since = env.day; }
+      // the air the chicks feel (house air less the wind chill of the fans) at or below target
+      // + 1.5 °C for 30 game minutes in a row
+      if (env.houseTemp - (env.windChill || 0) <= env.targetTemp + 1.5) { if (st.since == null) st.since = env.day; }
       else st.since = null;
       return st.since != null && env.day - st.since >= 30 / 1440 - EPS;
     }

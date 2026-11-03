@@ -7,8 +7,9 @@ import { createSim } from './sim.js';
 import { createEvents, EV } from './events.js';
 import { createFarm } from './farm.js';
 import { createRecords } from './records.js';
-import { createSkills } from './skills.js';
+import { createSkills, MILESTONES } from './skills.js';
 import { applyRound, profileOf } from './farm-profiles.js';
+import { underLineMoisture } from './farm-litter.js';
 
 /** A farm wired as main.js wires it. */
 export function makeWorld() {
@@ -32,7 +33,7 @@ function schedule(P) {
     if (d === 1) s.push([1, 9, 'crop'], [1, 12.25, 'cp:crop']);
     if (d === 3) s.push([3, 4, 'snap:night']);
     if (d === 5) s.push([5, 10, 'snap:leak'], [5, 10, 'leak24']);
-    if (d === 6) s.push([6, 12, 'noon'], [6, 10, 'snap:day6'], [6, 17, 'late']);
+    if (d === 6) s.push([6, 12, 'noon'], [6, 10, 'snap:day6'], [6, 15, 'snap:warm'], [6, 17, 'late']);
     if (d === 7) s.push([7, 9, 'weigh'], [7, 9.5, 'cp:weighin']);
     s.push([d, 15, 'pm'], [d, 20, 'sign']);
   }
@@ -65,7 +66,8 @@ export function runProfile(name, { seed = 1, onStep = null } = {}) {
     if (kind === 'cp') { events.emit(EV.LEVEL, { phase: 'checkpoint', name: arg, day: env.dayNumber }); continue; }
     if (kind === 'snap') {
       if (arg === 'night') snaps.houseAt04Day3 = env.houseTemp;
-      if (arg === 'day6') { snaps.litterMeanDay6 = farm.litter.meanMoisturePct; snaps.nh3Day6 = farm.litter.ammoniaPpm; }
+      if (arg === 'day6') { snaps.litterMeanDay6 = farm.litter.meanMoisturePct; snaps.nh3Day6 = farm.litter.ammoniaPpm; snaps.litterUnderLinesDay6 = underLineMoisture(farm.litter); }
+      if (arg === 'warm') { snaps.houseOverTargetAt15Day6 = env.houseTemp - env.targetTemp; snaps.pantShareAt15Day6 = farm.comfort.pantShare; }
       if (arg === 'leak') {
         const leak = farm.water.leak, cell = leak ? leak.cell : null;
         snaps.leakCellPct = cell == null ? null : farm.litter.moistureGrid[cell];
@@ -143,6 +145,14 @@ export function checkProfile(name, run, targets, { assert, inBand }) {
         break;
       }
       case 'comfortShareBelowIdeal': assert(ideal().comfortShare - S.comfortShare >= v, `comfort share ${S.comfortShare.toFixed(4)} vs ideal ${ideal().comfortShare.toFixed(4)}`); break;
+      case 'ratioBelowIdeal': assert(ideal().ratio - S.ratio >= v, `ratio ${S.ratio.toFixed(3)} vs ideal ${ideal().ratio.toFixed(3)}, want >= ${v} below`); break;
+      case 'litterUnderLinesDay6': inBand(S.litterUnderLinesDay6, v, 'litter under the drinker lines day 6'); break;
+      case 'houseOverTargetAt15Day6': inBand(S.houseOverTargetAt15Day6, v, 'house over target 15:00 day 6'); break;
+      case 'pantShareAt15Day6': inBand(S.pantShareAt15Day6, v, 'panting share 15:00 day 6'); break;
+      case 'notEarned': for (const id of v) {
+        const m = MILESTONES.find((x) => x.id === id), got = m && run.skills.milestones(m.branch).find((x) => x.id === id);
+        assert(m && got.tier == null, `milestone ${id} earned (${got?.points} points)`);
+      } break;
       default: throw new Error(`unknown target ${k}`);
     }
   }

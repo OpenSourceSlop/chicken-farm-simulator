@@ -28,11 +28,17 @@ export const PROFILE_TARGETS = {
   noFlush: { waterQuality: 0.85, deathsOverIdeal: [0.05, 0.3] },
   neglect: { passes: false },                      // ratio < 4.0 and/or deaths + culls > 2 %
   coldNightWideTimer: { houseAt04Day3: [20, 28], coldDeaths: [3, 30], uniformityBelowIdeal: 2 },
-  noMinVent: { rhMinFromDay4: 85, litterMeanDay6: [30, 60], nh3Day6: [20, 60] },
+  noMinVent: { rhMinFromDay4: 85, litterMeanDay6: [30, 60], nh3Day6: [20, 60], ratioBelowIdeal: 0.15, uniformityBelowIdeal: 3 },
   leakUnfixed24h: { leakCellPct: [45, 70], caked: true },
   filterNeverFound: { ratio: [3.95, 4.35], meterChangePctDay4: [-20, -4], dehydrationDeaths: 0 },
   noFeedOrder: { ratio: [4.2, 4.6], pansEmptyBetween: [{ day: 6, hour: 16 }, { day: 7, hour: 4 }] },
-  brooderNeverRelit: { comfortShareBelowIdeal: 0.02 },
+  brooderNeverRelit: { comfortShareBelowIdeal: 0.04, uniformityBelowIdeal: 3, ratioBelowIdeal: 0.02, notEarned: ['steady-heat'] },
+  // review round 2: mistakes that must show in the records (PHASE2.md §6.10)
+  pressure20: { ratioBelowIdeal: 0.12, litterUnderLinesDay6: [35, 70], passes: true },
+  pansUp: { cropFill: [0, 0.85], deathsPct: [2, 100], passes: false },
+  neverPlaced: { deathsPct: [2, 100], passes: false, notEarned: ['low-mortality', 'steady-heat', 'crop-fill', 'day7-weight'] },
+  litter2cm: { comfortShareBelowIdeal: 0.05, uniformityBelowIdeal: 5, notEarned: ['steady-heat'] },
+  warmNoFan: { houseOverTargetAt15Day6: [2, 6], pantShareAt15Day6: [0.2, 1] },
 };
 
 const only = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null;
@@ -228,7 +234,7 @@ test('package: every action id answers with its result shape', () => {
   events.on(EV.ACTION, (p) => seen.push(p.id));
   const shape = {
     'heat.relight': ['fixed'], 'vent.timer': null, 'light.program': null, 'light.lux': ['lux'], 'litter.depth': null, 'litter.spread': ['cover'],
-    'litter.patch': null, 'litter.squeeze': ['moisturePct', 'feel'], 'floor.probe': ['tempC'], 'water.flush': ['flushClear'], 'water.pressure': null,
+    'litter.patch': ['onLeak'], 'litter.squeeze': ['moisturePct', 'feel'], 'floor.probe': ['tempC'], 'water.flush': ['flushClear'], 'water.pressure': null,
     'water.height': null, 'water.flowtest': ['mlMin'], 'water.meter': ['litres', 'litres24h', 'per1000', 'changePct'], 'water.filter': ['inBar', 'outBar'],
     'water.clearFilter': ['fixed'], 'water.fixLeak': ['fixed'], 'feed.line': null, 'feed.meter': ['kg'], 'feed.silo': ['kg'], 'feed.order': ['arriveDay', 'arriveHour'],
     'sample.box': ['chicks', 'weightKg', 'boxKg'], 'sample.grade': ['reflexSec', 'navel', 'hocks', 'weightG'],
@@ -258,7 +264,7 @@ test('package: problems start silently, symptoms from actions and EV.NEAR, forec
   events.emit(EV.NEAR, { problemId: 'brooder-out', x: -7, z: 2.6 });
   assert(got.includes('brooder-out:symptom') && farm.problemZones().length === 0, 'EV.NEAR finds it, the zone goes');
   assert(farm.act('heat.relight', { index: 5 }).fixed === true && env.brooderOut.length === 0 && got.includes('brooder-out:fixed'), 'relight fixes it');
-  assert(/13 °C/.test(farm.forecast(2).text) && /19 °C/.test(farm.forecast(1).text) && /33 °C/.test(farm.forecast(5).text), `forecasts: ${farm.forecast(2).text} | ${farm.forecast(5).text}`);
+  assert(/13 °C/.test(farm.forecast(2).text) && /19 °C/.test(farm.forecast(1).text) && /36 °C/.test(farm.forecast(5).text), `forecasts: ${farm.forecast(2).text} | ${farm.forecast(5).text}`);
   env.skipHours(24 + 24 + 6); // day 3 11:00: filter clogged
   assert(farm.water.filterFactor < 1 && !got.includes('blocked-filter:symptom'), 'the filter clogs silently');
   farm.act('water.meter');

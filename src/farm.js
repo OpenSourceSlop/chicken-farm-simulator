@@ -30,7 +30,7 @@ import { createWater, updateAccess, drink, stepLines, recordMeter, waterPerKg } 
 import { createFeed, stepAugers, feedAccess, eat, meanPanFill } from './farm-feed.js';
 import { createLitter, stepLitter, serializeLitter, restoreLitter, cellIndex as litterCell, meanDepth } from './farm-litter.js';
 import { comfortNow, floorShareAbove } from './farm-comfort.js';
-import { createFlock, deliver, stepFlock, updateWeights, makeQuantile } from './farm-flock.js';
+import { createFlock, deliver, stepFlock, stepBoxes, updateWeights, makeQuantile } from './farm-flock.js';
 import { createProblems, tickProblems, actionSymptoms, onNear, onListen, problemZones, forecast, observe,
   installWeather, applyEffects } from './farm-problems.js';
 import { doAct } from './farm-act.js';
@@ -54,15 +54,17 @@ import { doAct } from './farm-act.js';
  *   chickWeightMeasuredG: number|null,   // from sample.box: (gross - box) / 100, never typed
  *   weighed: { t: number, sector: number, weightG: number }[],  // sample.weigh readings
  *   pansEmptyAt: number|null,            // first time the pans ran empty (mean fill < 5 %)
+ *   scaleAtWeighInG: number|null,        // the automatic bird scale at the weigh-in age (7.0, 08:00 day 7):
+ *                                        // the level result uses it when nobody weighed by hand
  * }} FarmStats   read by skills.js and the result screen; never shown as a verdict
  */
 
 // ui-only actions the farm listens to (symptoms): the ui emits them with result undefined
-const UI_ACTIONS = new Set(['radio.listen', 'controller.read', 'phone.report', 'heat.setpoint', 'vent.fans', 'grade.submit', 'sign.read']);
+const UI_ACTIONS = new Set(['radio.listen', 'controller.read', 'phone.report', 'heat.setpoint', 'vent.fans', 'vent.pad', 'grade.submit', 'sign.read']);
 const freshStats = () => ({ truckAt: null, firstTipAt: null, lastTipAt: null, boxWeighedAt: null, floorShareAtFirstTip: null,
   heightsAtFirstTip: null, flushDoneAt: null, ventReadings: [], cropFillTrue: null,
   comfortMinutes: 0, levelMinutes: 0, comfortShareByDay: [], comfortByDay: [], chickWeightMeasuredG: null,
-  weighed: [], pansEmptyAt: null });
+  weighed: [], pansEmptyAt: null, scaleAtWeighInG: null });
 
 export function createFarm(env, { events } = {}) {
   const emit = (t, p) => events && events.emit(t, p);
@@ -211,20 +213,23 @@ function stepFarm(farm, env, hrs, spill) {
   const age = farm.age;
   updateAccess(water, age);
   recordMeter(water, env);
-  // flock
+  // flock (chicks still in the boxes first: the box hazard runs while they wait)
+  stepBoxes(farm, env, hrs);
   let drunkL = 0, breathL = 0;
   const C = farm.comfort;
   if (fl.placed > 0 && fl.alive > 0) {
     // what the chicks feel changes with the house air: recomputed every 5 game minutes (and at once
     // when the brooders that are out change)
     farm.comfortH += hrs;
-    if (farm.comfortH >= SLOW_H - 1e-9 || C.out !== env.brooderOut.length || C.e == null) { comfortNow(env, C); C.out = env.brooderOut.length; farm.comfortH = 0; }
+    if (farm.comfortH >= SLOW_H - 1e-9 || C.out !== env.brooderOut.length || C.e == null) { comfortNow(env, C, { litter: farm.litter, age }); C.out = env.brooderOut.length; farm.comfortH = 0; }
     const io = { feedAccess: feedAccess(feed, age, env.dayNumber), eat: (kg) => eat(feed, kg), waterPerKg: waterPerKg(env.houseTemp) };
     const r = stepFlock(farm, env, hrs, C, io);
     drunkL = r.drunkL; breathL = r.breathL;
     drink(water, drunkL, age, spill);
   } else spill.fill(0);
   if (st.pansEmptyAt == null && fl.placed > 0 && meanPanFill(feed) < 0.05) st.pansEmptyAt = env.day;
+  // the automatic bird scale (reads about 2 % high) when the weigh-in opens: flock age 7.0
+  if (st.scaleAtWeighInG == null && fl.placed > 0 && age >= lv.endDay - 1e-9 && fl.alive > 0) st.scaleAtWeighInG = +(fl.meanWeightG * 1.02).toFixed(1);
   // litter, air
   // the litter integrates what fell on it every 5 game minutes (moisture changes over hours)
   const L = farm.litter, la = farm.litAcc;
@@ -284,7 +289,7 @@ function restoreFarm(farm, env, d) {
   env.litterDepthAt = (x, z) => { const i = litterCell(x, z); return farm.litter.depthGrid[i] * farm.litter.coverGrid[i]; };
   env.litterDepthCm = meanDepth(farm.litter);
   updateAccess(farm.water, farm.age);
-  if (farm.flock.placed > 0) { updateWeights(farm.flock); comfortNow(env, farm.comfort); }
+  if (farm.flock.placed > 0) { updateWeights(farm.flock); comfortNow(env, farm.comfort, { litter: farm.litter, age: farm.age }); }
 }
 
 

@@ -147,7 +147,8 @@ export function createLevel(ctx, deps = {}) {
     const measured = farm.stats?.chickWeightMeasuredG;
     const chick = measured ?? farm.flock.chickWeightG ?? LEVEL1.chickWeightG;
     const wr = weighResult();
-    const weightG = wr ? wr.mean : (farm.flock.meanWeightG || 0) * 1.02; // automatic scale reads about 2 % high
+    // not weighed by hand: the automatic bird scale at the weigh-in age (08:00 day 7, about 2 % high)
+    const weightG = wr ? wr.mean : farm.stats?.scaleAtWeighInG ?? (farm.flock.meanWeightG || 0) * 1.02;
     const ratio = chick ? weightG / chick : null;
     const pass = ratio != null && ratio >= LEVEL1.fail.weightRatioMin && deathsPct <= LEVEL1.fail.mortalityMaxPct;
     const failText = deathsPct > LEVEL1.fail.mortalityMaxPct ? `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}` : `day 7 weight ${two(ratio)} × chick weight`;

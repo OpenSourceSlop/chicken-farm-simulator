@@ -24,14 +24,15 @@ export { runProfile, checkProfile } from './farm-profiles-run.js';
 
 /** Profile names (keys of PROFILE_TARGETS in scripts/test-sim.mjs). */
 export const PROFILES = ['ideal', 'smallMistakes', 'latePreheat', 'noFlush', 'neglect', 'coldNightWideTimer',
-  'noMinVent', 'leakUnfixed24h', 'filterNeverFound', 'noFeedOrder', 'brooderNeverRelit'];
+  'noMinVent', 'leakUnfixed24h', 'filterNeverFound', 'noFeedOrder', 'brooderNeverRelit',
+  'pressure20', 'pansUp', 'neverPlaced', 'litter2cm', 'warmNoFan'];
 
 // What each profile does differently from the ideal (PHASE2.md §6.10).
 const IDEAL = {
   preheat: { day: -1, hour: 7 }, setpointOffset: 0, litterCm: 8, flush: true,
   pressure: 'sign', heights: 'sign', flood: true, timer: 'sign', wideTimerFrom: null,
   light: { darkStart: 2, darkHours: 1, dimmer: 0.6 }, relight: true,
-  filter: 'am4', leak: 'pm4', feedOrder: true, warmFan: true,
+  filter: 'am4', leak: 'pm4', feedOrder: true, warmFan: true, pansCm: null, place: true,
 };
 const MODS = {
   ideal: {},
@@ -45,6 +46,12 @@ const MODS = {
   filterNeverFound: { filter: 'never' },
   noFeedOrder: { feedOrder: false },
   brooderNeverRelit: { relight: false },
+  // review round 2: mistakes that must show in the records
+  pressure20: { pressure: 20 },             // regulators far above the sign's flow all week
+  pansUp: { pansCm: 40 },                   // pans flooded but left winched up at 40 cm
+  neverPlaced: { place: false },            // the stacks never tipped: the chicks stay in the boxes
+  litter2cm: { litterCm: 2 },               // 2 cm of husk instead of 5-10 cm
+  warmNoFan: { warmFan: false },            // the day 6 warm afternoon without a tunnel fan
 };
 export const profileOf = (name) => ({ ...IDEAL, ...(MODS[name] || {}) });
 
@@ -78,7 +85,7 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
     for (let z = -4.8; z <= 4.81; z += 2.4) for (let x = -23.5; x <= 23.5; x += 0.5) act('litter.spread', { x, z, r: 1.2, quiet: true });
     for (const line of lines) { act('water.height', { line, cm: 11 }); act('water.pressure', { line, cm: pressureFor(P, 0) }); }
     for (const line of lines) act('water.flowtest', { line });
-    for (const line of [0, 1, 2]) act('feed.line', { line, running: true, flood: P.flood, heightCm: Math.round(feederRimCmAt(0)) });
+    for (const line of [0, 1, 2]) act('feed.line', { line, running: true, flood: P.flood, heightCm: P.pansCm ?? Math.round(feederRimCmAt(0)) });
     act('feed.silo');
     act('light.program', P.light);
     if (P.timer === 'sign') act('vent.timer', signTimer(farm));
@@ -123,7 +130,7 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
       const c = act('sample.grade', { i });
       if (c && (c.navel === 'open' || c.navel === 'black button' || c.reflexSec > 3)) act('chicks.cull', { n: 1, reason: 'grading', index: i });
     }
-    for (let s = 0; s < LEVEL1.stacks; s++) {
+    for (let s = 0; s < LEVEL1.stacks && P.place !== false; s++) {
       if (s > 0) env.skipHours(7 / 60);
       const [x, z] = TIP_SPOTS[s];
       act('chicks.tip', { stack: s, chicks: LEVEL1.chicksPlaced / LEVEL1.stacks, x, z });
@@ -133,14 +140,14 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
   if (round === 'vent') { for (let i = 0; i < 5; i++) act('sample.vent', { ...near(i, 1.2, 0.8), index: i }); return done; }
   if (round === 'crop') { for (let i = 0; i < 10; i++) act('sample.crop', { ...near(i, 1.2, 0.8), index: i }); return done; }
   if (round === 'weigh') { for (let i = 0; i < 50; i++) act('sample.weigh', { ...near(Math.floor(i / 10), 0.5, 0.5), index: i }); return done; }
-  if (round === 'noon') { if (day === 6 && P.warmFan) env.setFans(1); return done; }
+  if (round === 'noon') { if (day === 6 && P.warmFan) env.setFans(2); return done; } // the warm afternoon: two tunnel fans
   if (round === 'late') { if (day === 6 && P.warmFan) env.setFans(0); return done; }
   if (round === 'leak24') { if (P.leak === '24h') fixLeak(act, farm); return done; }
   if (round === 'pm') {
     act('litter.squeeze', { x: -16, z: 0.6 }); act('litter.squeeze', { x: -8, z: -1.95 }); act('litter.squeeze', { x: -4, z: 3.2 });
     if (day === 4 && P.leak === 'pm4' && farm.water.leak) { act('litter.squeeze', { x: farm.water.leak.x, z: farm.water.leak.z }); fixLeak(act, farm); }
     if (day === 4 && P.filter === 'pm4' && farm.water.filterFactor < 1) { for (const line of lines) act('water.flowtest', { line }); act('water.clearFilter'); }
-    if (day === 6 && P.warmFan && env.hour < 17) env.setFans(1);
+    if (day === 6 && P.warmFan && env.hour < 17) env.setFans(2);
     return done;
   }
   return done;
@@ -164,8 +171,8 @@ function heightFor(P, day, current) {
 }
 function feeders(act, P, day, age) {
   for (const line of [0, 1, 2]) {
-    if (day <= 3) act('feed.line', { line, running: true, flood: P.flood, heightCm: Math.round(feederRimCmAt(0)) });
-    else act('feed.line', { line, running: true, flood: false, heightCm: Math.floor(feederRimCmAt(Math.max(0, age))) });
+    if (day <= 3) act('feed.line', { line, running: true, flood: P.flood, heightCm: P.pansCm ?? Math.round(feederRimCmAt(0)) });
+    else act('feed.line', { line, running: true, flood: false, heightCm: P.pansCm ?? Math.floor(feederRimCmAt(Math.max(0, age))) });
   }
 }
 function timer(act, P, day, farm) {

@@ -184,7 +184,9 @@ test('matchPayload on { result: { fixed: true } }; problems open only on a sympt
   assert(patch.status === 'waiting', 'a patch before the fix does not count');
   L.act('water.fixLeak', { line: 2, x: -9.15, result: { fixed: true } });
   assert(patch.status === 'open', 'patch opens after the leak');
-  L.act('litter.patch', { x: -9, z: 2, result: true });
+  L.act('litter.patch', { x: 1, z: -5, result: { onLeak: false } });
+  assert(patch.status === 'open', 'a sack 10 m away does not patch the wet cell');
+  L.act('litter.patch', { x: -9, z: 2, result: { onLeak: true } });
   assert(patch.status === 'done', 'patched');
   L.events.emit(EV.FARM_PROBLEM, { id: 'cold-night', phase: 'symptom' });
   const cold = L.jobs.list().find((i) => i.id === 'p-cold-night');
@@ -226,7 +228,9 @@ test('state rules: preheat and the 30-minute house-near-target', () => {
   L2.env.forceHouseTemp(L2.env.targetTemp + 1); L2.jobs.tick();
   const w = L2.jobs.list().find((i) => i.id === 'p-warm');
   L2.at(6, 13 + 20 / 60); assert(w.status === 'open', 'not yet 30 min');
-  L2.at(6, 13 + 31 / 60); assert(w.status === 'done', `30 min near target: ${w.status}`);
+  L2.at(6, 13 + 31 / 60); assert(w.status === 'open', `near target but nothing done to the air: ${w.status}`);
+  L2.act('vent.fans', { n: 1 });
+  assert(w.status === 'done', `a tunnel fan on and 30 min near target: ${w.status}`);
 });
 
 test('nextOpening: before the truck, after the morning, never past the level end', () => {

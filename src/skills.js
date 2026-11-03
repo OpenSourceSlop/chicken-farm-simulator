@@ -40,11 +40,11 @@ export const MILESTONES = [
   { id: 'brooder-relit', branch: 'brooding', checkpoint: 'problem', text: 'Cold brooder found and relit the same morning',
     tiers: [{ points: 1, rule: 'brooder-out fixed by 12:00 on day 1' }] },
   { id: 'steady-heat', branch: 'brooding', checkpoint: 'level-end', text: 'Chicks comfortable through the week',
-    tiers: [{ points: 2, rule: 'stats.comfortMinutes / stats.levelMinutes >= 0.85 (e within -1.5..+2 °C, age 0..7)' }] },
+    tiers: [{ points: 2, rule: 'stats.comfortMinutes / stats.levelMinutes >= 0.95 (share of the chicks whose group e is within -1.5..+2 °C, age 0..7)' }] },
   { id: 'day7-weight', branch: 'brooding', checkpoint: 'weighin', text: 'Day 7 weight against chick weight',
     tiers: [{ points: 1, rule: 'weighed mean >= 4.0 x chick weight' }, { points: 3, rule: '>= 4.5 x' }] },
   { id: 'low-mortality', branch: 'brooding', checkpoint: 'level-end', text: 'Week 1 deaths at or below 1 %',
-    tiers: [{ points: 1, rule: '(deaths + culls) / placed <= 1.0 % at the end of day 7' }] },
+    tiers: [{ points: 1, rule: '(deaths + culls) / placed <= 1.0 % at the end of day 7 (chicks placed, flock age >= 7.0)' }] },
   // Water (max 11)
   { id: 'flushed-on-time', branch: 'water', checkpoint: 'placed', text: 'Lines flushed about 12 hours before the chicks',
     tiers: [{ points: 2, rule: 'all 4 lines ran clear, stats.flushDoneAt 6-18 h before stats.truckAt' }] },

@@ -21,6 +21,7 @@ export function createFeed() {
     order: null,             // { kg, arriveDay, orderedAt } while a delivery is on its way
     orders: [],              // every order: { kg, orderedAt, arriveDay, arrivedAt }
     access: 0,               // f_F of the flock now
+    reach: 0,                // share of the pans the chicks can reach and eat from (fill x rim height, no flood factor)
     emptyAt: null,           // env.day when the pans ran empty (mean fill < 5 %)
   };
 }
@@ -43,15 +44,16 @@ export function stepAugers(feed, hrs) {
 
 /** f_F at flock age `age`: pan fill, flood in the first days, rim height. */
 export function feedAccess(feed, age, calendarDay) {
-  let s = 0;
+  let s = 0, r = 0;
   const rim = feederRimCmAt(Math.max(0, age));
   for (const l of feed.lines) {
     const fill = Math.min(1, l.kg / FEED.panKgNormal / FEED.accessFill);
     const early = calendarDay <= 3 && !l.flood ? FEED.notFloodedEarly : 1;
     const rimF = Math.max(0, 1 - FEED.rimPerCm * Math.max(0, l.heightCm - rim));
-    s += fill * early * rimF;
+    s += fill * early * rimF; r += fill * rimF;
   }
   feed.access = s / feed.lines.length;
+  feed.reach = r / feed.lines.length;
   return feed.access;
 }
 

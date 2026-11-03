@@ -44,7 +44,7 @@ const RAMP_DAYS = 2 / 24;   // weather events ramp in and out over 2 h
 // A brooder that is out leaves the air around it cooler than the house mean: the other brooders'
 // heat reaches it only by mixing (model). Air there = house - OUT_AIR.c x output x (g - mean g),
 // g a Gaussian of OUT_AIR.sigma m around it; mean g over the brooding floor keeps the house mean.
-const OUT_AIR = { c: 3, sigma: 2.5 };
+const OUT_AIR = { c: 6, sigma: 2.5 };
 const OUT_MEAN = HEATERS.map((h) => {
   let s = 0, n = 0;
   for (let x = BROOD_BOUNDS.xMin + 0.5; x < BROOD_BOUNDS.xMax; x += 1) for (let z = BROOD_BOUNDS.zMin + 0.5; z < BROOD_BOUNDS.zMax; z += 1) {

@@ -48,7 +48,7 @@ export function buildLevelControllerPanel(L) {
   // switched on by hand (env.fansManual).
   const manualFans = (d) => { env.setFans((env.fansManual ?? env.fansOn) + d); L.uiAct('vent.fans', { n: env.fansManual ?? env.fansOn }); refresh(); };
   const fanOut = out(), padBtn = button({ class: 'key key--wide', 'aria-pressed': 'false' });
-  padBtn.addEventListener('click', () => { env.setPad(!env.padOn); refresh(); });
+  padBtn.addEventListener('click', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); refresh(); });
   const draft = { fans: env.ventTimer?.fans ?? 1, onSec: env.ventTimer?.onSec ?? 0, cycleSec: env.ventTimer?.cycleSec ?? 300 };
   const tFans = out(), tOn = out(), tCycle = out(), tAir = h('span', { class: 'ctrl-air' });
   const step = (k, d, lo, hi) => () => { draft[k] = Math.max(lo, Math.min(hi, draft[k] + d)); if (draft.onSec > draft.cycleSec) draft.onSec = draft.cycleSec; refresh(); };
