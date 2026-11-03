@@ -55,10 +55,10 @@ export function createHud(parent, env) {
     b.addEventListener('click', () => { env.timeScale = s.scale; env.paused = false; refresh(); });
     return b;
   });
-  const skipBtn = button({ class: 'btn', title: 'Move the farm clock on by one hour' });
+  const skipBtn = button({ class: 'btn', title: 'Move the farm clock on by one hour', 'aria-label': 'Skip 1 hour' });
   skipBtn.innerHTML = `${ICONS.skip}<span>Skip 1 hour</span>`;
   skipBtn.addEventListener('click', () => { env.skipHours(1); refresh(); });
-  const morningBtn = button({ class: 'btn', title: 'Jump to 06:00 tomorrow morning' });
+  const morningBtn = button({ class: 'btn', title: 'Jump to 06:00 tomorrow morning', 'aria-label': 'Next morning (06:00)' });
   morningBtn.innerHTML = `${ICONS.sunrise}<span>Next morning (06:00)</span>`;
   morningBtn.addEventListener('click', () => {
     const hrs = ((TIME.sunrise - env.hour + 24) % 24) || 24;
