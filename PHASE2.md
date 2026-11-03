@@ -654,6 +654,9 @@ from `env.day`.
   the counts and sizes, dead birds where they lay) → level (jobs, anchors).
 - *Start Level 1* with a save asks by a second press ("Start again — replaces your day 3 save").
 - Storage blocked: the game plays the same; the title card says "Saving is off in this browser".
+- **Measured at integration** (`scripts/p2-level1.json`, real play, just before the day 7 signing, the
+  largest point of the week): 64.3 KB (records 34.0, level 18.1, farm 11.5, flock and props < 1);
+  under 60 KB through day 6. localStorage holds megabytes, so this only matters as a budget.
 
 ## 12. New 3D content
 
