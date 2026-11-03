@@ -1,0 +1,20 @@
+[
+  {"wait": 600},
+  {"clearStorage": true},
+  {"eval": "__game.stop(), window.__p = {}, 'p3-scene-perf (package scene): draw calls, triangles and the frame step in the house view; run it on main too and compare (PHASE3.md §12 budgets: +1 ms a frame at 1,800 birds, +40 draw calls, +60 k triangles)'"},
+  {"eval": "__game.startLevel({ seed: 1 }), __game.cycleAt(31, 15), __game.level.hudHooks.togglePause(), __game.setState({ farmer: { x: 0, z: 0.5, yaw: 0 }, cameraYaw: 0, zoom: 18 }), __game.settle(3), 'day 31 15:00, the farmer inside, clock held: ' + __game.flock.count + ' drawn birds'"},
+  {"eval": "(() => { const r = __game.renderer; r.info.autoReset = false; r.info.reset(); __game.renderNow(); const out = { calls: r.info.render.calls, triangles: r.info.render.triangles, programs: r.info.programs.length }; r.info.autoReset = true; window.__p.house = out; return 'house view: ' + JSON.stringify(out); })()"},
+  {"eval": "(() => { const t = []; for (let k = 0; k < 5; k++) { const t0 = performance.now(); __game.advance(1, 1 / 30); t.push((performance.now() - t0) / 30); } t.sort((a, b) => a - b); window.__p.stepMs = +t[0].toFixed(3); return 'frame step (env, player, world, house, props, flock, ui, level) best of 5 x 30 frames: ' + t[0].toFixed(3) + ' ms'; })()"},
+  {"eval": "(() => { const f = __game.flock, t = []; for (let k = 0; k < 5; k++) { const t0 = performance.now(); for (let i = 0; i < 30; i++) f.update(1 / 30, __game.env, __game.player.position); t.push((performance.now() - t0) / 30); } t.sort((a, b) => a - b); window.__p.flockMs = +t[0].toFixed(3); return 'flock.update best of 5 x 30: ' + t[0].toFixed(3) + ' ms'; })()"},
+  {"eval": "(() => { const p = __game.props, t = []; for (let k = 0; k < 5; k++) { const t0 = performance.now(); for (let i = 0; i < 30; i++) p.update(1 / 30, __game.env, { camera: __game.camera, playerPos: __game.player.position, playerInside: true, night: 0 }); t.push((performance.now() - t0) / 30); } t.sort((a, b) => a - b); window.__p.propsMs = +t[0].toFixed(3); return 'props.update best of 5 x 30: ' + t[0].toFixed(3) + ' ms'; })()"},
+  {"state": {"farmer": {"x": -14, "z": 9, "yaw": 0}, "cameraYaw": 0, "zoom": 24}},
+  {"eval": "(() => { const r = __game.renderer; r.info.autoReset = false; r.info.reset(); __game.renderNow(); const out = { calls: r.info.render.calls, triangles: r.info.render.triangles }; r.info.autoReset = true; window.__p.yard = out; return 'yard at the door: ' + JSON.stringify(out); })()"},
+  {"eval": "__game.level.hudHooks.togglePause(), __game.cycleAt(42, 2.4), 'the catching night ' + __game.env.timeLabel"},
+  {"state": {"farmer": {"x": -14, "z": 9, "yaw": 0}, "cameraYaw": -0.35, "zoom": 26}},
+  {"advance": 12},
+  {"eval": "(() => { const r = __game.renderer; r.info.autoReset = false; r.info.reset(); __game.renderNow(); const out = { calls: r.info.render.calls, triangles: r.info.render.triangles, programs: r.info.programs.length }; r.info.autoReset = true; window.__p.catchYard = out; return 'catching night at the door: ' + JSON.stringify(out); })()"},
+  {"state": {"farmer": {"x": -6, "z": 0.5, "yaw": 0}, "cameraYaw": 0, "zoom": 18}},
+  {"advance": 1},
+  {"eval": "(() => { const r = __game.renderer; r.info.autoReset = false; r.info.reset(); __game.renderNow(); const out = { calls: r.info.render.calls, triangles: r.info.render.triangles, programs: r.info.programs.length }; r.info.autoReset = true; window.__p.catchHouse = out; return 'catching night in the house: ' + JSON.stringify(out); })()"},
+  {"eval": "'RESULT ' + JSON.stringify(window.__p)"}
+]

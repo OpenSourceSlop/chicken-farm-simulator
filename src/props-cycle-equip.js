@@ -4,7 +4,8 @@
 // its gauge, the two silo slide valves on the boots. Static parts go into the props' static batch; lamps,
 // handles and needles into the shared box pool. Owner: package "scene".
 import * as THREE from 'three';
-import { FARM, SPOTS3, HOUSE, HOUSE_BOUNDS, FAN_COUNT } from './config.js';
+import { FARM, SPOTS2, SPOTS3, HOUSE, HOUSE_BOUNDS, FAN_COUNT } from './config.js';
+import { WATER } from './props-equip.js';
 import { Batch, mat, placer, canvasTexture, FONT, clamp01, lerp } from './props-kit.js';
 import { hutRack, lpgTank } from './props-cycle-models.js';
 
@@ -50,7 +51,7 @@ export function buildCycleEquipment(stat, pool, group) {
   stat.rod([W.x + 0.3, 1.5, wz + 0.04], [HOUSE.broodCurtainX, 2.6, wz - 0.02], 0.006, 0x3a3e42, 3); // cable to the wire
   stat.box(0.05, 0.05, 0.12, W.x + 0.3, 1.15, wz + 0.2, 0x3a3e42);                // crank shaft
   const crank = pool.slot(), crankKnob = pool.slot();
-  tabSpots.set('sign-curtain-winch', { x: W.x + 0.3, y: 1.6, z: wz + 0.2, ry: 0, rx: 0 });
+  tabSpots.set('curtain-winch', { x: W.x + 0.3, y: 1.6, z: wz + 0.2, ry: 0, rx: 0 });
 
   // ---------------- fan panel on the north wall at the fan end ----------------
   const F = SPOTS3.fanPanel, fz = zMin + 0.2;
@@ -109,6 +110,24 @@ export function buildCycleEquipment(stat, pool, group) {
   const gaugeAt = { x: G.x + 0.1, y: 0.95 + 0.55 + 0.2, z: G.z - 0.6 + 0.052 };
   tabSpots.set('gas-tank', { x: G.x - 0.6, y: 1.9, z: G.z - 0.1, ry: 0, rx: 0 });
   colliders.push({ type: 'box', minX: G.x - 1.25, maxX: G.x + 1.25, minZ: G.z - 1.2, maxZ: G.z });
+
+  // ---------------- loading bay: the ticket box on a post by the truck stop ----------------
+  const LB = SPOTS3.loadingBay;
+  stat.box(0.08, 1.35, 0.08, LB.x, 0.675, LB.z - 0.05, STEEL);
+  stat.box(0.44, 0.34, 0.16, LB.x, 1.32, LB.z, 0x2f6fb5);
+  stat.box(0.34, 0.24, 0.01, LB.x, 1.33, LB.z + 0.085, 0xf4f1ea);
+  for (let k = 0; k < 4; k++) stat.box(0.26, 0.012, 0.004, LB.x, 1.4 - k * 0.05, LB.z + 0.09, 0x9aa7b5);
+  tabSpots.set('loading-bay', { x: LB.x + 0.2, y: 1.66, z: LB.z + 0.1, ry: 0, rx: 0 });
+  colliders.push({ type: 'circle', x: LB.x, z: LB.z, r: 0.2 });
+  // plates without a 3D object of their own: the vaccine and medicine tabs on the water supply, the
+  // planning sheet on the office desk
+  {
+    const c = Math.cos(WATER.face), s = Math.sin(WATER.face), at = (u) => ({ x: WATER.x + u * c, z: WATER.z - u * s });
+    tabSpots.set('vaccine', { ...at(0.15), y: 2.05, ry: WATER.face, rx: 0 });
+    tabSpots.set('medicator', { ...at(-0.3), y: 2.05, ry: WATER.face, rx: 0 });
+    const O = SPOTS2.officeDesk;
+    tabSpots.set('plan-sheet', { x: O.x - 0.3, y: 1.15, z: O.z + 1.15, ry: 0, rx: 0 });
+  }
 
   // ---------------- silo slide valves on the boots ----------------
   const valves = FARM.silos.map((s) => {

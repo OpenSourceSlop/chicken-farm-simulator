@@ -128,6 +128,7 @@ export function createCycleTools(ctx, { props, pool, yard, lv }) {
   }
   return {
     st,
+    slots: { tape: tapeSlot, hose: hoseSlots },
     get panelsSeen() { return st.panelsSeen; },
     update(dt, level) {
       const P = pl(), f = farm();

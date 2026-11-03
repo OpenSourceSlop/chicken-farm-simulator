@@ -127,6 +127,8 @@ export function buildPad(kit) {
   return {
     /** dry pad sections now (0 = the north side), for tests */
     dry: dry6,
+    uniforms: padU, material: padMat,
+    get wet() { return wet; },
     overflow: over,
     update(dt, env) {
       wet = smooth(wet, env.padOn ? 1 : 0, env.padOn ? 0.8 : 0.25, dt);
@@ -191,7 +193,7 @@ ${mode === 'pad' ? 'attribute float aSec;' : ''}`).replace('#include <begin_vert
 ${decl}`);
     if (mode === 'pad') {
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <color_fragment>', '#include <color_fragment>\n  float wetK = mix(1.0, 0.75, uWet * (1.0 - vDry));\n  diffuseColor.rgb *= wetK;')
+        .replace('#include <color_fragment>', '#include <color_fragment>\n  float wetK = mix(1.0, 0.75, uWet * (1.0 - vDry)) * (1.0 + 0.12 * uWet * vDry);\n  diffuseColor.rgb *= wetK;')
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance *= wetK;');
     } else {
       sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.a *= 1.0 - vDry;');

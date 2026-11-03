@@ -2,7 +2,7 @@
   {"wait": 600},
   {"clearStorage": true},
   {"eval": "__game.stop(), window.__t = { acts: [], programs0: null }, __game.events.on('action', (p) => { if (['plan.measure', 'clean.swab', 'fan.fix', 'clean.bait', 'clean.brush', 'catch.panels', 'house.close', 'bio.change'].includes(p.id)) window.__t.acts.push({ id: p.id, axis: p.axis, m: p.m, spot: p.spot }); }), 'p3-scene-events (package scene, PHASE3.md §14.4): the scene against the stubs; expect lines PASS / FAIL'"},
-  {"eval": "__game.startLevel({ seed: 1 }), __game.renderNow(), (window.__t.programs0 = __game.renderer.info.programs.length), 'prep day: ' + window.__t.programs0 + ' shader programs after the warm-up and the first frame'"},
+  {"eval": "__game.startLevel({ seed: 1 }), __game.renderNow(), __game.advance(0.2), __game.renderNow(), (window.__t.programs0 = __game.renderer.info.programs.length), 'prep day: ' + window.__t.programs0 + ' shader programs after the warm-up and the first frame'"},
 
   {"eval": "__game.props.startCarry('tape', {}), __game.setState({ farmer: { x: -23.6, z: 0.4, yaw: Math.PI / 2 }, cameraYaw: 0, zoom: 14 }), 'carrying the tape at the west end wall'"},
   {"press": "e"},
@@ -28,7 +28,7 @@
   {"advance": 1},
   {"expect": "(() => { const a0 = window.__t.a0, a1 = Array.from(__game.house.debug.fans.angle); const still = Math.abs(a1[3] - a0[3]) < 1e-6 && __game.house.debug.fans.speed[3] === 0; const others = [0, 1, 2, 4, 5].every((i) => Math.abs(a1[i] - a0[i]) > 0.1); return still && others && 'fan 4 blade still, the other five turning; fan 4 lamp on: ' + (__game.env.fansOn > 3); })()", "label": "fan 4 broken: its rotor still while the others turn"},
   {"expect": "(() => { const it = __game.interact.get('fan-3'); return it && it.enabled() && 'fan-3 interactable enabled while the belt is broken'; })()", "label": "fan-3 can be fixed while it is broken"},
-  {"eval": "__game.setState({ farmer: { x: 22.8, z: -0.95, yaw: -Math.PI / 2 } })"},
+  {"eval": "__game.setState({ farmer: { x: 22.75, z: 2.85, yaw: -Math.PI / 2 } }), 'at fan 4 (index 3, z 2.85) inside the east end'"},
   {"press": "e"},
   {"expect": "window.__t.acts.some((q) => q.id === 'fan.fix') && 'E at fan 4: fan.fix sent'", "label": "E at the broken fan sends fan.fix"},
   {"eval": "__game.env.setFansBroken([]), __game.level.hudHooks.togglePause(), 'belt fitted (the stub does not fix it, the test does)'"},
