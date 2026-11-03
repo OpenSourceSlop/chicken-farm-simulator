@@ -3,7 +3,7 @@
   {"clearStorage": true},
   {"eval": "__game.stop(), window.__acts = [], __game.events.on('action', (p) => window.__acts.push({ id: p.id, truck: p.truck, on: p.on })), window.__catch = [], __game.events.on('catch', (p) => window.__catch.push(p.phase)), window.__open = () => document.querySelector('#hud .panel:not([hidden])'), 'stopped: the loading bay on the catching night (PHASE3.md §14.3 p3-panels-harvest)'"},
   {"eval": "(() => { const t = performance.now(); __game.cycleAt(42, 1); return 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ' in ' + Math.round(performance.now() - t) + ' ms: ' + __game.farm.flock.alive + ' birds, catch at ' + __game.farm.harvest.catchAt; })()"},
-  {"eval": "__game.ui.openPanel('feeder-box')"},
+  {"eval": "window.__acts.length = 0, __game.farm.act('feed.withdraw', { on: false }), window.__acts.length = 0, __game.ui.openPanel('feeder-box')"},
   {"advance": 0.3},
   {"expect": "(() => { const b = [...__open().querySelectorAll('button')].find((x) => x.textContent === 'Take the feed away' && x.offsetParent !== null); return !!b && 'day 42: the feeder box has Take the feed away'; })()", "label": "the feeder box offers the feed withdrawal in the finishing days"},
   {"clickText": "Take the feed away", "in": ".panel:not([hidden])"},

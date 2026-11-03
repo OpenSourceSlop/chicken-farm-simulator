@@ -132,10 +132,10 @@ export function cycleSiloParts(L) {
       const rows = historyOf(env).filter((r) => Number.isFinite(r.feedKg));
       const total = silos.reduce((a, s) => a + Math.max(0, s.kg || 0), 0);
       let perDay = null, how = '';
-      if (rows.length >= 2 && rows[rows.length - 1].t - rows[0].t >= 0.25) {
+      if (rows.length >= 2 && rows[rows.length - 1].t - rows[0].t >= 0.8) {
         const a = rows[0], b = rows[rows.length - 1];
         perDay = (b.feedKg - a.feedKg) / (b.t - a.t);
-        how = 'at the feed meter’s rate of the last hours';
+        how = 'at the feed meter’s rate of the last 24 hours';
       }
       if (!(perDay > 0)) { perDay = (knownBirds(farm) * feedStdGAt(flockAgeAt(env.day))) / 1000; how = 'at the feed sign’s figure for today'; }
       days.set(perDay > 0 ? `about ${one(total / perDay)} days` : '—', how);

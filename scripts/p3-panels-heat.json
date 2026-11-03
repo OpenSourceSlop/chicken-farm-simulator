@@ -3,7 +3,7 @@
   {"clearStorage": true},
   {"eval": "__game.stop(), window.__acts = [], __game.events.on('action', (p) => window.__acts.push({ id: p.id, fans: p.fans, n: p.n, on: p.on })), window.__open = () => document.querySelector('#hud .panel:not([hidden])'), window.__chill = () => { const c = __open()?.querySelector('.cyc-windchill'); return !!c && !c.hidden && c.offsetParent !== null; }, 'stopped: the fan panel in the heat wave (PHASE3.md §14.3 p3-panels-heat)'"},
   {"eval": "(() => { const t = performance.now(); __game.cycleAt(31, 14); return 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ' in ' + Math.round(performance.now() - t) + ' ms: fans ' + __game.env.fansManual + ', pad ' + __game.env.padOn + ', house ' + __game.env.houseTemp.toFixed(1) + ' °C ' + Math.round(__game.env.houseRH) + ' %'; })()"},
-  {"eval": "__game.env.setFans(2), __game.env.setPad(false), __game.ui.openPanel('fan-panel')"},
+  {"eval": "window.__acts.length = 0, __game.skills.reset(), __game.env.setFans(2), __game.env.setPad(false), __game.ui.openPanel('fan-panel')"},
   {"advance": 0.3},
   {"expect": "(() => { const t = __open().querySelector('.lcd-grid').textContent; return /House/.test(t) && /Humidity in/.test(t) && 'LCD: ' + t.replace(/\\s+/g, ' ').trim(); })()", "label": "the fan panel shows house °C and humidity side by side"},
   {"expect": "!__chill() && 'no wind chill readout before Heat & Ventilation level 1'", "label": "the wind chill line is absent before the unlock"},
