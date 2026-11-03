@@ -236,7 +236,11 @@ function ruleResult(rule, st) {
   switch (rule.type) {
     case 'event': case 'action': return st.payload;
     case 'each': return { ...st.seen };
-    case 'count': return st.list.map((r) => ({ x: r.x, z: r.z, sector: r.s, result: r.r }));
+    case 'count': {
+      // the samples themselves are in the notebook: the record keeps how many, where, and the values
+      const one = (r) => (r && typeof r === 'object' && Object.keys(r).length === 1 ? Object.values(r)[0] : r);
+      return { n: st.list.length, sectors: [...new Set(st.list.map((r) => r.s))], values: st.list.map((r) => one(r.r)) };
+    }
     case 'coverage': return { seenPct: Math.round(coverageShare(st) * 100), listened: st.listened };
     case 'state': return st.value;
     case 'all': case 'any': return rule.of.map((r, i) => (st.met[i] ? ruleResult(r, st.parts[i]) : null));
@@ -464,18 +468,32 @@ export function createJobEngine({ events, env, farm, props, records, jobs = JOBS
       return c;
     },
     serialize() {
+      // compact (the autosave stays small all week): id and day come from the key, times to ~1 s,
+      // a closed job keeps its rule state only for sample counts (the card's tallies)
+      const t = (v) => (v == null ? v : Math.round(v * 1e5) / 1e5);
       return { v: 1, lastDay, anchors: { ...anchors }, currentKey, started,
-        list: list.map((i) => ({ key: i.key, id: i.id, day: i.day, status: i.status, opensAt: i.opensAt, closesAt: i.closesAt, doneAt: i.doneAt, progress: i.progress, result: i.result, st: i.st })) };
+        list: list.map((i) => {
+          // a closed job without rule state is a tuple [key, status, opensAt, closesAt, doneAt]
+          if ((i.status === 'done' || i.status === 'missed') && i.def.done?.type !== 'count') return [i.key, i.status, t(i.opensAt), t(i.closesAt), t(i.doneAt)];
+          const o = { key: i.key, status: i.status, opensAt: t(i.opensAt), closesAt: t(i.closesAt), doneAt: t(i.doneAt) };
+          // a closed job's result is in records.logJob already; open ones keep their rule state
+          // (count jobs keep it closed too: the card shows their tallies)
+          if (i.status !== 'done') o.progress = Math.round(i.progress * 1000) / 1000;
+          if (i.status === 'waiting' || i.status === 'open' || i.def.done?.type === 'count') o.st = i.st;
+          return o;
+        }) };
     },
     restore(d) {
       list = []; byKey.clear(); anchors.truck = anchors.placed = null; currentKey = null;
       if (!d) { started = false; return; }
       lastDay = d.lastDay; currentKey = d.currentKey ?? null; started = d.started !== false;
       Object.assign(anchors, d.anchors || {});
-      for (const s of d.list || []) {
-        const def = jobs.find((j) => j.id === s.id);
+      for (const raw of d.list || []) {
+        const s = Array.isArray(raw) ? { key: raw[0], status: raw[1], opensAt: raw[2], closesAt: raw[3], doneAt: raw[4] } : raw;
+        const at = s.key.lastIndexOf('@'), id = s.id ?? s.key.slice(0, at), day = s.day ?? Number(s.key.slice(at + 1));
+        const def = jobs.find((j) => j.id === id);
         if (!def) continue;
-        const inst = { ...s, def, st: s.st || initState(def.done) };
+        const inst = { ...s, id, day, def, progress: s.progress ?? (s.status === 'done' ? 1 : 0), result: s.result ?? null, st: s.st || initState(def.done) };
         list.push(inst); byKey.set(inst.key, inst);
       }
     },

@@ -172,7 +172,7 @@ export function buildWeighPanel(L) {
     const valid = weights.filter((w) => Number.isFinite(w));
     frameMean.set(valid.length ? `${int(valid.reduce((a, b) => a + b, 0) / valid.length)} g` : '—', `${valid.length} of ${valid.length + queue.length} birds`);
     const all = L.weighings();
-    allMean.set(all.n ? `${int(all.mean)} g` : '—', all.n ? `${all.n} birds · ${all.sectors} places` : '');
+    allMean.set(all.n ? `${int(all.mean)} g` : '—', all.n ? `${all.n} bird${all.n === 1 ? '' : 's'} · ${all.sectors} place${all.sectors === 1 ? '' : 's'}` : '');
     nextBtn.disabled = allBtn.disabled = !queue.length;
   }
   return {

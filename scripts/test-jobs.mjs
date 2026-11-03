@@ -95,7 +95,7 @@ test('d7-weigh 08:00-18:00 on day 7, count with 5 sectors', () => {
   const xs = [-20, -12, -4, -20, -12];
   for (let i = 0; i < 50; i++) L.act('sample.weigh', { x: xs[i % 5], z: i % 5 < 3 ? -2 : 2, index: i, result: { weightG: 200 } });
   assert(w.status === 'done', `50 from 5 sectors: ${w.status} ${w.progress}`);
-  assert(L.logged.some((l) => l.key === 'd7-weigh@7' && l.result.length === 50), 'result logged with 50 readings');
+  assert(L.logged.some((l) => l.key === 'd7-weigh@7' && l.result.n === 50 && l.result.values.length === 50), 'result logged with 50 readings');
 });
 
 test('each: four flow tests; skip past the window marks missed', () => {

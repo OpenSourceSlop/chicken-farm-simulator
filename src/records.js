@@ -90,11 +90,17 @@ export function createRecords({ farm, env, events } = {}) {
     /** The result screen's "your week": settings and readings beside the sign values, per day. */
     timeline() { return records.rows().map(timelineOf); },
     reset() { notebook.length = 0; rows.clear(); jobLog.length = 0; for (const k of Object.keys(extras)) delete extras[k]; state.closedThrough = null; },
-    serialize() { return { v: 1, notebook: notebook.slice(), rows: records.rows(), jobLog: jobLog.slice(), extras: JSON.parse(JSON.stringify(extras)), closedThrough: state.closedThrough }; },
+    // notebook lines saved as [day, hour, kind, value, where?] (the autosave stays small all week)
+    serialize() { return { v: 1, notebook: notebook.map((n) => (n.where ? [n.day, n.hour, n.kind, n.value, n.where] : [n.day, n.hour, n.kind, n.value])), rows: records.rows(), jobLog: jobLog.slice(), extras: JSON.parse(JSON.stringify(extras)), closedThrough: state.closedThrough }; },
     restore(d) {
       records.reset();
       if (!d) return;
-      notebook.push(...(d.notebook || []));
+      for (const n of d.notebook || []) {
+        if (!Array.isArray(n)) { notebook.push(n); continue; }
+        const o = { day: n[0], hour: n[1], kind: n[2], value: n[3] };
+        if (n[4]) o.where = n[4];
+        notebook.push(o);
+      }
       for (const r of d.rows || []) rows.set(r.day, r);
       jobLog.push(...(d.jobLog || []));
       Object.assign(extras, JSON.parse(JSON.stringify(d.extras || {})));
@@ -113,7 +119,13 @@ export function createRecords({ farm, env, events } = {}) {
         const v = { id: p.id, ...strip(p) }, js = JSON.stringify(v);
         for (let i = notebook.length - 1; i >= 0; i--) {
           const n = notebook[i];
-          if (n.kind === 'setting' && n.value.id === v.id && n.value.line === v.line) { if (JSON.stringify(n.value) === js) return; break; }
+          if (n.kind === 'setting' && n.value.id === v.id && n.value.line === v.line) {
+            if (JSON.stringify(n.value) === js) return;
+            // stepping the same control again right away (a winch or thermostat key pressed many
+            // times): one line with the value it ends on
+            if (i === notebook.length - 1 && n.day === today() && env && env.hour - n.hour >= 0 && env.hour - n.hour < 0.25) { n.value = v; n.hour = r2(env.hour); return; }
+            break;
+          }
         }
         records.note('setting', v);
         return;

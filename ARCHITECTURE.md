@@ -1,16 +1,14 @@
-# Chicken Farm — Phase 1 architecture
+# Chicken Farm — architecture (Phase 1 and Phase 2)
 
 A browser game that teaches broiler farming by running a farm through a flock cycle.
-**Phase 1 is the look-and-feel test:** one chicken house, the farm around it, a walking farmer and a
-flock that reacts to temperature. The farmer (the user, who runs a broiler farm in Thailand) approves
-the art style and the controls. Nothing beyond that is in scope yet: no saving, sound, levels, skill
-tree or full content.
-
-> **Phase 2 (Level 1, the brooding week) is specified in `PHASE2.md`.** Its shared contracts are in
-> code: Phase 2 constants at the end of `src/config.js`, the event bus `src/events.js`, the
-> interactable registry `src/interact.js`, the stub modules `farm.js`, `records.js`, `skills.js`,
-> `save.js`, `level.js`, `content-jobs.js`, `props.js`, and the Phase 2 members of `sim.js`,
-> `flock.js` and `player.js`. Main.js wires them all; the Phase 1 farm below is the "sandbox" mode.
+**Phase 1** was the look-and-feel test: one chicken house, the farm around it, a walking farmer and
+a flock that reacts to temperature. It lives on as the **sandbox** mode. **Phase 2** is the Level 1
+vertical slice (the prep day and the brooding week, days −1..7), specified in `PHASE2.md` and
+integrated on main: title card, job list and daily rounds, signs and equipment plates, the farm
+model, flock records, the skill tree (11 branches, two earnable), problem events, pass / fail at the
+day 7 weigh-in, autosave. The Phase 1 sections below are still valid; **"Phase 2 (Level 1)"** at the
+end lists the modules, the contracts as integrated, and the tests. Not in scope yet: levels 2–9,
+sound, settings, farm overview map.
 
 ## Decisions already made (from the plan doc)
 
@@ -49,6 +47,11 @@ tree or full content.
 | `src/ui.js`, `src/content.js` | systems/UI agent | HUD, task list, sign + controller panels, test tools, task marker |
 | `src/index.template.html` | systems/UI agent | Page template: title, fonts, HUD CSS, import map |
 | `build.mjs`, `scripts/shoot.mjs` | shared tooling | Bundle to `dist/index.html`; screenshot/test harness |
+| `src/events.js`, `src/interact.js` | integrator | Phase 2 event bus (`EV`, `matchPayload`) and the interactable registry |
+| `src/farm.js`, `src/farm-*.js`, `src/records*.js`, `src/skills*.js`, `src/save.js` | sim | Farm model, problems, profiles, records, skill rules, autosave store (no DOM, run in node) |
+| `src/level.js`, `src/job-engine.js`, `src/content-jobs.js`, `src/content-signs.js`, `src/ui-*.js` | level | Level flow, jobs, every Level 1 panel, sign and job content |
+| `src/props.js`, `src/props-*.js`, `src/house-level.js`, `src/player-carry.js` | props | Level 1 props, triggers, trucks, boxes, boards, floor states and overlay, carried things |
+| `src/flock-level.js`, `flock-pop/dead/catch/sick.js` | flock | Level 1 population, dead and sick birds, catching, access behaviour |
 
 Agents edit **only their own files**. If you need something from another module, code against the
 contract below and note the need in your report; do not edit their file.
@@ -194,3 +197,97 @@ at once (`env.settleHeaters()`), so the HUD, glow and radiant heat always agree.
 - Performance target: 60 fps on a mid-range laptop with 1800 birds. Share geometries and
   materials, use InstancedMesh, avoid per-frame allocations, keep draw calls low (merge static
   geometry where it is repeated many times, e.g. feeder pans and nipples).
+
+## Phase 2 (Level 1) — as integrated
+
+`PHASE2.md` is the spec (jobs, model, problems, records, skills, contracts §13). This section lists
+how the four packages are wired on main and every contract that changed at integration.
+
+### Modes
+`level.mode`: `title` (title card over the farm at dawn; real browsers boot here) · `sandbox` (the
+Phase 1 farm exactly as before: 4-job tutorial, test tools; the boot mode under automation, so
+every Phase 1 harness scenario still runs) · `level` · `result` (result screen; *Keep walking the
+farm* returns to `level` with the level over). `farm.mode` is `'level'` only while a level runs
+(`farm.start` / `farm.stop`); with it `env.levelClimate` is on (slab, timer, humidity balance,
+brooders out). Props are hidden and the flock uses its Phase 1 tables while `farm.mode === 'off'`.
+
+### Wiring (main.js)
+Created in this order: `env` → `events` → `farm` (`env.addStepper(farm.step)`: the farm integrates
+every ≤ 60 game s, skips included) → `records` → `skills` (both subscribe to the bus) → `save` →
+world → house → `interact` (world and house boards) → `props` (registers its interactables and
+providers) → `colliders` (world + house + props; props adds its own in level mode only) → `player`
+→ `flock` (providers) → `ui` → `level`. `ctx` carries `events, farm, records, skills, interact,
+props, colliders, player, flock, level`. Frame order: env → player → world → house → props → flock
+→ ui → level. The hot-reload snapshot carries `level.saveBlob()` while a level runs.
+
+### Clock (level.js, every frame)
+`env.timeScale` from `LEVEL1.clock`, highest state wins: paused (records book, notebook, skill
+tree, result, title, the pause button) > `sign` 0 (a sign board, or an equipment panel whose
+plate is unfolded) > `panel` 30 > `carry` 30 (barrow, boxes, sack, frame; and from the truck
+stopping until the last tip) > `fast` 480 (4×) > `work` 120. Equipment plates open unfolded;
+every machine action that needs farm time folds them (flow test, flush valves, filter cleaning,
+feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
+
+### Contracts that changed or were settled at integration
+- **E** (ui.js): in a level `interact.nearest(player, accept)`; an interactable with `use()` is
+  used, else the ui panel registered under its id opens. In the sandbox only the three Phase 1
+  boards answer. **`interact.nearest`**: highest `priority`, then the nearest, where what the
+  farmer faces counts up to 0.45 m nearer (`player.yaw`; facing = (−sin yaw, −cos yaw)), so of two
+  machines side by side the one he turns to answers.
+- **Feeder control box** moved to `SPOTS2.feederBox` x −18 (between the water and brooder signs):
+  at x −22 it sat 0.9 m behind the line 1 drinker regulator, which always won.
+- **Controller** (ui-climate.js): *min / max since read* = `farm.controllerMemory()`; the farm
+  restarts it on the `controller.read` action (and saves it). Tunnel fan ± steps
+  `env.setFans(env.fansManual ± 1)`: in a level `env.fansOn` also counts the timer fans during the
+  on-part of each cycle. `vent.timer` / `light.program` actions: the farm calls
+  `env.setVentTimer` / `env.setLightProgram` itself.
+- **`records.timeline()`** rows (result screen "Your week"): `{ day, setpointC, signSetpointC,
+  flowsMlMin[4], flowSignMlMin, nippleHeightsCm[4], nippleSignCm, ventTimer, ventTimerM3h,
+  ventSignM3h, lightHours, floorAtArrivalC, cropTally: { full, of }, weightG, targetWeightG }`.
+- **Props follow every `chicks.tip`**: a stack tipped without the hand truck (goto auto) goes to the
+  pile of empties. The **`frame` provider** answers nowhere within 1.8 m of the bird scale, so E
+  there opens the scale (*Put them back*).
+- **Dead birds**: the farm owns `farm.flock.deadOnFloor` (+1 per death, −n on `EV.DEAD_PICK`); the
+  flock lays one drawn bird per death by cause and mirrors the count after 1 s (oldest go first).
+- **Floor thermometer view** (F, unlock `floorOverlay`): `config.FLOOR_TEMP_RAMP` (24 → 36 °C, blue
+  to orange, sRGB) is painted by props-floor and drawn as the HUD legend by ui.js.
+- **Job engine save** (`engine.serialize`): id and day come from the key, times to ~1 s, closed jobs
+  keep rule state only for sample counts and no result (`records.logJob` has it). A count job's
+  logged result is `{ n, sectors, values }`.
+- **Resume** (`level.resume(blob)`): clock → `farm.start(LEVEL1, { keepClock: true })` → saved env
+  values (setpoint, house, slab, heater level, manual fans, pad) → `farm.restore` (timer, light,
+  weather events, brooders out) → records → props → flock → level jobs. `saveBlob().env` carries
+  `fansManual`.
+- **`level.debug.goto(day, hour, { auto })`**: auto plays the ideal profile through
+  `farm-profiles.applyRound` at the rounds test-sim plays (prep unless the prep record is signed,
+  flush, morning 06:15 / 06:30, truck 08:06, vent first tip + 2.6 h, crop first tip + 23 h,
+  afternoon, day 6 tunnel fan 12:00–17:00, day 7 weigh 09:00), picks up and counts the dead birds
+  after each round, signs each evening, and completes the jobs still open. Without auto it skips.
+
+### Tests and harness
+- `npm test` = `scripts/test-contracts.mjs` (registry priority, action shapes, banned words) +
+  `scripts/test-sim.mjs` (§6.10 profiles, determinism, timing, save) + `scripts/test-jobs.mjs` (job
+  engine) + `scripts/test-level.mjs` (level.js with the real farm, records and skills in node:
+  `goto(7, 21, auto)` ends on the day 7 signing with a pass at 4.6–4.95 ×, both branches level 2,
+  no routine job missed; a week without care fails; save → resume keeps clock, jobs and farm).
+- Harness steps for play-throughs (`scripts/shoot.mjs`, with `__game.stop()`): `walkTo [x, z]`
+  (real mouse clicks on the ground: the farmer's click-to-walk and path finding, leg by leg),
+  `clickText` (real click on a visible HUD button / tab by its text or aria-label, `times`),
+  `pressIf` (a real key only while a condition holds), `advanceUntil`, `expect` (PASS / FAIL; a
+  FAIL makes the exit code 1).
+- **Integrator play-throughs**: `scripts/p2-level1.json` — the title card, the whole prep day by
+  walking and panel clicks, `goto(0, 7.9, auto)`, the truck, box weighing and grading, six stacks
+  tipped by walking (placed-fast ≤ 90 game min), vent temperatures, `goto(7, 8, auto)`, 50 birds
+  weighed from 5 sectors with the frame, signing day 7, the result screen (pass, 4.6–4.95 ×).
+  `scripts/p2-level1-find.json` — day 4: the meter shows the drop, a flow test opens *Low water flow*,
+  cleaning the filter closes it; walking past the wet patch at 15:00 opens *Wet litter here*, E at
+  the drip replaces the nipple, a sack of husk patches the cell.
+- Package steps files: `p2-level-*.json` (level; written against the stubs: they force farm fields
+  the real model now owns, so some of their printed job states differ), `p2-flock-*.json`,
+  `p2-props-*.json`. Phase 1: `tour`, `cold-hot`, `walk`, `p2-hooks` scenarios and
+  `scripts/phase1-jobs.json` in the sandbox.
+- `window.__game` Phase 2 hooks: `events, farm, records, skills, save, props, interact, level`,
+  `startLevel({ seed })`, `nextJob()`, `jobs()` (key, status, progress), `snapshot()` with `mode` and
+  `farmMode`, `ui.openPanel(id)`, `level.debug.goto / trigger / result`, `farm.debug.trigger /
+  truth()`. Steps files start a level with `{"eval": "__game.startLevel({ seed: 1 })"}` or from the
+  title (`__game.level.toTitle()` then `{"clickText": "Start Level 1"}`).

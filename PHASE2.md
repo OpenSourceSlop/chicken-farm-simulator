@@ -496,6 +496,28 @@ tests are skipped while `farm.stub` is true). Profiles are scripted by `src/farm
 | **brooder never relit** | ideal but brooder 5 stays out | comfort share ≥ 2 points under ideal |
 | **determinism** | ideal twice, seed 7 | identical records (byte for byte) |
 
+### 6.11 Model tunings made by package "sim" (recorded at integration)
+The constants live in `src/farm-*.js` (`FLOCK`, `WATER`, `FEED`, `LITTER`) and `src/sim.js`; all are
+**model** values (never on a sign). Where they differ from §6.2–§6.7 above, the code wins:
+- **Uniformity** (`FLOCK`): within-cohort CV grows per day by 0.0002 + 0.04·(1 − f_T) + 0.01·(1 − A)
+  + 0.015·(1 − f_F) (spec: 0.001 / 0.01 / 0.02 / 0.015). Weak cohort: 0.92 × the mean chick weight,
+  CV 10 %.
+- **Water access** (`WATER`): a_i = min(1, (f / need) / 0.75)^0.88 · hf (spec: clamp(f / need)^0.6 · hf).
+  Leak 0.5 L/h (spec 0.6). A flushed line puts 28 L through the meter (spec 40 L).
+- **Feed** (`FEED`): one line's pans hold 18 kg normal, 66 kg flooded (three flooded lines ≈ 200 kg);
+  auger 150 kg/h a line; the birds eat freely down to 30 % pan fill. Pans start winched up at 40 cm,
+  drinker lines at 50 cm and 10 cm pressure.
+- **Litter** (`LITTER`): dry husk 0.8 kg per cm per m² cell (≈ 80 kg/m³; spec 1 kg); drying rate
+  0.045 (spec 0.034). The humidity balance and litter drying are solved together each climate step
+  (`env.dryPotentialGh`), so RH and drying always agree.
+- **Comfort e** (`farm-comfort.js`): the felt temperature at the point 70 % of the brooding floor is
+  at least as warm as (the 0.3 quantile from the cold end), with the floor split into eight chick
+  groups, one per brooder; read from the warm end a brooder that is out would look comfortable.
+- **Brooder out** (`sim.js OUT_AIR`): besides losing its radiant, the air around an out brooder is
+  up to 3 °C × output cooler (Gaussian, σ 2.5 m; the house mean is kept), so its chicks huddle.
+- **Deaths** (`FLOCK`): cold 0.04 %/h × (−4 − e)² (spec 0.02); "other" × 2.0 when q < 1 (spec 1.5).
+All §6.10 profiles pass with these values (`node scripts/test-sim.mjs`).
+
 Also (contract tests, written): action payload shape, award deltas, farm owns `deadOnFloor`, flock
 age 7.0 at 08:00 day 7, save info day from `env.day`. Package checks: sandbox unchanged (with
 `farm.mode === 'off'` the cold-hot metrics match Phase 1 within ±0.02); `farm.step` ≤ 0.3 ms in node, a

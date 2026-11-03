@@ -33,6 +33,7 @@
 //                            the first visible button / label / tab whose text (or aria-label)
 //                            starts with this (default scope: the whole HUD)
 //   {"advanceUntil": "js expr", "max": 120, "step": 0.5}  advance in steps until the expression is truthy
+//   {"pressIf": "e", "if": "js expr"}   a real key press only while the expression is truthy (retries)
 //   {"expect": "js expr", "label": "..."}   evaluate; print PASS / FAIL (a FAIL makes the exit code 1)
 import { createRequire } from 'node:module';
 import http from 'node:http';
@@ -185,6 +186,10 @@ async function main() {
         return { ok: !!f(), t };
       }, [step.advanceUntil, step.max ?? 120, step.step ?? 0.5]);
       console.log(`advanceUntil ${step.advanceUntil} -> ${r.ok ? 'met' : 'NOT MET'} after ${r.t.toFixed(1)} s`);
+    } else if (step.pressIf) {
+      const go = await page.evaluate(step.if || 'true');
+      if (go) await page.keyboard.press(step.pressIf);
+      console.log(`pressIf ${step.pressIf}: ${go ? 'pressed' : 'not needed'}`);
     } else if (step.expect) {
       const r = await page.evaluate(step.expect);
       if (!r) expectFails++;

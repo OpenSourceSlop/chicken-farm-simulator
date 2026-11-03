@@ -171,6 +171,8 @@ export function buildProps(ctx, { house } = {}) {
     });
     ctx.interact.addProvider('frame', (p, inside) => {
       if (!st.level || props.carrying !== 'frame' || !inside || !inBrood(p) || st.frameAt) return null;
+      // at the bird scale E opens it (put the scale and frame back), not another frame
+      if (Math.hypot(p.x - SPOTS2.birdScale.x, p.z - SPOTS2.birdScale.z) < 1.8) return null;
       return { id: 'frame', label: 'the catching frame here', verb: 'Set down', x: p.x, z: p.z, radius: 1, priority: 20, use: setFrame };
     });
   }
