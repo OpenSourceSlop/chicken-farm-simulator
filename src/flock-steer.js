@@ -22,7 +22,7 @@ export function personalSpace(S) {
     else if (!arrived[i] && a !== ACT.REST) r = 0.65 * S.rRight; // on the way somewhere: squeeze through
     else if (a === ACT.REST) r = 0.75 * S.rRight;
     // a sick bird sits apart: the others keep a little more room round it (level only)
-    if (sick[i]) r = 2.2 * S.rRight;
+    if (sick[i]) r = 3 * S.rRight;
     r = (r > minR ? r : minR) * size[i];
     rad[i] = r;
     if (r > maxR) maxR = r;

@@ -12,16 +12,36 @@
 import * as THREE from 'three';
 import { DRINKER_LINES_Z, FEEDER_LINES_Z, HEATERS } from './config.js';
 import { EV } from './events.js';
-import { buildBirdGeometry } from './flock-geometry.js';
+import { PIVOTS, buildBirdGeometry } from './flock-geometry.js';
 import { createBirdMaterials } from './flock-shader.js';
 import { writeBirdMatrix } from './flock-pose.js';
 import { ACT, COLD } from './flock-state.js';
 
 export const MAX_DRAWN = 160;
+// top of the litter (house-shell.js lays the floor 2 cm up; live birds stand with their toes in it)
+const FLOOR_Y = 0.02;
 export const CAUSES = ['cold', 'heat', 'dehydration', 'weak', 'starveout', 'other', 'box'];
+
+// The stiff legs sticking out are what tells a dead bird from a resting one: draw them twice as
+// thick (and the feet wider) as on the live model, in both the chick and the broiler shape.
+function thickenLegs(geo) {
+  const part = geo.getAttribute('aPart').array;
+  for (const [name, hip] of [['position', PIVOTS.chick.hip], ['aPos2', PIVOTS.broiler.hip]]) {
+    const p = geo.getAttribute(name).array;
+    for (let v = 0; v < part.length; v++) {
+      if (part[v] < 5.5 || part[v] > 7.5) continue;
+      const side = part[v] > 6.5 ? 1 : -1, cz = hip[2] * side;
+      p[v * 3] = hip[0] + (p[v * 3] - hip[0]) * 2.2;
+      p[v * 3 + 2] = cz + (p[v * 3 + 2] - cz) * 2.2;
+      p[v * 3 + 1] *= 1.15;
+    }
+  }
+  geo.computeVertexNormals();
+}
 
 export function createDeadBirds(ctx, S, uniforms, pop) {
   const geo = buildBirdGeometry(0);
+  thickenLegs(geo);
   const attr = (name) => {
     const a = new THREE.InstancedBufferAttribute(new Float32Array(MAX_DRAWN * 4), 4);
     geo.setAttribute(name, a);
@@ -37,6 +57,18 @@ export function createDeadBirds(ctx, S, uniforms, pop) {
   mesh.count = 0;
   mesh.visible = false;
   ctx.scene.add(mesh);
+  // the damp, pressed-down patch of litter under a bird that has lain there a while: frames the
+  // dead bird so it reads among the walking chicks from the default camera
+  const patchGeo = new THREE.CircleGeometry(0.5, 9).rotateX(-Math.PI / 2);
+  const patchMat = new THREE.MeshLambertMaterial({ color: 0x7d6743, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const patch = new THREE.InstancedMesh(patchGeo, patchMat, MAX_DRAWN);
+  patch.name = 'flock-dead-patch';
+  patch.castShadow = false;
+  patch.receiveShadow = true;
+  patch.boundingSphere = mesh.boundingSphere;
+  patch.count = 0;
+  patch.visible = false;
+  ctx.scene.add(patch);
 
   /** @type {{ id: number, x: number, z: number, yaw: number, side: number, s: number, cause: string, tint: number }[]} */
   const list = [];
@@ -90,7 +122,8 @@ export function createDeadBirds(ctx, S, uniforms, pop) {
         for (const fz of FEEDER_LINES_Z) feed = Math.min(feed, Math.abs(z - fz));
         let crowd = 0;
         for (let q = 0; q < 12 && S.n > 0; q++) { const j = (rnd() * S.n) | 0; if ((S.px[j] - x) ** 2 + (S.pz[j] - z) ** 2 < 1) crowd++; }
-        const s = -Math.min(feed, 1.6) + 0.5 * crowd + 0.3 * rnd();
+        let s = -Math.min(feed, 1.3) + 0.5 * crowd + 0.4 * rnd();
+        for (const d of list) if ((d.x - x) ** 2 + (d.z - z) ** 2 < 4) s += 1; // alone, not by another dead bird
         if (s < bs) { bs = s; best = { x, z }; }
       }
       return best;
@@ -181,19 +214,26 @@ export function createDeadBirds(ctx, S, uniforms, pop) {
   function writeInstances() {
     if (!dirty) return;
     dirty = false;
-    const m = mesh.instanceMatrix.array, A = aA.array, B = aB.array, C = aC.array;
+    const m = mesh.instanceMatrix.array, pm = patch.instanceMatrix.array, A = aA.array, B = aB.array, C = aC.array;
     for (let k = 0; k < list.length; k++) {
       const d = list[k];
       const ph = (d.id * 0.618) % 1;
-      // on its side (roll 90°), resting on the wing: half the body width above the floor
-      writeBirdMatrix(m, k * 16, d.x, 0.27 * d.s, d.z, Math.cos(d.yaw), Math.sin(d.yaw), d.side * 1.5708, d.s, d.s, d.s);
-      const q = k * 4, pitch = -0.35 - 0.35 * ph, wing = 0.35 + 0.4 * ph;
+      // on its side (roll 90°), stretched out and flat on the litter: across the body (now
+      // vertical) squashed to 80 %, so it sits half that width above the floor
+      const cy = Math.cos(d.yaw), sy = Math.sin(d.yaw);
+      // the body's middle (0.42 up the standing bird) now lies to one side: shift it back over (x, z)
+      const off = 0.42 * d.s * d.side;
+      writeBirdMatrix(m, k * 16, d.x + sy * off, FLOOR_Y + 0.19 * d.s, d.z - cy * off, cy, sy, d.side * 1.5708, 1.06 * d.s, d.s, 0.72 * d.s);
+      writeBirdMatrix(pm, k * 16, d.x + 0.05 * d.s * cy, FLOOR_Y + 0.004, d.z + 0.05 * d.s * sy, cy, sy, 0, 1.4 * d.s, 1, 1.05 * d.s);
+      // head thrown back, a wing flopped open, legs stiff and out behind, beak a little open
+      const q = k * 4, pitch = -0.45 - 0.35 * ph, wing = 0.45 + 0.4 * ph;
       A[q] = Math.cos(pitch); A[q + 1] = Math.sin(pitch); A[q + 2] = -0.03; A[q + 3] = 0;
       B[q] = Math.cos(0.3 * (ph - 0.5)); B[q + 1] = Math.sin(0.3 * (ph - 0.5)); B[q + 2] = Math.cos(wing); B[q + 3] = Math.sin(wing);
-      C[q] = 0.18; C[q + 1] = Math.sin(0.35 * (ph - 0.5)); C[q + 2] = d.tint + 3; C[q + 3] = 0.05;
+      C[q] = 0.2; C[q + 1] = -0.5 + 0.2 * ph; C[q + 2] = d.tint + 3; C[q + 3] = 0.05;
     }
-    mesh.count = list.length;
-    mesh.visible = list.length > 0;
+    mesh.count = patch.count = list.length;
+    mesh.visible = patch.visible = list.length > 0;
+    patch.instanceMatrix.needsUpdate = true;
     mesh.instanceMatrix.needsUpdate = true; aA.needsUpdate = true; aB.needsUpdate = true; aC.needsUpdate = true;
   }
 
