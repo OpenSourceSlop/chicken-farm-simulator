@@ -168,6 +168,23 @@ export function lateEstimate(farm, env) {
   return Math.max(K.min, Math.min(K.max, L));
 }
 
+/**
+ * Phase 3: `n` birds die of `cause` now (the cycle's causes: sds, legs, disease, respiratory; heat and cold
+ * from the house model): out of the cohorts, counted, on the floor, EV.FARM_DEATH. Returns the number.
+ */
+export function killBirds(farm, n, cause) {
+  const fl = farm.flock;
+  n = Math.min(Math.floor(n), Math.floor(fl.alive));
+  if (!(n > 0)) return 0;
+  removeDead(fl, n, cause);
+  fl.deadTotal += n; fl.deadByCause[cause] = (fl.deadByCause[cause] || 0) + n; fl.deadOnFloor += n;
+  const by = fl.floorByCause || (fl.floorByCause = {});
+  by[cause] = (by[cause] || 0) + n;
+  syncAlive(fl);
+  farm.emit(EV.FARM_DEATH, { n, cause });
+  return n;
+}
+
 /** Remove `n` birds of a cause: weak / starve-out from their cohort, the rest from all alike. */
 function removeDead(fl, n, cause) {
   const c = fl.cohorts;
@@ -200,13 +217,15 @@ export function cull(farm, { n = 1, reason = 'sick', index } = {}) {
   const order = sample && !sample.weak ? [c.good, c.late, c.weak] : [c.weak, c.late, c.good];
   for (const k of order) { const t = Math.min(left, k.n); k.n -= t; left -= t; }
   fl.culls += n;
+  const by = fl.cullsBy || (fl.cullsBy = {});
+  by[reason] = (by[reason] || 0) + n;
   syncAlive(fl);
   return true;
 }
 
 /** Live birds on the litter: placed - deaths after placing - culls after placing (integers). */
 export function syncAlive(fl) {
-  fl.alive = Math.max(0, fl.placed - (fl.deadTotal - fl.boxDead) - (fl.culls - fl.cullsInBoxes));
+  fl.alive = Math.max(0, fl.placed - (fl.deadTotal - fl.boxDead) - (fl.culls - fl.cullsInBoxes) - (fl.caught || 0)); // Phase 3: caught at the harvest
 }
 
 const weakRate = (age) => FLOCK.weakRate.find(([to]) => age < to)[1];
@@ -221,10 +240,15 @@ export function stepFlock(farm, env, hrs, C, io) {
   // temperature per chick group (one per brooder; in week 1 the chicks stay under their own
   // brooder): the cold side from each group's e, averaged over the chicks; the spread between the
   // groups makes the flock less even. The hot side from the whole floor (they move away from heat).
-  const eG = C.eG;
+  // Phase 3 (from Week 2, farm.cyc.on): the whole house's comfort (farm-house.js: the cold side per 6 m
+  // strip of the floor in use, the hot side as f_heat), the new light factor and the cycle's factors
+  const X = farm.cyc && farm.cyc.on ? farm.cyc : null;
+  const eG = X ? C.eZ : C.eG, W = X ? C.wZ : GROUP_W;
   let fTc = 0, fTsq = 0, gainC = 0, coldG = 0, coldSq = 0;
-  for (let i = 0; i < GROUP_W.length; i++) {
-    const e = eG ? eG[i] : C.e, w = GROUP_W[i];
+  for (let i = 0; i < W.length; i++) {
+    const w = W[i];
+    if (!(w > 0)) continue;
+    const e = eG ? eG[i] : C.e;
     const def = Math.max(0, -1.5 - e), ft = Math.max(0.2, 1 - 0.12 * def);
     fTc += w * ft; fTsq += w * ft * ft;
     gainC += w * Math.max(0, 1 - FLOCK.coldGain * def);
@@ -233,16 +257,17 @@ export function stepFlock(farm, env, hrs, C, io) {
   }
   const fTsd = Math.sqrt(Math.max(0, fTsq - fTc * fTc));
   let fT = fTc;
-  if (C.meanOver > 1.5) fT *= 1 - 0.08 * (C.meanOver - 1.5);
+  if (!X && C.meanOver > 1.5) fT *= 1 - 0.08 * (C.meanOver - 1.5);
   fT = Math.max(0.2, Math.min(1, fT));
   const lp = env.lightProgram || { darkHours: 1 };
   const darkH = Math.max(0, lp.darkHours || 0), litH = Math.max(1, 24 - darkH);
-  const fL = Math.min(1, (farm.luxLit() < 20 ? 0.9 : 1) * (1 - 0.04 * (darkH - 1)));
+  const fL = X ? (1 - 0.01 * Math.max(0, darkH - 4) - 0.03 * Math.max(0, darkH - 8)) * (farm.luxLit() < 10 ? 0.95 : 1)
+    : Math.min(1, (farm.luxLit() < 20 ? 0.9 : 1) * (1 - 0.04 * (darkH - 1)));
   const fF = io.feedAccess;
   const A = farm.water.access, fW = Math.pow(Math.max(0, A), 0.8);
   const fAir = Math.max(FLOCK.airMin, 1 - FLOCK.airPerPpm * Math.max(0, farm.litter.ammoniaPpm - FLOCK.airFromPpm));
   const FX = fl.factors; FX.fT = fT; FX.fL = fL; FX.fF = fF; FX.fW = fW; FX.fAir = fAir;
-  const f = fT * fL * fF * fW * fAir;
+  const f = fT * fL * fF * fW * fAir * (X ? X.fx.f : 1);
   // ---- intake, spread over the lit hours ----
   const lit = env.lightsOn ? 24 / litH : 0;
   const std = feedStdGAt(age) / 1000 * (hrs / 24) * lit;  // kg per bird this step at full rate
@@ -251,13 +276,14 @@ export function stepFlock(farm, env, hrs, C, io) {
   const wantKg = wGood + wLate + wWeak;
   const gotKg = wantKg > 0 ? io.eat(wantKg) : 0;
   const k = wantKg > 0 ? gotKg / wantKg : 0;
-  const gainK = (1000 * k * gainC) / fpg(age);
+  const gainK = (1000 * k * gainC) / (fpg(age) * (X ? X.fx.fpgK : 1));
   if (c.good.n > 0) c.good.w += (wGood / c.good.n) * gainK;
   if (c.late.n > 0) c.late.w += (wLate / c.late.n) * gainK;
   if (c.weak.n > 0) c.weak.w += (wWeak / c.weak.n) * gainK;
   const fEff = f * (wantKg > 0 ? k : 1);
   const dcv = (FLOCK.cvBase + FLOCK.cvTemp * (1 - fT) + FLOCK.cvGroup * fTsd + FLOCK.cvWater * (1 - A)
-    + FLOCK.cvFeed * (1 - Math.min(1, fF * (wantKg > 0 ? k : 1))) + FLOCK.cvCaked * (farm.litter.cakedShare || 0) + FLOCK.cvAir * (1 - fAir)) * (hrs / 24);
+    + FLOCK.cvFeed * (1 - Math.min(1, fF * (wantKg > 0 ? k : 1))) + FLOCK.cvCaked * (farm.litter.cakedShare || 0) + FLOCK.cvAir * (1 - fAir)
+    + (X ? X.fx.dcv : 0)) * (hrs / 24);
   c.good.cv += dcv; c.late.cv += dcv; c.weak.cv += dcv;
   fl.cumFeedKg += gotKg; fl.feedTodayKg += gotKg;
   const drunkL = gotKg * io.waterPerKg;
@@ -286,9 +312,10 @@ export function stepFlock(farm, env, hrs, C, io) {
   const starving = fl.hungryH > FLOCK.hungryAfterH ? alive * FLOCK.hungryRate * Math.min(1, (fl.hungryH - FLOCK.hungryAfterH) / FLOCK.hungryRampH) : 0;
   rates[1] = (age >= FLOCK.starveFrom && age < FLOCK.starveTo ? c.late.n * FLOCK.starveRate : 0) + starving;
   rates[2] = alive * FLOCK.coldRate * coldSq;
-  rates[3] = C.meanOver > FLOCK.heatFrom ? alive * FLOCK.heatRate * (C.meanOver - FLOCK.heatFrom) ** 2 : 0;
-  rates[4] = A < FLOCK.dehydBelow ? alive * FLOCK.dehydRate * ((FLOCK.dehydBelow - A) / FLOCK.dehydBelow) : 0;
-  rates[5] = env.dayNumber >= FLOCK.otherFromDay ? alive * FLOCK.otherRate * (1 + FLOCK.otherPerLapse * fl.lapses) * (farm.water.quality < 1 ? FLOCK.otherBadWater : 1) : 0;
+  // Phase 3: heat deaths per cell of the floor in use (farm-heat.heatDeathRate through farm-house.js)
+  rates[3] = X ? alive * (C.heatDeathPerH || 0) : C.meanOver > FLOCK.heatFrom ? alive * FLOCK.heatRate * (C.meanOver - FLOCK.heatFrom) ** 2 : 0;
+  rates[4] = A < FLOCK.dehydBelow ? alive * FLOCK.dehydRate * ((FLOCK.dehydBelow - A) / FLOCK.dehydBelow) * (X ? X.fx.dehydK : 1) : 0;
+  rates[5] = env.dayNumber >= FLOCK.otherFromDay ? alive * FLOCK.otherRate * (1 + FLOCK.otherPerLapse * fl.lapses) * (farm.water.quality < 1 ? FLOCK.otherBadWater : 1) * (X ? X.fx.otherK : 1) : 0;
   let next12 = 0;
   for (let ci = 0; ci < RATE_CAUSES.length; ci++) {
     const cause = RATE_CAUSES[ci], r = rates[ci];
@@ -301,15 +328,24 @@ export function stepFlock(farm, env, hrs, C, io) {
       if (n > 0) {
         removeDead(fl, n, cause);
         fl.deadTotal += n; fl.deadByCause[cause] += n; fl.deadOnFloor += n;
+        if (X) { const by = fl.floorByCause || (fl.floorByCause = {}); by[cause] = (by[cause] || 0) + n; }
         farm.emit(EV.FARM_DEATH, { n, cause });
       }
     }
+  }
+  // Phase 3: the cycle's causes (sudden death, disease, breathing) from farm-health.js, per bird-hour
+  if (X) for (const cause in X.rates) {
+    const r = X.rates[cause] * alive;
+    next12 += r * 12;
+    if (!(r > 0)) continue;
+    fl.acc[cause] = (fl.acc[cause] || 0) + r * hrs;
+    if (fl.acc[cause] >= 1) { const n = Math.floor(fl.acc[cause]); fl.acc[cause] -= n; killBirds(farm, n, cause); }
   }
   syncAlive(fl);
   fl.sick = Math.min(24, Math.round(next12));
   // ---- what the litter shows, comfort minutes for the stats ----
   const ratio = io.waterPerKg;
-  fl.droppings = C.meanOver > 2 || ratio > 2.0 ? 'watery' : fEff < 0.7 && env.lightsOn ? 'few' : 'normal';
+  fl.droppings = X ? X.droppings : C.meanOver > 2 || ratio > 2.0 ? 'watery' : fEff < 0.7 && env.lightsOn ? 'few' : 'normal';
   if (age >= 0 && age < 7) {
     const m = hrs * 60, ok = m * C.groupShare; // the chicks whose group is in the comfort band
     s.levelMinutes += m; s.comfortMinutes += ok;

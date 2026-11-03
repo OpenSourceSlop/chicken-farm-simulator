@@ -23,8 +23,8 @@
 // EV.DEAD_PICK), the problems and their weather (it adds and rebuilds env weather events, also on
 // restore), the symptom decision (EV.FARM_PROBLEM phase 'symptom' from an action it sees, an
 // EV.NEAR from props, or 'radio.listen'), and farm.stats (what skills.js needs, computed in node).
-import { LEVEL1, EQUIP, flockAgeAt } from './config.js';
-import { EV } from './events.js';
+import { LEVEL1, EQUIP, flockAgeAt, PLAN_LEVEL } from './config.js';
+import { EV, UI_ACTION_IDS_CYCLE } from './events.js';
 import { createRng } from './farm-rng.js';
 import { createWater, updateAccess, drink, stepLines, recordMeter, waterPerKg } from './farm-water.js';
 import { createFeed, stepAugers, feedAccess, eat, meanPanFill } from './farm-feed.js';
@@ -34,8 +34,12 @@ import { createFlock, deliver, stepFlock, stepBoxes, updateWeights, makeQuantile
 import { createProblems, tickProblems, actionSymptoms, onNear, onListen, problemZones, forecast, observe,
   installWeather, applyEffects } from './farm-problems.js';
 import { doAct } from './farm-act.js';
-// Phase 3 (PHASE3.md §13.8): the cycle state and the Phase 3 actions; a stub until package "sim" builds it
+// Phase 3 (PHASE3.md §6, §13): the cycle state, its actions and the per-step model of Week 2 on
 import { installCycle, cycleAct } from './farm-cycle.js';
+import { cyclePre, cycleComfort, cycleFactors, cyclePost } from './farm-cycle-step.js';
+import { stepAugersCycle } from './farm-silos.js';
+import { onBus } from './farm-cycle-act.js';
+import { tickCycleProblems, cycleSymptoms, cycleZones, cycleNear, cycleForecast, cycleObserve, onLabLetter } from './farm-cycle-problems.js';
 
 /**
  * @typedef {{ heightCm: number, pressureCm: number, flowMlMin: number, access: number,
@@ -62,7 +66,7 @@ import { installCycle, cycleAct } from './farm-cycle.js';
  */
 
 // ui-only actions the farm listens to (symptoms): the ui emits them with result undefined
-const UI_ACTIONS = new Set(['radio.listen', 'controller.read', 'phone.report', 'heat.setpoint', 'vent.fans', 'vent.pad', 'grade.submit', 'sign.read']);
+const UI_ACTIONS = new Set(['radio.listen', 'controller.read', 'phone.report', 'heat.setpoint', 'vent.fans', 'vent.pad', 'grade.submit', 'sign.read', ...UI_ACTION_IDS_CYCLE]);
 const freshStats = () => ({ truckAt: null, firstTipAt: null, lastTipAt: null, boxWeighedAt: null, floorShareAtFirstTip: null,
   heightsAtFirstTip: null, flushDoneAt: null, ventReadings: [], cropFillTrue: null,
   comfortMinutes: 0, levelMinutes: 0, comfortShareByDay: [], comfortByDay: [], chickWeightMeasuredG: null,
@@ -98,13 +102,17 @@ export function createFarm(env, { events } = {}) {
     emit,
     /** Flock age in days (env.day - PLACEMENT_DAY), negative before 08:00 on day 0. */
     get age() { return flockAgeAt(env.day); },
-    problemZones() { return farm.mode === 'level' ? problemZones(farm) : []; },
-    /** The office radio: tonight's forecast for HUD day `day` (the cold night shows here). */
-    forecast(day = env.dayNumber) { return forecast(farm, env, day); },
-    /** What the farmer sees and hears standing at (x, z): neutral words for the notebook. */
-    observe(x, z) { return observe(farm, env, x, z); },
-    /** The climate controller's memory: house min / max (°C) since its last reading (controller.read). */
-    controllerMemory() { const m = farm.ctlMem; return m ? { minC: +m.minC.toFixed(1), maxC: +m.maxC.toFixed(1), since: m.since } : { minC: +env.houseTemp.toFixed(1), maxC: +env.houseTemp.toFixed(1), since: env.day }; },
+    problemZones() { return farm.mode === 'level' ? [...problemZones(farm), ...cycleZones(farm)] : []; },
+    /** The office radio: tonight's forecast for HUD day `day` (the cold night shows here; Phase 3: the level's weather). */
+    forecast(day = env.dayNumber) { return cycleForecast(farm, env, day, forecast(farm, env, day)); },
+    /** What the farmer sees and hears standing at (x, z): neutral words for the notebook (from Week 2 also the air). */
+    observe(x, z) { const o = observe(farm, env, x, z); return farm.cyc && farm.cyc.on ? cycleObserve(farm, env, x, z, o) : o; },
+    /** The climate controller's memory: house min / max (°C) and humidity (%) since its last reading (controller.read). */
+    controllerMemory() {
+      const m = farm.ctlMem;
+      return m ? { minC: +m.minC.toFixed(1), maxC: +m.maxC.toFixed(1), rhMin: Math.round(m.rhMin ?? env.houseRH), rhMax: Math.round(m.rhMax ?? env.houseRH), since: m.since }
+        : { minC: +env.houseTemp.toFixed(1), maxC: +env.houseTemp.toFixed(1), rhMin: Math.round(env.houseRH), rhMax: Math.round(env.houseRH), since: env.day };
+    },
 
     /** Start Level 1 from the prep day (bare floor, empty house, lines high, no chicks). */
     start(level = LEVEL1, { seed = 1, keepClock = false } = {}) {
@@ -144,7 +152,7 @@ export function createFarm(env, { events } = {}) {
     act(id, args = {}) {
       const cyc = cycleAct(farm, env, id, args);
       const result = cyc !== undefined ? cyc : doAct(farm, env, id, args);
-      if (farm.mode === 'level') actionSymptoms(farm, env, id, args, result);
+      if (farm.mode === 'level') { actionSymptoms(farm, env, id, args, result); cycleSymptoms(farm, env, id, args, result); }
       if (!args.quiet) emit(EV.ACTION, { id, ...args, result });
       return result;
     },
@@ -173,18 +181,22 @@ export function createFarm(env, { events } = {}) {
   };
   farm.flock.weightQuantile = makeQuantile(farm.flock);
   installCycle(farm, env);
+  farm.onLabLetter = () => onLabLetter(farm, env);
 
   if (events) {
     // The farm is the only owner of deadOnFloor (flock.dead mirrors it).
     events.on(EV.DEAD_PICK, (p) => { farm.flock.deadOnFloor = Math.max(0, farm.flock.deadOnFloor - (p.n || 0)); });
     events.on(EV.ACTION, (p) => {
       if (farm.mode !== 'level' || p.result !== undefined || !UI_ACTIONS.has(p.id)) return;
+      onBus(farm, env, EV.ACTION, p);
       actionSymptoms(farm, env, p.id, p, undefined);
+      cycleSymptoms(farm, env, p.id, p, undefined);
       if (p.id === 'controller.read') farm.ctlMem = null; // the controller's min / max memory restarts at each read
     });
-    events.on(EV.NEAR, (p) => { if (farm.mode === 'level') onNear(farm, env, p); });
-    events.on(EV.LISTEN, () => { if (farm.mode === 'level') onListen(farm, env); });
-    events.on(EV.HOUSE_ENTER, (p) => { if (farm.mode === 'level' && p && p.dipped === false) farm.flock.lapses++; });
+    events.on(EV.NEAR, (p) => { if (farm.mode === 'level') { onNear(farm, env, p); cycleNear(farm, env, p); } });
+    events.on(EV.LISTEN, (p) => { if (farm.mode === 'level') { onListen(farm, env); onBus(farm, env, EV.LISTEN, p); } });
+    events.on(EV.HOUSE_ENTER, (p) => { if (farm.mode === 'level' && p && p.dipped === false) farm.flock.lapses++; onBus(farm, env, EV.HOUSE_ENTER, p || {}); });
+    for (const t of [EV.CELL, EV.BIRD_PICK, EV.BIRD_RELEASE, EV.FOOTDIP, EV.DEAD_PICK, EV.RECORD_CLOSED]) events.on(t, (p) => onBus(farm, env, t, p || {}));
   }
   return farm;
 }
@@ -194,10 +206,14 @@ export const cellIndex = litterCell;
 /** One farm step of `hrs` game hours (PHASE2.md §6). */
 function stepFarm(farm, env, hrs, spill) {
   const fl = farm.flock, water = farm.water, feed = farm.feed, st = farm.stats, lv = farm.level || LEVEL1;
+  const X = farm.cyc && farm.cyc.on ? farm.cyc : null; // Phase 3: the cycle model from Week 2 (farm-cycle-step.js)
   tickProblems(farm, env);
+  if (farm.cycleLevel) tickCycleProblems(farm, env);
   const cm = farm.ctlMem || (farm.ctlMem = { minC: env.houseTemp, maxC: env.houseTemp, since: env.day });
   if (env.houseTemp < cm.minC) cm.minC = env.houseTemp;
   if (env.houseTemp > cm.maxC) cm.maxC = env.houseTemp;
+  if (farm.cycleLevel) { if (!(env.houseRH >= cm.rhMin)) cm.rhMin = env.houseRH; if (!(env.houseRH <= cm.rhMax)) cm.rhMax = env.houseRH; }
+  if (X) cyclePre(farm, env, hrs);
   if (st.truckAt == null && env.day >= lv.arrivalDay + lv.arrivalHour / 24 - 1e-9) {
     deliver(farm, env);
     femit(farm, EV.FARM_DELIVERY, { kind: 'chicks', phase: 'arrive' });
@@ -211,11 +227,12 @@ function stepFarm(farm, env, hrs, spill) {
     femit(farm, EV.FARM_DELIVERY, { kind: 'feed', phase: 'leave', kg: o.kg });
   }
   // equipment
-  stepAugers(feed, hrs);
+  if (X) stepAugersCycle(feed, hrs); else stepAugers(feed, hrs);
   const leakL = stepLines(water, env, hrs);
   if (water.flushedAt != null && st.flushDoneAt == null) st.flushDoneAt = water.flushedAt;
   const age = farm.age;
   updateAccess(water, age);
+  if (water.mainClosed) { water.access = 0; for (const l of water.lines) l.access = 0; } // Phase 3: the main valve shut (the vaccine's thirst)
   recordMeter(water, env);
   // flock (chicks still in the boxes first: the box hazard runs while they wait)
   stepBoxes(farm, env, hrs);
@@ -225,12 +242,17 @@ function stepFarm(farm, env, hrs, spill) {
     // what the chicks feel changes with the house air: recomputed every 5 game minutes (and at once
     // when the brooders that are out change)
     farm.comfortH += hrs;
-    if (farm.comfortH >= SLOW_H - 1e-9 || C.out !== env.brooderOut.length || C.e == null) { comfortNow(env, C, { litter: farm.litter, age }); C.out = env.brooderOut.length; farm.comfortH = 0; }
+    if (farm.comfortH >= SLOW_H - 1e-9 || C.out !== env.brooderOut.length || C.e == null || (X && !C.eZ)) {
+      if (X) cycleComfort(farm, env, C, age); else comfortNow(env, C, { litter: farm.litter, age });
+      C.out = env.brooderOut.length; farm.comfortH = 0;
+    }
     const io = { feedAccess: feedAccess(feed, age, env.dayNumber), eat: (kg) => eat(feed, kg), waterPerKg: waterPerKg(env.houseTemp) };
+    if (X) cycleFactors(farm, env, age);
     const r = stepFlock(farm, env, hrs, C, io);
     drunkL = r.drunkL; breathL = r.breathL;
     drink(water, drunkL, age, spill);
   } else spill.fill(0);
+  farm.lastDrunkL = drunkL;
   if (st.pansEmptyAt == null && fl.placed > 0 && meanPanFill(feed) < 0.05) st.pansEmptyAt = env.day;
   // the automatic bird scale (reads about 2 % high) when the weigh-in opens: flock age 7.0
   if (st.scaleAtWeighInG == null && fl.placed > 0 && age >= lv.endDay - 1e-9 && fl.alive > 0) st.scaleAtWeighInG = +(fl.meanWeightG * 1.02).toFixed(1);
@@ -249,8 +271,9 @@ function stepFarm(farm, env, hrs, spill) {
   env.vapourGh = 0.4 * farm.drinkLh * 1000;
   env.dryPotentialGh = L.dryPotentialGh;
   const birds = fl.alive, w = fl.meanWeightG;
-  env.flockHeatPerH = birds > 0 ? (0.2 * birds) / 6000 + (1.3 * birds * w) / (6000 * 2850) : 0;
+  env.flockHeatPerH = birds > 0 ? ((0.2 * birds) / 6000 + (1.3 * birds * w) / (6000 * 2850)) * (X ? X.heatK : 1) : 0;
   if (farm.depthVersion !== L.version) { farm.depthVersion = L.version; env.litterDepthCm = meanDepth(L); }
+  if (farm.mode === 'level') cyclePost(farm, env, hrs, { drunkL });
 }
 
 const femit = (farm, t, p) => farm.emit(t, p);
@@ -273,7 +296,7 @@ function restoreFarm(farm, env, d) {
   if (!d) return;
   farm.mode = d.mode || 'off';
   if (farm.mode !== 'level') { farm.stop(); return; }
-  farm.level = LEVEL1; farm.seed = d.seed ?? 1;
+  farm.level = d.levelId === PLAN_LEVEL.id ? PLAN_LEVEL : LEVEL1; farm.seed = d.seed ?? 1;
   farm.rng = createRng(1); farm.rng.state = d.rng ?? 1;
   farm.truckLeft = !!d.truckLeft; farm.drinkLh = d.drinkLh || 0; farm.ctlMem = d.ctlMem ? { ...d.ctlMem } : null;
   farm.comfortH = d.comfortH || 0; farm.litAcc = d.litAcc ? clone(d.litAcc) : { h: 0, drop: 0, leak: 0, spill: [0, 0, 0, 0] };
