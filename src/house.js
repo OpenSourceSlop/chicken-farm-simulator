@@ -36,11 +36,12 @@ export function buildHouse(ctx) {
   const walls = buildWalls(stat, mats, HOUSE.door, (north, south) => buildFrame(stat, chords, rafters, { [-1]: north, [1]: south }));
   for (const w of walls) group.add(w.group);
   walls[1].group.add(houseSign());
-  buildDoor(stat, porch);
+  const leaves = { open: new Batch(), shut: new Batch() };
+  buildDoor(stat, porch, leaves);
   buildApron(stat);
 
   const parts = [buildPad, buildFans, buildFeeders, buildDrinkers, buildBrooders, buildFittings].map((make) => make(kit));
-  const drinkerPart = parts[3];
+  const drinkerPart = parts[3], fanPart = parts[1], broodPart = parts[4];
 
   group.add(stat.mesh(mats.vc));
   group.add(statDS.mesh(mats.vcDS, { receive: false }));
@@ -55,6 +56,10 @@ export function buildHouse(ctx) {
   const porchFade = withDither(porchMat, 'house-porch');
   const porchMesh = porch.mesh(porchMat);
   group.add(porchMesh);
+  // door leaves (Phase 3: shut while the clean house rests, level only), faded with the porch
+  const leavesOpen = leaves.open.mesh(porchMat), leavesShut = leaves.shut.mesh(porchMat);
+  leavesShut.visible = false;
+  group.add(leavesOpen, leavesShut);
   const roof = buildRoof(group);
 
   // Walls as boxes; the 1.8 m door gap in the south wall stays open.
@@ -100,6 +105,9 @@ export function buildHouse(ctx) {
     porchK = dt <= 0 ? porchT : smooth(porchK, porchT, 6, dt);
     porchFade.value = porchK;
     porchMesh.visible = porchK > 0.01;
+    const shut = !!(ctx.farm && ctx.farm.mode === 'level' && ctx.farm.house?.closed);
+    leavesOpen.visible = porchMesh.visible && !shut;
+    leavesShut.visible = porchMesh.visible && shut;
   }
 
   return {
@@ -113,6 +121,8 @@ export function buildHouse(ctx) {
     drinkers: { z: DRINKER_LINES_Z, nippleX: NIPPLE_X, nippleHeight },
     // nipple tip height of each drinker line now (m): the farm's heights in a level (props)
     lineHeights: drinkerPart.heights,
+    // test hooks (Phase 3 scene steps): fan blade angles / spin, the curtain roll, the pad parts
+    debug: { fans: fanPart, brooders: broodPart, pad: parts[0], get doorShut() { return leavesShut.visible; } },
     update(dt, env, view) {
       cutaway(dt, view);
       for (const p of parts) p.update(dt, env, view);
