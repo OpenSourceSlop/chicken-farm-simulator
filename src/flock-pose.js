@@ -117,7 +117,8 @@ export function poseAll(S, dt, stage) {
     animA[q] = Math.cos(hp[i]); animA[q + 1] = Math.sin(hp[i]); animA[q + 2] = hl[i]; animA[q + 3] = sitA[i];
     animB[q] = Math.cos(ht[i]); animB[q + 1] = Math.sin(ht[i]); animB[q + 2] = Math.cos(wing); animB[q + 3] = Math.sin(wing);
     animC[q] = 0.6 * beak[i]; // sin(x) ~ x is plenty for a 0.6 rad beak gape
-    animC[q + 1] = Math.sin(walk * (1 - sitA[i]) * (lame ? 0.2 : 0.55) * Math.sin(st));
+    // a lame bird sits with its legs splayed out front and back (it cannot fold them under)
+    animC[q + 1] = lame && sitA[i] > 0.5 ? 0.52 : Math.sin(walk * (1 - sitA[i]) * (lame ? 0.2 : 0.55) * Math.sin(st));
     // tint +3 = eyes closed and a dull coat (flock-shader.js): sick birds
     animC[q + 2] = S.tint[i] + (sk ? 3 : 0); animC[q + 3] = 0.25 * wingA[i];
   }

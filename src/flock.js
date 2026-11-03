@@ -85,7 +85,8 @@ export function createFlock(ctx, { house } = {}) {
   function applyDay(env, force) {
     const day = lookDay(env), curtain = !!env.broodCurtain;
     const meanW = S.levelMode && ctx.farm.flock.meanWeightG > 0 ? ctx.farm.flock.meanWeightG : weightAt(day);
-    const grown = S.levelMode && Math.abs(lengthOf(meanW) - S.L) > 0.004 * S.L;
+    const boost = S.levelMode ? 1 + 0.2 * smooth(18, 40, day) : 1;
+    const grown = S.levelMode && Math.abs(lengthOf(meanW) * boost - S.L) > 0.004 * S.L;
     if (!force && Math.abs(day - S.day) < 0.02 && curtain === S.curtain && !grown) return;
     const prevDay = S.day, prevCurtain = S.curtain;
     // The curtain lifting during a time jump (Next morning, Skip, the test tools) re-places the flock
@@ -108,7 +109,9 @@ export function createFlock(ctx, { house } = {}) {
       }
     }
 
-    S.L = lengthOf(meanW);
+    // Phase 3: from about day 18 a drawn bird stands a little larger (it stands for 3.3 real birds), so the
+    // grown flock covers the floor like a white carpet at harvest weight (level mode only)
+    S.L = lengthOf(meanW) * boost;
     const growth = Math.min(1, Math.max(0, (S.L - 0.15) / 0.45));
     S.baseSpeed = 0.25 + 0.1 * growth;
     S.morph = Math.min(1, Math.max(0, (day - 1) / 26));
@@ -136,6 +139,7 @@ export function createFlock(ctx, { house } = {}) {
     const even = Math.sqrt((2 * area) / (Math.sqrt(3) * n));
     S.perM2 = n / area;
     S.rRight = Math.max(0.82 * even, 0.95 * S.L);
+    if (S.levelMode && day > 18) S.rRight = Math.min(S.rRight, Math.max(0.82 * even, 1.05 * even)); // a full house: shoulder to shoulder
     // hot birds keep apart (at least 1.3 body lengths) yet still crowd the cooler wall bands
     S.rHot = Math.min(even, Math.max(0.72 * even, 1.3 * S.L));
     S.rHuddle = 0.62 * S.L;
