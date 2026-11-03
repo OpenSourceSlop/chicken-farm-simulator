@@ -5,11 +5,15 @@ import {
 } from './config.js';
 
 const HOUR = 3600;
+const MAX_DAY = 42;
 
-export function createSim() {
-  const env = {
+// The farm clock keeps `day` and `hour` in step: the whole number of `day` is the calendar day of
+// the flock (it changes at midnight) and the fraction is the time of day, so day = N + hour / 24.
+// Day 1 is the arrival day; the chicks arrive at TIME.startHour on day 1.
+function initialState() {
+  return {
     // clock
-    day: TIME.startDay,            // flock age in days (float). Day 1 = arrival day.
+    day: TIME.startDay + TIME.startHour / 24, // flock age in days (float). Day 1 = arrival day.
     hour: TIME.startHour,          // 0–24
     timeScale: TIME.gameSecondsPerRealSecond,
     paused: false,
@@ -34,13 +38,25 @@ export function createSim() {
     feelsLike: 27,
     bodyWeight: weightAt(TIME.startDay),
     broodCurtain: true,
+  };
+}
+
+// Calendar day number (0..MAX_DAY). Robust to float drift in `hour`.
+function dayNumberOf(env) {
+  return Math.max(0, Math.min(MAX_DAY, Math.round(env.day - env.hour / 24)));
+}
+
+export function createSim() {
+  const env = {
+    ...initialState(),
 
     get isNight() { return this.hour < TIME.sunrise || this.hour > TIME.sunset; },
     get timeLabel() {
-      const h = Math.floor(this.hour);
-      const m = Math.floor((this.hour - h) * 60);
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      const mins = Math.floor(this.hour * 60 + 1e-4) % (24 * 60); // 1e-4: 05:59.99999 reads 06:00
+      return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
     },
+    // Whole calendar day of the flock (changes at midnight). Use this for "Day N" labels.
+    get dayNumber() { return dayNumberOf(this); },
 
     // Temperature a chick feels at floor point (x, z): house air, plus radiant heat under a
     // running brooder, minus wind chill, slightly cooler beside the side walls and near the pad.
@@ -66,19 +82,37 @@ export function createSim() {
     // Signed difference between what a bird feels at (x, z) and the target for its age.
     comfort(x, z) { return this.localTemp(x, z) - this.targetTemp; },
 
-    setDay(d) { this.day = Math.max(0, Math.min(42, d)); derive(this); emit('day'); },
-    setHour(h) { this.hour = ((h % 24) + 24) % 24; derive(this); emit('time'); },
+    // setDay picks the calendar day (whole number, 0..42) and keeps the time of day.
+    setDay(d) { const n = Math.max(0, Math.min(MAX_DAY, Math.floor(d))); this.day = n + this.hour / 24; derive(this); emit('day'); },
+    setHour(h) { const n = dayNumberOf(this); this.hour = ((h % 24) + 24) % 24; this.day = n + this.hour / 24; derive(this); emit('time'); },
     setWeather(w) { if (WEATHER[w]) { this.weather = w; derive(this); emit('weather'); } },
-    setHeaterSetpoint(t) { this.heaterSetpoint = Math.max(15, Math.min(40, Math.round(t * 2) / 2)); emit('controls'); },
+    setHeaterSetpoint(t) {
+      this.heaterSetpoint = Math.max(15, Math.min(40, Math.round(t * 2) / 2));
+      thermostat(this); // the burner relay answers at once, even while the clock is paused
+      emit('controls');
+    },
     setFans(n) { this.fansOn = Math.max(0, Math.min(FAN_COUNT, Math.round(n))); derive(this); emit('controls'); },
     setPad(on) { this.padOn = !!on; emit('controls'); },
     forceHouseTemp(t) { this.forcedHouseTemp = t == null ? null : t; if (t != null) this.houseTemp = t; derive(this); emit('controls'); },
-    skipHours(h) { stepGame(this, h * HOUR, true); emit('time'); },
+    skipHours(h) {
+      const d0 = dayNumberOf(this);
+      stepGame(this, h * HOUR, true);
+      emit('time');
+      if (dayNumberOf(this) !== d0) emit('day');
+    },
+    // Back to the start of the flock: day 1, 08:00, cool season, controls at their first settings.
+    reset() {
+      Object.assign(this, initialState());
+      derive(this);
+      emit('day'); emit('time'); emit('weather'); emit('controls');
+    },
 
     // dt in real seconds
     update(dt) {
       if (this.paused) return;
+      const d0 = dayNumberOf(this);
       stepGame(this, dt * this.timeScale, false);
+      if (dayNumberOf(this) !== d0) emit('day');
     },
 
     on(name, fn) { (listeners[name] ||= []).push(fn); return () => { listeners[name] = listeners[name].filter((f) => f !== fn); }; },
@@ -113,6 +147,12 @@ function derive(env) {
   env.lightsOn = !(env.hour >= 2 && env.hour < 3);
 }
 
+// Brooder thermostat with 0.3 °C hysteresis, measured on the house air.
+function thermostat(env) {
+  if (env.houseTemp < env.heaterSetpoint - 0.3) env.heatersOn = true;
+  else if (env.houseTemp > env.heaterSetpoint + 0.3) env.heatersOn = false;
+}
+
 // Advance the farm by `gs` game seconds in steps of at most one game minute.
 function stepGame(env, gs, fast) {
   let left = gs;
@@ -120,14 +160,13 @@ function stepGame(env, gs, fast) {
     const s = Math.min(left, 60);
     left -= s;
     const hrs = s / HOUR;
+    let n = dayNumberOf(env);
     env.hour += hrs;
-    if (env.hour >= 24) { env.hour -= 24; }
-    env.day = Math.min(42, env.day + hrs / 24);
+    if (env.hour >= 24) { env.hour -= 24; n = Math.min(MAX_DAY, n + 1); } // after day 42 the clock keeps day 42
+    env.day = n + env.hour / 24;
     derive(env);
 
-    // Thermostat with 0.3 °C hysteresis
-    if (env.houseTemp < env.heaterSetpoint - 0.3) env.heatersOn = true;
-    else if (env.houseTemp > env.heaterSetpoint + 0.3) env.heatersOn = false;
+    thermostat(env);
     const k = 1 - Math.exp(-hrs * 12); // glow follows the burner within a few game minutes
     env.heaterLevel += ((env.heatersOn ? 1 : 0) - env.heaterLevel) * (fast ? 1 : k);
 

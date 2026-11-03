@@ -7,36 +7,177 @@
    One deliberate look (a farm at work, read through painted signs and a controller LCD), so a single theme. */
 :root {
   color-scheme: dark;
+  /* text */
   --ink: #f3ecd8;            /* cream text, like sign paint */
   --ink-dim: #c9c1aa;
-  --panel: rgba(24, 36, 30, 0.86);   /* dark feed-sack green */
+  --ink-faint: #9d977f;
+  /* HUD cards: dark feed-sack green */
+  --panel: rgba(24, 36, 30, 0.86);
   --panel-solid: #18241e;
+  --panel-raised: #24362c;
+  --panel-raised-hi: #2e4337;
+  --panel-sunk: rgba(8, 15, 11, 0.42);
   --panel-edge: rgba(243, 236, 216, 0.16);
+  --panel-stitch: rgba(243, 236, 216, 0.11);
+  --panel-weave: rgba(243, 236, 216, 0.022);
+  --shadow: 0 8px 22px rgba(4, 10, 7, 0.32);
+  --scrim: rgba(8, 14, 11, 0.5);
+  /* signals */
   --accent: #f28c28;         /* brooder flame orange */
+  --accent-ink: #1e1305;
+  --accent-soft: rgba(242, 140, 40, 0.16);
+  --focus: #ffd447;
   --lcd: #b9e27a;            /* controller LCD green */
+  --lcd-shade: #a5cf68;
+  --lcd-ink: #1f2d12;
+  --lcd-ghost: rgba(31, 45, 18, 0.12);
   --cold: #6cb8f0;
   --ok: #8fd17a;
   --hot: #f0664a;
   --sky: #bfd9ea;
-  --font-display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
-  --font-body: "Sarabun", "Segoe UI", system-ui, sans-serif;
+  /* painted sign board */
+  --sign-face: #1d4a37;
+  --sign-face-lo: #173d2d;
+  --sign-paint: #f6f1e2;
+  --sign-paint-dim: #c6d2c0;
+  --sign-rule: rgba(246, 241, 226, 0.28);
+  --sign-yellow: #e7b646;
+  --sign-yellow-ink: #2a200c;
+  --wood: #7a5232;
+  --wood-dark: #553821;
+  --wood-light: #93673f;
+  --bolt-hi: #ece6d6;
+  --bolt-lo: #7d7768;
+  --chick: #f5d36b;
+  /* climate controller hardware */
+  --case-hi: #dad6ca;
+  --case-lo: #b3ae9f;
+  --case-ink: #2d302c;
+  --case-ink-dim: #5d5f57;
+  --plate: #262d31;
+  --plate-edge: #11161a;
+  --key: #465057;
+  --key-hi: #5b666e;
+  --key-ink: #f2f1ea;
+  --led-heat: #ff8a2a;
+  --led-pad: #52c3f2;
+  --led-run: #8fe36a;
+  --led-off: #3b4145;
+  /* type */
+  --font-display: "Chakra Petch", "Bahnschrift", "DIN Alternate", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Sarabun", "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
   --gutter: 16px;
+  --top: calc(var(--gutter) + env(safe-area-inset-top, 0px));
+  --left: max(var(--gutter), env(safe-area-inset-left, 0px));
+  --right: max(var(--gutter), env(safe-area-inset-right, 0px));
+  --bottom: calc(var(--gutter) + env(safe-area-inset-bottom, 0px));
+  --jobs-w: 304px;
 }
 html, body { height: 100%; }
-body { background: var(--panel-solid); color: var(--ink); font-family: var(--font-body); overflow: hidden; }
-#app { position: fixed; inset: 0; }
+body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family: var(--font-body); overflow: hidden; }
+#app { position: fixed; inset: 0; overflow: hidden; }
 #game { display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
-#hud { position: absolute; inset: 0; pointer-events: none; font-variant-numeric: tabular-nums; }
-#hud > * { pointer-events: auto; }
-.hud-clock { position: absolute; top: calc(var(--gutter) + env(safe-area-inset-top, 0px)); left: max(var(--gutter), env(safe-area-inset-left, 0px)); background: var(--panel); border: 1px solid var(--panel-edge); padding: 8px 12px; border-radius: 6px; font-family: var(--font-display); }
-#boot { position: absolute; inset: 0; display: grid; place-items: center; background: var(--panel-solid); color: var(--ink); font-family: var(--font-display); font-size: 18px; letter-spacing: 0.04em; padding-inline: max(var(--gutter), env(safe-area-inset-left, 0px)); text-align: center; }
-#boot.boot--error { color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5; }
+#hud { position: absolute; inset: 0; pointer-events: none; font-variant-numeric: tabular-nums; font-size: 14px; line-height: 1.35; }
+#hud * { box-sizing: border-box; }
+#hud .card, #hud button, #hud input, #hud select, #hud .panel, #hud .scrim, #hud .narrow { pointer-events: auto; }
+.icon { width: 1em; height: 1em; flex: none; display: inline-block; vertical-align: -0.15em; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- boot card (main.js hides #boot when the farm is ready) ---------- */
+#boot { position: absolute; inset: 0; display: grid; place-items: center; background: var(--panel-solid); color: var(--ink); font-family: var(--font-body); padding-inline: max(var(--gutter), env(safe-area-inset-left, 0px)); text-align: center;
+  background-image: radial-gradient(ellipse at 50% 120%, rgba(127, 174, 78, 0.22), transparent 60%); }
+#boot.boot--error { font-size: 16px; line-height: 1.5; padding-inline: max(var(--gutter), calc((100% - 520px) / 2)); }
+.boot-card { width: min(360px, 100%); display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; align-items: center; text-align: left; padding: 20px 22px; border-radius: 10px; background: var(--panel-raised); border: 1px solid var(--panel-edge); box-shadow: var(--shadow); }
+.boot-mark { grid-row: span 2; width: 64px; height: 48px; }
+.boot-title { font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: 0.02em; margin: 0; }
+.boot-sub { margin: 0; color: var(--ink-dim); font-size: 15px; }
+.boot-bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; margin-top: 10px; background: var(--panel-sunk); overflow: hidden; }
+.boot-bar::before { content: ""; display: block; height: 100%; width: 40%; border-radius: 3px; background: var(--accent); animation: boot-slide 1.6s ease-in-out infinite alternate; }
+@keyframes boot-slide { from { transform: translateX(-10%); } to { transform: translateX(160%); } }
+
+/* ---------- HUD cards: feed-sack green, a stitched seam, a faint weave ---------- */
+.card { position: relative; background-color: var(--panel); color: var(--ink); border: 1px solid var(--panel-edge); border-radius: 8px; box-shadow: var(--shadow);
+  background-image: repeating-linear-gradient(0deg, var(--panel-weave) 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, var(--panel-weave) 0 1px, transparent 1px 3px);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.card::after { content: ""; position: absolute; inset: 3px; border: 1px dashed var(--panel-stitch); border-radius: 6px; pointer-events: none; }
+.label { font-family: var(--font-display); font-size: 11px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-dim); }
+.unit { font-size: 0.5em; font-weight: 500; color: var(--ink-dim); margin-left: 0.18em; letter-spacing: 0.02em; }
+
+.hud-tl { position: absolute; top: var(--top); left: var(--left); max-width: calc(100% - var(--jobs-w) - var(--left) - var(--right) - 16px); display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.hud-tr { position: absolute; top: var(--top); right: var(--right); width: var(--jobs-w); }
+.hud-bl { position: absolute; left: var(--left); bottom: var(--bottom); display: flex; flex-direction: column; align-items: flex-start; gap: 10px; max-width: calc(100% - var(--left) - var(--right)); }
+.hud-br { position: absolute; right: var(--right); bottom: var(--bottom); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-height: calc(100% - var(--top) - var(--bottom) - 250px); min-height: 0; }
+.hud-bc { position: absolute; left: 50%; bottom: calc(var(--bottom) + 12px); transform: translateX(-50%); }
+
+/* farm clock */
+.clock { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 14px; padding: 10px 14px 11px; min-width: 176px; }
+.clock-day { font-family: var(--font-display); font-weight: 700; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+.clock-time { font-family: var(--font-display); font-weight: 600; font-size: 32px; line-height: 1; letter-spacing: 0.02em; margin-top: 2px; }
+.clock-sky { grid-row: 1 / span 2; grid-column: 2; font-size: 30px; color: var(--sign-yellow); }
+.clock-sky.is-night { color: var(--ink-dim); }
+.clock-weather { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--panel-edge); color: var(--ink-dim); font-size: 13px; white-space: nowrap; }
+.clock-weather .icon { font-size: 16px; color: var(--ink); }
+.clock-rate { margin-left: auto; font-family: var(--font-display); font-weight: 600; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
+.clock-rate.is-paused { color: var(--accent); }
+
+/* gauge strip */
+.gauges { display: flex; align-items: stretch; padding: 4px; }
+.gauge { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 6px 14px; min-width: 92px; }
+.gauge + .gauge { border-left: 1px solid var(--panel-edge); }
+.gauge .label { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.gauge .label .icon { font-size: 14px; color: var(--ink); }
+.gauge-value { font-family: var(--font-display); font-weight: 600; font-size: 22px; line-height: 1.05; white-space: nowrap; }
+.gauge--main { min-width: 132px; }
+.gauge--main .gauge-value { font-size: 36px; }
+.gauge-sub { font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+.pips { display: flex; gap: 3px; margin-top: 2px; }
+.pip { width: 9px; height: 5px; border-radius: 1px; background: var(--panel-sunk); box-shadow: inset 0 0 0 1px var(--panel-edge); }
+.pip.is-on { background: var(--ink); box-shadow: none; }
+.gauge--burner .gauge-value { display: flex; align-items: center; gap: 6px; }
+.gauge--burner .flame { font-size: 22px; color: var(--ink-faint); transition: color 0.3s, filter 0.3s; }
+.gauge--burner.is-on .flame { color: var(--accent); filter: drop-shadow(0 0 6px rgba(242, 140, 40, 0.65)); }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--panel-edge); background: var(--panel-raised); color: var(--ink); font: 600 13px/1.1 var(--font-display); letter-spacing: 0.03em; cursor: pointer; white-space: nowrap; }
+.btn .icon { font-size: 17px; }
+.btn:hover { background: var(--panel-raised-hi); }
+.btn:active { transform: translateY(1px); }
+.btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn--icon { width: 38px; padding: 0; }
+#hud button:focus-visible, #hud input:focus-visible, #hud select:focus-visible, #hud [tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.kbd { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 5px; background: var(--ink); color: var(--panel-solid); font: 700 13px/1 var(--font-display); box-shadow: inset 0 -2px 0 var(--ink-faint); }
+
+/* time controls */
+.timebar { display: flex; align-items: center; gap: 6px; padding: 7px; }
+.seg { display: inline-flex; }
+.seg .btn { border-radius: 0; }
+.seg .btn:first-child { border-radius: 6px 0 0 6px; }
+.seg .btn:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+.timebar-sep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--panel-edge); }
+/*__CSS_PART_2__*/
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 <div id="app">
   <canvas id="game" tabindex="0" aria-label="3D view of the chicken farm"></canvas>
   <div id="hud"></div>
-  <div id="boot">Opening the farm gate…</div>
+  <div id="boot" role="status">
+    <div class="boot-card">
+      <svg class="boot-mark" viewBox="0 0 64 48" aria-hidden="true">
+        <polygon points="8,21 14,33 11,24" fill="#d9d3c2"/>
+        <polygon points="11,24 20,17 38,15 48,22 47,34 35,40 19,38 13,31" fill="#f4f1ea"/>
+        <polygon points="21,25 36,22 33,33 21,33" fill="#ddd7c7"/>
+        <polygon points="38,15 43,6 51,6 54,13 48,22" fill="#f4f1ea"/>
+        <polygon points="43,6 45,1 48,4 51,1 52,6" fill="#d8322f"/>
+        <polygon points="54,9 60,11 54,13" fill="#f2a33a"/>
+        <polygon points="50,14 53,14 52,19" fill="#d8322f"/>
+        <circle cx="49" cy="9.5" r="1.3" fill="#18241e"/>
+        <path d="M27 39v6M24 45h6M34 38v7M31 45h6" stroke="#f2a33a" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <p class="boot-title">Chicken Farm</p>
+      <p class="boot-sub">Opening the farm gate&hellip;</p>
+      <div class="boot-bar" aria-hidden="true"></div>
+    </div>
+  </div>
 </div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">/*__GAME_BUNDLE__*/</script>
