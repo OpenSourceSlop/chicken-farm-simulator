@@ -7,6 +7,8 @@ import { h, button, setText, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { equipShell, machineRow, readout, stepper, toggleKey } from './ui-equipment.js';
 import { int, one, signedPct, hhmm } from './ui-format.js';
+// Phase 3 (package "panels"): main valve, Vaccine / Medicine / Clean-out tabs, the water test kit
+import { cycleWaterParts } from './ui-cycle-water.js';
 
 const GAME_MIN = 1 / 1440;
 
@@ -151,12 +153,15 @@ export function buildWaterSupplyPanel(L) {
     return { row, t, tube };
   });
   const overview = h('div', { class: 'overview' });
-  shell.main.append(
+  // Phase 2's content is the Lines tab; from day 8 the Phase 3 tabs sit above it (the brooding week has none)
+  const linesSec = h('div', { role: 'tabpanel' },
     h('div', { class: 'supply-top' },
       h('div', { class: 'supply-box' }, h('p', { class: 'supply-k' }, 'Water meter'), dial, meter.el, readMeter),
       h('div', { class: 'supply-box' }, h('p', { class: 'supply-k' }, 'Main filter'), gauges, filt.el, h('div', { class: 'equip-btns' }, readFilter, clean), cleanBar)),
     h('p', { class: 'supply-k supply-k--rows' }, 'Flush valves · sight tube at the east end of each line'),
     h('div', { class: 'ctrl-rows supply-valves' }, valves.map((v) => v.row.el)), overview);
+  const cyc = cycleWaterParts(L, { linesSec, foldPlates: () => shell.foldPlates() });
+  shell.main.append(cyc.bar, linesSec, ...cyc.secs);
 
   function drawGauges() {
     const g = (label, bar) => {
@@ -197,6 +202,7 @@ export function buildWaterSupplyPanel(L) {
   drawGauges();
   return {
     el: shell.el,
+    onOpen() { shell.refreshPlates(); cyc.onOpen(); },
     onClose() { if (cleaning) { cleaning = null; cleanBar.hidden = true; setText(clean, 'Clean the filter'); } },
     update(dt, force) {
       if (cleaning) {
@@ -209,7 +215,7 @@ export function buildWaterSupplyPanel(L) {
         }
       }
       acc -= dt;
-      if (force || acc <= 0) { acc = 0.25; refresh(); }
+      if (force || acc <= 0) { acc = 0.25; refresh(); cyc.update(); }
     },
   };
 }

@@ -7,6 +7,8 @@ import { h, button, setText, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { equipShell, readout, stepper } from './ui-equipment.js';
 import { int, one, two, cropWords } from './ui-format.js';
+// Phase 3 (package "panels"): the weight spread chart in the weigh panel (unlock uniformityChart)
+import { spreadChart } from './ui-cycle-kit.js';
 
 // A chick drawn in 2D (top-left origin 0..60). flip = on its back, cull = gone.
 function chickSvg({ flip = false, size = 1 } = {}) {
@@ -164,8 +166,17 @@ export function buildWeighPanel(L) {
   nextBtn.addEventListener('click', () => { shell.foldPlates(); auto = false; wait = 0.4; nextPending = true; });
   allBtn.addEventListener('click', () => { shell.foldPlates(); auto = true; wait = 0.4; });
   let nextPending = false;
-  shell.main.append(h('div', { class: 'equip-reads' }, frameMean.el, allMean.el), list, h('div', { class: 'equip-btns' }, nextBtn, allBtn),
+  const spread = h('div', { class: 'cyc-chart cyc-spread', hidden: true });
+  shell.main.append(h('div', { class: 'equip-reads' }, frameMean.el, allMean.el), list, h('div', { class: 'equip-btns' }, nextBtn, allBtn), spread,
     h('p', { class: 'equip-note' }, 'Close the panel to let the birds go; the frame stays in your hands for the next place.'));
+  function drawSpread() {
+    const on = !!L.skills?.unlocked?.('uniformityChart');
+    spread.hidden = !on;
+    if (!on) return;
+    const c = spreadChart(L.weighings().list.map((x) => x.w));
+    spread.innerHTML = c ? `<p class="ctrl-chart-k">Weight spread today · ${c.n} birds, mean ${int(c.mean)} g · within ±10 % of the mean: ${c.inside} (${Math.round((100 * c.inside) / c.n)} %)</p>${c.svg}`
+      : '<p class="ctrl-chart-k">Weight spread: weigh two birds or more today</p>';
+  }
   function draw() {
     list.replaceChildren(...weights.map((w, i) => h('li', null, h('span', null, `${i + 1}`), `${int(w)} g`)),
       ...queue.map(() => h('li', { class: 'is-waiting' }, h('span', null, '·'), 'in the frame')));
@@ -174,10 +185,12 @@ export function buildWeighPanel(L) {
     const all = L.weighings();
     allMean.set(all.n ? `${int(all.mean)} g` : '—', all.n ? `${all.n} bird${all.n === 1 ? '' : 's'} · ${all.sectors} place${all.sectors === 1 ? '' : 's'}` : '');
     nextBtn.disabled = allBtn.disabled = !queue.length;
+    drawSpread();
   }
   return {
     el: shell.el,
     take(f) { frame = f; queue = (f.birds || []).slice(); weights = []; auto = false; nextPending = false; draw(); },
+    onOpen() { shell.refreshPlates(); },
     onClose() { if (frame) { L.flock?.releaseGroup?.(); frame = null; } },
     update(dt) {
       if ((auto || nextPending) && queue.length) {

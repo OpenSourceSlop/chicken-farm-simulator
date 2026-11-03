@@ -4,12 +4,15 @@
 // ui-only action on the bus); the panel shows what the machine shows, never a verdict.
 import { EQUIP, FEEDER_LINES_Z, LEVEL1 } from './config.js';
 import { BOARDS } from './content-signs.js';
+import { BOARDS_CYCLE } from './content-signs-cycle.js';
 import { h, button, setText, uniqueId, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
 import { key } from './ui-controller.js';
 import { buildPlate } from './ui-boards.js';
 import { int, one } from './ui-format.js';
+// Phase 3 (package "panels"): feed withdrawal and pan wash, two silos and slide valves, fork and scraper
+import { cycleFeederParts, cycleSiloParts, cycleHeapParts } from './ui-cycle-equip.js';
 
 /**
  * Machine case: header with icon, title and where; a dark working plate; plate columns at the side.
@@ -20,8 +23,10 @@ export function equipShell({ cls = '', icon, title, sub, plates = [], onClose, s
   const { el, closeBtn } = dialogShell(`equip ${cls}`, titleId, onClose);
   const main = h('div', { class: 'equip-main' });
   const plateEls = plates.map((id) => buildPlate(id));
+  // Phase 3: a link may name a board of the full cycle (content-signs-cycle.js BOARDS_CYCLE)
+  const board = (id) => BOARDS[id] || BOARDS_CYCLE[id];
   const links = signLinks.length ? h('p', { class: 'equip-links' }, h('span', { html: ICONS.facts, 'aria-hidden': 'true' }),
-    `Facts also on: ${signLinks.map((id) => `${BOARDS[id].title} (${BOARDS[id].where.toLowerCase()})`).join('; ')}`) : null;
+    `Facts also on: ${signLinks.filter(board).map((id) => `${board(id).title} (${board(id).where.toLowerCase()})`).join('; ')}`) : null;
   const side = plateEls.length ? h('div', { class: 'equip-side' }, plateEls.map((p) => p.el), links) : null;
   if (!plateEls.length && links) { links.classList.add('equip-links--below'); }
   const screws = ['tl', 'tr', 'bl', 'br'].map((p) => h('span', { class: `screw screw--${p}`, 'aria-hidden': 'true' }));
@@ -29,7 +34,21 @@ export function equipShell({ cls = '', icon, title, sub, plates = [], onClose, s
     h('header', { class: 'ctrl-brand' }, h('span', { class: 'ctrl-logo', html: icon || ICONS.sliders, 'aria-hidden': 'true' }),
       h('div', null, h('h2', { id: titleId }, title), sub ? h('p', null, sub) : null)),
     h('div', { class: `equip-grid${side ? '' : ' equip-grid--solo'}` }, main, side), side ? null : links), closeBtn);
-  return { el, main, plates: plateEls, foldPlates() { for (const p of plateEls) p.fold(); } };
+  return {
+    el, main, plates: plateEls,
+    foldPlates() { for (const p of plateEls) p.fold(); },
+    /** Phase 3: rebuild a plate whose merged board of today has more lines (BOARD_EXTRA_ITEMS fromDay);
+     *  the brooding week's plates never change. Panels call it when they open. */
+    refreshPlates() {
+      plateEls.forEach((p, i) => {
+        const fresh = buildPlate(p.id, { open: p.open });
+        const n = (x) => x.el.querySelectorAll('.plate-items > li').length;
+        if (n(fresh) === n(p)) return;
+        p.el.replaceWith(fresh.el);
+        plateEls[i] = fresh;
+      });
+    },
+  };
 }
 
 /** A labelled row of the working plate: led, label (+ small), controls. */
@@ -85,7 +104,8 @@ export function buildFeederPanel(L) {
   const meter = readout('Feed meter');
   const readBtn = button({ class: 'btn btn--machine' }, h('span', { html: ICONS.eye, 'aria-hidden': 'true' }), 'Read the feed meter');
   readBtn.addEventListener('click', () => { const r = L.act('feed.meter', {}); meter.set(`${int(r?.kg)} kg`, 'since the first fill'); });
-  shell.main.append(h('div', { class: 'ctrl-rows' }, rows.map((r) => r.row.el)), h('div', { class: 'equip-reads' }, meter.el, readBtn));
+  const cyc = cycleFeederParts(L, { foldPlates: () => shell.foldPlates() });
+  shell.main.append(h('div', { class: 'ctrl-rows' }, rows.map((r) => r.row.el), cyc.els[0]), h('div', { class: 'equip-reads' }, meter.el, readBtn), cyc.els[1]);
 
   function panSvg(l) {
     // side view: litter line, pan at its rim height, feed heaped by fill (flood = heaped above the rim)
@@ -108,7 +128,12 @@ export function buildFeederPanel(L) {
       if (r.pan.__k !== k) { r.pan.__k = k; r.pan.innerHTML = panSvg(l); }
     });
   }
-  return { el: shell.el, update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.25; refresh(); } } };
+  return {
+    el: shell.el,
+    onOpen() { shell.refreshPlates(); },
+    onClose() { cyc.onClose(); },
+    update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.25; refresh(); cyc.update(); } },
+  };
 }
 
 // ---------------- silo gauge (outside, north of the house) ----------------
@@ -119,8 +144,10 @@ export function buildSiloPanel(L) {
   const reading = readout('Gauge reading');
   const readBtn = button({ class: 'btn btn--machine' }, h('span', { html: ICONS.eye, 'aria-hidden': 'true' }), 'Read the gauge');
   readBtn.addEventListener('click', () => { const r = L.act('feed.silo', {}); reading.set(`about ${int(r?.kg)} kg`, `both silos, read ${L.env.timeLabel}`); });
-  shell.main.append(h('div', { class: 'silo-wrap' }, strip, h('div', { class: 'equip-reads equip-reads--col' }, reading.el, readBtn,
-    h('p', { class: 'equip-note' }, 'The office phone orders feed.'))));
+  const p2 = h('div', { class: 'silo-wrap' }, strip, h('div', { class: 'equip-reads equip-reads--col' }, reading.el, readBtn,
+    h('p', { class: 'equip-note' }, 'The office phone orders feed.')));
+  const cyc = cycleSiloParts(L);
+  shell.main.append(p2, cyc.el);
   function draw() {
     const cap = EQUIP.siloCapacityKg, kg = Math.max(0, farm.feed.siloKg);
     const ticks = [0, 1000, 2000, 3000, 4000, 5000, 6000].map((t) => {
@@ -132,7 +159,18 @@ export function buildSiloPanel(L) {
       <rect x="23" y="${fy.toFixed(1)}" width="16" height="${(150 - fy).toFixed(1)}" fill="var(--sign-yellow)"/>${ticks}</svg>`;
   }
   let acc = 0;
-  return { el: shell.el, update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.5; draw(); } } };
+  return {
+    el: shell.el,
+    onOpen() { shell.refreshPlates(); },
+    update(dt, force) {
+      acc -= dt;
+      if (!(force || acc <= 0)) return;
+      acc = 0.5;
+      const on = cyc.active();
+      p2.hidden = on; cyc.el.hidden = !on;
+      if (on) cyc.update(); else draw();
+    },
+  };
 }
 
 // ---------------- rice husk heap ----------------
@@ -153,9 +191,10 @@ export function buildHeapPanel(L) {
   back.addEventListener('click', () => { props.drop(); refresh(); });
   sack.addEventListener('click', () => { props.startCarry('sack', {}); L.close(); });
   const hint = h('p', { class: 'equip-note' });
+  const cyc = cycleHeapParts(L);
   shell.main.append(
     h('fieldset', { class: 'depth' }, h('legend', null, 'Depth to spread'), depths.map((d) => d.el)),
-    h('div', { class: 'equip-reads' }, cover.el, h('div', { class: 'equip-btns' }, barrow, back, sack)), hint);
+    h('div', { class: 'equip-reads' }, cover.el, h('div', { class: 'equip-btns' }, barrow, back, sack, ...cyc.buttons)), hint);
   function refresh() {
     for (const d of depths) d.input.checked = Math.round(farm.litter.depthCm) === d.cm;
     cover.set(`${Math.round((farm.litter.cover ?? 0) * 100)} %`, `${fmt0(farm.litter.depthCm)} cm set`);
@@ -164,7 +203,8 @@ export function buildHeapPanel(L) {
     back.hidden = carrying !== 'barrow';
     sack.hidden = env.dayNumber < LEVEL1.arrivalDay || carrying === 'barrow';
     barrow.disabled = !!carrying && carrying !== 'barrow';
-    setText(hint, carrying === 'barrow' ? 'Push the barrow over the floor: it spreads a strip about 2.4 m wide.' : 'With the barrow the clock runs slower; walk the whole house from wall to wall.');
+    setText(hint, cyc.hint() ?? (carrying === 'barrow' ? 'Push the barrow over the floor: it spreads a strip about 2.4 m wide.' : 'With the barrow the clock runs slower; walk the whole house from wall to wall.'));
+    cyc.update();
   }
   let acc = 0;
   return { el: shell.el, update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.3; refresh(); } } };
@@ -195,7 +235,7 @@ export function buildBirdScalePanel(L) {
     back.hidden = props.carrying !== 'frame';
   }
   let acc = 0;
-  return { el: shell.el, update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.4; refresh(); } } };
+  return { el: shell.el, onOpen() { shell.refreshPlates(); }, update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.4; refresh(); } } };
 }
 
 export const fmtKg = (kg) => `${one(kg)} kg`;
