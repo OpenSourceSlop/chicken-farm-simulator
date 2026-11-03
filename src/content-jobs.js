@@ -37,6 +37,7 @@
 //     { type: 'all', of: [rules] }               every rule (each one latches when met)
 //     { type: 'any', of: [rules] }               one of the rules
 import { EV } from './events.js';
+import { JOBS_CYCLE, JOB_WHERE_CYCLE } from './content-jobs-cycle.js';
 
 const R = (id, days, round, title, rest) => ({ id, kind: 'routine', days, round, title, ...rest });
 const D = (id, day, round, title, rest) => ({ id, kind: 'dated', day, round, title, ...rest });
@@ -176,7 +177,13 @@ export const JOBS = [
     done: { type: 'action', id: 'phone.report' } }),
 ];
 
-export const jobById = (id) => JOBS.find((j) => j.id === id) || null;
+/** Phase 3 (PHASE3.md §3.1): the one job list of every level (the engine makes only the jobs whose
+ *  days lie inside its level, and problem jobs only for that level's problems). */
+export const ALL_JOBS = [...JOBS, ...JOBS_CYCLE];
+export const allJobs = () => ALL_JOBS;
+export const jobById = (id) => ALL_JOBS.find((j) => j.id === id) || null;
+/** The card's "where" line of any job (Phase 2's or the cycle's). */
+export const jobWhere = (id) => JOB_WHERE[id] || JOB_WHERE_CYCLE[id] || '';
 
 // One line of "where" for the open job on the card: the place and the check, never the value.
 export const JOB_WHERE = {
