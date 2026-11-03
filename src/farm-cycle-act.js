@@ -155,7 +155,12 @@ export function onBus(farm, env, type, p = {}) {
       if (!seen.includes(i)) { seen.push(i); vaccineWalk(farm, 1 / 576); }
       break;
     }
-    case EV.BIRD_PICK: farm.inHand = { index: p.index ?? null, lame: p.purpose === 'lame' }; break;
+    case EV.BIRD_PICK: {
+      farm.inHand = { index: p.index ?? null, lame: p.purpose === 'lame' };
+      const st = farm.problems.find((x) => x.id === 'lame-birds');
+      if (p.purpose === 'lame' && st && st.phase === 'active') findProblem(farm, env, 'lame-birds', 'pick');
+      break;
+    }
     case EV.BIRD_RELEASE: farm.inHand = null; break;
     case EV.FOOTDIP: if (env.dayNumber === -2 && p.where === 'gate') (st.gate || (st.gate = {})).gateDip = true; break;
     case EV.HOUSE_ENTER: if (env.dayNumber === -2 && p.dipped) (st.gate || (st.gate = {})).houseDip = true; break;

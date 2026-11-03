@@ -197,7 +197,9 @@ export function createRecords({ farm, env, events } = {}) {
     events.on(EV.LISTEN, (p) => {
       if (!live() || !farm) return;
       const o = farm.observe(p.x, p.z);
-      const text = `You see: chicks ${o.spread}; droppings ${o.droppings}. You hear: ${o.sounds}.`;
+      // from Week 2 the birds are no longer chicks, and the air has its own line (PHASE3.md §6.13)
+      const text = o.air ? `You see: birds ${o.spread}; droppings ${o.droppings}. You hear: ${o.sounds}. The air: ${o.air}.`
+        : `You see: chicks ${o.spread}; droppings ${o.droppings}. You hear: ${o.sounds}.`;
       // the same words again within the hour (he stood still twice in the same flock): one line
       for (let i = notebook.length - 1; i >= 0; i--) {
         const n = notebook[i];

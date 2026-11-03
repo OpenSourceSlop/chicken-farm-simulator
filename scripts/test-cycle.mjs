@@ -5,6 +5,7 @@
 // (scripts/cycle-refs.mjs, env alone) run now; the profile tests skip while farm.cycleStub is true.
 //   node scripts/test-cycle.mjs
 import { makeWorld } from '../src/farm-profiles-run.js';
+import { EV } from '../src/events.js';
 import { CYCLE_PROFILES, runCycle } from '../src/farm-profiles-cycle.js';
 import { planSums, planOutcome } from '../src/farm-plan.js';
 import { LEVELS, SKILL_BRANCHES, weightAt, feedStdGAt, feedPerGainAt } from '../src/config.js';
@@ -383,6 +384,34 @@ test('package: harvest page, clean-out page and cycle summary from the ideal', (
   const c = run.records.cleanPage();
   assert(c && c.swabsTaken === 10 && c.restDays === 21 && c.lab, `clean page ${JSON.stringify(c).slice(0, 200)}`);
   assert(run.records.timeline('week2').length === 7 && run.records.timeline('week2').every((r) => r.darkHours != null), 'timeline of week 2');
+});
+
+test('package: cycle problems start silently; zones, the radio, look words; env.heatBudget()', () => {
+  if (STUB) return 'skip';
+  const starts = runCycle('ideal', { seed: 1, from: 'plan', to: 'weeks45', keepStarts: true }).starts;
+  const w = makeWorld(), got = [];
+  w.events.on(EV.FARM_PROBLEM, (p) => got.push(`${p.id}:${p.phase}`));
+  restoreBlob(w, starts.week3);
+  const { farm, env } = w;
+  assert(/hot, up to 35/.test(farm.forecast(15).text), `radio on day 15: ${farm.forecast(15).text}`);
+  env.skipHours(2 * 24 + 5); // day 17 11:00: the pad overflows silently
+  assert(got.includes('pad-overflow:start') && !got.includes('pad-overflow:symptom') && farm.house.padFloatStuck, 'the pad overflows silently');
+  env.skipHours(3);
+  assert(farm.problemZones().some((z) => z.problemId === 'pad-overflow' && z.minMoisture === 35), 'the pad-end zone');
+  w.events.emit(EV.NEAR, { problemId: 'pad-overflow', x: -23, z: 0 });
+  assert(got.includes('pad-overflow:symptom') && farm.act('pad.fixFloat').fixed === true && got.includes('pad-overflow:fixed'), 'EV.NEAR finds it, the float valve fixes it');
+  const o = farm.observe(0, 0);
+  assert(o.spread && o.droppings && o.sounds && o.air, `look words ${JSON.stringify(o)}`);
+  const hb = env.heatBudget();
+  assert(['wallsCh', 'airCh', 'brooderCh', 'birdsCh', 'sunCh'].every((k) => Number.isFinite(hb[k])) && hb.birdsCh > 0, `heat budget ${JSON.stringify(hb)}`);
+  const w2 = makeWorld();
+  restoreBlob(w2, starts.weeks45);
+  w2.env.skipHours(5 * 24 + 4); // day 27 10:00: fan 4's belt broke at 09:00
+  assert(w2.env.fansBroken.includes(3) && w2.farm.problemZones().some((z) => z.problemId === 'fan-belt'), 'fan 4 broken with its zone');
+  w2.env.setFans(6);
+  assert(Math.abs(w2.env.airSpeed - 5 * 2.5 / 6) < 0.01, `six fans with one broken move ${w2.env.airSpeed} m/s`);
+  w2.farm.act('fan.fix', { index: 3 });
+  assert(!w2.env.fansBroken.length && Math.abs(w2.env.airSpeed - 2.5) < 0.01, 'the belt fitted: all six turn');
 });
 
 test('package: the run store (PHASE3.md §11): run key, level starts by day, clearStarts, quota drops the oldest start', async () => {
