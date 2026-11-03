@@ -67,6 +67,11 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
   const head = h('h2', { class: 'label', id: titleId });
   const count = h('span', { class: 'jobs-count' });
   const list = h('div', { class: 'ljobs-list' });
+  // the list scrolls when it is longer than the card: a fade and "more" at the bottom say so
+  const more = button({ class: 'ljobs-more', hidden: true, 'aria-label': 'Show more of the job list' }, 'more ▾');
+  more.addEventListener('click', () => { list.scrollBy({ top: Math.max(60, list.clientHeight * 0.7), behavior: 'smooth' }); });
+  const listWrap = h('div', { class: 'ljobs-wrap' }, list, more);
+  let missedOpen = false;
   const live = h('p', { class: 'sr-only', 'aria-live': 'polite' });
   const nextBtn = button({ class: 'btn btn--accent ljobs-next' }, h('span', { html: ICONS.next, 'aria-hidden': 'true' }), h('span'));
   const nbBtn = button({ class: 'btn btn--icon', title: 'Notebook (N)', 'aria-label': 'Notebook (N)', html: ICONS.notebook });
@@ -78,7 +83,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
   skBtn.addEventListener('click', () => { dot.hidden = true; onSkills(); });
   const card = h('section', { class: 'card jobs ljobs', 'aria-labelledby': titleId },
     h('header', { class: 'jobs-head' }, h('span', { class: 'jobs-icon', html: ICONS.clipboard, 'aria-hidden': 'true' }), head, count),
-    list, h('footer', { class: 'ljobs-foot' }, nextBtn, nbBtn, skBtn), live);
+    listWrap, h('footer', { class: 'ljobs-foot' }, nextBtn, nbBtn, skBtn), live);
   parent.appendChild(card);
 
   const marker = createMarker(ctx, root, { name: 'job-marker', avoid });
@@ -193,13 +198,31 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     if (g.preTruck.length) sections.push(h('p', { class: 'ljobs-group' }, h('span', { html: ICONS.truck, 'aria-hidden': 'true' }), 'Before the truck'), h('ol', { class: 'jobs-list' }, g.preTruck.map((i) => add(i))));
     if (g.rest.length) sections.push(h('ol', { class: 'jobs-list' }, g.rest.map((i) => add(i))));
     if (!pin.length && !g.preTruck.length && !g.rest.length) sections.push(h('p', { class: 'ljobs-none' }, waiting.length ? 'No job open now.' : 'No more jobs today. Next job skips the clock.'));
-    if (waiting.length) sections.push(h('ol', { class: 'jobs-list ljobs-later' }, waiting.slice(0, 4).map((i) => {
-      const li = itemEl(i, 'is-waiting').li;
-      li.querySelector('.job-mark').textContent = '';
-      li.querySelector('.job-title').append(h('span', { class: 'job-when' }, ` from ${hhmm(splitDay(i.opensAt).hour)}`));
-      return li;
-    })));
-    if (missed.length) sections.push(h('ol', { class: 'jobs-list ljobs-missed' }, missed.map((i) => itemEl(i, 'is-missed').li)));
+    if (waiting.length) {
+      // jobs that open later today: one line per opening time ("Afternoon round · 5 jobs from 13:00")
+      const byTime = new Map();
+      for (const i of waiting) { const t = hhmm(splitDay(i.opensAt).hour); if (!byTime.has(t)) byTime.set(t, []); byTime.get(t).push(i); }
+      sections.push(h('ol', { class: 'jobs-list ljobs-later' }, [...byTime.entries()].slice(0, 3).map(([t, group]) => {
+        if (group.length === 1) {
+          const li = itemEl(group[0], 'is-waiting').li;
+          li.querySelector('.job-mark').textContent = '';
+          li.querySelector('.job-title').append(h('span', { class: 'job-when' }, ` from ${t}`));
+          return li;
+        }
+        const hr = splitDay(group[0].opensAt).hour + 1e-6, R = LEVEL1.rounds;
+        const name = hr >= R.am.from && hr < R.am.to ? R.am.label : hr >= R.pm.from && hr < R.pm.to ? R.pm.label : hr >= R.eve.from ? R.eve.label : 'Later';
+        return h('li', { class: 'job is-waiting', title: group.map((i) => i.def.title).join(' · ') }, h('span', { class: 'job-mark', 'aria-hidden': 'true' }),
+          h('div', { class: 'job-body' }, h('p', { class: 'job-title' }, `${name} · ${group.length} jobs`, h('span', { class: 'job-when' }, ` from ${t}`))));
+      })));
+    }
+    if (missed.length) {
+      // jobs whose window passed: one count line, the titles when he opens it
+      const det = h('details', { class: 'ljobs-missed' }, h('summary', null, `${missed.length} not done today`),
+        h('ol', { class: 'jobs-list' }, missed.map((i) => itemEl(i, 'is-missed').li)));
+      det.open = missedOpen;
+      det.addEventListener('toggle', () => { missedOpen = det.open; });
+      sections.push(det);
+    }
     list.replaceChildren(...sections);
     ctx.props?.highlight?.(cur ? cur.def.signs : []);
   }
@@ -212,7 +235,11 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     refresh() { sig = ''; render(); },
     update(dt, panelOpen) {
       acc -= dt;
-      if (acc <= 0) { acc = 0.25; render(); setText(nextBtn.lastChild, nextLabel()); }
+      if (acc <= 0) {
+        acc = 0.25; render(); setText(nextBtn.lastChild, nextLabel());
+        const overflow = list.scrollHeight > list.clientHeight + 4 && list.scrollTop + list.clientHeight < list.scrollHeight - 4;
+        if (more.hidden === overflow) { more.hidden = !overflow; listWrap.classList.toggle('has-more', overflow); }
+      }
       for (const { bar, ptext, inst } of items.values()) {
         bar.style.transform = `scaleX(${Math.max(0, Math.min(1, inst.progress)).toFixed(3)})`;
         if (ptext) setText(ptext, progressText(inst, ctx));

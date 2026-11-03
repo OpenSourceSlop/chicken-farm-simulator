@@ -60,7 +60,7 @@ export function buildBoardPanel(id, env, onClose) {
     const trs = b.table.rows.map((r) => {
       const tr = h('tr', null, h('th', { scope: 'row' }, r.day === 0 ? 'Day 0' : `Day ${r.day}`),
         h('td', null, `${r.temp} °C`),
-        h('td', { class: 'approx' }, r.source === 'general' ? 'general' : 'guide'));
+        h('td', { class: 'approx' }, sourceLabel(r.source)));
       rows.push({ day: r.day, tr });
       return tr;
     });
@@ -68,10 +68,10 @@ export function buildBoardPanel(id, env, onClose) {
     const table = h('div', { class: 'sign-col' },
       h('p', { class: 'sign-today' }, h('span', { class: 'sign-today-k' }, 'Your flock today'), todayRow),
       h('table', { class: 'sign-table' }, h('caption', { class: 'sr-only' }, 'House temperature by day'),
-        h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Day'), h('th', { scope: 'col', colspan: '2', class: 'th-temp' }, 'House temperature'))),
+        h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Day'), h('th', { scope: 'col', class: 'th-temp' }, 'House temperature'), h('th', { scope: 'col', class: 'th-src' }, 'Source'))),
         h('tbody', null, trs)),
       h('p', { class: 'sign-note' }, b.table.note),
-      h('p', { class: 'src' }, h('span', { class: 'src-k' }, 'Source'), ` rows marked guide: ${sourceLabel(['week1', 'vent'])}; general: ${sourceLabel('general')}`));
+      h('p', { class: 'sign-note' }, 'Each row shows its source in the last column.'));
     body = h('div', { class: 'sign-body' }, h('div', { class: 'sign-grid' }, table, h('div', { class: 'sign-col' }, items)));
   } else {
     body = h('div', { class: 'sign-body' }, items);

@@ -24,14 +24,14 @@ export function buildDrinkerPanel(L, line) {
     const [lo, hi] = EQUIP.nippleHeightCm;
     const cm = Math.max(lo, Math.min(hi, Math.round(farm.water.lines[line].heightCm + d)));
     L.act('water.height', { line, cm }); draw(true);
-  });
+  }, { bigStep: 5 });
   const press = stepper('Pressure', 'cm', (d) => {
     const [lo, hi] = EQUIP.pressureCm;
     const cm = Math.max(lo, Math.min(hi, Math.round(farm.water.lines[line].pressureCm + d)));
     L.act('water.pressure', { line, cm }); draw(true);
   });
   const flow = readout('Flow test');
-  const testBtn = button({ class: 'btn btn--machine btn--go' }, h('span', { html: ICONS.timer, 'aria-hidden': 'true' }), 'Flow test: cup under a nipple, one minute');
+  const testBtn = button({ class: 'btn btn--machine btn--go' }, h('span', { html: ICONS.timer, 'aria-hidden': 'true' }), 'Flow test: a cup under a nipple for one minute');
   const cup = h('div', { class: 'cup', 'aria-hidden': 'true' }, h('span', { class: 'cup-water' }));
   const bar = h('div', { class: 'job-progress' }, h('span', { class: 'job-bar' }));
   let test = null; // { start, until }
@@ -44,7 +44,7 @@ export function buildDrinkerPanel(L, line) {
   shell.main.append(
     h('div', { class: 'drinker-grid' }, side,
       h('div', { class: 'ctrl-rows' },
-        machineRow('Winch', 'Nipple tip above the litter', ...winch.els).el,
+        machineRow('Winch', 'Nipple tip above the litter · Shift: 5 cm a press', ...winch.els).el,
         machineRow('Pressure', 'Water column in the sight tube', ...press.els).el,
         h('div', { class: 'flowtest' }, cup, h('div', null, flow.el, bar)), testBtn)),
     heightText);
@@ -53,7 +53,11 @@ export function buildDrinkerPanel(L, line) {
     const l = farm.water.lines[line];
     const age = flockAgeAt(env.day), scale = 4.2, base = 150;
     const y = (cm) => base - cm * scale;
-    const tip = y(l.heightCm);
+    // the ruler covers the chick's 30 cm; a line winched higher is drawn at the top of the view
+    // with its height written beside it, so it is always in the picture above the chick
+    const TOP_CM = 28;
+    const high = l.heightCm > TOP_CM;
+    const tip = y(Math.min(l.heightCm, TOP_CM));
     const eye = y(eyeCm(age));
     const chickS = 0.9 + Math.max(0, age) * 0.08;
     const ruler = [];
@@ -67,6 +71,7 @@ export function buildDrinkerPanel(L, line) {
       <path d="M118 ${tip - 22}v18" stroke="var(--drinker, #dedede)" stroke-width="3"/>
       <circle cx="118" cy="${tip}" r="4.5" fill="var(--hen-comb)"/>
       <path d="M50 ${tip}h136" stroke="var(--accent)" stroke-width="1" stroke-dasharray="3 3"/>
+      ${high ? `<text x="126" y="${tip + 17}" font-size="11" font-weight="700" fill="var(--accent)" font-family="var(--font-display)">▲ line at ${fmt0(l.heightCm)} cm</text>` : ''}
       <g transform="translate(96 ${eye}) scale(${chickS.toFixed(2)})">${(() => {
         const by = Math.max(10, (base - eye) / chickS - 13); // body centre: the feet stand on the litter
         return `<path d="M-6 3L-16 ${by - 6}L6 ${by - 9}L6 3z" fill="var(--chick)"/>
@@ -79,7 +84,7 @@ export function buildDrinkerPanel(L, line) {
       <text x="64" y="${eye + 4}" font-size="10" fill="var(--chick)" font-family="var(--font-display)">eye</text>
       <rect x="194" y="22" width="12" height="100" rx="5" fill="none" stroke="var(--key-sub)" stroke-width="1.5"/>
       <rect x="196.5" y="${120 - col * 2.4}" width="7" height="${col * 2.4}" rx="3" fill="var(--led-pad)"/>
-      <text x="168" y="16" font-size="10" fill="var(--key-sub)" font-family="var(--font-display)">sight tube</text>
+      <text x="214" y="138" text-anchor="end" font-size="9" fill="var(--key-sub)" font-family="var(--font-display)">sight tube</text>
     </svg>`;
   }
   let key = '';
@@ -151,7 +156,7 @@ export function buildWaterSupplyPanel(L) {
       h('div', { class: 'supply-box' }, h('p', { class: 'supply-k' }, 'Water meter'), dial, meter.el, readMeter),
       h('div', { class: 'supply-box' }, h('p', { class: 'supply-k' }, 'Main filter'), gauges, filt.el, h('div', { class: 'equip-btns' }, readFilter, clean), cleanBar)),
     h('p', { class: 'supply-k supply-k--rows' }, 'Flush valves · sight tube at the east end of each line'),
-    h('div', { class: 'ctrl-rows' }, valves.map((v) => v.row.el)), overview);
+    h('div', { class: 'ctrl-rows supply-valves' }, valves.map((v) => v.row.el)), overview);
 
   function drawGauges() {
     const g = (label, bar) => {

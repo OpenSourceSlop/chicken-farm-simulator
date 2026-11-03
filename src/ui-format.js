@@ -1,6 +1,7 @@
 // Number, time and reading formatting for the Level 1 UI. Owner: package "level".
 // Plain numbers only: nothing here colours or judges a value.
 import { fmt0, fmt1 } from './ui-dom.js';
+import { BROOD_BOUNDS, broodSector } from './config.js';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 /** 13.5 -> "13:30" (hours past 24 wrap). */
@@ -38,6 +39,50 @@ export const cropWords = (c) => CROP_WORDS[c] || String(c ?? '—');
 const FEEL_WORDS = { ok: 'holds, then breaks', damp: 'sticks together' };
 export const feelWords = (f) => FEEL_WORDS[f] || String(f ?? '—');
 
+/** A whole number without '.0', else one decimal: 11 -> "11", 10.5 -> "10.5". */
+export const num = (n) => (n == null || !Number.isFinite(n) ? '—' : Math.abs(n - Math.round(n)) < 0.05 ? int(Math.round(n)) : fmt1(n));
+const lineNo = (v) => (v.line ?? 0) + 1;
+
+/** A place on the brooding floor in words ("west part, south side"); outside it: "". */
+export function placeWords(x, z) {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return '';
+  const b = BROOD_BOUNDS;
+  if (x < b.xMin - 0.5 || x > b.xMax + 0.5 || z < b.zMin - 0.5 || z > b.zMax + 0.5) return '';
+  const s = broodSector(x, z);
+  return `${['west', 'middle', 'east'][Math.floor(s / 2)]} part, ${s % 2 ? 'south' : 'north'} side`;
+}
+
+/** A control the farmer set (notebook kind 'setting', value { id, ...args }) in his own words. */
+export function settingText(v) {
+  switch (v.id) {
+    case 'water.height': return `Line ${lineNo(v)} winch: nipples at ${num(v.cm)} cm`;
+    case 'water.pressure': return `Line ${lineNo(v)} pressure: ${num(v.cm)} cm water column`;
+    case 'water.flush': return `Line ${lineNo(v)} flush valve ${v.on ? 'open' : 'shut'}`;
+    case 'heat.setpoint': return `Brooder thermostat set to ${num(v.value)} °C`;
+    case 'vent.timer': return v.fans > 0 && v.onSec > 0
+      ? `Min. vent timer: ${num(v.fans)} fan${v.fans === 1 ? '' : 's'}, ${num(v.onSec)} s in every ${num(v.cycleSec)} s`
+      : 'Min. vent timer off';
+    case 'vent.fans': return v.n > 0 ? `Tunnel fans on by hand: ${num(v.n)}` : 'Tunnel fans off';
+    case 'vent.pad': return `Cooling pad ${v.on ? 'on' : 'off'}`;
+    case 'light.program': return v.darkHours > 0
+      ? `Lights: dark from ${hhmm(v.darkStart ?? 0)} for ${num(v.darkHours)} h, dimmer ${num((v.dimmer ?? 1) * 100)} %`
+      : `Lights on 24 h, dimmer ${num((v.dimmer ?? 1) * 100)} %`;
+    case 'feed.line': {
+      const parts = [];
+      if (v.running != null) parts.push(v.running ? 'running' : 'stopped');
+      if (v.flood != null) parts.push(v.flood ? 'flood on' : 'flood off');
+      if (v.heightCm != null) parts.push(`pans at ${num(v.heightCm)} cm`);
+      return `Feeder line ${lineNo(v)}: ${parts.join(', ') || 'set'}`;
+    }
+    case 'litter.depth': return `Litter depth ${num(v.cm)} cm`;
+    default: {
+      const parts = [];
+      for (const [k, val] of Object.entries(v)) if (val != null && typeof val !== 'object' && k !== 'id') parts.push(`${k} ${typeof val === 'number' ? num(val) : val}`);
+      return parts.join(' · ') || '—';
+    }
+  }
+}
+
 /** A notebook reading (records Note or an action result) in plain words. */
 export function readingText(kind, v) {
   if (v == null) return '—';
@@ -61,10 +106,19 @@ export function readingText(kind, v) {
     case 'controller': case 'controller.read': return [`house ${one(r.houseC)} °C`, r.minC != null && `min ${one(r.minC)} / max ${one(r.maxC)} °C`, r.setpoint != null && `set ${one(r.setpoint)} °C`].filter(Boolean).join(' · ');
     case 'look': return [r.spread && `chicks ${r.spread}`, r.droppings && `droppings ${r.droppings}`, r.sounds && r.sounds].filter(Boolean).join('; ');
     case 'house.temp': return `house ${one(r.houseC ?? r.tempC)} °C`;
+    case 'setting': return settingText(v);
+    case 'tip': case 'chicks.tip': return `${int(r.placed)} chicks out on the litter${r.deadInBoxes ? `, ${int(r.deadInBoxes)} dead in the boxes` : ''}`;
+    case 'cull': case 'chicks.cull': return `${int(r.n)} culled${r.reason === 'grading' ? ' at the chick table' : r.reason === 'sick' ? ' (sick bird)' : ''}`;
+    case 'order': case 'feed.order': return r.arriveDay != null ? `feed ordered, arrives day ${r.arriveDay} ${hhmm(r.arriveHour ?? 9)}` : 'feed ordered';
+    case 'grade': case 'sample.grade': return `chick ${int((r.i ?? 0) + 1)}: rights itself in ${one(r.reflexSec)} s, navel ${r.navel ?? '—'}, hocks ${r.hocks ?? '—'}`;
+    case 'grade.sheet': case 'grade.submit': {
+      const s = r.sheet || {};
+      return `sheet handed in: navel not closed ${int(s.navelBad ?? 0)}, red hocks ${int(s.redHocks ?? 0)}, slow to right ${int(s.slowReflex ?? 0)}, culled ${int(s.culled ?? 0)}`;
+    }
     default: {
       if (r.text) return String(r.text);
       const parts = [];
-      for (const [k, val] of Object.entries(r)) if (val != null && typeof val !== 'object' && k !== 'id' && k !== 'day' && k !== 'hour') parts.push(`${k} ${typeof val === 'number' ? one(val) : val}`);
+      for (const [k, val] of Object.entries(r)) if (val != null && typeof val !== 'object' && k !== 'id' && k !== 'day' && k !== 'hour') parts.push(`${k} ${typeof val === 'number' ? num(val) : val}`);
       return parts.join(' · ') || '—';
     }
   }

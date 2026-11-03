@@ -25,13 +25,14 @@ export function key(label, icon, onPress) {
     if (e.button !== 0) return;
     stop();
     fromPointer = true;
-    onPress();
-    wait = setTimeout(() => { rep = setInterval(onPress, 120); }, 400);
+    onPress(e);
+    const held = { shiftKey: e.shiftKey }; // a held key repeats the same step (Shift held: the big step)
+    wait = setTimeout(() => { rep = setInterval(() => onPress(held), 120); }, 400);
   });
   for (const ev of ['pointerup', 'pointerleave', 'pointercancel', 'blur']) b.addEventListener(ev, stop);
-  b.addEventListener('click', () => {
+  b.addEventListener('click', (e) => {
     if (fromPointer) { fromPointer = false; return; }
-    onPress();
+    onPress(e);
   });
   return b;
 }

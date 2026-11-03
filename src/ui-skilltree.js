@@ -2,14 +2,14 @@
 // pips and what each level unlocks. The two earnable branches of Level 1 show a point bar and their
 // milestones: the result in plain words, its points, and once earned the measured value. The
 // others read "Comes in a later level". Points come from play only. Owner: package "level".
-import { SKILL_LEVEL_POINTS, UNLOCKS } from './config.js';
+import { SKILL_LEVEL_POINTS, UNLOCKS, LATER_UNLOCKS } from './config.js';
 import { h, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
 
 const BADGE_ICON = {
-  planning: ICONS.clipboard, biosecurity: ICONS.droplet, brooding: ICONS.chick, comfort: ICONS.thermometer, ventilation: ICONS.fan,
-  moisture: ICONS.wind, heating: ICONS.flame, water: ICONS.droplet, feed: ICONS.scale, lighting: ICONS.bulb, growth: ICONS.scale,
+  planning: ICONS.clipboard, biosecurity: ICONS.shield, brooding: ICONS.chick, comfort: ICONS.thermometer, ventilation: ICONS.fan,
+  moisture: ICONS.wind, heating: ICONS.flame, water: ICONS.droplet, feed: ICONS.sack, lighting: ICONS.bulb, growth: ICONS.trend,
 };
 // Each badge: a faceted hexagon in its own hue (hue is identity only, never a judgement).
 const HUES = { planning: 38, biosecurity: 160, brooding: 44, comfort: 12, ventilation: 200, moisture: 190, heating: 22, water: 205, feed: 30, lighting: 52, growth: 120 };
@@ -47,7 +47,12 @@ export function buildSkillTreePanel(L) {
       const pips = h('span', { class: 'pips3', 'aria-label': `Level ${b.level} of 3` }, [1, 2, 3].map((i) => h('span', { class: `pip3${b.level >= i ? ' is-on' : ''}` })));
       const card = h('article', { class: `branch${b.earnable ? ' branch--earn' : ' branch--later'}` },
         h('div', { class: 'branch-top' }, h('span', { html: badge(b.id, b.level, b.earnable) }), h('div', null, h('h3', null, b.name), pips)));
-      if (!b.earnable) { card.append(h('p', { class: 'branch-later' }, 'Comes in a later level')); return card; }
+      if (!b.earnable) {
+        // what its first level will unlock, dimmed: the branch is earned in a later level
+        card.append(h('p', { class: 'branch-later' }, 'Comes in a later level'),
+          LATER_UNLOCKS[b.id] ? h('p', { class: 'branch-later branch-later--unlock' }, h('b', null, 'Level 1'), ` · ${LATER_UNLOCKS[b.id]}`) : null);
+        return card;
+      }
       const max = SKILL_LEVEL_POINTS[2];
       const bar = h('div', { class: 'pbar', role: 'img', 'aria-label': `${b.points} points; levels at ${SKILL_LEVEL_POINTS.join(', ')}` },
         h('span', { class: 'pbar-fill', style: `width:${Math.min(100, (b.points / max) * 100).toFixed(1)}%` }),

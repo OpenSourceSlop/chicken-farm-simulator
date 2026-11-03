@@ -4,14 +4,16 @@
 import { h, button, uniqueId, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
-import { hhmm, readingText } from './ui-format.js';
+import { hhmm, readingText, placeWords } from './ui-format.js';
 
 const KIND_LABEL = {
   'water.meter': 'Water meter', 'feed.meter': 'Feed meter', 'feed.silo': 'Silo', 'water.flow': 'Flow test', 'water.flowtest': 'Flow test',
   'water.height': 'Nipples', 'floor.temp': 'Floor', 'floor.probe': 'Floor', litter: 'Litter', 'litter.squeeze': 'Litter', lux: 'Light',
   dead: 'Dead birds', 'vent.temp': 'Vent', crop: 'Crop', grade: 'Grading', box: 'Box scale', weigh: 'Weighing', 'house.temp': 'House',
-  look: 'Look', filter: 'Filter', controller: 'Controller', text: 'Note',
+  look: 'Look', filter: 'Filter', controller: 'Controller', text: 'Note', setting: 'Set', 'grade.sheet': 'Grading', cull: 'Cull', tip: 'Chicks out', order: 'Feed order',
 };
+// where a reading was taken, in words (the brooding floor's six parts); a place off it is left out
+const whereText = (w) => { const s = Array.isArray(w) ? placeWords(w[0], w[1]) : ''; return s ? ` · ${s}` : ''; };
 
 export function buildNotebookPanel(L) {
   const titleId = uniqueId('nb-title');
@@ -31,7 +33,7 @@ export function buildNotebookPanel(L) {
     body.replaceChildren(...days.map((d) => h('section', { class: 'nb-day' },
       h('h3', null, d < 0 ? 'Prep day' : `Day ${fmt0(d)}`),
       h('ul', null, notes.filter((n) => n.day === d).slice().reverse().map((n) => h('li', { class: `nb-line nb-line--${n.kind.replace('.', '-')}` },
-        h('span', { class: 'nb-t' }, hhmm(n.hour)), h('span', { class: 'nb-k' }, KIND_LABEL[n.kind] || n.kind), h('span', { class: 'nb-v' }, readingText(n.kind, n.value), n.where ? ` · ${n.where}` : '')))))));
+        h('span', { class: 'nb-t' }, hhmm(n.hour)), h('span', { class: 'nb-k' }, KIND_LABEL[n.kind] || n.kind), h('span', { class: 'nb-v' }, readingText(n.kind, n.value), whereText(n.where))))))));
   }
   return { el, kind: 'paused', onOpen: render, update(dt, force) { if (force) render(); } };
 }

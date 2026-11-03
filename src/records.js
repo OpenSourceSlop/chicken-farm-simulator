@@ -15,6 +15,11 @@
 import { EV } from './events.js';
 import { LEVEL1, MIN_DAY, targetTempAt, weightAt, nippleHeightCmAt, flowTargetAt, minVentM3hPer1000, EQUIP } from './config.js';
 import { buildRow, settingsNow } from './records-rows.js';
+import { jobById } from './content-jobs.js';
+
+const thousands = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+/** The calendar day a job instance belongs to ('r-walk@3' -> 3), or null. */
+const dayOfKey = (key) => { const m = /@(-?\d+)$/.exec(key || ''); return m ? +m[1] : null; };
 
 /**
  * One notebook line.
@@ -34,7 +39,7 @@ const KIND = {
   'chicks.tip': 'tip', 'feed.order': 'order', 'water.clearFilter': 'text', 'water.fixLeak': 'text', 'heat.relight': 'text',
   'litter.patch': 'text', 'phone.report': 'text',
 };
-const SETTINGS = new Set(['heat.setpoint', 'vent.timer', 'vent.fans', 'light.program', 'water.pressure', 'water.height', 'feed.line', 'litter.depth', 'water.flush']);
+const SETTINGS = new Set(['heat.setpoint', 'vent.timer', 'vent.fans', 'vent.pad', 'light.program', 'water.pressure', 'water.height', 'feed.line', 'litter.depth', 'water.flush']);
 const TEXT = {
   'water.clearFilter': 'Main water filter cleaned', 'water.fixLeak': 'Nipple replaced on drinker line', 'heat.relight': 'Brooder relit',
   'litter.patch': 'Fresh husk put on a wet patch', 'phone.report': 'Deaths reported to the company vet',
@@ -161,15 +166,23 @@ export function createRecords({ farm, env, events } = {}) {
     });
     events.on(EV.FARM_DELIVERY, (p) => {
       if (!live() || p.phase !== 'arrive') return;
-      ex(today()).notes.push(p.kind === 'feed' ? `Feed delivered: ${p.kg} kg` : `Chicks delivered: ${(farm && farm.flock.delivered) || LEVEL1.chicksPlaced}`);
+      ex(today()).notes.push(p.kind === 'feed' ? `Feed delivered: ${thousands(p.kg)} kg` : `Chicks delivered: ${thousands((farm && farm.flock.delivered) || LEVEL1.chicksPlaced)}`);
     });
     events.on(EV.SKILL_POINTS, (p) => {
       if (!live() || !p.points) return;
       const name = p.branch === 'water' ? 'Water' : p.branch === 'brooding' ? 'Brooding' : p.branch;
-      ex(today()).skillLines.push(`Skill points: ${name} +${p.points}${p.detail ? `, ${p.detail}` : ''}`);
+      ex(today()).skillLines.push(`${name} +${p.points}${p.detail ? ` ${p.detail}` : ''}`);
     });
     events.on(EV.JOB_DONE, () => { if (live()) ex(today()).jobsDone++; });
-    events.on(EV.JOB_MISSED, (p) => { if (live()) { const e = ex(today()); e.jobsMissed++; if (p && p.id) e.missed.push(p.id); } });
+    // a job not done goes on the row of the day it belonged to (a skip can mark it the day after),
+    // by its title; a row already closed gets it too
+    events.on(EV.JOB_MISSED, (p) => {
+      if (!live() || !p) return;
+      const d = dayOfKey(p.key) ?? today(), e = ex(d), title = (p.id && jobById(p.id)?.title) || p.id;
+      e.jobsMissed++; if (title) e.missed.push(title);
+      const row = rows.get(d);
+      if (row) { row.jobsMissed = e.jobsMissed; row.missed = [...e.missed]; }
+    });
     events.on(EV.HOUSE_ENTER, (p) => { if (live() && p && p.dipped === false) ex(today()).lapses++; });
   }
   // A day nobody signed closes by itself at 06:00 the next morning.

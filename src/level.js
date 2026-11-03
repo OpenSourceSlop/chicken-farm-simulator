@@ -151,12 +151,16 @@ export function createLevel(ctx, deps = {}) {
     const weightG = wr ? wr.mean : farm.stats?.scaleAtWeighInG ?? (farm.flock.meanWeightG || 0) * 1.02;
     const ratio = chick ? weightG / chick : null;
     const pass = ratio != null && ratio >= LEVEL1.fail.weightRatioMin && deathsPct <= LEVEL1.fail.mortalityMaxPct;
-    const failText = deathsPct > LEVEL1.fail.mortalityMaxPct ? `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}` : `day 7 weight ${two(ratio)} × chick weight`;
+    // what the farmer knows of the dead (the bin) and what he has not seen yet (the floor, the boxes)
+    const fl = farm.flock, onFloor = fl.deadOnFloor || 0, inBoxes = (fl.boxDead || 0);
+    const notPicked = onFloor > 0 ? ` (${onFloor.toLocaleString('en')} dead bird${onFloor === 1 ? '' : 's'} not picked up)` : '';
+    const failText = deathsPct > LEVEL1.fail.mortalityMaxPct ? `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}${notPicked}` : `day 7 weight ${two(ratio)} × chick weight`;
     const floor = records?.timeline?.()?.find?.((e) => e.day === 0)?.floorAtArrivalC ?? null;
     const { day, hour } = splitDay(env.day);
     return { pass, reason, early: reason === 'mortality', endedAt: `day ${day}, ${hhmm(hour)}`, day, hour,
       ratio, weightG, weighedByHand: !!wr, chickWeightG: chick, chickSource: measured != null ? 'box' : 'delivery',
-      deaths, placed, deathsPct, uniformityPct: wr && wr.n >= 10 ? wr.uniformityPct : farm.flock.uniformityPct ?? null,
+      deaths, placed, placedReal: (fl.placed || 0) > 0, countedDead: fl.countedDead || 0, deadOnFloor: onFloor, deadInBoxes: inBoxes, culls: fl.culls || 0,
+      deathsPct, uniformityPct: wr && wr.n >= 10 ? wr.uniformityPct : farm.flock.uniformityPct ?? null,
       fcr: farm.flock.fcr || records?.row?.(LEVEL1.endDay)?.fcr || null, failText, floorAtArrival: floor, points: points.slice() };
   }
 

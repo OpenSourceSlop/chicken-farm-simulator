@@ -41,10 +41,12 @@ export function machineRow(title, sub, ...controls) {
 }
 
 /** − value + with press-and-hold repeat. */
-export function stepper(label, unit, onStep) {
+export function stepper(label, unit, onStep, { bigStep = 0 } = {}) {
   const out = h('output', { class: 'lcd-mini', 'aria-live': 'polite' });
-  const minus = key(`${label}: one step down`, ICONS.minus, () => onStep(-1));
-  const plus = key(`${label}: one step up`, ICONS.plus, () => onStep(1));
+  // bigStep: with Shift held each press moves that many steps (a winch from 50 cm to 11 cm)
+  const n = (e) => (bigStep && e && e.shiftKey ? bigStep : 1);
+  const minus = key(`${label}: one step down`, ICONS.minus, (e) => onStep(-n(e)));
+  const plus = key(`${label}: one step up`, ICONS.plus, (e) => onStep(n(e)));
   return { els: [minus, out, plus], set: (v) => setText(out, `${v}${unit ? ` ${unit}` : ''}`) };
 }
 
@@ -75,7 +77,7 @@ export function buildFeederPanel(L) {
       const [lo, hi] = EQUIP.feederHeightCm;
       const cm = Math.max(lo, Math.min(hi, Math.round(farm.feed.lines[i].heightCm + d)));
       L.act('feed.line', { line: i, heightCm: cm }); refresh();
-    });
+    }, { bigStep: 5 });
     const pan = h('span', { class: 'pan-pic', 'aria-hidden': 'true' });
     const row = machineRow(`Line ${i + 1}`, h('small', null, pan), run.el, flood.el, ...height.els);
     return { row, run, flood, height, pan };

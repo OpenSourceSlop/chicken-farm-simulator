@@ -6,6 +6,7 @@ import { h, button, setText, uniqueId, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
 import { int, one, two, signedPct, hhmm, readingText, dayTime } from './ui-format.js';
+import { jobById } from './content-jobs.js';
 
 // What "Today" lists, in job order: [note kind(s), label]
 const TODAY_LINES = [
@@ -77,7 +78,7 @@ export function buildRecordsPanel(L) {
   function todayPage() {
     const d = env.dayNumber;
     const row = records.row?.(d);
-    const out = [radio, h('h3', { class: 'book-h' }, d < 0 ? 'Prep day · the day before the chicks' : `Day ${fmt0(d)} · ${dayTime(env.day)}`)];
+    const out = [radio, h('h3', { class: 'book-h' }, d < 0 ? 'Prep day · the day before the chicks' : `Day ${fmt0(d)} · ${hhmm(env.hour)}`)];
     if (d < 0) {
       const prep = L.jobs().filter((i) => i.day === -1);
       out.push(h('table', { class: 'ledger' }, h('tbody', null, prep.map((i) => h('tr', null, h('th', { scope: 'row' }, i.def.title),
@@ -126,45 +127,75 @@ export function buildRecordsPanel(L) {
 }
 
 export function weekTable(L, { dark = false } = {}) {
-const { env, records, farm } = L;
+  const { env, records, farm } = L;
   const rows = records.rows ? records.rows() : [];
   const d = env.dayNumber;
   const all = [];
   for (let day = LEVEL1.startDay; day <= LEVEL1.endDay; day++) all.push(rows.find((r) => r.day === day) || (day === d ? { ...(records.draft?.(day) || {}), day, draft: true } : { day, empty: true }));
   const chick = farm.stats?.chickWeightMeasuredG;
   const C = (v) => (v == null ? '—' : v);
-  const head = ['Day', 'Alive', 'Deaths (culls)', 'Mortality %', 'Feed kg · g/bird', 'Water L · per 1,000 · change', 'Water : feed', 'Weight g', 'Target g', '× chick', 'Unif. %', 'FCR', 'Litter %', 'House min / max · target', 'Light h', 'Notes'];
-  const tr = all.map((r) => h('tr', { class: r.draft ? 'is-draft' : r.empty ? 'is-empty' : '' },
-    h('th', { scope: 'row' }, r.day < 0 ? 'Prep' : String(r.day)),
-    h('td', null, C(r.alive != null ? int(r.alive) : null)),
-    h('td', null, r.deaths != null ? `${int(r.deaths)} (${int(r.culls ?? 0)})` : '—'),
-    h('td', null, r.mortalityCumPct != null ? two(r.mortalityCumPct) : '—'),
-    h('td', null, r.feedKg != null ? `${int(r.feedKg)} · ${one(r.feedPerBirdG)}` : '—'),
-    h('td', null, r.waterL != null ? `${int(r.waterL)} · ${one(r.waterPerBirdMl)} · ${signedPct(r.waterChangePct)}` : '—'),
-    h('td', null, r.waterFeedRatio != null ? two(r.waterFeedRatio) : '—'),
-    h('td', null, r.weightG != null ? `${int(r.weightG)} ${r.weightSource === 'weighed' ? '(weighed)' : '(scale)'}` : '—'),
-    h('td', null, r.day >= 0 ? int(r.targetWeightG || weightAt(r.day)) : '—'),
-    h('td', null, r.weightRatio != null ? two(r.weightRatio) : r.weightG != null && chick ? two(r.weightG / chick) : '—'),
-    h('td', null, r.uniformityPct != null ? int(r.uniformityPct) : '—'),
-    h('td', null, r.fcr != null ? two(r.fcr) : '—'),
-    h('td', null, r.litterMoisturePct != null ? int(r.litterMoisturePct) : '—'),
-    h('td', null, r.houseMinC != null ? `${one(r.houseMinC)} / ${one(r.houseMaxC)} · ${one(r.targetC)}` : r.day >= 0 && r.targetC ? `— · ${one(r.targetC)}` : '—'),
-    h('td', null, r.lightHours != null ? one(r.lightHours) : '—'),
-    h('td', { class: 'notes' }, [r.chickQualityNote, ...(r.notes || []), ...(r.skillLines || [])].filter(Boolean).join(' · ') || (r.draft ? 'today, not signed' : ''))));
+  // the columns a farmer checks first come first: birds, the house, then weight, feed and water
+  const head = ['Day', 'Alive', 'Deaths (culls)', 'Mort. %', 'House min / max · target °C', 'Light h', 'Weight g', 'Target g', '× chick', 'Unif. %', 'FCR',
+    'Feed kg · g/bird', 'Water L · per 1,000 · change', 'Water : feed', 'Litter %'];
+  const body = [];
+  for (const r of all) {
+    body.push(h('tr', { class: `${r.draft ? 'is-draft' : r.empty ? 'is-empty' : ''} day-row` },
+      h('th', { scope: 'row' }, r.day < 0 ? 'Prep' : String(r.day)),
+      h('td', null, C(r.alive != null ? int(r.alive) : null)),
+      h('td', null, r.deaths != null ? `${int(r.deaths)} (${int(r.culls ?? 0)})` : '—'),
+      h('td', null, r.mortalityCumPct != null ? two(r.mortalityCumPct) : '—'),
+      h('td', null, r.houseMinC != null ? `${one(r.houseMinC)} / ${one(r.houseMaxC)} · ${one(r.targetC)}` : r.day >= 0 && r.targetC ? `— · ${one(r.targetC)}` : '—'),
+      h('td', null, r.lightHours != null ? one(r.lightHours) : '—'),
+      h('td', null, r.weightG != null ? `${int(r.weightG)} ${r.weightSource === 'weighed' ? '(weighed)' : '(scale)'}` : '—'),
+      h('td', null, r.day >= 0 ? int(r.targetWeightG || weightAt(r.day)) : '—'),
+      h('td', null, r.weightRatio != null ? two(r.weightRatio) : r.weightG != null && chick ? two(r.weightG / chick) : '—'),
+      h('td', null, r.uniformityPct != null ? int(r.uniformityPct) : '—'),
+      h('td', null, r.fcr != null ? two(r.fcr) : '—'),
+      h('td', null, r.feedKg != null ? `${int(r.feedKg)} · ${one(r.feedPerBirdG)}` : '—'),
+      h('td', null, r.waterL != null ? `${int(r.waterL)} · ${one(r.waterPerBirdMl)} · ${signedPct(r.waterChangePct)}` : '—'),
+      h('td', null, r.waterFeedRatio != null ? two(r.waterFeedRatio) : '—'),
+      h('td', null, r.litterMoisturePct != null ? int(r.litterMoisturePct) : '—')));
+    // the day's notes under its numbers, full width, so every number row stays one line
+    const lines = [];
+    const facts = [r.chickQualityNote, ...(r.notes || [])].filter(Boolean);
+    if (facts.length) lines.push(h('span', { class: 'notes-line' }, facts.join(' · ')));
+    const missed = (r.missed || []).map((x) => jobById(x)?.title || x);
+    if (missed.length) {
+      lines.push(h('details', { class: 'notes-line notes-missed' }, h('summary', null, `Not done: ${missed.length} job${missed.length === 1 ? '' : 's'}`), h('span', null, missed.join(' · '))));
+    } else if (r.jobsMissed) lines.push(h('span', { class: 'notes-line' }, `Not done: ${r.jobsMissed} job${r.jobsMissed === 1 ? '' : 's'}`));
+    if (r.skillLines?.length) lines.push(h('span', { class: 'notes-line notes-points' }, `Points: ${r.skillLines.map((x) => x.replace(/^Skill points: /, '')).join(' · ')}`));
+    if (!lines.length && r.draft) lines.push(h('span', { class: 'notes-line' }, 'today, not signed'));
+    if (lines.length) body.push(h('tr', { class: 'notes-row' }, h('td', { colspan: String(head.length) }, lines)));
+  }
   return h('div', { class: 'week' }, h('p', { class: 'book-note' }, `Feed and water: 24 h to this morning. Target weight: general practice. Week 1 target 4–5 × chick weight (Week 1 guide)${chick ? `; your chick weight ${one(chick)} g (box weighing)` : ''}.`),
     h('div', { class: 'ledger-scroll', tabindex: '0', role: 'region', 'aria-label': 'Week table' },
-      h('table', { class: `ledger ledger--week${dark ? ' ledger--dark' : ''}` }, h('thead', null, h('tr', null, head.map((t) => h('th', { scope: 'col' }, t)))), h('tbody', null, tr))));
+      h('table', { class: `ledger ledger--week${dark ? ' ledger--dark' : ''}` }, h('thead', null, h('tr', null, head.map((t) => h('th', { scope: 'col' }, t)))), h('tbody', null, body))));
 }
 
 function graphSvg(pts) {
-  const W = 520, H = 180, pad = 30;
+  const W = 760, H = 220, padL = 40, padR = 52, padT = 22, padB = 30;
   if (!pts.length) return '<p class="book-note">No signed rows yet.</p>';
-  const max = Math.max(1, ...pts.map((p) => p.v || 0));
-  const X = (d) => pad + (d / 7) * (W - pad * 2), Y = (v) => H - pad - (v / max) * (H - pad * 2);
-  const bars = pts.map((p) => (p.v == null ? '' : `<rect x="${X(p.d) - 10}" y="${Y(p.v)}" width="20" height="${H - pad - Y(p.v)}" fill="var(--ledger-ink)" opacity="0.75"/><text x="${X(p.d)}" y="${Y(p.v) - 4}" font-size="10" text-anchor="middle">${one(p.v)}</text>`)).join('');
-  const rmax = 3, RY = (r) => H - pad - (r / rmax) * (H - pad * 2);
-  const ratio = pts.filter((p) => p.ratio != null).map((p, i) => `${i ? 'L' : 'M'}${X(p.d)} ${RY(p.ratio)}`).join('');
-  const days = [0, 1, 2, 3, 4, 5, 6, 7].map((d) => `<text x="${X(d)}" y="${H - 10}" font-size="10" text-anchor="middle">${d}</text>`).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" role="img" aria-label="Water per 1,000 birds by day, with water to feed ratio">${bars}${ratio ? `<path d="${ratio}" fill="none" stroke="var(--ledger-ink2)" stroke-width="2" stroke-dasharray="5 3"/>` : ''}${days}
-    <text x="${W - pad}" y="14" font-size="10" text-anchor="end">dashed: water : feed (0–3)</text></svg>`;
+  const max = Math.max(1, ...pts.map((p) => p.v || 0)) * 1.08;
+  const X = (d) => padL + ((d + 0.5) / 8) * (W - padL - padR), Y = (v) => H - padB - (v / max) * (H - padT - padB);
+  const bw = Math.min(46, ((W - padL - padR) / 8) * 0.6);
+  // bars: litres per 1,000 birds, the value written inside the top of the bar
+  const bars = pts.map((p) => {
+    if (p.v == null) return '';
+    const y = Y(p.v), hgt = H - padB - y, inside = hgt > 22;
+    return `<rect x="${X(p.d) - bw / 2}" y="${y}" width="${bw}" height="${hgt}" fill="var(--ledger-ink)" opacity="0.72"/>`
+      + `<text x="${X(p.d)}" y="${inside ? y + 15 : y - 4}" font-size="11" font-weight="600" text-anchor="middle" style="fill:${inside ? '#fffaf0' : 'var(--ledger-ink)'}">${one(p.v)}</text>`;
+  }).join('');
+  // the water : feed line on its own right-hand axis, 0 to 3
+  const rmax = 3, RY = (r) => H - padB - (Math.min(rmax, r) / rmax) * (H - padT - padB);
+  const rp = pts.filter((p) => p.ratio != null);
+  const ratio = rp.map((p, i) => `${i ? 'L' : 'M'}${X(p.d)} ${RY(p.ratio)}`).join('');
+  const dots = rp.map((p) => `<circle cx="${X(p.d)}" cy="${RY(p.ratio)}" r="3" fill="var(--ledger-ink2)"/>`).join('');
+  const rAxis = [0, 1, 2, 3].map((r) => `<line x1="${W - padR}" x2="${W - padR + 4}" y1="${RY(r)}" y2="${RY(r)}" stroke="var(--ledger-ink2)"/><text x="${W - padR + 8}" y="${RY(r) + 4}" font-size="10" fill="var(--ledger-ink2)">${r}</text>`).join('');
+  const days = [0, 1, 2, 3, 4, 5, 6, 7].map((d) => `<text x="${X(d)}" y="${H - 10}" font-size="11" text-anchor="middle">day ${d}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Water per 1,000 birds by day (bars), with the water to feed ratio (line, right axis 0 to 3)">
+    <line x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}" stroke="var(--ledger-rule)"/>${bars}
+    <line x1="${W - padR}" x2="${W - padR}" y1="${padT}" y2="${H - padB}" stroke="var(--ledger-ink2)" opacity="0.6"/>${rAxis}
+    ${ratio ? `<path d="${ratio}" fill="none" stroke="var(--ledger-ink2)" stroke-width="2" stroke-dasharray="5 3"/>${dots}` : ''}${days}
+    <text x="${padL}" y="12" font-size="10">bars: litres per 1,000 birds</text>
+    <text x="${W - 4}" y="12" font-size="10" text-anchor="end" fill="var(--ledger-ink2)">dashed: water : feed</text></svg>`;
 }

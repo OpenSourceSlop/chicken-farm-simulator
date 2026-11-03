@@ -302,6 +302,19 @@ export const UNLOCKS = {
   waterTrend: { branch: 'water', level: 1, name: 'Water meter trend graph' },
   lineOverview: { branch: 'water', level: 2, name: 'All-lines water overview' },
 };
+// What the branches of later levels will unlock (the plan's examples; shown dimmed on the tree,
+// nothing here can be earned in Level 1).
+export const LATER_UNLOCKS = {
+  planning: 'Planning calculator at the office desk',
+  biosecurity: 'Quick symptom check when you inspect a bird',
+  comfort: 'Comfort colour overlay on the flock',
+  ventilation: 'Wind chill readout on the fan panel',
+  moisture: 'Litter moisture overlay',
+  heating: 'Heat loss readout for the house',
+  feed: 'Droppings guide at the bird check',
+  lighting: 'Light program presets',
+  growth: 'Flock records screen with targets',
+};
 
 // Floor thermometer view (unlock floorOverlay): litter surface °C -> sRGB colour, continuous blue
 // (cool) to orange (warm), no good / bad colours. props-floor paints the floor with it; the ui

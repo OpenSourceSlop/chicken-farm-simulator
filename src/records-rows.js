@@ -94,8 +94,8 @@ export function buildRow(day, { notebook, extras, farm, env }, signed) {
   for (const n of of('order')) if (n.value && n.value.arriveDay != null) notes.push(`Feed ordered, arrives day ${n.value.arriveDay} ${String(n.value.arriveHour).padStart(2, '0')}:00`);
   for (const n of of('text')) notes.push(n.value);
   if (ex.lapses) notes.push(`House entered without the foot dip: ${ex.lapses}`);
-  if (ex.missed.length) notes.push(`Jobs not done: ${ex.missed.join(', ')}`);
-  const sheetNote = sheet && sheet.value && sheet.value.sheet ? Object.entries(sheet.value.sheet).map(([k, v]) => `${k} ${v}`).join(', ') : null;
+  const s = sheet && sheet.value && sheet.value.sheet;
+  const sheetNote = s ? `Grading sheet: navel not closed ${s.navelBad ?? 0}, red hocks ${s.redHocks ?? 0}, slow to right ${s.slowReflex ?? 0}, culled ${s.culled ?? 0}` : null;
   return {
     day, signed: !!signed,
     alive, deaths: placed > 0 || deathsToday ? deathsToday : null, culls: placed > 0 || cullsToday ? cullsToday : null,
@@ -110,7 +110,7 @@ export function buildRow(day, { notebook, extras, farm, env }, signed) {
     lightHours: lightCtl, cropFullPct: crops.length ? r1((100 * crops.filter((c) => c === 'full-soft').length) / crops.length) : null,
     ventTempMeanC: r1(mean(vents)), chickWeightG: day === 0 || (box && box.day === day) ? r1(chickMeasured) : null,
     chickQualityNote: sheetNote, looks: of('look').map((n) => n.value), skillLines: [...ex.skillLines], notes,
-    jobsDone: ex.jobsDone, jobsMissed: ex.jobsMissed,
+    jobsDone: ex.jobsDone, jobsMissed: ex.jobsMissed, missed: [...(ex.missed || [])],
     flowsMlMin: flows.some((f) => f != null) ? flows : null, floorTempMeanC: r1(mean(floors)),
     cropTally: crops.length ? { full: crops.filter((c) => c === 'full-soft').length, of: crops.length } : null,
     settings: settingsNow(farm, env),
