@@ -11,7 +11,7 @@ export function createHelp() {
   const list = h('dl', { class: 'help-list' });
   for (const row of HELP_KEYS) {
     const keys = row.keys.map((k) => h('kbd', { class: 'kbd' }, k));
-    list.append(h('dt', null, keys, row.or ? h('span', { class: 'help-or' }, `or ${row.or}`) : null), h('dd', null, row.what));
+    list.append(h('dt', null, keys), h('dd', null, row.what));
   }
   const closeBtn = button({ class: 'btn' }, 'Got it');
   const card = h('section', { class: 'card help', 'aria-labelledby': titleId },
