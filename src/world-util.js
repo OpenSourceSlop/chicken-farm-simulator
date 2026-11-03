@@ -202,6 +202,8 @@ export function makeMaterials() {
     // same looks, but screen-door faded when standing between the camera and the farmer
     flatFade: withOcclusionFade(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 'occ-flat'),
     metalFade: withOcclusionFade(new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 70, specular: 0x5a5f64 }), 'occ-metal'),
+    // window glass: glossy, glows warm at night (emissive set by world.js)
+    glass: withOcclusionFade(new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 90, specular: 0x7a8894 }), 'occ-glass'),
   };
 }
 

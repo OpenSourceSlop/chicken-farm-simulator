@@ -87,6 +87,6 @@ function canvasTexture(w, h, draw, renderer) {
 export function makeSignTextures(renderer) {
   return {
     gate: canvasTexture(1024, 572, drawGate, renderer),
-    office: canvasTexture(512, 160, drawOffice, renderer),
+    office: canvasTexture(608, 160, drawOffice, renderer),
   };
 }

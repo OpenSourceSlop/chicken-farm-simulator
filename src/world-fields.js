@@ -234,9 +234,9 @@ function buildTreeline(group, mats, plots) {
       egrets.push({ x: p.x0 + 1 + r() * (p.x1 - p.x0 - 2), y: PADDY_Y - 0.12, z: p.z0 + 1 + r() * (p.z1 - p.z0 - 2), s: 0.9 + r() * 0.25, ry: r() * 6.28 });
     }
   }
-  group.add(instanced(egretGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), egrets));
   group.add(extra.mesh(mats.flat, { cast: false, receive: false, name: 'village' }));
   const treeMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
+  group.add(instanced(egretGeometry(), treeMat, egrets));
   group.add(instanced(treeGeometry('village', 3), treeMat, village));
   group.add(instanced(treeGeometry('village2', 4), treeMat, village2));
   group.add(instanced(treeGeometry('coconut', 5), treeMat, coconut));

@@ -59,34 +59,46 @@ function gableEnds(b, x0, x1, z0, z1, yEave, rise, color) {
   }
 }
 
-function office(flat, metal, colliders, signTex, group) {
+function office(flat, metal, glass, colliders, signTex, group) {
   const O = FARM.office, x0 = O.x - O.w / 2, x1 = O.x + O.w / 2, z0 = O.z - O.d / 2, z1 = O.z + O.d / 2;
   const base = 0.3, eave = 3.1;
   flat.boxMM(x0 - 0.2, x1 + 0.2, 0, base, z0 - 0.2, z1 + 0.2, COLORS.concrete);
   flat.boxMM(x0, x1, base, eave, z0, z1, WALL, { jitter: 0.02 });
   flat.boxMM(x0 - 0.02, x1 + 0.02, base, base + 0.35, z0 - 0.02, z1 + 0.02, WALL_TRIM);
   gableEnds(flat, x0, x1, z0, z1, eave, 1.3, WALL);
-  gableRoof(flat, x0, x1, z0, z1, eave, 1.3, 0.65, COLORS.roofBlue);
-  roofRibs(flat, x0, x1, z0, z1, eave, 1.3, 0.65, 0x355f88);
+  gableRoof(flat, x0, x1, z0, z1, eave, 1.3, 0.55, COLORS.roofBlue);
+  roofRibs(flat, x0, x1, z0, z1, eave, 1.3, 0.55, 0x355f88);
   // front (south): door, two windows, sign
   const doorX = x0 + 1.4;
   flat.boxMM(doorX - 0.55, doorX + 0.55, base, base + 2.15, z1 - 0.02, z1 + 0.05, DOOR);
   flat.boxMM(doorX - 0.65, doorX + 0.65, base + 2.15, base + 2.27, z1 - 0.02, z1 + 0.08, FRAME);
   for (const s of [-1, 1]) flat.boxMM(doorX + s * 0.6 - 0.05, doorX + s * 0.6 + 0.05, base, base + 2.2, z1 - 0.02, z1 + 0.08, FRAME);
   metal.boxMM(doorX + 0.25, doorX + 0.32, base + 1.0, base + 1.1, z1 + 0.05, z1 + 0.1, 0xc9b26a);
-  windowOn(flat, metal, 'z', 1, z1, x0 + 3.6, 1.2, 1.6, 1.25);
-  windowOn(flat, metal, 'z', 1, z1, x0 + 5.7, 1.2, 1.2, 1.25);
-  windowOn(flat, metal, 'x', -1, x0, O.z - 0.9, 1.2, 1.4, 1.25);
-  windowOn(flat, metal, 'x', -1, x0, O.z + 1.1, 1.2, 1.0, 1.25);
-  windowOn(flat, metal, 'z', -1, z0, O.x, 1.4, 1.4, 1.0);
+  windowOn(flat, glass, 'z', 1, z1, x0 + 3.6, 1.2, 1.6, 1.25);
+  windowOn(flat, glass, 'z', 1, z1, x0 + 5.7, 1.2, 1.2, 1.25);
+  windowOn(flat, glass, 'x', -1, x0, O.z - 0.9, 1.2, 1.4, 1.25);
+  windowOn(flat, glass, 'x', -1, x0, O.z + 1.1, 1.2, 1.0, 1.25);
+  windowOn(flat, glass, 'z', -1, z0, O.x, 1.4, 1.4, 1.0);
   // step and front apron, path to the road
   flat.boxMM(doorX - 0.9, doorX + 0.9, 0, 0.16, z1 + 0.2, z1 + 0.85, COLORS.concrete);
   flat.boxMM(-37.3, x1, -0.05, 0.05, z1 + 0.2, z1 + 2.0, 0xc4beb1);
-  // sign above the door
-  const sw = 1.7, sh = 0.53;
-  flat.boxMM(doorX + 0.2 - sw / 2 - 0.04, doorX + 0.2 + sw / 2 + 0.04, 2.55, 2.55 + sh + 0.08, z1, z1 + 0.06, 0x1d3a58);
+  // potted plants either side of the step, a bench under the front windows
+  for (const [px, col] of [[doorX - 1.15, 0xd0508a], [doorX + 1.15, 0xe86a3a]]) {
+    flat.cyl(0.24, 0.42, px, 0.05, z1 + 0.55, 0xb0603a, 8, { top: 1.25 });
+    flat.add(unitSphere(7, 5), 0x4f8a3a, { x: px, y: 0.78, z: z1 + 0.55, sx: 0.38, sy: 0.34, sz: 0.38, jitter: 0.15 });
+    for (let i = 0; i < 4; i++) flat.add(unitSphere(5, 4), col, { x: px + Math.cos(i * 1.7) * 0.22, y: 0.92 + (i % 2) * 0.08, z: z1 + 0.55 + Math.sin(i * 1.7) * 0.22, s: 0.09 });
+    colliders.push({ type: 'circle', x: px, z: z1 + 0.55, r: 0.35 });
+  }
+  const bx = x0 + 4.6;
+  flat.boxMM(bx - 0.8, bx + 0.8, 0.42, 0.48, z1 + 0.35, z1 + 0.75, 0x8a6a48);
+  for (const lx of [bx - 0.65, bx + 0.65]) flat.boxMM(lx - 0.04, lx + 0.04, 0.05, 0.42, z1 + 0.4, z1 + 0.7, 0x5c4630);
+  colliders.push({ type: 'box', minX: bx - 0.85, maxX: bx + 0.85, minZ: z1 + 0.3, maxZ: z1 + 0.8 });
+  // sign hung from the eave edge above the door, where the angled camera can read it
+  const sw = 1.9, sh = 0.5, sz = z1 + 0.5, sy0 = 2.27, scx = doorX + 0.35;
+  flat.boxMM(scx - sw / 2 - 0.05, scx + sw / 2 + 0.05, sy0 - 0.05, sy0 + sh + 0.05, sz - 0.05, sz, 0x1d3a58);
+  for (const ox of [-sw / 2 + 0.15, sw / 2 - 0.15]) flat.boxMM(scx + ox - 0.02, scx + ox + 0.02, sy0 + sh, 2.86, sz - 0.04, sz - 0.01, 0x55595c);
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), new THREE.MeshLambertMaterial({ map: signTex.office }));
-  sign.position.set(doorX + 0.2, 2.59 + sh / 2, z1 + 0.065);
+  sign.position.set(scx, sy0 + sh / 2, sz + 0.005);
   sign.name = 'office-sign';
   group.add(sign);
   // air conditioner condenser on the east wall, on brackets, with its pipe run
@@ -183,10 +195,11 @@ function waterTower(flat, metal, colliders) {
 }
 
 export function buildBuildings(group, mats, colliders, signTex) {
-  const flat = new GeoBuilder(), metal = new GeoBuilder();
-  office(flat, metal, colliders, signTex, group);
+  const flat = new GeoBuilder(), metal = new GeoBuilder(), glass = new GeoBuilder();
+  office(flat, metal, glass, colliders, signTex, group);
   generatorShed(flat, metal, colliders);
   waterTower(flat, metal, colliders);
   group.add(flat.mesh(mats.flatFade, { name: 'buildings' }));
   group.add(metal.mesh(mats.metalFade, { name: 'buildings-metal' }));
+  group.add(glass.mesh(mats.glass, { cast: false, name: 'office-windows' }));
 }

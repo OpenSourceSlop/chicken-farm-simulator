@@ -117,8 +117,8 @@ export function buildGateArea(group, mats, colliders, signTex) {
   hut.boxMM(x0, x0 + 0.2, 1.0, 2.15, z0, z1, 0xeee6d2);       // west wall full height
   hut.boxMM(x0, x1, 1.0, 2.15, z0, z0 + 0.2, 0xeee6d2);       // north wall (door)
   hut.boxMM(x0 + 1.0, x0 + 1.9, 0.18, 2.1, z0 - 0.03, z0 + 0.02, 0x7b5a3c); // door
-  hutM.boxMM(x0 + 0.2, x1 - 0.05, 1.0, 2.15, z1 - 0.12, z1 - 0.06, 0x31475a); // south glass
-  hutM.boxMM(x1 - 0.12, x1 - 0.06, 1.0, 2.15, z0 + 0.2, z1 - 0.05, 0x31475a); // east glass
+  hutM.boxMM(x0 + 0.2, x1 - 0.05, 1.0, 2.15, z1 - 0.12, z1 - 0.06, 0x3e5a70); // south glass
+  hutM.boxMM(x1 - 0.12, x1 - 0.06, 1.0, 2.15, z0 + 0.2, z1 - 0.05, 0x3e5a70); // east glass
   for (const t of [0, 0.5, 1]) {
     hut.boxMM(x0 + 0.2 + t * (H.w - 0.3) - 0.04, x0 + 0.2 + t * (H.w - 0.3) + 0.04, 1.0, 2.15, z1 - 0.15, z1, 0xf4f1ea);
     hut.boxMM(x1 - 0.15, x1, 1.0, 2.15, z0 + 0.2 + t * (H.d - 0.3) - 0.04, z0 + 0.2 + t * (H.d - 0.3) + 0.04, 0xf4f1ea);
@@ -194,6 +194,6 @@ export function buildGateArea(group, mats, colliders, signTex) {
   group.add(flat.mesh(mats.flat, { name: 'gate-area' }));
   group.add(metal.mesh(mats.metal, { name: 'gate-metal' }));
   group.add(hut.mesh(mats.flatFade, { name: 'guard-hut' }));
-  group.add(hutM.mesh(mats.metalFade, { name: 'guard-hut-glass' }));
+  group.add(hutM.mesh(mats.glass, { cast: false, name: 'guard-hut-glass' }));
   return { r };
 }

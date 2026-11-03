@@ -186,9 +186,9 @@ function buildPublicRoad(b) {
 function buildTufts() {
   const blade = new GeoBuilder();
   const r = rng(11);
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2 + r() * 0.5, lean = 0.4 + r() * 0.35;
-    blade.add(new THREE.ConeGeometry(0.075, 1, 3, 1, true), 0xffffff, { x: Math.cos(a) * 0.1, y: 0.32, z: Math.sin(a) * 0.1, rx: Math.sin(a) * lean, rz: -Math.cos(a) * lean, sy: 0.55 + r() * 0.35 });
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + r() * 0.6, lean = 0.22 + r() * 0.4, h = 0.45 + r() * 0.45;
+    blade.add(new THREE.ConeGeometry(0.05, 1, 3, 1, true), 0xffffff, { x: Math.cos(a) * 0.07, y: h / 2, z: Math.sin(a) * 0.07, rx: Math.sin(a) * lean, rz: -Math.cos(a) * lean, sy: h });
   }
   const geo = blade.geometry();
   geo.deleteAttribute('color');

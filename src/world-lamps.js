@@ -55,7 +55,7 @@ export function buildLamps(group, mats, colliders) {
   }
   // wall lamps: office door, guard hut, generator shed
   const O = FARM.office, H = FARM.guardHut, G = FARM.generator;
-  lamp(O.x - O.w / 2 + 1.4, 2.42, O.z + O.d / 2 + 0.18, 3.5, 0.11);
+  lamp(O.x - O.w / 2 + 2.9, 2.62, O.z + O.d / 2 + 0.18, 3.5, 0.11);
   lamp(H.x + H.w / 2 + 0.15, 2.3, H.z + 0.4, 3.5, 0.1);
   lamp(G.x, 2.55, G.z + 0.2, 3.2, 0.1);
 

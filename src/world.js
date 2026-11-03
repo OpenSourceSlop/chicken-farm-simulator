@@ -68,6 +68,8 @@ export function buildWorld(ctx) {
       sky.update(dt, env, view);
       fields.update(sky);
       lamps.update(sky.state.night);
+      const glow = Math.max(0, Math.min(1, (sky.state.night - 0.15) / 0.5));
+      mats.glass.emissive.setRGB(0.95 * glow, 0.56 * glow, 0.2 * glow);
       if (view && view.camera && view.playerPos) {
         occlusion.uCam.value.copy(view.camera.position);
         occlusion.uPlayer.value.set(view.playerPos.x, 1.0, view.playerPos.z);
