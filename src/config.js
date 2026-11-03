@@ -179,7 +179,7 @@ export const GUIDES = {
 export const LEVEL1 = {
   id: 'level1',
   n: 2, short: 'The brooding week',  // Phase 3: the second level of the run (PHASE3.md §2.1)
-  title: 'Level 1 – The brooding week',
+  title: 'Level 2 – The brooding week', // titles carry the run number (Phase 2 said "Level 1")
   startDay: -1, startHour: 7,         // prep day, 07:00 at the farm gate
   arrivalDay: 0, arrivalHour: 8,      // chick truck at the house door
   endDay: 7,                          // the level ends when the day 7 record is signed
@@ -453,19 +453,25 @@ const CLOCK = LEVEL1.clock; // every level runs on Phase 2's clock speeds
 
 // Key target of the brooding week in Phase 3 terms (its pass rule stays LEVEL1.fail, PHASE2.md §10).
 LEVEL1.target = { kind: 'ratio', day: LEVEL1.endDay, min: LEVEL1.fail.weightRatioMin };
+LEVEL1.starts = [LEVEL1.startDay];
 
 // The seven levels of a run. problems: same shape as LEVEL1.problems (the farm starts them silently;
-// `until` makes a weather event; `rh` = outside humidity during it; conditional ones start only when
-// their condition holds, PHASE3.md §7). anchors: job-engine anchors beyond truck / placed (§3.1).
+// `until` makes a weather event; `rh` = the outside RH during it, `rhDrop` = points off it; an event
+// without them keeps the day's water content, so the RH falls as it heats: about 47 % at 15:00 on the
+// hot afternoon, 40 % in the heat wave; conditional ones start only when their condition holds,
+// PHASE3.md §7). anchors: job-engine anchors beyond truck / placed (§3.1). starts: the saved starts a
+// level can be replayed from (its first day, and day 29 for weeks 4-5).
+// Every level from Week 2 on runs the cycle climate (env.setCycleClimate(true), farm.enterLevel).
+// Title = "Level <n> – <short>" (the run card, the result screen).
 export const PLAN_LEVEL = {
-  id: 'plan', n: 1, title: 'Level 1 – Plan the farm', short: 'Plan the farm',
+  id: 'plan', n: 1, title: 'Level 1 – Plan the farm', short: 'Plan the farm', starts: [-2],
   startDay: -2, startHour: 7, endDay: -2, weather: 'cool', rounds: ROUNDS, clock: CLOCK, chicksPlaced: 0,
   anchors: { sent: { action: 'plan.send' } },
   problems: [],
   target: { kind: 'plan' }, fail: {},
 };
 export const WEEK2 = {
-  id: 'week2', n: 3, title: 'Level 3 – Week 2', short: 'Week 2',
+  id: 'week2', n: 3, title: 'Level 3 – Week 2', short: 'Week 2', starts: [8],
   startDay: 8, startHour: 6, endDay: 14, weather: 'cool', rounds: ROUNDS, clock: CLOCK, weighDays: [14],
   anchors: { curtain: { action: 'house.curtain', match: { open: true } } },
   problems: [
@@ -476,10 +482,12 @@ export const WEEK2 = {
   target: { kind: 'weight', day: 14, minShare: 0.9 }, fail: { mortalityMaxPct: 1.0 },
 };
 export const WEEK3 = {
-  id: 'week3', n: 4, title: 'Level 4 – Week 3', short: 'Week 3',
+  id: 'week3', n: 4, title: 'Level 4 – Week 3', short: 'Week 3', starts: [15],
   startDay: 15, startHour: 6, endDay: 21, weather: 'normal', rounds: ROUNDS, clock: CLOCK, weighDays: [21],
   anchors: {},
   problems: [
+    // the first warm afternoon of the season: the tunnel fans the birds need now (PHASE3.md §7)
+    { id: 'warm-afternoon3', day: 16, hour: 11, outsideRise: 2, sunPerH: 1, until: { day: 16, hour: 17 } },
     { id: 'pad-overflow', day: 17, hour: 10, litresPerCellH: 0.8, columns: 2 },
     { id: 'coccidiosis', day: 19, hour: 5 },
     { id: 'gumboro', day: 20, hour: 6, conditional: 'vaccine', below: 0.85 },
@@ -487,11 +495,11 @@ export const WEEK3 = {
   target: { kind: 'weight', day: 21, minShare: 0.9 }, fail: { mortalityMaxPct: 1.0 },
 };
 export const WEEKS45 = {
-  id: 'weeks45', n: 5, title: 'Level 5 – Weeks 4 and 5', short: 'Weeks 4 and 5',
+  id: 'weeks45', n: 5, title: 'Level 5 – Weeks 4 and 5', short: 'Weeks 4 and 5', starts: [22, 29],
   startDay: 22, startHour: 6, endDay: 35, weather: 'normal', rounds: ROUNDS, clock: CLOCK, weighDays: [28, 35],
   anchors: {},
   problems: [
-    { id: 'dusty-air', day: 23, hour: 8, rhDrop: 25, until: { day: 24, hour: 18 } },
+    { id: 'dusty-air', day: 23, hour: 4, rhDrop: 30, until: { day: 24, hour: 18 } },
     { id: 'hot-afternoon', day: 25, hour: 11, outsideRise: 3, sunPerH: 1.5, until: { day: 25, hour: 17 } },
     { id: 'fan-belt', day: 27, hour: 9, fan: 3 },
     { id: 'pad-clog', day: 29, hour: 10, share: 0.33 },
@@ -501,16 +509,17 @@ export const WEEKS45 = {
   target: { kind: 'weight', day: 35, minShare: 0.9 }, fail: { mortalityMaxPct: 2.0 },
 };
 export const FINISH = {
-  id: 'finish', n: 6, title: 'Level 6 – Finishing and harvest', short: 'Finishing and harvest',
+  id: 'finish', n: 6, title: 'Level 6 – Finishing and harvest', short: 'Finishing and harvest', starts: [36],
   startDay: 36, startHour: 6, endDay: 42, weather: 'normal', rounds: ROUNDS, clock: CLOCK, weighDays: [40],
   anchors: { catch: { stat: 'catchAt' } },
   problems: [
     { id: 'hot-finish', day: 38, hour: 11, outsideRise: 4, sunPerH: 1.5, until: { day: 38, hour: 17 } },
   ],
+  // the harvest live weight (tickets) against weightAt(age at the catch) x the expected shrink (HARVEST.shrink)
   target: { kind: 'harvest', minShare: 0.9 }, fail: { mortalityMaxPct: 1.5, withDoa: true },
 };
 export const CLEANOUT = {
-  id: 'cleanout', n: 7, title: 'Level 7 – Clean-out and rest', short: 'Clean-out and rest',
+  id: 'cleanout', n: 7, title: 'Level 7 – Clean-out and rest', short: 'Clean-out and rest', starts: [43],
   startDay: 43, startHour: 6, endDay: CYCLE.lastDay, weather: 'normal', rounds: ROUNDS, clock: CLOCK,
   anchors: {},
   problems: [{ id: 'swab-positive', conditional: 'lab' }],
@@ -567,12 +576,27 @@ export const PLAN_CONTRACT = {
 export const HARVEST = {
   catchDefault: { day: 42, hour: 2 }, bookFrom: { day: 41, hour: 18 }, bookTo: { day: 42, hour: 6 },
   sections: 8, sectionMin: 22, sectionOrder: [1, 0, 2, 3, 4, 5, 6, 7], crew: 4, trucks: 2,
-  cratesPerTruck: 300, birdsPerCrate: 10, tareKg: 12000, withdrawalH: [8, 12],
+  cratesPerTruck: 300, birdsPerCrate: 10, tareKg: 12000,
+  withdrawalH: [8, 12],   // the pans are empty this many hours before the catch (sign-feed, sign-catch)
+  stopLinesBeforeEmptyH: 1, // the lines stop about an hour before the pans run empty
+  shrink: 0.98,           // the birds lose about 2 % of their weight between feed off and the plant
+  bookAheadH: 72,         // book the crew and the trucks at least 3 days ahead (sign-catch)
+  catchLux: 10,           // dim to about 10 lux at bird height for the catch (sign-catch)
+  catchFansMin: 3,        // keep at least half the tunnel fans running while the birds are caught (sign-catch)
 };
 
 // Clean-out and rest (general).
+// swabSpots: the ten places the lab asks to be swabbed, where cleaning is hardest (a small flag marks each;
+// the farmer swabs every one; the lab result comes from the whole house, PHASE3.md §6.10).
 export const CLEAN = {
   restMinDays: CYCLE.restMinDays, bookMinDays: 14, swabs: 10, swabSectors: 5, labDays: 2, maxPositive: 2,
+  swabSpots: [
+    { x: -20.0, z: -1.95, label: 'Under drinker line 2, west' }, { x: 16.0, z: 1.95, label: 'Under drinker line 3, east' },
+    { x: -8.0, z: -3.9, label: 'Feeder pans, line 1' }, { x: 10.0, z: 3.9, label: 'Feeder pans, line 3' },
+    { x: -23.4, z: 2.0, label: 'Cooling pad, inside' }, { x: 23.4, z: -1.5, label: 'Tunnel fans, inside' },
+    { x: -23.4, z: -5.6, label: 'North-west corner' }, { x: 23.4, z: 5.6, label: 'South-east corner' },
+    { x: 4.0, z: 5.6, label: 'Side-wall inlet, south' }, { x: -14.0, z: 5.4, label: 'Inside the door' },
+  ],
   brushParts: ['lines', 'fans', 'pad', 'brooders', 'inlets'], washItems: ['boots', 'buckets', 'barrow', 'washer'],
 };
 

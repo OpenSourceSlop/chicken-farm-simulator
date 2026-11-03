@@ -65,14 +65,19 @@ export const MILESTONES = [
   { id: 'ratio-steady', branch: 'water', checkpoint: 'level-end', text: 'Water to feed ratio steady all week',
     tiers: [{ points: 1, rule: 'recorded water:feed between 1.6 and 2.2 on >= 5 of days 1-7' }] },
 ];
-// Phase 3: Phase 2's milestones and the cycle's in one table. evaluate() and the current skill tree still
-// use MILESTONES (Phase 2) so the brooding week and its screens are unchanged; package "sim" switches
-// evaluate() to ALL_MILESTONES when the cycle rules exist, package "run" its skill tree.
-export const ALL_MILESTONES = [...MILESTONES, ...MILESTONES_CYCLE];
+// Phase 3: Phase 2's milestones and the cycle's in one table. Every Phase 2 milestone belongs to the brooding
+// week (level 'level1'). evaluate() takes only the milestones of the checkpoint's level: ctx.level, else the
+// level the run (EV.RUN level-start) or the level (EV.LEVEL checkpoints with `level`) last announced, else
+// 'level1' (Phase 2's lone brooding week emits no level). So Phase 2's rules never run on later days (day7-weight
+// at the day 14 weigh-in). The current skill tree still uses MILESTONES; package "sim" switches evaluate() to
+// ALL_MILESTONES when the cycle rules exist (the cycle milestones of level 'level1' count only in a run, at
+// the brooding week's level-end: ctx.run), package "run" its skill tree.
+export const ALL_MILESTONES = [...MILESTONES.map((m) => ({ ...m, level: 'level1' })), ...MILESTONES_CYCLE];
 
 export function createSkills({ events, records, farm } = {}) {
   /** milestone id -> best tier index earned (profile, kept across replays) */
   const earned = new Map();
+  let currentLevel = 'level1';      // the level of the bus checkpoints ('problem', 'day') and of checkpoints without one
 
   const pointsOf = (branch) => {
     let p = 0;
@@ -102,9 +107,10 @@ export function createSkills({ events, records, farm } = {}) {
     /** STUB: package "sim" checks the milestones of this checkpoint here (reads farm.stats,
      *  farm.problems, records). Returns the awards made: [{ id, tier, delta }]. */
     evaluate(checkpoint, ctx = {}) {
-      void ctx;
       const out = [];
       if (!farm || farm.mode !== 'level') return out;
+      // Phase 2's milestones are the brooding week's: they never run at a later level's checkpoint
+      if ((ctx.level ?? currentLevel) !== 'level1') return out;
       for (const m of MILESTONES) {
         if (checkpoint !== 'level-end' && m.checkpoint !== checkpoint) continue;
         const r = RULES[m.id] ? RULES[m.id](farm, records) : null;
@@ -132,7 +138,12 @@ export function createSkills({ events, records, farm } = {}) {
   };
   // The bus drives the checkpoints (PHASE2.md §9): nobody else calls evaluate().
   if (events) {
-    events.on(EV.LEVEL, (p) => { if (p.phase === 'checkpoint') skills.evaluate(p.name, p); });
+    events.on(EV.RUN, (p) => { if (p && p.phase === 'level-start' && p.level) currentLevel = p.level; });
+    events.on(EV.LEVEL, (p) => {
+      if (p.phase === 'farm-start') currentLevel = 'level1';   // Phase 2's level.start (a run's later levels announce themselves after it)
+      if (p.level) currentLevel = p.level;
+      if (p.phase === 'checkpoint') skills.evaluate(p.name, p);
+    });
     events.on(EV.FARM_PROBLEM, (p) => { if (p.phase === 'symptom' || p.phase === 'found' || p.phase === 'fixed') skills.evaluate('problem', p); });
     events.on(EV.RECORD_CLOSED, (p) => skills.evaluate('day', p));
   }

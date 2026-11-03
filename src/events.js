@@ -25,6 +25,7 @@ export const EV = {
   FRAME_SET: 'frame:set',           // { x, z, birds: [index] } catching frame set down, birds held (props, after flock.catchGroup)
   // d: flock
   BIRD_PICK: 'bird:pick',           // { index, x, z, purpose: 'vent'|'crop'|'sick' (+ Phase 3 'lame'|'check') } a live bird in the hand
+                                    //   (Phase 3: purpose 'check' whenever level.sampling === 'bird'; ui opens 'bird-check' from day 8)
   BIRD_RELEASE: 'bird:release',     // { index, culled: boolean }
   DEAD_PICK: 'dead:pick',           // { n, causes: {cause: n}, carried } dead birds picked up (farm: deadOnFloor -= n)
   DEAD_DROP: 'dead:drop',           // { n, causes } carried dead birds put in the bin (counted)
@@ -44,10 +45,11 @@ export const EV = {
   JOB_OPEN: 'job:open',             // { id, key }
   JOB_DONE: 'job:done',             // { id, key, result }
   JOB_MISSED: 'job:missed',         // { id, key }
-  LEVEL: 'level',                   // { phase: 'start'|'resume'|'day'|'checkpoint'|'end', day, name?, result?, level? }
+  LEVEL: 'level',                   // { phase: 'start'|'resume'|'day'|'checkpoint'|'end', day, name?, result?, level?, run? }
                                     //   checkpoint names: 'placed', 'vent', 'crop', 'weighin', 'level-end' (skills listen);
                                     //   Phase 3 adds 'plan', 'curtain', 'vaccine', 'heatwave', 'catch', 'harvest',
-                                    //   'clean', 'swabs', 'rest' and the level id on every checkpoint (PHASE3.md §9)
+                                    //   'clean', 'swabs', 'rest', the level id on every checkpoint and run: true while
+                                    //   the level is part of a run (PHASE3.md §9). No `level` = Phase 2's lone brooding week.
   // Phase 3 (PHASE3.md §13.2)
   RUN: 'run',                       // { phase: 'start'|'level-start'|'level-end'|'cycle-end', level, pass? } (run.js)
   CATCH: 'catch',                   // { phase: 'start'|'section'|'end', i, birds } the catching crew's progress (farm)
@@ -71,8 +73,10 @@ export const ACTION_IDS = [
   'gas.meter', 'sample.bird', 'water.main', 'vaccine.mix', 'water.medicate', 'water.test', 'feed.valve',
   'feed.withdraw', 'feed.wash', 'litter.fork', 'phone.vet', 'phone.bookCatch', 'phone.bookChicks', 'catch.panels',
   'load.ticket', 'clean.scrape', 'clean.wash', 'clean.spray', 'clean.brush', 'clean.washbay', 'clean.bait',
-  'clean.swab', 'house.close', 'swab.read',
+  'clean.swab', 'house.close', 'swab.read', 'water.disinfect',
 ];
+/** Phase 3 action ids that are ui-only (EV.ACTION with result undefined; the farm sees them on the bus). */
+export const UI_ACTION_IDS_CYCLE = ['plan.letter', 'plan.reply', 'fans.read', 'phone.vet', 'swab.read', 'light.preset', 'sign.read'];
 
 /**
  * Does `payload` contain `pattern`? Every key of the pattern must be equal in the payload; a

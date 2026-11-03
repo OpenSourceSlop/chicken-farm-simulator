@@ -1,7 +1,9 @@
 // The run of seven levels in node (PHASE3.md §14.2). Owner: package "run". The real sim, farm,
 // records, skills, job engine, level.js and run.js, with the 3D modules and the ui stubbed (as
-// test-level.mjs). The chaining tests skip while run.stub is true; the free-run stub test (the other
-// packages' way to a level-mode farm at any age) runs now.  node scripts/test-run.mjs
+// test-level.mjs). The chaining tests skip while run.stub or farm.cycleStub is true (they need the real run
+// AND the real farm model: on the sim stub nothing heats, sickens or grows to the cycle's targets); the
+// free-run stub test (the other packages' way to a level-mode farm at any age) runs now.
+//   node scripts/test-run.mjs
 import { makeWorld } from '../src/farm-profiles-run.js';
 import { createLevel } from '../src/level.js';
 import { createRun } from '../src/run.js';
@@ -53,19 +55,21 @@ test('run stub: startLevel(week3) is a level-mode farm at day 15 06:00', () => {
 });
 
 const CHAIN = [
-  'a scripted plan (two measures, the reference plan, the reply, signed) passes with 3,611 birds a week',
+  'a scripted plan (two measures, the reference plan, the reply, signed) passes with 3,611 birds a week; a 49-day plan at 0 % losses does not',
   'goto(7, 21, auto) passes the brooding week; Continue starts week 2 at day 8 06:00 with the same flock, start saved',
   'goto(auto) through every level passes each one; the cycle summary exists',
   'a failed week 3 replays from day 15 06:00 with a farm identical to the saved start',
+  'poorVaccine: week 3 passes with the Gumboro deaths in its record; poorVaccineCocci fails week 3, its fail screen offers Replay Week 2 with "vaccine drunk in N h on day 12", and week 2 replayed with the ideal vaccination then passes week 3',
+  'weeks45 has two saved starts (day 22 and day 29); a fail on day 33 offers both',
   'a standard start of weeks45 reaches day 22 06:00 in 6 s or less',
   'every level start blob is 250 KB or less; a Phase 2 save continues as a run at level1',
 ];
 for (const name of CHAIN) test(name, () => {
   const R = makeRun();
-  if (R.run.stub) return 'skip';
+  if (R.run.stub || R.farm.cycleStub) return 'skip';
   void LEVELS;
   throw new Error('package "run": write this test (PHASE3.md §14.2)');
 });
 
-console.log(failed ? `${failed} failed` : `all passed${skipped ? ` (${skipped} skipped: run.stub)` : ''}`);
+console.log(failed ? `${failed} failed` : `all passed${skipped ? ` (${skipped} skipped: run.stub / farm.cycleStub)` : ''}`);
 process.exit(failed ? 1 : 0);

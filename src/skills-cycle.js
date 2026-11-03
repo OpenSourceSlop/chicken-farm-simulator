@@ -4,7 +4,12 @@
 // with Phase 2's MILESTONES; until rules exist nothing here is awarded.
 //
 // Milestone: { id, branch, level, checkpoint, text, tiers: [{ points, rule }] }
-//   level       the level whose checkpoint evaluates it (config LEVELS ids)
+//   level       the level whose checkpoint evaluates it (config LEVELS ids). The milestones of level 'level1'
+//               count only inside a run (checkpoint ctx.run) and only at the brooding week's level-end, so the
+//               week plays exactly as Phase 2 (its unlocks come with the result screen); Phase 2's lone
+//               brooding week (__game.startLevel({ seed: 1 })) awards only skills.js MILESTONES.
+//   Every threshold a tier names is on the sign or plate the job links (PHASE3.md §9), or is a measured
+//   outcome the text states (deaths, hours of panting, kg of feed left): never a hidden setting.
 //   checkpoint  EV.LEVEL checkpoint name (PHASE3.md §9): plan | placed | vent | crop | weighin | curtain |
 //               vaccine | heatwave | catch | harvest | clean | swabs | rest | level-end, or 'problem' / 'day'
 //   text        the result in the farmer's words (shown on the skill tree; never praise or a verdict)
@@ -24,10 +29,10 @@ export const MILESTONES_CYCLE = [
     [[2, 'planSums.densityKgM2 <= PLAN_CONTRACT.densityMaxKgM2']]),
   M('plan-rest', 'planning', 'plan', 'plan', 'Plan leaves 3 weeks of rest between flocks',
     [[1, 'planSums.restDays >= 21']]),
-  M('catch-booked', 'planning', 'finish', 'catch', 'Catching crew and trucks booked 3 days ahead',
-    [[1, 'phone.bookCatch >= 72 h before harvest.catchAt']]),
-  M('last-order', 'planning', 'finish', 'catch', 'Last feed order planned to the catch',
-    [[2, 'silos + pans at the withdrawal between 0 and one day of feed']]),
+  M('catch-booked', 'planning', 'finish', 'catch', 'Catching crew and trucks booked at least 3 days ahead',
+    [[1, 'phone.bookCatch (booked) >= HARVEST.bookAheadH before harvest.catchAt (sign-catch)']]),
+  M('last-order', 'planning', 'finish', 'catch', 'Less than one day of feed (1.2 t) left at catching',
+    [[2, 'silos + pans at the catch < 1,200 kg (sign-feed)']]),
   M('sold-as-planned', 'planning', 'finish', 'harvest', 'Birds sold against the plan',
     [[2, 'sold >= plan chicks per house x (1 - plan losses)'], [3, 'and mean live weight >= the plan sale weight']], ['plan']),
   M('losses-as-planned', 'planning', 'finish', 'harvest', 'Losses at or under the plan’s allowance',
@@ -42,8 +47,8 @@ export const MILESTONES_CYCLE = [
     'biosecurity', lv, 'level-end', `No dip missed in ${LEVEL_NAMES[lv]}`, [[1, 'no house entry without the dip and no dip job missed in the level']])),
   ...per(['week2', 'week3', 'weeks45'], (lv) => M(`dead-${lv === 'week2' ? 'w2' : lv === 'week3' ? 'w3' : 'w45'}`,
     'biosecurity', lv, 'level-end', `Dead birds picked up on every round of ${LEVEL_NAMES[lv]}`, [[1, 'no r-dead-am / r-dead-pm missed in the level']])),
-  M('vaccine-drunk', 'biosecurity', 'week2', 'vaccine', 'Vaccine drunk within 2 hours',
-    [[2, 'health.vaccine.coverage >= 0.85'], [3, '>= 0.95']]),
+  M('vaccine-drunk', 'biosecurity', 'week2', 'vaccine', 'Hours the birds took to drink the vaccine',
+    [[2, 'health.vaccine.hours <= 2.5 (the vaccine plate: about 2 hours)'], [3, '<= 2.0']]),
   M('lame-culled', 'biosecurity', 'week2', 'level-end', 'Lame birds culled the day they were found',
     [[1, 'no lame bird left on the floor at any evening signing, days 11-14']]),
   M('cocci-treated', 'biosecurity', 'week3', 'problem', 'Blood in the droppings: vet called and medicine in the water the same day',
@@ -60,7 +65,7 @@ export const MILESTONES_CYCLE = [
     [[1, 'house.curtain open on calendar day 9-11']]),
 
   // ---------------- Body Temperature & Comfort (max 16) ----------------
-  M('vent-band', 'comfort', 'level1', 'vent', 'Vent temperatures 39.4–40.5 °C on most chicks',
+  M('vent-band', 'comfort', 'level1', 'level-end', 'Vent temperatures 39.4–40.5 °C on most chicks',
     [[1, '>= 4 of the first 5 vent readings in 39.4-40.5 °C']]),
   M('comfort-w2', 'comfort', 'week2', 'level-end', 'Birds in their comfort band through week 2',
     [[2, 'bird-minutes with zone e in -1.5..hotFrom >= 90 %, days 8-14']]),
@@ -68,22 +73,26 @@ export const MILESTONES_CYCLE = [
     [[1, 'no game hour with tunnel fans on and e < -2, days 8-14']]),
   M('comfort-w3', 'comfort', 'week3', 'level-end', 'Birds in their comfort band through week 3',
     [[2, '>= 90 %, days 15-21']]),
-  M('panting-short', 'comfort', 'weeks45', 'level-end', 'Panting hours on the hot afternoons',
-    [[2, 'panting bird-hours <= 0.6 x the flock, days 22-35'], [3, '<= 0.3 x']]),
-  M('heatwave-safe', 'comfort', 'weeks45', 'heatwave', 'Birds lost to heat in the heat wave',
-    [[1, 'heat deaths days 30-32 <= 0.2 % of the birds'], [3, '<= 0.05 %']]),
+  M('panting-short', 'comfort', 'weeks45', 'level-end', 'Hours of panting per bird in weeks 4–5: 60 or fewer',
+    [[2, 'sum of pantShare over the hours of days 22-35 <= 60'], [3, '<= 45']]),
+  M('heatwave-safe', 'comfort', 'weeks45', 'heatwave', 'Hours of panting per bird in the heat wave: 12 or fewer',
+    [[1, 'sum of pantShare over the hours, day 30 06:00 to day 32 19:00 <= 12'], [3, '<= 6']]),
   M('comfort-fin', 'comfort', 'finish', 'level-end', 'Birds in their comfort band in the last week',
     [[2, '>= 85 %, days 36-41']]),
   M('catch-cool', 'comfort', 'finish', 'harvest', 'Birds kept cool while they were caught',
     [[2, 'DOA <= 0.2 % of the birds loaded']]),
 
   // ---------------- Heat & Ventilation (max 15) ----------------
-  M('warm-timer', 'ventilation', 'level1', 'problem', 'Warm afternoon: the timer brought the chicks back',
+  M('warm-timer', 'ventilation', 'level1', 'level-end', 'Warm afternoon: the timer brought the chicks back',
     [[1, 'warm-afternoon fixed by "air" (PHASE2.md §7)']]),
-  M('fans-afternoon', 'ventilation', 'weeks45', 'level-end', 'Tunnel fans on for the afternoon heat',
-    [[2, 'on >= 10 of 14 afternoons with house >= target + 6 °C, >= 3 fans within 1 h']]),
-  M('pads-limit', 'ventilation', 'weeks45', 'level-end', 'Pads off when the house was hot and humid',
-    [[2, '<= 30 game min with the pad on while house °C + RH >= 110, days 22-35']]),
+  M('w3-heat', 'ventilation', 'week3', 'problem', 'First warm afternoon of week 3: birds panting for under 2 hours after it was found',
+    [[1, 'warm-afternoon3 fixed by "air" (heat-handled) within 2 h of being found']]),
+  M('air-measured', 'ventilation', 'weeks45', 'day', 'Air speed measured at bird height in three parts of the house',
+    [[1, '>= 3 air.probe from 3 house sectors by the day 23 record']]),
+  M('hot-first', 'ventilation', 'weeks45', 'problem', 'First hot afternoon: fewer than one bird in ten panting again the same afternoon',
+    [[1, 'hot-afternoon fixed by "air" (heat-handled) before 18:00 on day 25']]),
+  M('pads-limit', 'ventilation', 'weeks45', 'level-end', 'Pads off while the house humidity was over 90 % (the pad plate)',
+    [[2, '<= 30 game min with the pad on and house RH > HEAT.padOffAboveRH, days 22-35']]),
   M('fan-fixed', 'ventilation', 'weeks45', 'problem', 'Stopped fan found and fixed the same day',
     [[1, 'fan-belt fixed on the day it started']]),
   M('pad-flushed', 'ventilation', 'weeks45', 'problem', 'Dry pad section found and cleaned the same day',
@@ -92,10 +101,10 @@ export const MILESTONES_CYCLE = [
     [[2, 'fans.read, pad.check and a water.flowtest on day 29 or before 10:00 day 30']]),
   M('heat-deaths-w45', 'ventilation', 'weeks45', 'level-end', 'Heat deaths in weeks 4–5',
     [[2, 'heat deaths days 22-35 <= 0.3 % of the birds'], [3, '<= 0.1 %']]),
-  M('full-tunnel', 'ventilation', 'finish', 'level-end', 'Full tunnel on the hot finishing afternoon',
-    [[2, 'six fans and the pad by 13:00 on day 38']]),
-  M('catch-air', 'ventilation', 'finish', 'harvest', 'Fans running while the birds were caught',
-    [[1, '>= 3 tunnel fans for the whole catch']]),
+  M('heat-finish', 'ventilation', 'finish', 'level-end', 'Hours of panting per bird on the hot finishing afternoon: 3 or fewer',
+    [[2, 'sum of pantShare over the hours of day 38 <= 3']]),
+  M('catch-air', 'ventilation', 'finish', 'harvest', 'At least three tunnel fans running through the catch (sign-catch)',
+    [[1, 'env.fansEffective >= HARVEST.catchFansMin from the catch start to the house empty']]),
 
   // ---------------- Moisture & Minimum Ventilation (max 16) ----------------
   M('minvent-l1', 'moisture', 'level1', 'level-end', 'Minimum ventilation by the table in the brooding week',
@@ -118,7 +127,7 @@ export const MILESTONES_CYCLE = [
     [[1, 'air.ammoniaPpm < 20 for >= 95 % of the hours, days 22-35']]),
 
   // ---------------- Heating (max 15) ----------------
-  M('preheat-day', 'heating', 'level1', 'placed', 'Pre-heating ran from the prep day',
+  M('preheat-day', 'heating', 'level1', 'level-end', 'Pre-heating ran from the prep day',
     [[2, 'setpoint >= 30 °C with the brooders burning by 12:00 on day -1']]),
   M('cold-night', 'heating', 'level1', 'level-end', 'Cold night: the house held its target',
     [[2, 'house >= target - 1 °C from 00:00 to 07:00 on day 3']]),
@@ -130,8 +139,8 @@ export const MILESTONES_CYCLE = [
     [[2, 'night house minimum >= target - 2 °C on >= 6 nights']]),
   M('no-overheat-w2', 'heating', 'week2', 'level-end', 'No hour more than 3 °C over the target with the brooders burning',
     [[2, 'no game hour with heaterLevel > 0.2 and house > target + 3 °C, days 8-14']]),
-  M('gas-w13', 'heating', 'week3', 'level-end', 'Gas used in weeks 1–3',
-    [[2, 'stats.gasKg per 1,000 birds placed <= 60 kg'], [3, '<= 45 kg']]),
+  M('gas-w13', 'heating', 'week3', 'level-end', 'Gas used to day 21, against the gas plate (200–300 kg)',
+    [[2, 'stats.gasKg at the day 21 record <= 300 kg'], [3, '<= 250 kg']]),
   M('brooders-up', 'heating', 'weeks45', 'level-end', 'Brooders off and raised when the heat was no longer needed',
     [[1, 'heat.brooders up by 18:00 on day 22 and no cold stress after']]),
 
@@ -161,14 +170,16 @@ export const MILESTONES_CYCLE = [
     [[1, 'pans >= 90 % finisher between day 29 06:00 and day 30 24:00']]),
   M('heat-feeders', 'feed', 'weeks45', 'heatwave', 'Feeders off in the hottest hours of the heat wave',
     [[1, 'lines stopped / pans up 11:00-16:00 on >= 2 of days 30-32']]),
-  M('withdrawal', 'feed', 'finish', 'catch', 'Feed taken away 8–12 hours before catching',
-    [[2, 'pans empty 8-12 h before harvest.catchAt']]),
+  M('withdrawal', 'feed', 'finish', 'catch', 'Pans empty 8–12 hours before the catch (sign-feed)',
+    [[2, 'harvest.catchAt - the time the pans ran empty (<= 5 %) in HARVEST.withdrawalH']]),
 
   // ---------------- Lighting (max 15) ----------------
   M('light-23h', 'lighting', 'level1', 'level-end', '23 hours of light in the brooding week',
     [[2, 'light hours >= 22 on days 0-6']]),
   M('lux-l1', 'lighting', 'level1', 'level-end', '30–40 lux at chick level in week 1',
     [[1, 'luxLit between 26 and 44 on >= 6 of days 0-7']]),
+  M('light-arrival', 'lighting', 'level1', 'level-end', 'Lights on and bright when the chicks arrived',
+    [[1, 'lights on, dimmer >= 0.5 and dark <= 1 h at the first tip (the chick arrival sign)']]),
   M('dark-w2', 'lighting', 'week2', 'level-end', 'A dark period every night from week 2',
     [[2, 'dark hours >= 4 on >= 6 of days 8-14']]),
   M('lux-measured', 'lighting', 'week2', 'level-end', 'Light measured at bird level in week 2',
@@ -179,20 +190,20 @@ export const MILESTONES_CYCLE = [
     [[2, 'lame culls + legs deaths days 15-21 <= 0.2 % of the birds']]),
   M('dark-w45', 'lighting', 'weeks45', 'level-end', 'Dark period kept through weeks 4–5',
     [[2, 'dark hours >= 4 on >= 12 of days 22-35']]),
-  M('catch-light', 'lighting', 'finish', 'harvest', 'Lights dimmed for the catch',
-    [[2, 'dimmer <= 0.2 for the whole catch']]),
+  M('catch-light', 'lighting', 'finish', 'harvest', 'Lights at about 10 lux or less through the catch (sign-catch)',
+    [[2, 'luxLit <= 12 from the catch start to the house empty']]),
 
   // ---------------- Growth & Performance (max 19) ----------------
-  ...per([['week2', 14], ['week3', 21], ['weeks45', 35]], ([lv, day]) => M(`w${day}-weight`, 'growth', lv, 'weighin', `Day ${day} weight against the target`,
-    [[1, `weighed mean >= 95 % of weightAt(${day})`], [3, '>= 100 %']], ['weigh'])),
+  ...per([['week2', 14], ['week3', 21], ['weeks45', 35]], ([lv, day]) => M(`w${day}-weight`, 'growth', lv, 'weighin', `Day ${day} weight: 98 % of the target or more`,
+    [[1, `weighed mean >= 98 % of weightAt(${day})`], [3, '>= 103 %']], ['weigh'])),
   M('weighed-weekly', 'growth', 'finish', 'harvest', 'Weighed 50 birds every week',
     [[2, '>= 50 sample.weigh on each of days 7, 14, 21, 28, 35 and 40']], ['weigh']),
-  M('harvest-fcr', 'growth', 'finish', 'harvest', 'Feed conversion at harvest',
-    [[2, 'harvest FCR <= 1.80'], [3, '<= 1.70']]),
+  M('harvest-fcr', 'growth', 'finish', 'harvest', 'Feed conversion at harvest: 1.75 or under',
+    [[2, 'harvest FCR <= 1.75'], [3, '<= 1.65']]),
   M('harvest-uniformity', 'growth', 'finish', 'harvest', 'Uniformity at the last weigh-in',
     [[2, 'day 40 weighing uniformity >= 70 %']], ['weigh']),
-  M('epef', 'growth', 'finish', 'harvest', 'Production efficiency factor at harvest',
-    [[1, 'EPEF >= 300'], [3, '>= 350']]),
+  M('epef', 'growth', 'finish', 'harvest', 'Production efficiency factor at harvest: 340 or more',
+    [[1, 'EPEF >= 340'], [3, '>= 390']]),
 ];
 
 /** Highest points a branch can earn from these milestones (the skill tree's bar). */

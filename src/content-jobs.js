@@ -118,7 +118,7 @@ export const JOBS = [
     preTruck: true, spot: 'waterSupply', signs: ['sign-water'], branch: 'water', done: { type: 'action', id: 'water.meter' } }),
   R('r-walk', ROUTINE1, 'am', 'Walk the house and look at the chicks', {
     spot: 'heater', signs: ['sign-health', 'sign-brooder'], branch: 'brooding',
-    done: { type: 'coverage', frac: 0.5, sight: 2, listen: true, area: 'used' } }),
+    done: { type: 'coverage', frac: 0.5, sight: 2, listen: true, area: 'used', maxCells: 150 } }), // 150 cells = week 1's half of 300
   R('r-drinkers', ROUTINE, 'am', 'Check drinker flow and height', {
     spot: 'drinkers.0', signs: ['sign-water'], branch: 'water',
     done: { type: 'each', id: 'water.flowtest', key: 'line', values: [0, 1, 2, 3] } }),
@@ -133,8 +133,8 @@ export const JOBS = [
     spot: 'houseDoor', signs: ['sign-gate'], branch: null, done: HOUSE_DIP }),
   R('r-walk-pm', ROUTINE, 'pm', 'Walk the house again', {
     spot: 'heater', signs: ['sign-health', 'sign-brooder'], branch: 'brooding',
-    done: { type: 'coverage', frac: 0.35, sight: 2, listen: true, area: 'used' } }),
-  R('r-controller-pm', [0, 21], 'pm', 'Read the afternoon temperature', {
+    done: { type: 'coverage', frac: 0.35, sight: 2, listen: true, area: 'used', maxCells: 105 } }),
+  R('r-controller-pm', [0, 14], 'pm', 'Read the afternoon temperature', {
     spot: 'controller', signs: ['sign-brooder'], branch: 'brooding', done: CONTROLLER_READ }),
   R('r-litter', ROUTINE, 'pm', 'Check the litter (Q: squeeze a handful)', {
     spot: 'signLitter', signs: ['sign-litter'], branch: null,

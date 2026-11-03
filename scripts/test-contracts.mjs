@@ -106,7 +106,7 @@ test('player-facing words: no verdicts in job titles, signs or milestone texts',
 const VERDICT = /correct|wrong|well done|good job|great job|mistake|perfect|excellent|match(es)? the/i;
 const ALL_JOBS = [...JOBS, ...JOBS_CYCLE];
 const ALL_BOARD_IDS = new Set([...BOARD_IDS, ...BOARD_IDS_CYCLE]);
-const DYNAMIC_SPOTS = ['heater', 'heater-out', 'dead', 'leak', 'lame', 'fan-broken', 'bait'];
+const DYNAMIC_SPOTS = ['heater', 'heater-out', 'dead', 'leak', 'lame', 'fan-broken', 'bait', 'swab'];
 const CHECKPOINTS = ['plan', 'placed', 'vent', 'crop', 'weighin', 'curtain', 'vaccine', 'heatwave', 'catch', 'harvest', 'clean', 'swabs', 'rest', 'level-end', 'problem', 'day'];
 
 test('cycle: levels are one contiguous calendar from the planning day to the rest', () => {
@@ -202,6 +202,26 @@ test('plan sums: the planning sign\'s reference plan', () => {
   assert(!planOutcome({ houses: 6, birdsPerHouse: 7000, cycleDays: 67, lossesPct: 4, saleKg: 2.8 }, 576).pass, '7,000 a house over density');
   assert(!planOutcome({ houses: 5, birdsPerHouse: 6000, cycleDays: 49, lossesPct: 0, saleKg: 2.8 }, 576).pass, '49 days at 0 % losses');
   assert(!planOutcome({ houses: 4, birdsPerHouse: 6500, cycleDays: 49, lossesPct: 0, saleKg: 2.8 }, 576).pass, '4 x 6,500 x 49 days at 0 %');
+});
+
+test('skills: Phase 2 milestones belong to the brooding week (PHASE3.md §9: no day7-weight at the day 14 weigh-in)', async () => {
+  const { makeWorld } = await import('../src/farm-profiles-run.js');
+  const { env, events, farm, skills } = makeWorld();
+  farm.start(LEVEL1, { seed: 1 });
+  const chick = farm.stats.chickWeightMeasuredG ?? farm.flock.chickWeightG;
+  const tierOf = () => skills.milestones('brooding').find((m) => m.id === 'day7-weight').tier;
+  env.setDay(7); env.setHour(10);
+  farm.stats.weighed = Array.from({ length: 50 }, (_, i) => ({ t: env.day, sector: i % 6, weightG: chick * 3.8 }));
+  events.emit(EV.LEVEL, { phase: 'checkpoint', name: 'weighin' });
+  assert(tierOf() == null, 'a 3.8 x week earns no day7-weight');
+  events.emit(EV.RUN, { phase: 'level-start', level: 'week2' });
+  env.setDay(14);
+  farm.stats.weighed.push(...Array.from({ length: 50 }, (_, i) => ({ t: env.day, sector: i % 8, weightG: 500 })));
+  events.emit(EV.LEVEL, { phase: 'checkpoint', name: 'weighin', level: 'week2' });
+  events.emit(EV.LEVEL, { phase: 'checkpoint', name: 'level-end', level: 'week2' });
+  events.emit(EV.RECORD_CLOSED, { day: 14, signed: true });
+  assert(tierOf() == null, 'the week 2 weigh-in (12 x chick weight) earns no day7-weight');
+  assert(ALL_MILESTONES.filter((m) => MILESTONES.some((p) => p.id === m.id)).every((m) => m.level === 'level1'), 'Phase 2 milestones tagged level1');
 });
 
 let failed = 0;

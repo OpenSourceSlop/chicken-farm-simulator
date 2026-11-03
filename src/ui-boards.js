@@ -6,6 +6,12 @@
 //                                      that needs farm time folds its plate (plate.fold())
 //   PICS[pic]                          small pictograms for sign items
 import { BOARDS, BROODER_ROWS_L1, sourceLabel } from './content-signs.js';
+import { boardsForDay } from './content-signs-cycle.js';
+
+// Phase 3 (PHASE3.md §13.9): plates read the merged boards of the day (Phase 3 plates and the extra lines
+// from their fromDay; the brooding week reads exactly Phase 2's). ui.js sets the day source once.
+let plateDay = () => 0;
+export function setPlateDay(fn) { plateDay = typeof fn === 'function' ? fn : () => 0; }
 import { h, button, setText, uniqueId, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
@@ -96,8 +102,8 @@ export function buildBoardPanel(id, env, onClose) {
 }
 
 /** An engraved plate (equipment facts). open = shown at first; the clock stands still while open. */
-export function buildPlate(id, { open = true } = {}) {
-  const b = BOARDS[id];
+export function buildPlate(id, { open = true, day } = {}) {
+  const b = boardsForDay(day ?? plateDay())[id] || BOARDS[id];
   const bodyId = uniqueId('plate');
   const toggle = button({ class: 'plate-head', 'aria-expanded': String(open), 'aria-controls': bodyId },
     h('span', { class: 'plate-icon', html: ICONS.facts, 'aria-hidden': 'true' }),

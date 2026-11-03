@@ -11,7 +11,7 @@
 //             match }, each { has }; new state tests: STATE_TEST_IDS_CYCLE below
 //   spot      a SPOTS / SPOTS2 / SPOTS3 / FARM key, 'drinkers.N', or dynamic: Phase 2's 'heater',
 //             'heater-out', 'dead', 'leak' and 'lame' (nearest lame bird), 'fan-broken' (the stopped
-//             fan), 'bait' (the next bait station not done)
+//             fan), 'bait' (the next bait station not done), 'swab' (the next swab place not done, CLEAN.swabSpots)
 // The Phase 2 routines continue to day 41 (content-jobs.js); these are the jobs only Phase 3 adds.
 import { EV } from './events.js';
 
@@ -30,9 +30,14 @@ const RAISE = ALL({ type: 'each', id: 'water.height', key: 'line', values: [0, 1
 const even = (a, b) => { const o = []; for (let d = a; d <= b; d += 2) o.push(d); return o; };
 
 // State predicates of Phase 3 (the run package implements them in job-engine.js; PHASE3.md §3.1).
+//   heat-handled  farm.comfort.pantShare <= 0.1, or every fan that turns is on (env.fansEffective = 6 - broken) and
+//                 the pad runs (or is off with house RH > HEAT.padOffAboveRH), for 30 game min: met by doing what the
+//                 heat sign and the pad plate say, even while the weather still makes some birds pant
+//   pad-humid-ok  (pad off, or house RH <= HEAT.padOffAboveRH) and env.fansEffective >= 5, for 30 game min
 export const STATE_TEST_IDS_CYCLE = ['house-ready', 'rh-under', 'lame-cleared', 'vaccine-drunk', 'pans-grower', 'pans-finisher',
-  'caked-cleared', 'air-clear', 'panting-low', 'heat-index-ok', 'house-empty', 'litter-removed', 'house-washed',
+  'caked-cleared', 'air-clear', 'heat-handled', 'pad-humid-ok', 'house-empty', 'litter-removed', 'house-washed',
   'house-disinfected', 'house-dry', 'lines-disinfected', 'rest-done'];
+const SWABS = { type: 'each', id: 'clean.swab', key: 'spot', values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] }; // config CLEAN.swabSpots
 
 export const JOBS_CYCLE = [
   // ---------------- Level 1: Plan the farm (day -2) ----------------
@@ -56,12 +61,12 @@ export const JOBS_CYCLE = [
   D('w2-curtain', 9, 'pm', 'Lift the brooding curtain and let the birds spread', { window: [13, 66], pin: true, spot: 'curtainWinch', signs: ['sign-curtain'], branch: 'brooding',
     done: A('house.curtain', { open: true }) }),
   D('w2-spread', 9, 'rel', 'Walk the whole house and look at the spread', { rel: { anchor: 'curtain', fromH: 0.5, toH: 6 }, spot: 'curtainWinch', signs: ['sign-curtain', 'sign-health'], branch: 'brooding',
-    done: { type: 'coverage', frac: 0.4, sight: 2, listen: true, area: 'house' } }),
+    done: { type: 'coverage', frac: 0.25, sight: 2, listen: true, area: 'house' } }),
   R('w2-check', [10, 13], 'am', 'Check ten birds in the hand: walk, feathers, feet', { onDays: [10, 13], window: [8, 18], spot: 'birdScale', signs: ['sign-legs', 'bird-check'], branch: 'biosecurity',
     done: { type: 'count', id: 'sample.bird', match: { look: 'gait' }, n: 10, sectors: 3, sectorsOf: 'used' } }),
   D('w2-vaccine', 12, 'am', 'Vaccinate the flock in the drinking water', { window: [6, 16], pin: true, spot: 'waterSupply', signs: ['vaccine', 'water-supply'], branch: 'biosecurity', done: ST('vaccine-drunk') }),
   D('w2-order', 13, 'am', 'Order grower pellets for the feed change', { window: [6, 16], spot: 'officeDesk', signs: ['sign-feed', 'silo'], branch: 'feed', done: A('feed.order', { type: 'grower' }) }),
-  R('r-raise', [8, 34], 'pm', 'Raise the drinker and feeder lines for the birds’ size', { onDays: even(8, 34), spot: 'drinkers.0', signs: ['drinker', 'feeder-box'], branch: 'water', done: RAISE }),
+  R('r-raise', [8, 34], 'pm', 'Raise the drinker and feeder lines for the birds’ size', { onDays: [8, 11, 14, 17, 20, 24, 28, 32], spot: 'drinkers.0', signs: ['drinker', 'feeder-box'], branch: 'water', done: RAISE }),
   D('w2-weigh', 14, 'am', 'Weigh sample birds', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
   P('p-damp', 'The air in the house feels damp', { problem: 'rainy-spell', spot: 'controller', signs: ['sign-vent', 'sign-air'], branch: 'moisture',
     done: ALL(ANY('vent.timer', 'vent.fans'), ST('rh-under')) }),
@@ -81,13 +86,15 @@ export const JOBS_CYCLE = [
     done: A('litter.patch', { result: { onPad: true } }) }),
   P('p-blood', 'Blood in the droppings', { problem: 'coccidiosis', spot: 'officeDesk', signs: ['sign-droppings', 'medicator'], branch: 'biosecurity',
     done: ALL(A('phone.vet'), A('water.medicate', { on: true })) }),
+  P('p-heat3', 'Birds panting in the afternoon', { problem: 'warm-afternoon3', spot: 'fanPanel', signs: ['sign-heat', 'fan-panel'], branch: 'ventilation',
+    done: ALL(ANY('vent.fans', 'vent.pad'), ST('heat-handled')) }),
   P('p-hunched', 'Birds sitting hunched with white watery droppings', { problem: 'gumboro', spot: 'officeDesk', signs: ['sign-droppings', 'sign-health'], branch: 'biosecurity', done: A('phone.vet') }),
 
   // ---------------- Level 5: Weeks 4 and 5 (days 22-35) ----------------
   D('w45-brooders', 22, 'am', 'Turn the brooders off and winch them up', { window: [6, 18], spot: 'heater', signs: ['sign-brooder', 'sign-heat'], branch: 'heating', done: A('heat.brooders', { up: true }) }),
-  R('r-fans-pm', [22, 41], 'pm', 'Check the fans and the house in the afternoon heat', { spot: 'fanPanel', signs: ['sign-heat', 'fan-panel'], branch: 'ventilation',
-    done: ALL(A('fans.read'), { type: 'coverage', frac: 0.3, sight: 2, area: 'house' }) }),
-  R('r-vent-night', [22, 41], 'night', 'Set the ventilation for the night', { spot: 'fanPanel', signs: ['sign-vent', 'sign-air'], branch: 'moisture', done: ANY('fans.read', 'controller.read') }),
+  R('r-fans-pm', [15, 41], 'pm', 'Check the fans and the house in the afternoon heat', { spot: 'fanPanel', signs: ['sign-heat', 'fan-panel'], branch: 'ventilation',
+    done: A('fans.read') }),   // the walk is r-walk-pm's (PHASE3.md §3.3)
+  R('r-vent-night', [15, 41], 'night', 'Set the ventilation for the night', { spot: 'fanPanel', signs: ['sign-heat', 'sign-vent'], branch: 'moisture', done: ANY('fans.read', 'controller.read') }),
   D('w45-air', 23, 'am', 'Measure the air speed at bird height (V)', { window: [8, 18], spot: 'fanPanel', signs: ['sign-heat'], branch: 'ventilation',
     done: { type: 'count', id: 'air.probe', n: 3, sectors: 3, sectorsOf: 'house' } }),
   D('w45-pad', 24, 'am', 'Check the cooling pad: water on every section', { window: [8, 18], spot: 'padPump', signs: ['pad-pump'], branch: 'ventilation', done: A('pad.check') }),
@@ -98,17 +105,17 @@ export const JOBS_CYCLE = [
   P('p-dust', 'Dusty air and birds breathing with a rattle', { problem: 'dusty-air', spot: 'fanPanel', signs: ['sign-air'], branch: 'moisture',
     done: ALL(ANY('vent.timer', 'vent.fans'), ST('air-clear')) }),
   P('p-panting', 'Birds panting in the afternoon heat', { problem: 'hot-afternoon', spot: 'fanPanel', signs: ['sign-heat', 'fan-panel'], branch: 'ventilation',
-    done: ALL(ANY('vent.fans', 'vent.pad', 'vent.stages'), ST('panting-low')) }),
+    done: ALL(ANY('vent.fans', 'vent.pad', 'vent.stages'), ST('heat-handled')) }),
   P('p-fan', 'Fan 4 is not turning', { problem: 'fan-belt', spot: 'fan-broken', signs: ['fan-panel'], branch: 'ventilation', done: A('fan.fix', { result: { fixed: true } }) }),
   P('p-pad-dry', 'Part of the cooling pad is dry', { problem: 'pad-clog', spot: 'padPump', signs: ['pad-pump'], branch: 'ventilation', done: A('pad.flush', { result: { fixed: true } }) }),
   P('p-heatwave', 'A heat wave is coming: get the house ready', { problem: 'heat-wave', spot: 'fanPanel', signs: ['sign-heat', 'pad-pump', 'sign-feed'], branch: 'ventilation',
     done: ALL(A('fans.read'), A('pad.check'), A('water.flowtest')) }),
   P('p-humid', 'Hot and humid in the house', { problem: 'humid-heat', spot: 'padPump', signs: ['pad-pump'], branch: 'ventilation',
-    done: ALL(ANY('vent.pad', 'vent.fans'), ST('heat-index-ok')) }),
+    done: ALL(ANY('vent.pad', 'vent.fans'), ST('pad-humid-ok')) }),
 
   // ---------------- Level 6: Finishing and harvest (days 36-42) ----------------
   D('f-order', 36, 'am', 'Order the last feed for the flock', { window: [6, 16], spot: 'officeDesk', signs: ['sign-feed', 'silo'], branch: 'planning', done: A('feed.order') }),
-  D('f-book', 37, 'am', 'Book the catching crew and the trucks', { window: [6, 66], spot: 'officeDesk', signs: ['sign-catch'], branch: 'planning', done: A('phone.bookCatch') }),
+  D('f-book', 37, 'am', 'Book the catching crew and the trucks', { window: [6, 66], spot: 'officeDesk', signs: ['sign-catch'], branch: 'planning', done: A('phone.bookCatch', { result: { booked: true } }) }),
   D('f-weigh', 40, 'am', 'Weigh sample birds before catching', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
   D('f-withdraw', 41, 'rel', 'Take the feed away before catching', { rel: { anchor: 'catch', fromH: -14, toH: -6 }, spot: 'feederBox', signs: ['sign-feed', 'sign-catch'], branch: 'feed',
     done: A('feed.withdraw', { on: true }) }),
@@ -120,7 +127,7 @@ export const JOBS_CYCLE = [
   D('f-tickets', 42, 'rel', 'Read the weight tickets at the loading bay', { rel: { anchor: 'catch', fromH: 0.5, toH: 8 }, spot: 'loadingBay', signs: ['sign-catch', 'loading-bay'], branch: 'growth',
     done: { type: 'each', id: 'load.ticket', key: 'truck', values: [0, 1] } }),
   P('p-panting-fin', 'Birds panting in the afternoon heat', { problem: 'hot-finish', spot: 'fanPanel', signs: ['sign-heat', 'fan-panel'], branch: 'ventilation',
-    done: ALL(ANY('vent.fans', 'vent.pad', 'vent.stages'), ST('panting-low')) }),
+    done: ALL(ANY('vent.fans', 'vent.pad', 'vent.stages'), ST('heat-handled')) }),
 
   // ---------------- Level 7: Clean-out and rest (days 43 → the booked chick day) ----------------
   D('c-raise', 43, 'am', 'Winch all the lines and brooders up', { spot: 'drinkers.0', signs: ['sign-clean'], branch: 'biosecurity', done: RAISE }),
@@ -128,23 +135,22 @@ export const JOBS_CYCLE = [
   D('c-brush', 43, 'clean', 'Brush the dust off the lines, fans, pad, brooders and inlets', { spot: 'controller', signs: ['sign-clean'], branch: 'biosecurity',
     done: { type: 'each', id: 'clean.brush', key: 'part', values: ['lines', 'fans', 'pad', 'brooders', 'inlets'] } }),
   D('c-wash', 44, 'clean', 'Wash the house with the pressure washer', { pin: true, spot: 'washBay', signs: ['sign-clean', 'wash-bay'], branch: 'biosecurity', done: ST('house-washed') }),
-  D('c-lines', 44, 'clean', 'Clean the drinker lines with disinfectant', { spot: 'waterSupply', signs: ['sign-clean', 'water-supply'], branch: 'water', done: ST('lines-disinfected') }),
+  D('c-lines', 44, 'clean', 'Clean the drinker lines with disinfectant', { spot: 'waterSupply', signs: ['sign-clean', 'water-supply'], branch: 'water',
+    done: ALL(A('water.disinfect', { on: true }), ST('lines-disinfected')) }),
   D('c-pans', 44, 'clean', 'Wash the feeder pans', { spot: 'feederBox', signs: ['sign-clean'], branch: 'feed', done: { type: 'each', id: 'feed.wash', key: 'line', values: [0, 1, 2] } }),
   D('c-dry', 44, 'clean', 'Let the house dry with the fans', { window: [13, 42], spot: 'fanPanel', signs: ['sign-clean'], branch: 'moisture', done: ST('house-dry') }),
   D('c-spray', 45, 'clean', 'Disinfect the house', { spot: 'washBay', signs: ['sign-clean', 'wash-bay'], branch: 'biosecurity', done: ST('house-disinfected') }),
   D('c-washbay', 45, 'clean', 'Wash and disinfect the tools at the wash bay', { spot: 'washBay', signs: ['sign-clean', 'wash-bay'], branch: 'biosecurity',
     done: { type: 'each', id: 'clean.washbay', key: 'item', values: ['boots', 'buckets', 'barrow', 'washer'] } }),
   D('c-bait', 45, 'clean', 'Set rodent bait round the house', { spot: 'bait', signs: ['sign-clean'], branch: 'biosecurity', done: { type: 'count', id: 'clean.bait', n: 4 } }),
-  D('c-swabs', 46, 'am', 'Take swabs from the clean house', { window: [6, 18], spot: 'washBay', signs: ['sign-clean'], branch: 'biosecurity',
-    done: { type: 'count', id: 'clean.swab', n: 10, sectors: 5, sectorsOf: 'house' } }),
+  D('c-swabs', 46, 'am', 'Take swabs from the clean house', { window: [6, 18], spot: 'swab', signs: ['sign-clean', 'wash-bay'], branch: 'biosecurity', done: SWABS }),
   D('c-close', 46, 'eve', 'Close the house for the rest', { window: [6, 24], spot: 'houseDoor', signs: ['sign-clean'], branch: 'biosecurity', done: A('house.close') }),
   D('c-lab', 48, 'eve', 'Read the lab result', { window: [6, 24], spot: 'officeDesk', signs: ['sign-clean'], branch: 'biosecurity', done: A('swab.read') }),
-  D('c-book', 48, 'eve', 'Book the next chicks', { window: [6, 456], spot: 'officeDesk', signs: ['sign-clean', 'sign-plan'], branch: 'planning', done: A('phone.bookChicks') }),
+  D('c-book', 48, 'eve', 'Book the next chicks', { window: [6, 456], spot: 'officeDesk', signs: ['sign-clean', 'sign-plan'], branch: 'planning', done: A('phone.bookChicks', { result: { booked: true } }) }),
   D('c-rest', 48, 'eve', 'Rest the house', { window: [6, 528], after: 'c-book', spot: 'houseDoor', signs: ['sign-clean'], branch: null, done: ST('rest-done') }),
   P('p-rewash', 'Swabs grew bacteria: wash and disinfect again', { problem: 'swab-positive', spot: 'washBay', signs: ['sign-clean'], branch: 'biosecurity',
     done: ALL(ST('house-washed'), ST('house-disinfected')) }),
-  P('p-reswab', 'Take new swabs', { problem: 'swab-positive', after: 'p-rewash', spot: 'washBay', signs: ['sign-clean'], branch: 'biosecurity',
-    done: { type: 'count', id: 'clean.swab', n: 10, sectors: 5, sectorsOf: 'house' } }),
+  P('p-reswab', 'Take new swabs', { problem: 'swab-positive', after: 'p-rewash', spot: 'swab', signs: ['sign-clean'], branch: 'biosecurity', done: SWABS }),
 ];
 
 export const jobByIdCycle = (id) => JOBS_CYCLE.find((j) => j.id === id) || null;
@@ -181,10 +187,11 @@ export const JOB_WHERE_CYCLE = {
   'p-pad-wet': 'Cooling pad pump outside the west end: look at the float valve and the sump.',
   'p-pad-patch': 'Rice husk heap: a sack of husk for the wet strip at the pad end.',
   'p-blood': 'Office desk: the phone to the company vet; then the Medicine tab at the water supply.',
+  'p-heat3': 'Fan panel at the east end: more tunnel fans for the afternoon; walk the house and look at the birds again.',
   'p-hunched': 'Office desk: the phone to the company vet.',
   'w45-brooders': 'Climate controller: the Temperature section.',
-  'r-fans-pm': 'Fan panel at the east end, north wall; then walk the house.',
-  'r-vent-night': 'Fan panel or the climate controller, between 18:00 and 22:00.',
+  'r-fans-pm': 'Fan panel at the east end, north wall: keep it open a moment to read it.',
+  'r-vent-night': 'Fan panel or the climate controller, between 18:00 and 22:00: the fans for the night.',
   'w45-air': 'Press V at bird height in three parts of the house.',
   'w45-pad': 'Cooling pad pump outside the west end.',
   'w45-order': 'Office desk: the phone.',
@@ -210,17 +217,17 @@ export const JOB_WHERE_CYCLE = {
   'c-litter': 'Rice husk heap: take the scraper and push it over the whole floor.',
   'c-brush': 'Inside: the lines, the fans, the pad, the brooders and the side inlets.',
   'c-wash': 'Wash bay west of the house: take the pressure washer and wash the whole house.',
-  'c-lines': 'Water supply: disinfectant in the header tank, then flush each line.',
+  'c-lines': 'Water supply: disinfectant in the header tank (Clean-out tab), then flush each line.',
   'c-pans': 'Feeder control box: wash each line’s pans.',
   'c-dry': 'Fan panel: fans on until the floor is dry.',
   'c-spray': 'Wash bay: take the sprayer and disinfect the whole house.',
   'c-washbay': 'Wash bay: boots, buckets, the barrow and the washer.',
   'c-bait': 'Bait stations at the four corners of the house.',
-  'c-swabs': 'Wash bay: take the swab kit; E on the floor in five parts of the house.',
+  'c-swabs': 'Wash bay: take the swab kit; the lab’s ten places are marked with small flags: E at each one.',
   'c-close': 'House door: close the house.',
   'c-lab': 'Office desk: the lab letter in the record book.',
   'c-book': 'Office desk: the phone to the hatchery.',
   'c-rest': 'The house rests until the chicks you booked.',
   'p-rewash': 'Wash bay: the washer, then the sprayer, over the whole house again.',
-  'p-reswab': 'Wash bay: the swab kit; E on the floor in five parts of the house.',
+  'p-reswab': 'Wash bay: the swab kit; E at each of the ten flagged places again.',
 };
