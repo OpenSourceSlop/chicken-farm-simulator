@@ -6,7 +6,8 @@
   "description": "Browser game that teaches broiler farming through a full flock cycle.",
   "scripts": {
     "build": "node build.mjs",
-    "shoot": "node scripts/shoot.mjs"
+    "shoot": "node scripts/shoot.mjs",
+    "test": "node scripts/test-contracts.mjs && node scripts/test-sim.mjs"
   },
   "dependencies": {
     "three": "0.160.0"

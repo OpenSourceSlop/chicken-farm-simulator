@@ -11,8 +11,14 @@
 //
 // Everything the player does to, or reads from, the farm goes through farm.act(id, args): it
 // changes the state, returns the result and emits EV.ACTION { id, ...args, result } so the job
-// engine and the records see it. Action ids: PHASE2.md "Actions".
-import { DRINKER_LINES_Z, FEEDER_LINES_Z, FLOOR_GRID, LEVEL1, weightAt } from './config.js';
+// engine and the records see it. Action ids: PHASE2.md §13.2. ONE payload shape for every action,
+// from the farm or from the ui: { id, ...args, result } (result undefined for ui-only actions).
+//
+// The farm is the only owner of: dead birds on the floor (deadOnFloor: += on each death, -= on
+// EV.DEAD_PICK), the problems and their weather (it adds and rebuilds env weather events, also on
+// restore), the symptom decision (EV.FARM_PROBLEM phase 'symptom' from an action it sees, an
+// EV.NEAR from props, or 'radio.listen'), and farm.stats (what skills.js needs, computed in node).
+import { DRINKER_LINES_Z, FEEDER_LINES_Z, FLOOR_GRID, LEVEL1, weightAt, flockAgeAt } from './config.js';
 import { EV } from './events.js';
 
 /**
@@ -20,7 +26,19 @@ import { EV } from './events.js';
  *   flushing: boolean, flushClear: number, blocked: number, leakX: number|null }} DrinkerLine
  * @typedef {{ heightCm: number, running: boolean, flood: boolean, panFill: number }} FeederLine
  * @typedef {{ id: string, phase: 'pending'|'active'|'found'|'fixed', startedAt: number|null,
- *   foundAt: number|null, fixedAt: number|null }} ProblemState   (times as env.day floats)
+ *   foundAt: number|null, fixedAt: number|null, foundBy: string|null }} ProblemState   (times as env.day floats)
+ * @typedef {{ problemId: string, x: number, z: number, r: number, dwellSec: number,
+ *   minMoisture?: number }} ProblemZone   props emits EV.NEAR after dwellSec real seconds inside r
+ * @typedef {{
+ *   truckAt: number|null, firstTipAt: number|null, lastTipAt: number|null, boxWeighedAt: number|null,
+ *   floorShareAtFirstTip: number|null,   // share of brooding cells with litter surface >= 28 °C
+ *   heightsAtFirstTip: number[]|null, flushDoneAt: number|null,
+ *   ventReadings: { t: number, sector: number, tempC: number }[],
+ *   cropFillTrue: number|null,           // true crop fill at 24 h (0..1)
+ *   comfortMinutes: number, levelMinutes: number,  // minutes with e in [-1.5, +2] / all minutes, age 0..7
+ *   comfortShareByDay: number[],         // same per HUD day 0..7
+ *   chickWeightMeasuredG: number|null,   // from sample.box: (gross - box) / 100, never typed
+ * }} FarmStats   read by skills.js and the result screen; never shown as a verdict
  */
 
 export function createFarm(env, { events } = {}) {
@@ -28,6 +46,8 @@ export function createFarm(env, { events } = {}) {
   const emit = (t, p) => events && events.emit(t, p);
 
   const farm = {
+    /** true while this file is the contract stub (scripts/test-sim.mjs skips the acceptance tests) */
+    stub: true,
     /** 'off' (Phase 1 sandbox) or 'level' */
     mode: 'off',
     level: null,
@@ -59,9 +79,11 @@ export function createFarm(env, { events } = {}) {
       meterL: 0,
       waterTempC: 27,
       flushedAt: null,        // env.day when the last line finished flushing
+      filterFactor: 1,        // main filter at the water supply: 1 clean, 0.5 blocked (every line's flow x this)
+      leak: null,             // { line, x, cell } while a nipple leaks
     },
     feed: {
-      siloKg: 1500,
+      siloKg: LEVEL1.siloStartKg,
       meterKg: 0,
       /** @type {FeederLine[]} */
       lines: FEEDER_LINES_Z.map(() => ({ heightCm: 5, running: true, flood: false, panFill: 1 })),
@@ -79,6 +101,18 @@ export function createFarm(env, { events } = {}) {
     vent: { fans: 0, onSec: 0, cycleSec: 300 },
     /** @type {ProblemState[]} */
     problems: [],
+    /** @type {FarmStats} */
+    stats: { truckAt: null, firstTipAt: null, lastTipAt: null, boxWeighedAt: null, floorShareAtFirstTip: null,
+      heightsAtFirstTip: null, flushDoneAt: null, ventReadings: [], cropFillTrue: null,
+      comfortMinutes: 0, levelMinutes: 0, comfortShareByDay: [], chickWeightMeasuredG: null },
+    /** Flock age in days (env.day - PLACEMENT_DAY), negative before 08:00 on day 0. */
+    get age() { return flockAgeAt(env.day); },
+    /** Zones where standing still is a symptom (the leak's wet patch, the cold brooder). @returns {ProblemZone[]} */
+    problemZones() { return []; },
+    /** The office radio: tonight's forecast for HUD day `day` (the cold night shows here). */
+    forecast(day) { return { day, lowC: 19, highC: 29, text: 'Tonight: clear, low 19 °C' }; },
+    /** What the farmer sees and hears standing at (x, z): neutral words for the notebook. */
+    observe(x, z) { void x; void z; return { spread: 'evenly spread', droppings: 'firm, brown with a white cap', sounds: 'quiet chirping' }; },
 
     /** Start Level 1 from the prep day (bare floor, empty house, lines high, no chicks). */
     start(level = LEVEL1, { seed = 1 } = {}) {
@@ -121,9 +155,11 @@ export function createFarm(env, { events } = {}) {
       truth() { return { flock: { ...farm.flock }, problems: farm.problems.map((p) => ({ ...p })) }; },
     },
 
-    serialize() { return { v: 1, mode: farm.mode }; },
+    serialize() { return { v: 1, mode: farm.mode }; }, // grids as integer arrays (moisture x 10)
     restore(data) { if (data && data.mode) farm.mode = data.mode; },
   };
+  // The farm is the only owner of deadOnFloor (flock.dead mirrors it).
+  events && events.on(EV.DEAD_PICK, (p) => { farm.flock.deadOnFloor = Math.max(0, farm.flock.deadOnFloor - (p.n || 0)); });
   return farm;
 }
 
@@ -149,6 +185,10 @@ function stubAct(farm, env, id, a) {
     case 'sample.crop': return { crop: 'full' };
     case 'sample.weigh': return { weightG: Math.round(farm.flock.meanWeightG) };
     case 'litter.spread': return { cover: farm.litter.cover };
+    case 'water.filter': return { inBar: 2.5, outBar: +(2.5 * farm.water.filterFactor).toFixed(1) };
+    case 'water.clearFilter': return { fixed: farm.water.filterFactor < 1 };
+    case 'water.fixLeak': return { fixed: !!farm.water.leak };
+    case 'heat.relight': return { fixed: false };
     default: return true;
   }
 }

@@ -19,29 +19,49 @@ export const EV = {
   BOX_PICK: 'boxes:pick',           // { stack, chicks } farmer picked up a stack of chick boxes
   BOX_TIP: 'boxes:tip',             // { stack, chicks, x, z } boxes emptied onto the litter here
   PROBE: 'probe',                   // { kind: 'floor' | 'litter' | 'lux', x, z, value } hand measurement
-  LISTEN: 'listen',                 // { x, z, seconds } farmer stood still inside listening
+  LISTEN: 'listen',                 // { x, z, seconds } farmer stood still inside listening (records writes what he sees and hears)
+  NEAR: 'near',                     // { problemId, x, z } farmer dwelled in a farm.problemZones() zone (props triggers)
+  CARRY: 'carry',                   // { kind, opts } props.startCarry / props.drop (kind null = hands empty)
+  FRAME_SET: 'frame:set',           // { x, z, birds: [index] } catching frame set down, birds held (props, after flock.catchGroup)
   // d: flock
-  BIRD_PICK: 'bird:pick',           // { index, x, z } a live bird was caught for a sample
-  BIRD_RELEASE: 'bird:release',     // { index }
-  DEAD_PICK: 'dead:pick',           // { n, causes: {cause: n}, carried } dead birds picked up
+  BIRD_PICK: 'bird:pick',           // { index, x, z, purpose: 'vent'|'crop'|'sick' } a live bird in the hand
+  BIRD_RELEASE: 'bird:release',     // { index, culled: boolean }
+  DEAD_PICK: 'dead:pick',           // { n, causes: {cause: n}, carried } dead birds picked up (farm: deadOnFloor -= n)
   DEAD_DROP: 'dead:drop',           // { n, causes } carried dead birds put in the bin (counted)
   // a: farm model
   FARM_DEATH: 'farm:death',         // { n, cause } n real birds died (cause: cold|heat|dehydration|weak|starveout|other|box)
   FARM_PLACED: 'farm:placed',       // { chicks, x, z, minutesInBox }
   FARM_PROBLEM: 'farm:problem',     // { id, phase: 'start' | 'symptom' | 'fixed' }
   FARM_DELIVERY: 'farm:delivery',   // { kind: 'chicks' | 'feed', phase: 'arrive' | 'leave' }
-  RECORD_CLOSED: 'record:closed',   // { day, row } the daily record row is final
-  SKILL_POINTS: 'skill:points',     // { branch, milestone, points, total, level }
+  RECORD_CLOSED: 'record:closed',   // { day, row, signed } the daily record row is final (signed false = closed by itself at 06:00)
+  SKILL_POINTS: 'skill:points',     // { branch, milestone, tier, points (this award's delta), total, level, detail }
   SKILL_UNLOCK: 'skill:unlock',     // { key } a key of config UNLOCKS became available
   // b: jobs / level / panels
   PANEL_OPEN: 'panel:open',         // { id }
   PANEL_CLOSE: 'panel:close',       // { id }
-  ACTION: 'action',                 // { id, action, ...values } something done on a panel (see PHASE2.md)
+  ACTION: 'action',                 // { id, ...args, result } farm.act(id, args) or a ui-only action (result undefined). PHASE2.md §13.2
   JOB_OPEN: 'job:open',             // { id, key }
   JOB_DONE: 'job:done',             // { id, key, result }
   JOB_MISSED: 'job:missed',         // { id, key }
-  LEVEL: 'level',                   // { phase: 'start' | 'resume' | 'day' | 'end', day, result? }
+  LEVEL: 'level',                   // { phase: 'start'|'resume'|'day'|'checkpoint'|'end', day, name?, result? }
+                                    //   checkpoint names: 'placed', 'vent', 'crop', 'weighin', 'level-end' (skills listen)
 };
+
+/**
+ * Does `payload` contain `pattern`? Every key of the pattern must be equal in the payload; a
+ * nested object in the pattern matches recursively (subset), so { result: { fixed: true } }
+ * matches { id, line, result: { fixed: true, ... } }. Arrays and other values compare with ===.
+ * Job rules (`match`) and tests use this one function.
+ */
+export function matchPayload(payload, pattern) {
+  if (!pattern) return true;
+  if (payload == null || typeof payload !== 'object') return false;
+  for (const [k, v] of Object.entries(pattern)) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) { if (!matchPayload(payload[k], v)) return false; }
+    else if (payload[k] !== v) return false;
+  }
+  return true;
+}
 
 /**
  * @returns {{ on(type: string, fn: (payload: any, type: string) => void): () => void,

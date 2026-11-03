@@ -148,6 +148,15 @@ export const COLORS = {
 // Flock days: day 0 = placement day (the chicks arrive at LEVEL1.arrivalHour), day -1 = prep day.
 // sim.js clamps env.dayNumber to MIN_DAY..MAX_DAY. Phase 1 (sandbox) keeps using days 1..42.
 export const MIN_DAY = -1;
+// Two clocks in a level (PHASE2.md §2):
+//   calendar day N = env.dayNumber (the HUD's "Day N", changes at midnight). Job windows, record
+//     rows and everything the farmer reads off a sign by day ("day 3: 33 °C", "age + 20 ml/min")
+//     use it.
+//   flock age a = env.day - PLACEMENT_DAY (days since 08:00 on day 0; negative before). The model's
+//     continuous rates (intake, growth, need for water, nipple and pan height) use it. Day 7 08:00
+//     is age 7.0, the earliest weigh-in.
+export const PLACEMENT_DAY = 0 + 8 / 24;   // = LEVEL1.arrivalDay + LEVEL1.arrivalHour / 24
+export const flockAgeAt = (envDay) => envDay - PLACEMENT_DAY;
 
 // The six guides. Every sign fact carries one of these keys, or 'general'.
 export const GUIDES = {
@@ -172,23 +181,35 @@ export const LEVEL1 = {
   boxes: 60, chicksPerBox: 100, stacks: 6, // boxes come in 6 stacks of 10; one carry = one stack
   chickWeightG: 41.5,                 // mean day-old weight of this delivery (model; seeded +-1 g)
   // Clock: game seconds per real second while the level runs (Phase 1 sandbox keeps TIME).
-  clock: { work: 120, fast: 480, panel: 30 }, // panel: while an equipment/inspection panel is open
+  //   work   walking about (one farm hour = 30 s)
+  //   panel  an equipment or inspection panel is open (a 1-minute flow test takes 2 s)
+  //   carry  carrying chick boxes, the barrow or the catching frame, and from the truck stopping
+  //          until the last stack is tipped (placing 6,000 chicks takes about 30-45 farm minutes)
+  //   sign   a sign board or a plate is open: 0 = the clock stands still while you read
+  //   fast   the 4x button on the time bar
+  // The records book, notebook, skill tree and result screen also stop the clock.
+  clock: { work: 120, fast: 480, panel: 30, carry: 30, sign: 0 },
   // Job rounds (game hours). A job is open inside its window; when the window ends it is "missed".
   rounds: {
     am: { from: 6, to: 12, label: 'Morning round' },
     pm: { from: 13, to: 18, label: 'Afternoon round' },
     eve: { from: 16, to: 24, label: 'Evening' },
+    prep: { from: 7, to: 24, label: 'Prep day' },
   },
+  siloStartKg: 1100,                  // starter feed in the silos at 07:00 on the prep day (model)
   // Level result thresholds. Week 1 target 4-5 x chick weight is the Week 1 guide; the mortality
   // limit is general practice.
   targetRatio: [4, 5],
   fail: { weightRatioMin: 4.0, mortalityMaxPct: 2.0 },
-  // Problem events of the slice (day, game hour they start). PHASE2.md "Problem events".
+  // Problem events of the slice, one a day from day 1 (calendar day, game hour they start).
+  // The farm starts them silently; a problem job opens only on a symptom (PHASE2.md §7).
   problems: [
+    { id: 'brooder-out', day: 1, hour: 5, heater: 5 },          // index into HEATERS: the flame goes out
     { id: 'cold-night', day: 2, hour: 19, outsideDrop: 6, until: { day: 3, hour: 7 } },
-    { id: 'blocked-line', day: 3, hour: 2, line: 1 },           // drinker line index into DRINKER_LINES_Z
+    { id: 'blocked-filter', day: 3, hour: 10, flowFactor: 0.5 }, // main filter at the water supply: every line's flow x 0.5
     { id: 'leaking-nipple', day: 4, hour: 10, line: 2, x: -9.15 },
-    { id: 'low-silo', day: 5, hour: 6, siloKg: 260 },
+    { id: 'low-silo', day: 4, hour: 6 },                        // no event: the silo simply runs low (siloStartKg)
+    { id: 'warm-afternoon', day: 6, hour: 11, outsideRise: 4, until: { day: 6, hour: 17 } },
   ],
 };
 
@@ -209,13 +230,36 @@ export const EQUIP = {
   luxMax: 60,                         // at bird level with the dimmer at 100 %
 };
 
+// Air through the house: ONE figure for heat loss, humidity and ammonia (PHASE2.md §6.2).
+// env.airflowM3h = infiltrationM3h + (manual fans + timer fans x duty) x EQUIP.fanM3h.
+// Heat exchange toward the inlet air, per hour = wallLossPerH + airflowM3h / thermalM3. With these
+// numbers the house loses heat exactly as in Phase 1 (0.25 + 0.9 per running fan per hour), so the
+// sandbox is unchanged. thermalM3 is the air plus the heat stored in walls, litter and equipment.
+export const AIR = { infiltrationM3h: 300, thermalM3: 40000, wallLossPerH: 0.25 - 300 / 40000 }; // model
+
+// Minimum ventilation: fresh air needed per 1,000 birds by body weight (general practice; the
+// numbers on sign-vent). [body weight g, m3/h per 1,000 birds]; straight line between, flat outside.
+export const MIN_VENT_PER_1000 = [[40, 150], [100, 290], [200, 480]];
+export function minVentM3hPer1000(weightG) {
+  const t = MIN_VENT_PER_1000;
+  if (weightG <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i++) {
+    const [w1, q1] = t[i], [w0, q0] = t[i - 1];
+    if (weightG <= w1) return q0 + ((q1 - q0) * (weightG - w0)) / (w1 - w0);
+  }
+  return t[t.length - 1][1];
+}
+
+// Standard feed intake, g per bird per day at flock age a (general practice). The feeder plate
+// shows it per HUD day: 14, 18, 22, 26, 30, 34, 38, 42 g on days 0-7 (the value at mid-day).
+export const feedStdGAt = (age) => (age < 0 ? 0 : 12 + 4 * age);
+
 // Interactive spots added in Phase 2. house/world/props build the objects here; ui/jobs read them.
 // Boards on the north wall face south like Phase 1's (stand at z ~ -4.6 and press E).
 export const SPOTS2 = {
   feederBox: { x: -22.0, z: -5.8, label: 'Feeder control box', inside: true },
   signWater: { x: -20.0, z: -5.8, label: 'Water lines sign', inside: true },
   signVent: { x: -8.0, z: -5.8, label: 'Minimum ventilation sign', inside: true },
-  lightPanel: { x: -4.0, z: -5.8, label: 'Light control', inside: true },
   signLitter: { x: 0.0, z: -5.8, label: 'Litter sign', inside: true },
   waterSupply: { x: -23.2, z: 5.0, label: 'Water meter and flush valves', inside: true },
   // drinker line regulators at the west end of each line (one per DRINKER_LINES_Z entry)
@@ -282,4 +326,18 @@ export function nippleHeightCmAt(day) {
   return 45;
 }
 // Water flow a nipple should give: age in days + 20 ml/min (Broiler Management 101 / Week 1 guide).
+// Signs and milestones pass the HUD day number; the model passes flock age.
 export const flowTargetAt = (day) => Math.max(0, day) + 20;
+
+// Feeder pan rim height (cm above the litter) by flock age: on the litter, flooded, for the first
+// days, then at the birds' back (general practice). Phase 1's table in house-feeders.js, keyed by
+// flock age (Phase 1 day 1 = age 0); the sim and props both read this one.
+const RIM_CM = [[0, 5], [6, 9], [13, 15], [20, 22], [27, 28], [34, 33], [41, 35]];
+export function feederRimCmAt(age) {
+  const d = Math.max(0, Math.min(41, age));
+  for (let i = 1; i < RIM_CM.length; i++) {
+    const [d1, h1] = RIM_CM[i], [d0, h0] = RIM_CM[i - 1];
+    if (d <= d1) return h0 + ((h1 - h0) * (d - d0)) / (d1 - d0);
+  }
+  return 35;
+}

@@ -212,17 +212,28 @@ export function createFlock(ctx, { house } = {}) {
     // mode it draws round(farm.flock.alive / BIRDS_PER_INSTANCE) birds once placed (none before),
     // sizes them from farm.flock.weightQuantile(), shows ~farm.flock.sick sick birds, keeps the
     // dead ones (farm EV.FARM_DEATH) lying where they died until picked up, and follows per-line
-    // water and feed access. PHASE2.md "Package flock".
+    // water and feed access. Providers it registers on ctx.interact: 'chick' (while
+    // ctx.level.sampling is set, hands empty, priority 5), 'sick-bird' (level mode, nearest drawn
+    // sick bird within 1.2 m, hands empty, 5), 'dead-bird' (hands empty or carrying the bucket, 6).
+    // A catch calls ctx.props.startCarry('chick', { index }); a dead pick-up startCarry('bucket').
+    // PHASE2.md §12.2 and §14.4.
     /** Chicks from a tipped stack: count real chicks spill out at (x, z) and spread. */
     placeBatch(x, z, chicks) { void x; void z; void chicks; },
     /** Catch the nearest live bird within maxDist of (x, z) for a sample: { index, x, z } | null. */
     catchNearest(x, z, maxDist = 1.2) { void x; void z; void maxDist; return null; },
     /** Up to n birds caught around (x, z) with a catching frame (weighing): [{ index, x, z }]. */
     catchGroup(x, z, n) { void x; void z; void n; return []; },
-    /** Put a caught bird back (it walks off). */
-    releaseBird(index) { void index; },
-    /** Dead birds on the floor: { count, near(x, z, r) -> [{ id, x, z, cause }], pickUp(x, z, r) -> { n, causes } }. */
+    /** Put a caught bird back (it walks off); culled = it was culled (hidden for good). Calls
+     *  ctx.props.drop() and emits EV.BIRD_RELEASE { index, culled }. */
+    releaseBird(index, culled = false) { void index; void culled; },
+    /** Let the birds held by the catching frame go (weigh panel closed). */
+    releaseGroup() {},
+    /** Dead birds on the floor, one drawn dead bird = one real bird (mirrors farm.flock.deadOnFloor,
+     *  which the farm owns): { count, near(x, z, r) -> [{ id, x, z, cause }], pickUp(x, z, r) -> { n, causes } }. */
     dead: { count: 0, near() { return []; }, pickUp() { return { n: 0, causes: {} }; } },
+    /** Save blob part: dead birds' positions and causes, sick birds drawn (PHASE2.md §11). */
+    serialize() { return { v: 1, dead: [] }; },
+    restore(d) { void d; },
     /** What the farmer hears standing in the house (0..1 each): distress peeping, contented chirping, snicking. */
     sounds() { return { distress: 0, contented: 1, snick: 0 }; },
     /** Wipe the level's birds (prep day: empty house). */

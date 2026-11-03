@@ -55,10 +55,12 @@ export function createSaveStore({ key = SAVE.key, profileKey = SAVE.profileKey, 
     /** @param {object} data  JSON-safe level state. Returns true when it was written. */
     save(data) { return write(key, { ...data, version, savedAt: Date.now() }); },
     clear() { remove(key); },
-    /** Short description for the title card: { day, hour, savedAt } or null. */
+    /** Short description for the title card: { day (calendar day, -1 = prep day), hour, savedAt } or null. */
     info() {
       const d = this.load();
-      return d ? { day: d.env?.dayNumber ?? null, hour: d.env?.hour ?? null, savedAt: d.savedAt } : null;
+      if (!d || !d.env || typeof d.env.day !== 'number') return null;
+      const hour = d.env.hour ?? 0;
+      return { day: Math.round(d.env.day - hour / 24), hour, savedAt: d.savedAt };
     },
     loadProfile() { const p = read(profileKey); return p && p.version === version ? p : null; },
     saveProfile(p) { return write(profileKey, { ...p, version }); },

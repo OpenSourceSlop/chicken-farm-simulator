@@ -13,8 +13,14 @@
 //   enabled() false hides it for now (e.g. the chick table before the truck came)
 //
 // Provider: a function (playerPos, isInside) -> Interactable | null for things that are not at a
-// fixed place (the nearest dead bird, the nearest chick while a sample job is open). Providers are
-// asked only when no fixed interactable is in reach, so boards and machines always win.
+// fixed place (the nearest dead bird, the nearest chick while a sample job is open, the tip spot
+// while carrying boxes). A provider returns null when it cannot act now (e.g. the farmer's hands
+// are full), so it never hides another one.
+//
+// Choice (nearest): of everything in reach, the highest `priority` wins, then the nearest.
+// Defaults: fixed interactables 10, providers 0, so boards and machines beat providers as in
+// Phase 1. Phase 2 priorities (PHASE2.md §13.3): tip / patch / frame (only while carrying the
+// matching thing) 20, dead-bird 6, sick-bird and chick 5. The litter squeeze is not on E (key Q).
 
 /**
  * @typedef {{ id: string, label: string, x: number, z: number, radius: number, inside?: boolean,
@@ -45,19 +51,19 @@ export function createInteract(initial = []) {
      */
     nearest(player, accept) {
       const p = player.position, inside = player.isInside;
-      let best = null, bestD = Infinity;
-      for (const it of fixed) {
-        if (!usable(it, inside) || (accept && !accept(it))) continue;
+      let best = null, bestP = -Infinity, bestD = Infinity;
+      const consider = (it, defaultPriority) => {
+        if (!it || !usable(it, inside) || (accept && !accept(it))) return;
         const d = Math.hypot(it.x - p.x, it.z - p.z);
-        if (d <= it.radius && d < bestD) { bestD = d; best = it; }
-      }
-      if (best) return best;
+        if (d > it.radius) return;
+        const pr = it.priority ?? defaultPriority;
+        if (pr > bestP || (pr === bestP && d < bestD)) { best = it; bestP = pr; bestD = d; }
+      };
+      for (const it of fixed) consider(it, 10);
       for (const fn of providers.values()) {
         let it = null;
         try { it = fn(p, inside); } catch (err) { console.error('interact provider failed', err); }
-        if (!it || !usable(it, inside) || (accept && !accept(it))) continue;
-        const d = Math.hypot(it.x - p.x, it.z - p.z);
-        if (d <= it.radius && d < bestD) { bestD = d; best = it; }
+        consider(it, 0);
       }
       return best;
     },

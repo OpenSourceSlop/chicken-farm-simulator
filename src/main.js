@@ -89,6 +89,7 @@ function start(saved = {}) {
   const interact = createInteract([...world.interactables, ...house.interactables]);
   ctx.interact = interact;
   const props = buildProps(ctx, { house, world });
+  ctx.props = props;                 // flock and ui call props.startCarry / props.drop (PHASE2.md §13.6)
   // ctx.colliders: the one array the farmer collides with; props may add / remove its own entries.
   const colliders = [...world.colliders, ...house.colliders, ...props.colliders];
   ctx.colliders = colliders;
@@ -242,14 +243,15 @@ function start(saved = {}) {
   };
   window.__game = game;
 
-  // Keep the farm state when the artifact viewer hot-reloads a new version
+  // Keep the farm state when the artifact viewer hot-reloads a new version. In a level the whole
+  // save blob (PHASE2.md §11) goes along, the same object the autosave writes.
   window.claude?.hot?.snapshot?.(() => ({
     env: {
       day: env.day, hour: env.hour, weather: env.weather, houseTemp: env.houseTemp,
       heaterSetpoint: env.heaterSetpoint, fansOn: env.fansOn, padOn: env.padOn, timeScale: env.timeScale,
     },
     player: { x: player.position.x, z: player.position.z, yaw: player.yaw },
-    levelSave: level.mode === 'level' ? level.serialize() : null,
+    levelSave: level.mode === 'level' ? level.saveBlob() : null,
   }));
 
   // Compile every shader program now, behind the boot card. Otherwise the first look into the

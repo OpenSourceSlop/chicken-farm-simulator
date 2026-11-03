@@ -24,8 +24,9 @@ tree or full content.
 - Farm layout: a typical Thai tunnel-ventilated (EVAP) broiler house: cooling pad at the west end,
   tunnel fans at the east end, nipple drinker lines, pan feeder lines, gas brooders.
 - A day passes in a few minutes of play; a "next job" / skip button jumps ahead.
-- Every sign shows its source in small text (guide + page). Pages come from content-map.md in
-  Phase 2; Phase 1 signs show the guide name and "general" for general-practice facts.
+- Every sign shows its source in small text: the guide's name (one of the six guides in
+  `config.GUIDES`), or "general practice". No page numbers: the guide PDFs and content-map.md are
+  not in this repo, so only the facts listed in PHASE2.md §6.1 carry a guide name.
 - Art: simple shapes with flat colours (`flatShading`, Lambert/Standard materials), procedural
   geometry (no external model files: the sandbox has no network for assets). The house has its
   **roof cut away** so you see inside; walls between camera and farmer drop to a stub. From the yard

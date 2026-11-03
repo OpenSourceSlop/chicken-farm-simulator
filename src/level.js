@@ -17,9 +17,17 @@
 //                       when the next job opens (leaving open jobs as missed if the player chose to)
 //   jobs                { list(): JobInstance[], open(): JobInstance[], current(): JobInstance|null,
 //                         complete(key) (debug), byKey(key) }
-//   serialize()         JSON-safe state of the level for save.js
+//   serialize()         JSON-safe state of the level itself (jobs, anchors, clock mode)
+//   saveBlob()          the whole save object of PHASE2.md §11 ({ level, env, farm, records, props,
+//                       flock, player }); autosave and the artifact hot reload both use it, and
+//                       resume(blob) takes it back
+//   checkpoint events   emits EV.LEVEL { phase: 'checkpoint', name } for 'placed' (last stack
+//                       tipped), 'vent' / 'crop' (their windows closed), 'weighin', 'level-end';
+//                       skills.js listens (the level never calls skills.evaluate itself)
 //   sampling            null | 'vent' | 'crop' | 'weigh' (catching chicks is possible only then)
-//   debug               { goto(day, hour, { auto }) jump with the routine jobs done for you,
+//   debug               { goto(day, hour, { auto }) jump; auto: farm-profiles.applyRound(farm, env,
+//                         day, round, 'ideal') acts on the farm for every round passed, then the
+//                         jobs still open are completed and logged, so records and skills match,
 //                         trigger(problemId), result(forcePass?) } for test tools and harness
 //
 // JobInstance: { key, id, def, day, status: 'waiting'|'open'|'done'|'missed', opensAt, closesAt,
@@ -48,6 +56,20 @@ export function createLevel(ctx, deps = {}) {
       byKey: () => null,
     },
     serialize() { return { v: 1, mode: level.mode }; },
+    saveBlob() {
+      const env = ctx.env, p = deps.player;
+      return {
+        level: level.serialize(),
+        env: env ? { day: env.day, hour: env.hour, weather: env.weather, houseTemp: env.houseTemp, slabTemp: env.slabTemp,
+          heaterSetpoint: env.heaterSetpoint, heaterLevel: env.heaterLevel, fansOn: env.fansOn, padOn: env.padOn,
+          ventTimer: env.ventTimer, lightProgram: env.lightProgram } : null,  // weatherEvents: rebuilt by the farm
+        farm: deps.farm?.serialize() ?? null,
+        records: deps.records?.serialize() ?? null,
+        props: deps.props?.serialize() ?? null,
+        flock: deps.flock?.serialize?.() ?? null,
+        player: p ? { x: p.position.x, z: p.position.z, yaw: p.yaw } : null,
+      };
+    },
     debug: {
       goto() { return false; },
       trigger(id) { deps.farm?.debug?.trigger(id); },

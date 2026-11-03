@@ -17,11 +17,23 @@
 //   setOverlay(name, on)    'floorTemp': the floor thermometer view (unlock floorOverlay)
 //   highlight(ids)          orange 'facts' tab on these boards (the current job's signs); [] clears
 //   overlay                 { floorTemp: boolean }
-//   carrying                null | 'barrow' | 'boxes' | 'dead' | 'scale'   (what the farmer holds)
+//   carrying                null | 'barrow' | 'sack' | 'boxes' | 'bucket' | 'frame' | 'chick'
+//   carryOpts               { stack } boxes, { n, causes } bucket, { depthCm } barrow, { index } chick
+//   startCarry(kind, opts)  THE only way anything is carried (ui, flock and props call it): sets
+//                           carrying, calls player.carry(kind) for the mesh, emits EV.CARRY
+//                           { kind, opts }. 'bucket' adds opts.n / opts.causes to what is carried.
+//   drop()                  hands empty: player.carry(null), EV.CARRY { kind: null }
+//   Providers props registers (PHASE2.md §13.3): 'tip' (carrying boxes, inside BROOD_BOUNDS,
+//   priority 20), 'patch' (carrying a sack, on litter, 20), 'frame' (carrying the frame, inside
+//   BROOD_BOUNDS, 20: flock.catchGroup then EV.FRAME_SET); fixed 'brooder-0..7' (enabled while that
+//   brooder is out), 'leak' (enabled while the leak exists).
+//   Triggers also emit EV.NEAR from ctx.farm.problemZones() (dwell inside a zone, once per entry).
 //   truck                   { state: 'away'|'driving-in'|'parked'|'leaving', arrive(), leave() }
 //   stacks                  { left: number } box stacks not yet carried in
 //   reset()                 back to the level's prep-day look (bare floor, heap, no truck)
 //   serialize() / restore(d)  what the save needs that the farm model does not hold
+
+import { EV } from './events.js';
 
 export function buildProps(ctx, { house, world } = {}) {
   void house; void world;
@@ -35,15 +47,32 @@ export function buildProps(ctx, { house, world } = {}) {
     colliders: [],
     overlay: { floorTemp: false },
     carrying: null,
+    carryOpts: null,
+    startCarry(kind, opts = {}) {
+      if (kind === 'bucket' && props.carrying === 'bucket') {
+        const c = props.carryOpts; c.n += opts.n || 0;
+        for (const [k, v] of Object.entries(opts.causes || {})) c.causes[k] = (c.causes[k] || 0) + v;
+      } else {
+        props.carrying = kind;
+        props.carryOpts = kind === 'bucket' ? { n: opts.n || 0, causes: { ...(opts.causes || {}) } } : { ...opts };
+      }
+      ctx.player?.carry?.(kind);
+      ctx.events?.emit(EV.CARRY, { kind, opts: props.carryOpts });
+    },
+    drop() {
+      props.carrying = null; props.carryOpts = null;
+      ctx.player?.carry?.(null);
+      ctx.events?.emit(EV.CARRY, { kind: null, opts: null });
+    },
     truck: { state: 'away', arrive() { props.truck.state = 'parked'; }, leave() { props.truck.state = 'away'; } },
     stacks: { left: 0 },
     update(dt, env, view) { void dt; void env; void view; },
     setOverlay(name, on) { if (name in props.overlay) props.overlay[name] = !!on; },
     highlighted: [],
     highlight(ids = []) { props.highlighted = [...ids]; },
-    reset() { props.carrying = null; props.truck.state = 'away'; props.stacks.left = 0; },
-    serialize() { return { v: 1, carrying: props.carrying, truck: props.truck.state, stacks: props.stacks.left }; },
-    restore(d) { if (!d) return; props.carrying = d.carrying ?? null; props.truck.state = d.truck ?? 'away'; props.stacks.left = d.stacks ?? 0; },
+    reset() { props.carrying = null; props.carryOpts = null; props.truck.state = 'away'; props.stacks.left = 0; },
+    serialize() { return { v: 1, carrying: props.carrying, carryOpts: props.carryOpts, truck: props.truck.state, stacks: props.stacks.left }; },
+    restore(d) { if (!d) return; props.carrying = d.carrying ?? null; props.carryOpts = d.carryOpts ?? null; props.truck.state = d.truck ?? 'away'; props.stacks.left = d.stacks ?? 0; },
   };
   return props;
 }

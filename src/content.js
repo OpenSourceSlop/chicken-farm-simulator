@@ -1,14 +1,11 @@
 // Words on the farm: sign boards, today's jobs and the controls legend. Owner: systems/UI agent.
-// Every fact on a sign carries its source. Phase 1 names the guide only (pages come in Phase 2);
-// "general practice" marks facts that are common farm practice rather than from one guide.
-import { targetTempAt } from './config.js';
+// Every fact on a sign carries its source: the guide's name, or "general practice" for common
+// farm practice. No page numbers (the guide PDFs are not in this repo). Level 1's signs and plates
+// are in content-signs.js.
+import { targetTempAt, GUIDES } from './config.js';
 
-export const SOURCES = {
-  bm101: 'Broiler Management 101',
-  week1: 'Week 1 guide',
-  vent: 'Broiler Ventilation',
-  general: 'general practice',
-};
+// One source table for the whole game: config GUIDES (week1..week4, vent, bm101, general).
+export const SOURCES = GUIDES;
 
 // Brooder sign table: house temperature by flock age, read from config.targetTempAt.
 // Day 1 and day 35 are the guide values; days in between are a straight line until the full
@@ -29,7 +26,8 @@ export const SIGNS = {
     title: 'Farm gate – biosecurity',
     kicker: 'Before you go in',
     items: [
-      { text: 'Dip your boots in the foot dip, and spray every vehicle before it comes onto the farm.', source: SOURCES.bm101 },
+      { text: 'Disinfect at the gate: dip your boots in the foot dip.', source: SOURCES.bm101 },
+      { text: 'Spray every vehicle before it comes onto the farm.', source: SOURCES.general },
       { text: 'Report abnormal deaths in the flock straight away.', source: SOURCES.bm101 },
       { text: 'Change into farm clothes and farm boots before you go near the chicken houses.', source: SOURCES.general },
     ],
@@ -42,7 +40,7 @@ export const SIGNS = {
       caption: 'House temperature by flock age',
       colAge: 'Flock age',
       colTemp: 'House temperature',
-      approxNote: 'approx. = read off a straight line between the guide’s day 1 and day 35 values. The guide’s full table comes in a later version.',
+      approxNote: 'approx. = general practice: read off a straight line between the guide’s day 1 and day 35 values.',
       source: `${SOURCES.week1} / ${SOURCES.vent}`,
     },
     readTitle: 'Read the chicks',
