@@ -843,7 +843,7 @@ full, wrong mode), so it never shadows another. Tested in `scripts/test-contract
 | `feeder-box`, `water-supply`, `drinker-0..3`, `silo`, `office-desk`, `chick-table`, `bird-scale`, `litter-heap` | props | 10 | panel (ui) |
 | `box-stack-0..5`, `dead-bin`, `leak`, `brooder-0..7` (enabled while out) | props | 10 | `use()` |
 | provider `tip` (carrying boxes, in BROOD_BOUNDS) · `patch` (carrying a sack, on litter) · `frame` (carrying the frame, in BROOD_BOUNDS) | props | 20 | `use()` |
-| provider `dead-bird` (hands empty or carrying the bucket; drawn dead birds within 1.5 m) | flock | 6 | pick up all within 1.5 m |
+| provider `dead-bird` (hands empty or carrying the bucket; drawn dead birds within 1.5 m) | flock | 6; **15 within 0.8 m** (`nearRadius` / `nearPriority`: a bird at his feet beats the board or machine whose 2 m reach he stands in; final check) | pick up all within 1.5 m |
 | provider `sick-bird` (level mode, hands empty, nearest drawn sick bird within 1.2 m) | flock | 5 | catch → chick-in-hand panel (*Cull* / *Put back*) |
 | provider `chick` (`ctx.level.sampling` set, hands empty) | flock | 5 | catch → chick-in-hand panel |
 

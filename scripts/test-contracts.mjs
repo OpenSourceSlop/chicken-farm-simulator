@@ -46,6 +46,19 @@ test('interact: priority beats distance, fixed beat default providers, null prov
   assert(reg.nearest(at(0.5, 0)).id === 'tip', 'priority 20 beats a fixed board (10)');
   reg.removeProvider('tip');
   assert(reg.nearest(at(0.5, 0)).id === 'controller', 'fixed (10) beats dead bird (6) and litter (0)');
+  // a dead bird at the feet (within its nearRadius 0.8 m: nearPriority 15) beats the board behind it;
+  // 1.2 m away the board answers again, and a tip while carrying (20) still wins
+  const reg2 = createInteract([{ id: 'sign-vent', label: 'Minimum ventilation', x: 0, z: -1, radius: 2 }]);
+  let bird = { x: 0.5, z: 0 };
+  reg2.addProvider('dead-bird', () => bird && ({ id: 'dead-bird', label: 'dead bird', x: bird.x, z: bird.z, radius: 1.5, priority: 6, nearRadius: 0.8, nearPriority: 15 }));
+  assert(reg2.nearest(at(0, 0)).id === 'dead-bird', 'dead bird 0.5 m away beats the board (2 m reach)');
+  bird = { x: 1.2, z: 0 };
+  assert(reg2.nearest(at(0, 0)).id === 'sign-vent', 'dead bird 1.2 m away: the board answers');
+  bird = null;
+  assert(reg2.nearest(at(0, 0)).id === 'sign-vent', 'no dead bird: the board answers');
+  bird = { x: 0.3, z: 0 };
+  reg2.addProvider('tip', (p) => ({ id: 'tip', label: 'tip', x: p.x, z: p.z, radius: 2, priority: 20 }));
+  assert(reg2.nearest(at(0, 0)).id === 'tip', 'carrying boxes: the tip (20) beats a bird at the feet (15)');
   const err = console.error; console.error = () => {};
   reg.addProvider('broken', () => { throw new Error('x'); });
   assert(reg.nearest(at(5, 0)).id === 'dead-bird', 'a throwing provider is skipped');

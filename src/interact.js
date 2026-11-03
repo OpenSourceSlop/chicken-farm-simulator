@@ -11,6 +11,9 @@
 //   verb     prompt verb, e.g. 'Pick up', 'Read the', 'Use the' (ui picks a default when absent)
 //   use()    called on E instead of opening a panel (pick up a stack, tip boxes, catch a chick)
 //   enabled() false hides it for now (e.g. the chick table before the truck came)
+//   priority     see "Choice" below
+//   nearRadius, nearPriority   within nearRadius m of the farmer it competes with nearPriority
+//                instead (a dead bird right at his feet beats the board behind it)
 //
 // Provider: a function (playerPos, isInside) -> Interactable | null for things that are not at a
 // fixed place (the nearest dead bird, the nearest chick while a sample job is open, the tip spot
@@ -22,11 +25,13 @@
 // (-sin yaw, -cos yaw)). So of two machines side by side the one he turns to answers.
 // Defaults: fixed interactables 10, providers 0, so boards and machines beat providers as in
 // Phase 1. Phase 2 priorities (PHASE2.md §13.3): tip / patch / frame (only while carrying the
-// matching thing) 20, dead-bird 6, sick-bird and chick 5. The litter squeeze is not on E (key Q).
+// matching thing) 20, dead-bird 6 (15 within 0.8 m: a bird at his feet beats a board or machine
+// whose 2 m reach he stands in), sick-bird and chick 5. The litter squeeze is not on E (key Q).
 
 /**
  * @typedef {{ id: string, label: string, x: number, z: number, radius: number, inside?: boolean,
- *   verb?: string, use?: () => void, enabled?: () => boolean, priority?: number }} Interactable
+ *   verb?: string, use?: () => void, enabled?: () => boolean, priority?: number,
+ *   nearRadius?: number, nearPriority?: number }} Interactable
  */
 
 const FACING_M = 0.45;
@@ -61,7 +66,7 @@ export function createInteract(initial = []) {
         if (!it || !usable(it, inside) || (accept && !accept(it))) return;
         const d = Math.hypot(it.x - p.x, it.z - p.z);
         if (d > it.radius) return;
-        const pr = it.priority ?? defaultPriority;
+        const pr = it.nearRadius != null && d <= it.nearRadius ? (it.nearPriority ?? it.priority ?? defaultPriority) : (it.priority ?? defaultPriority);
         const face = d > 0.2 ? (FACING_M * ((it.x - p.x) * fx + (it.z - p.z) * fz)) / d : 0;
         const score = d - face;
         if (pr > bestP || (pr === bestP && score < bestD)) { best = it; bestP = pr; bestD = score; }

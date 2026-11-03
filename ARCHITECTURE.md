@@ -233,7 +233,9 @@ feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
   used, else the ui panel registered under its id opens. In the sandbox only the three Phase 1
   boards answer. **`interact.nearest`**: highest `priority`, then the nearest, where what the
   farmer faces counts up to 0.45 m nearer (`player.yaw`; facing = (−sin yaw, −cos yaw)), so of two
-  machines side by side the one he turns to answers.
+  machines side by side the one he turns to answers. An interactable may give `nearRadius` /
+  `nearPriority`: within that distance it competes with the near priority (the dead-bird provider:
+  6, but 15 within 0.8 m, so a bird at his feet beats the north-wall board whose 2 m reach he stands in).
 - **Feeder control box** moved to `SPOTS2.feederBox` x −18 (between the water and brooder signs):
   at x −22 it sat 0.9 m behind the line 1 drinker regulator, which always won.
 - **Controller** (ui-climate.js): *min / max since read* = `farm.controllerMemory()`; the farm

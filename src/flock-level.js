@@ -66,7 +66,8 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
     }
     if (!best) return null;
     return { id: 'dead-bird', label: k > 1 ? `${k} dead birds` : 'dead bird', verb: 'Pick up', x: best.x, z: best.z,
-      radius: 1.5, inside: true, priority: 6, use: () => { const f = farmer() || p; dead.api.pickUp(f.x, f.z, 1.5); } };
+      // a bird right at his feet (0.8 m) beats the board or machine whose 2 m reach he stands in
+      radius: 1.5, inside: true, priority: 6, nearRadius: 0.8, nearPriority: 15, use: () => { const f = farmer() || p; dead.api.pickUp(f.x, f.z, 1.5); } };
   });
 
   const heldSick = () => { let k = 0; for (const h of catcher.held.values()) if (h.sick) k++; return k; };
