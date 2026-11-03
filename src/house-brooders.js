@@ -108,7 +108,7 @@ export function buildBrooders(kit) {
   }
   cg.computeVertexNormals();
   const curtainMat = new THREE.MeshLambertMaterial({
-    color: 0xe4eef3, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false,
+    color: 0xe4eef3, emissive: 0x67737a, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false,
   });
   const curtain = new THREE.Group();
   const sheet = new THREE.Mesh(cg, curtainMat);
@@ -116,6 +116,7 @@ export function buildBrooders(kit) {
   const wire = new Batch();
   wire.rod([HOUSE.broodCurtainX, 2.63, zMin], [HOUSE.broodCurtainX, 2.63, zMax], 0.012, 0x6d757c, 4);
   for (let z = zMin + 0.4; z < zMax; z += 0.8) wire.cyl(0.018, 0.03, HOUSE.broodCurtainX, 2.6, z, 0xd8dcdf, 6);
+  wire.box(0.07, 0.035, zMax - zMin - 0.1, HOUSE.broodCurtainX + 0.04, 0.035, 0, 0xc9d3d8);   // weighted hem on the litter
   curtain.add(sheet, wire.mesh(mats.vc, { cast: false }));
   curtain.renderOrder = 2;
   group.add(curtain);
@@ -129,7 +130,7 @@ export function buildBrooders(kit) {
       glowMat.opacity = 0.42 * level;
       curtainK = smooth(curtainK, env.broodCurtain ? 1 : 0, 2.5, dt);
       curtain.visible = curtainK > 0.01;
-      curtainMat.opacity = 0.4 * curtainK;
+      curtainMat.opacity = 0.5 * curtainK;
     },
   };
 }
