@@ -51,8 +51,8 @@ const SIGNED = { type: 'event', event: EV.RECORD_CLOSED, match: { signed: true }
 //   lines-flushed    every farm.water.lines[i].flushClear >= 0.99
 //   all-placed       farm.flock.inBoxes === 0 and farm.flock.placed > 0
 //   dead-cleared     farm.flock.deadOnFloor === 0 and props.carrying !== 'bucket'
-//   house-near-target  env.houseTemp - env.windChill (what the chicks feel) <= env.targetTemp + 1.5
-//                      for 30 game min
+//   house-near-target  what the chicks feel (farm-problems feltNearTarget: comfort e at chick
+//                      level, wind chill included) within -1.5..+1.5 °C of the target for 30 game min
 export const STATE_TEST_IDS = ['preheat-on', 'litter-covered', 'pans-flooded', 'lines-flushed', 'all-placed', 'dead-cleared', 'house-near-target'];
 
 export const JOBS = [
@@ -159,10 +159,11 @@ export const JOBS = [
     problem: 'low-silo', spot: 'officeDesk', signs: ['silo', 'feeder-box'], branch: null,
     done: { type: 'action', id: 'feed.order' } }),
   P('p-warm', 'The house is above its target this afternoon', {
-    problem: 'warm-afternoon', spot: 'controller', signs: ['sign-brooder', 'sign-vent'], branch: null,
-    // done once he changed the air (tunnel fans, the timer or the pad) and the chicks feel it
+    problem: 'warm-afternoon', spot: 'controller', signs: ['sign-vent', 'sign-brooder'], branch: null,
+    // done once he changed the air or the heat (any of the controller's settings) and the air the
+    // chicks feel is back near the target (not over it, not chilled under it) for 30 min
     done: { type: 'all', of: [
-      { type: 'any', of: [{ type: 'action', id: 'vent.fans' }, { type: 'action', id: 'vent.timer' }, { type: 'action', id: 'vent.pad' }] },
+      { type: 'any', of: [{ type: 'action', id: 'vent.timer' }, { type: 'action', id: 'heat.setpoint' }, { type: 'action', id: 'vent.fans' }, { type: 'action', id: 'vent.pad' }] },
       { type: 'state', test: 'house-near-target' }] } }),
   P('p-report', 'Report the deaths to the company vet', {
     problem: 'abnormal-deaths', spot: 'officeDesk', signs: ['sign-health'], branch: null,
@@ -208,6 +209,6 @@ export const JOB_WHERE = {
   'p-leak': 'The wet patch on the litter: look at the line above it.',
   'p-wet-patch': 'Rice husk heap: take a sack of husk, then E on the wet patch.',
   'p-order-feed': 'Office desk on the porch: the phone.',
-  'p-warm': 'Climate controller: tunnel fans, the cooling pad and the timer. Watch the house and the chicks.',
+  'p-warm': 'Climate controller: the brooders (Temperature) and the minimum ventilation timer (Ventilation); the minimum ventilation sign beside it. Watch the house and the chicks.',
   'p-report': 'Office desk on the porch: the phone.',
 };

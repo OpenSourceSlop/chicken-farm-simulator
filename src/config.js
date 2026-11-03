@@ -210,7 +210,9 @@ export const LEVEL1 = {
     { id: 'blocked-filter', day: 3, hour: 10, flowFactor: 0.5 }, // main filter at the water supply: every line's flow x 0.5
     { id: 'leaking-nipple', day: 4, hour: 10, line: 2, x: -9.15 },
     { id: 'low-silo', day: 4, hour: 6 },                        // no event: the silo simply runs low (siloStartKg)
-    { id: 'warm-afternoon', day: 6, hour: 11, outsideRise: 7, until: { day: 6, hour: 17 } }, // about 36 °C outside at 15:00
+    // a hot, sunny afternoon: about 32 °C outside at 15:00 and the sun on the roof (model, °C/h into
+    // the house air): the closed house runs over its target unless more air goes through it
+    { id: 'warm-afternoon', day: 6, hour: 11, outsideRise: 3, sunPerH: 1.5, until: { day: 6, hour: 17 } },
   ],
 };
 

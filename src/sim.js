@@ -45,6 +45,11 @@ const RAMP_DAYS = 2 / 24;   // weather events ramp in and out over 2 h
 // heat reaches it only by mixing (model). Air there = house - OUT_AIR.c x output x (g - mean g),
 // g a Gaussian of OUT_AIR.sigma m around it; mean g over the brooding floor keeps the house mean.
 const OUT_AIR = { c: 6, sigma: 2.5 };
+// Minimum ventilation draws its air in through the side-wall inlets, which throw it up under the
+// roof: it mixes with the house air before it reaches the chicks. Air speed at bird level from the
+// timer fans = this share of what the same fans give in tunnel mode (model). The tunnel fans pull
+// the air through the pad end, along the house at bird level (full speed, full wind chill).
+const INLET_SPEED_SHARE = 0.1;
 const OUT_MEAN = HEATERS.map((h) => {
   let s = 0, n = 0;
   for (let x = BROOD_BOUNDS.xMin + 0.5; x < BROOD_BOUNDS.xMax; x += 1) for (let z = BROOD_BOUNDS.zMin + 0.5; z < BROOD_BOUNDS.zMax; z += 1) {
@@ -128,7 +133,7 @@ export function createSim() {
       if (this.levelClimate && this.brooderOut.length) t += this.outAirDev(x, z);
       const wallDist = Math.min(z - BIRD_BOUNDS.zMin, BIRD_BOUNDS.zMax - z);
       if (wallDist < 1.5) t -= 1.0 * (1 - wallDist / 1.5);
-      const fans = this.levelClimate ? this.fanMean : this.fansOn;
+      const fans = this.levelClimate ? this.fansManual : this.fansOn; // tunnel air: pad (west) to fans (east)
       if (fans > 0) {
         // air warms as it travels from the pad (west) to the fans (east)
         const along = (x - BIRD_BOUNDS.xMin) / (BIRD_BOUNDS.xMax - BIRD_BOUNDS.xMin);
@@ -249,19 +254,27 @@ function outsideTempAt(weather, hour) {
   return mean + amp * Math.sin(((hour - 9) / 24) * Math.PI * 2);
 }
 
-// Weather events (cold night, warm afternoon): °C taken off the outside air now, 2 h ramps.
+// Weather events (cold night, warm afternoon): °C taken off the outside air now, 2 h ramps; an
+// event may also carry sun on the roof (heatPerH, °C per hour into the house air, same ramps).
+function weatherRamp(env, ev) {
+  if (!(env.day > ev.fromDay && env.day < ev.toDay)) return 0;
+  return Math.min(1, (env.day - ev.fromDay) / RAMP_DAYS, (ev.toDay - env.day) / RAMP_DAYS);
+}
 function weatherDrop(env) {
   let d = 0;
-  for (const ev of env.weatherEvents) {
-    if (!(env.day > ev.fromDay && env.day < ev.toDay)) continue;
-    d += ev.outsideDrop * Math.min(1, (env.day - ev.fromDay) / RAMP_DAYS, (ev.toDay - env.day) / RAMP_DAYS);
-  }
+  for (const ev of env.weatherEvents) d += ev.outsideDrop * weatherRamp(env, ev);
   return d;
+}
+function weatherHeat(env) {
+  let q = 0;
+  for (const ev of env.weatherEvents) if (ev.heatPerH) q += ev.heatPerH * weatherRamp(env, ev);
+  return q;
 }
 
 function derive(env) {
   env.outsideTemp = outsideTempAt(env.weather, env.hour);
-  if (env.weatherEvents.length) env.outsideTemp -= weatherDrop(env);
+  env.sunHeatPerH = 0;
+  if (env.weatherEvents.length) { env.outsideTemp -= weatherDrop(env); env.sunHeatPerH = weatherHeat(env); }
   env.outsideRH = WEATHER[env.weather].rh;
   // The target follows the whole flock day (the brooder sign's table): day 1 is 34 °C all day.
   env.targetTemp = targetTempAt(dayNumberOf(env));
@@ -274,7 +287,8 @@ function derive(env) {
     env.fanMean = Math.min(FAN_COUNT, env.fansManual + (t ? t.fans * env.ventDuty : 0));
     const onPart = !!t && ((env.hour * HOUR) % t.cycleSec) < t.onSec;
     env.fansOn = Math.min(FAN_COUNT, env.fansManual + (onPart ? t.fans : 0));
-    env.airSpeed = env.fanMean * (2.5 / FAN_COUNT);
+    const timerMean = env.fanMean - Math.min(FAN_COUNT, env.fansManual);
+    env.airSpeed = (Math.min(FAN_COUNT, env.fansManual) + timerMean * INLET_SPEED_SHARE) * (2.5 / FAN_COUNT);
   } else {
     env.fanMean = env.fansOn;
     env.airSpeed = env.fansOn * (2.5 / FAN_COUNT);
@@ -305,10 +319,13 @@ export function absHumSat(t) { return 5.018 + 0.32321 * t + 8.1847e-3 * t * t + 
 // ammonia); brooders with some out; the concrete slab as a slow heat store under the litter; the
 // flock's heat and vapour from the farm model.
 function levelClimate(env, hrs) {
-  const padDrop = env.padOn && env.fanMean > 0 ? Math.min(9, (100 - env.outsideRH) / 5) * 0.85 : 0;
+  // the pad cools only the air the tunnel fans pull through it (the timer air comes in at the side
+  // inlets): the mixed inlet air is cooler by padDrop x the tunnel share of the air
+  const tunnelShare = env.fanMean > 0 ? Math.min(1, env.fansManual / env.fanMean) : 0;
+  const padDrop = env.padOn ? Math.min(9, (100 - env.outsideRH) / 5) * 0.85 * tunnelShare : 0;
   const inlet = env.outsideTemp - padDrop;
   const lit = HEATERS.length - env.brooderOut.length;
-  const heat = (HEAT_RATE * env.heaterLevel * lit) / HEATERS.length;
+  const heat = (HEAT_RATE * env.heaterLevel * lit) / HEATERS.length + (env.sunHeatPerH || 0);
   const exchange = AIR.wallLossPerH + env.airflowM3h / AIR.thermalM3;
   const sink = SLAB.sinkPerH * (env.houseTemp - env.slabTemp);
   const dT = heat + env.flockHeatPerH - exchange * (env.houseTemp - inlet) - sink;

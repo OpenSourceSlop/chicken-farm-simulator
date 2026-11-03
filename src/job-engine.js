@@ -22,6 +22,7 @@
 import { BROOD_BOUNDS, DRINKER_LINES_Z, FLOOR_GRID, LEVEL1, broodSector } from './config.js';
 import { EV, matchPayload } from './events.js';
 import { JOBS } from './content-jobs.js';
+import { feltNearTarget } from './farm-problems.js';
 
 const H = 1 / 24;
 /** The level ends at 06:00 on day 8 at the latest (PHASE2.md §10). */
@@ -199,9 +200,10 @@ function stateTest(test, st, { env, farm, props }) {
     case 'all-placed': return farm.flock.inBoxes === 0 && farm.flock.placed > 0;
     case 'dead-cleared': return farm.flock.deadOnFloor === 0 && props?.carrying !== 'bucket';
     case 'house-near-target': {
-      // the air the chicks feel (house air less the wind chill of the fans) at or below target
-      // + 1.5 °C for 30 game minutes in a row
-      if (env.houseTemp - (env.windChill || 0) <= env.targetTemp + 1.5) { if (st.since == null) st.since = env.day; }
+      // what the chicks feel (farm-problems feltNearTarget: house air less the wind chill of the
+      // fans, at chick level) within -1.5..+1.5 °C of the target for 30 game minutes in a row:
+      // tunnel air that chills the chicks does not count
+      if (feltNearTarget(env, farm)) { if (st.since == null) st.since = env.day; }
       else st.since = null;
       return st.since != null && env.day - st.since >= 30 / 1440 - EPS;
     }

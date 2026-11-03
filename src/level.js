@@ -446,7 +446,7 @@ export function createLevel(ctx, deps = {}) {
       /** Jump to day + hour. auto: the ideal farmer's management (farm-profiles.applyRound, the same
        *  rounds scripts/test-sim.mjs plays) at each round passed: the prep (unless the prep record is
        *  signed already), the flush, the morning and afternoon rounds, the truck, vent and crop
-       *  samples, the day 6 tunnel fan, the day 7 weigh-in; dead birds picked up and counted after
+       *  samples, the day 6 warm-afternoon timer, the day 7 weigh-in; dead birds picked up and counted after
        *  each round, the evening record signed, and the jobs still open completed and logged. */
       goto(day, hour, { auto = false } = {}) {
         if (level.mode !== 'level') level.start({ seed });

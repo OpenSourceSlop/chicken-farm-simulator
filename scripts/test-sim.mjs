@@ -23,7 +23,7 @@ export const PROFILE_TARGETS = {
     meterChangePct: { 1: [5, 60], 2: [5, 40], 3: [5, 40], 4: [-20, -4], 5: [5, 60], 6: [5, 40], 7: [5, 40] },
     skillLevels: { brooding: 2, water: 2 }, passes: true },
   smallMistakes: { ratio: [4.2, 4.5], passes: true },
-  latePreheat: { floorShare28AtTip: [0, 0.5], cropFill: [0.85, 0.93], ratio: [4.45, 4.75],
+  latePreheat: { floorShare28AtTip: [0, 0.5], cropFill: [0.85, 0.93], ratio: [4.45, 4.8], // 4.75 -> 4.8: the ideal day 6 no longer chills (final check)
     uniformityBelowIdeal: 5, deathsPct: [1.0, 1.7], passes: true },
   noFlush: { waterQuality: 0.85, deathsOverIdeal: [0.05, 0.3] },
   neglect: { passes: false },                      // ratio < 4.0 and/or deaths + culls > 2 %
@@ -38,7 +38,8 @@ export const PROFILE_TARGETS = {
   pansUp: { cropFill: [0, 0.85], deathsPct: [2, 100], passes: false },
   neverPlaced: { deathsPct: [2, 100], passes: false, notEarned: ['low-mortality', 'steady-heat', 'crop-fill', 'day7-weight'] },
   litter2cm: { comfortShareBelowIdeal: 0.05, uniformityBelowIdeal: 5, notEarned: ['steady-heat'] },
-  warmNoFan: { houseOverTargetAt15Day6: [2, 6], pantShareAt15Day6: [0.2, 1] },
+  warmNoAction: { houseOverTargetAt15Day6: [2, 6], pantShareAt15Day6: [0.2, 1] },
+  warmTunnel: { feltOverTargetAt15Day6: [-6, -1.5], coldShareAt15Day6: [0.2, 1], coldMinutesDay6: [180, 400], comfortShareBelowIdeal: 0.015 },
 };
 
 const only = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null;
@@ -137,6 +138,39 @@ for (const name of Object.keys(PROFILE_TARGETS)) {
     checkProfile(name, run, PROFILE_TARGETS, { assert, inBand });
   });
 }
+// The warm afternoon found on the controller at 14:00 (house >= target + 2), then three answers:
+// more timer air (the sign's warm-afternoon timer) brings the chicks back within the hour; two
+// tunnel fans chill them (comfort e < -2: they pile under the brooders, the problem stays open
+// while the fans run); nothing ends 'weather'.
+accept('warm afternoon: the timer cools the house, tunnel fans chill the chicks', async () => {
+  const { runProfile, WARM_TIMER } = await import('../src/farm-profiles.js');
+  const play = (answer) => {
+    const info = { eMin: 9, eMax: -9 };
+    const run = runProfile('warmNoAction', { seed: SEED, onStep: ({ farm, events }, env) => {
+      if (env.dayNumber !== 6) return;
+      const warm = farm.problems.find((p) => p.id === 'warm-afternoon');
+      if (!info.read && env.hour >= 14) {
+        info.read = true;
+        events.emit(EV.ACTION, { id: 'controller.read', houseC: +env.houseTemp.toFixed(1) });
+        info.found = warm.phase;
+        if (answer === 'timer') farm.act('vent.timer', WARM_TIMER);
+        if (answer === 'tunnel') { env.setFans(2); events.emit(EV.ACTION, { id: 'vent.fans', n: 2 }); }
+      }
+      if (answer === 'tunnel' && env.hour >= 17 && env.fansManual) env.setFans(0);
+      if (info.read && env.hour >= 14.75 && env.hour < 17) { info.eMin = Math.min(info.eMin, farm.comfort.e); info.eMax = Math.max(info.eMax, farm.comfort.e); }
+      if (warm.phase === 'fixed' && info.fixedH == null) { info.fixedH = env.hour; info.by = warm.fixedBy; }
+    } });
+    return info;
+  };
+  const timer = play('timer'), tunnel = play('tunnel'), none = play('none');
+  assert(timer.found === 'found' && tunnel.found === 'found', `found on the controller at 14:00: ${timer.found}`);
+  assert(timer.fixedH != null && timer.fixedH <= 15.25, `more timer air: near target by 15:15 (fixed ${timer.fixedH?.toFixed(2)})`);
+  assert(timer.eMax <= 1.5 && timer.eMin >= -1.5, `more timer air: e ${timer.eMin.toFixed(2)}..${timer.eMax.toFixed(2)} from 14:45`);
+  assert(tunnel.eMax < -1.5, `tunnel fans: e up to ${tunnel.eMax.toFixed(2)} from 14:45 (chicks chilled)`);
+  assert(tunnel.fixedH == null || tunnel.fixedH >= 17, `tunnel fans: not near target while they run (fixed ${tunnel.fixedH?.toFixed(2)})`);
+  assert(none.fixedH != null && none.fixedH >= 16.5, `no answer: the weather ends it late (${none.fixedH?.toFixed(2)})`);
+});
+
 accept('determinism: same seed and inputs give identical records', async () => {
   const { runProfile } = await import('../src/farm-profiles.js');
   const a = JSON.stringify(runProfile('ideal', { seed: 7 }).records.serialize());
@@ -264,7 +298,7 @@ test('package: problems start silently, symptoms from actions and EV.NEAR, forec
   events.emit(EV.NEAR, { problemId: 'brooder-out', x: -7, z: 2.6 });
   assert(got.includes('brooder-out:symptom') && farm.problemZones().length === 0, 'EV.NEAR finds it, the zone goes');
   assert(farm.act('heat.relight', { index: 5 }).fixed === true && env.brooderOut.length === 0 && got.includes('brooder-out:fixed'), 'relight fixes it');
-  assert(/13 °C/.test(farm.forecast(2).text) && /19 °C/.test(farm.forecast(1).text) && /36 °C/.test(farm.forecast(5).text), `forecasts: ${farm.forecast(2).text} | ${farm.forecast(5).text}`);
+  assert(/13 °C/.test(farm.forecast(2).text) && /19 °C/.test(farm.forecast(1).text) && /afternoon hot, up to 32 °C/.test(farm.forecast(5).text), `forecasts: ${farm.forecast(2).text} | ${farm.forecast(5).text}`);
   env.skipHours(24 + 24 + 6); // day 3 11:00: filter clogged
   assert(farm.water.filterFactor < 1 && !got.includes('blocked-filter:symptom'), 'the filter clogs silently');
   farm.act('water.meter');

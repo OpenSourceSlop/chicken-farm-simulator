@@ -49,10 +49,12 @@ export function runProfile(name, { seed = 1, onStep = null } = {}) {
   const { env, events, farm, records, skills } = world;
   farm.start(LEVEL1, { seed });
   if (onStep) env.addStepper((e) => onStep(world, e));
-  const snaps = { meterChange: {}, rhMinFromDay4: 100, litterMax: 0, failedEarlyAt: null };
-  env.addStepper((e) => {
+  const snaps = { meterChange: {}, rhMinFromDay4: 100, litterMax: 0, failedEarlyAt: null, coldMinutesDay6: 0 };
+  env.addStepper((e, s) => {
     // minimum ventilation only: hours with a tunnel fan switched on by hand (the warm afternoon) left out
     if (e.day >= 4 && e.fansManual === 0 && e.houseRH < snaps.rhMinFromDay4) snaps.rhMinFromDay4 = e.houseRH;
+    // the warm afternoon: minutes the chicks were cold (comfort e < -2: they pile under the brooders)
+    if (e.dayNumber === 6 && e.hour >= 11 && e.hour < 18 && farm.comfort.e < -2) snaps.coldMinutesDay6 += s / 60;
   });
   const pickDead = () => {
     const n = farm.flock.deadOnFloor;
@@ -67,7 +69,10 @@ export function runProfile(name, { seed = 1, onStep = null } = {}) {
     if (kind === 'snap') {
       if (arg === 'night') snaps.houseAt04Day3 = env.houseTemp;
       if (arg === 'day6') { snaps.litterMeanDay6 = farm.litter.meanMoisturePct; snaps.nh3Day6 = farm.litter.ammoniaPpm; snaps.litterUnderLinesDay6 = underLineMoisture(farm.litter); }
-      if (arg === 'warm') { snaps.houseOverTargetAt15Day6 = env.houseTemp - env.targetTemp; snaps.pantShareAt15Day6 = farm.comfort.pantShare; }
+      if (arg === 'warm') {
+        snaps.houseOverTargetAt15Day6 = env.houseTemp - env.targetTemp; snaps.pantShareAt15Day6 = farm.comfort.pantShare;
+        snaps.feltOverTargetAt15Day6 = env.houseTemp - env.windChill - env.targetTemp; snaps.coldShareAt15Day6 = farm.comfort.coldShare;
+      }
       if (arg === 'leak') {
         const leak = farm.water.leak, cell = leak ? leak.cell : null;
         snaps.leakCellPct = cell == null ? null : farm.litter.moistureGrid[cell];
@@ -149,6 +154,10 @@ export function checkProfile(name, run, targets, { assert, inBand }) {
       case 'litterUnderLinesDay6': inBand(S.litterUnderLinesDay6, v, 'litter under the drinker lines day 6'); break;
       case 'houseOverTargetAt15Day6': inBand(S.houseOverTargetAt15Day6, v, 'house over target 15:00 day 6'); break;
       case 'pantShareAt15Day6': inBand(S.pantShareAt15Day6, v, 'panting share 15:00 day 6'); break;
+      case 'feltOverTargetAt15Day6': inBand(S.feltOverTargetAt15Day6, v, 'felt air over target 15:00 day 6'); break;
+      case 'coldShareAt15Day6': inBand(S.coldShareAt15Day6, v, 'cold share 15:00 day 6'); break;
+      case 'coldMinutesDay6': inBand(S.coldMinutesDay6, v, 'cold minutes day 6 11:00-18:00'); break;
+      case 'warmFixed': { const p = run.farm.problems.find((x) => x.id === 'warm-afternoon'); assert((p.phase === 'fixed') === v, `warm afternoon ${p.phase}`); break; }
       case 'notEarned': for (const id of v) {
         const m = MILESTONES.find((x) => x.id === id), got = m && run.skills.milestones(m.branch).find((x) => x.id === id);
         assert(m && got.tier == null, `milestone ${id} earned (${got?.points} points)`);

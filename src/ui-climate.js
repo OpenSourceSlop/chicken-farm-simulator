@@ -51,7 +51,8 @@ export function buildLevelControllerPanel(L) {
   padBtn.addEventListener('click', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); refresh(); });
   const draft = { fans: env.ventTimer?.fans ?? 1, onSec: env.ventTimer?.onSec ?? 0, cycleSec: env.ventTimer?.cycleSec ?? 300 };
   const tFans = out(), tOn = out(), tCycle = out(), tAir = h('span', { class: 'ctrl-air' });
-  const step = (k, d, lo, hi) => () => { draft[k] = Math.max(lo, Math.min(hi, draft[k] + d)); if (draft.onSec > draft.cycleSec) draft.onSec = draft.cycleSec; refresh(); };
+  // Shift held: the big step (10 s on-seconds), as the winches step 5 cm
+  const step = (k, d, lo, hi, big = d) => (e) => { draft[k] = Math.max(lo, Math.min(hi, draft[k] + (e && e.shiftKey ? big : d))); if (draft.onSec > draft.cycleSec) draft.onSec = draft.cycleSec; refresh(); };
   const applyTimer = button({ class: 'key key--wide key--apply' }, 'Set the timer');
   const timerOff = button({ class: 'key key--wide' }, 'Timer off');
   applyTimer.addEventListener('click', () => {
@@ -64,9 +65,9 @@ export function buildLevelControllerPanel(L) {
     row('Tunnel fans', 'Running all the time', key('One tunnel fan fewer', ICONS.minus, () => manualFans(-1)), fanOut,
       key('One tunnel fan more', ICONS.plus, () => manualFans(1))),
     h('div', { class: 'ctrl-timer' },
-      h('p', { class: 'ctrl-timer-k' }, 'Minimum ventilation timer'),
+      h('p', { class: 'ctrl-timer-k' }, 'Minimum ventilation timer', h('small', null, ' · air in at the side inlets')),
       row('Fans on the timer', null, key('One timer fan fewer', ICONS.minus, step('fans', -1, 1, FAN_COUNT)), tFans, key('One timer fan more', ICONS.plus, step('fans', 1, 1, FAN_COUNT))),
-      row('On-seconds', 'in each cycle', key('One second less', ICONS.minus, step('onSec', -1, 0, 600)), tOn, key('One second more', ICONS.plus, step('onSec', 1, 0, 600))),
+      row('On-seconds', 'in each cycle · Shift: 10 s', key('One second less', ICONS.minus, step('onSec', -1, 0, 600, -10)), tOn, key('One second more', ICONS.plus, step('onSec', 1, 0, 600, 10))),
       row('Cycle', 'seconds', key('Cycle 30 s shorter', ICONS.minus, step('cycleSec', -30, 60, 600)), tCycle, key('Cycle 30 s longer', ICONS.plus, step('cycleSec', 30, 60, 600))),
       h('div', { class: 'ctrl-apply' }, tAir, timerOff, applyTimer)),
     row('Cooling pad', 'Water on the west end pad', padBtn));

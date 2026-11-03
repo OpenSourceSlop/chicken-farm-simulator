@@ -285,7 +285,7 @@ feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
   is played at once): auto plays the ideal profile through
   `farm-profiles.applyRound` at the rounds test-sim plays (prep unless the prep record is signed,
   flush, morning 06:15 / 06:30, truck 08:06, vent first tip + 2.6 h, crop first tip + 23 h,
-  afternoon, day 6 tunnel fan 12:00–17:00, day 7 weigh 09:00), picks up and counts the dead birds
+  afternoon, day 6 warm-afternoon timer 12:00–17:00, day 7 weigh 09:00), picks up and counts the dead birds
   after each round, signs each evening, and completes the jobs still open. Without auto it skips.
 
 ### Tests and harness

@@ -7,8 +7,8 @@
 //     Performs that round's management for the profile through farm.act(...) and the env setters
 //     (env.setHeaterSetpoint, env.setFans; the timer goes through farm.act('vent.timer')). round:
 //     'prep' | 'am' | 'pm' | 'eve' (the level's rounds) and the finer ones runProfile uses:
-//     'truck' (box weighed, six stacks tipped 7 min apart, grading), 'vent', 'crop', 'noon',
-//     'late', 'leak24', 'weigh'. 'am' on day 0 after the truck also does 'truck'; 'am' on day 1
+//     'truck' (box weighed, six stacks tipped 7 min apart, grading), 'vent', 'crop', 'noon' / 'late'
+//     (day 6: the warm afternoon timer from 12:00, the sign's timer again at 17:00), 'leak24', 'weigh'. 'am' on day 0 after the truck also does 'truck'; 'am' on day 1
 //     inside the crop window also does 'crop'; 'am' on day 7 from 08:00 also does 'weigh'.
 //     A few rounds advance the clock by minutes (env.skipHours) for timed work: the flush (10 min a
 //     line), the tips (7 min a stack). It never emits events itself: farm.act emits the actions.
@@ -25,23 +25,27 @@ export { runProfile, checkProfile } from './farm-profiles-run.js';
 /** Profile names (keys of PROFILE_TARGETS in scripts/test-sim.mjs). */
 export const PROFILES = ['ideal', 'smallMistakes', 'latePreheat', 'noFlush', 'neglect', 'coldNightWideTimer',
   'noMinVent', 'leakUnfixed24h', 'filterNeverFound', 'noFeedOrder', 'brooderNeverRelit',
-  'pressure20', 'pansUp', 'neverPlaced', 'litter2cm', 'warmNoFan'];
+  'pressure20', 'pansUp', 'neverPlaced', 'litter2cm', 'warmNoAction', 'warmTunnel'];
+
+// The warm afternoon (sign-vent): brooders off by their thermostat, more fan time on the timer
+// (the side inlets keep the air off the chicks), back to the sign's timer as the afternoon cools.
+export const WARM_TIMER = { fans: 2, onSec: 120, cycleSec: 300 };
 
 // What each profile does differently from the ideal (PHASE2.md §6.10).
 const IDEAL = {
   preheat: { day: -1, hour: 7 }, setpointOffset: 0, litterCm: 8, flush: true,
   pressure: 'sign', heights: 'sign', flood: true, timer: 'sign', wideTimerFrom: null,
   light: { darkStart: 2, darkHours: 1, dimmer: 0.6 }, relight: true,
-  filter: 'am4', leak: 'pm4', feedOrder: true, warmFan: true, pansCm: null, place: true,
+  filter: 'am4', leak: 'pm4', feedOrder: true, warm: 'timer', pansCm: null, place: true,
 };
 const MODS = {
   ideal: {},
   smallMistakes: { pressure: 6, heights: 'day3', setpointOffset: -1, filter: 'pm4' },
   latePreheat: { preheat: { day: 0, hour: 2 } },
   noFlush: { flush: false },
-  neglect: { preheat: { day: 0, hour: 4 }, flood: false, pressure: 4, heights: 'never', timer: 'none', filter: 'never', feedOrder: false },
+  neglect: { preheat: { day: 0, hour: 4 }, flood: false, pressure: 4, heights: 'never', timer: 'none', filter: 'never', feedOrder: false, warm: 'none' },
   coldNightWideTimer: { wideTimerFrom: 2 },
-  noMinVent: { timer: 'none' },
+  noMinVent: { timer: 'none', warm: 'none' }, // no timer all week, the warm afternoon too
   leakUnfixed24h: { leak: '24h' },
   filterNeverFound: { filter: 'never' },
   noFeedOrder: { feedOrder: false },
@@ -51,7 +55,8 @@ const MODS = {
   pansUp: { pansCm: 40 },                   // pans flooded but left winched up at 40 cm
   neverPlaced: { place: false },            // the stacks never tipped: the chicks stay in the boxes
   litter2cm: { litterCm: 2 },               // 2 cm of husk instead of 5-10 cm
-  warmNoFan: { warmFan: false },            // the day 6 warm afternoon without a tunnel fan
+  warmNoAction: { warm: 'none' },           // the day 6 warm afternoon left on the morning's timer
+  warmTunnel: { warm: 'tunnel' },           // the day 6 warm afternoon with two tunnel fans 12:00-17:00
 };
 export const profileOf = (name) => ({ ...IDEAL, ...(MODS[name] || {}) });
 
@@ -140,17 +145,25 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
   if (round === 'vent') { for (let i = 0; i < 5; i++) act('sample.vent', { ...near(i, 1.2, 0.8), index: i }); return done; }
   if (round === 'crop') { for (let i = 0; i < 10; i++) act('sample.crop', { ...near(i, 1.2, 0.8), index: i }); return done; }
   if (round === 'weigh') { for (let i = 0; i < 50; i++) act('sample.weigh', { ...near(Math.floor(i / 10), 0.5, 0.5), index: i }); return done; }
-  if (round === 'noon') { if (day === 6 && P.warmFan) env.setFans(2); return done; } // the warm afternoon: two tunnel fans
-  if (round === 'late') { if (day === 6 && P.warmFan) env.setFans(0); return done; }
+  if (round === 'noon') { if (day === 6) warmAfternoon(act, env, P, true); return done; }
+  if (round === 'late') { if (day === 6) { warmAfternoon(act, env, P, false); if (P.warm === 'timer') timer(act, P, day, farm); } return done; }
   if (round === 'leak24') { if (P.leak === '24h') fixLeak(act, farm); return done; }
   if (round === 'pm') {
     act('litter.squeeze', { x: -16, z: 0.6 }); act('litter.squeeze', { x: -8, z: -1.95 }); act('litter.squeeze', { x: -4, z: 3.2 });
     if (day === 4 && P.leak === 'pm4' && farm.water.leak) { act('litter.squeeze', { x: farm.water.leak.x, z: farm.water.leak.z }); fixLeak(act, farm); }
     if (day === 4 && P.filter === 'pm4' && farm.water.filterFactor < 1) { for (const line of lines) act('water.flowtest', { line }); act('water.clearFilter'); }
-    if (day === 6 && P.warmFan && env.hour < 17) env.setFans(2);
+    if (day === 6 && env.hour >= 12 && env.hour < 17) warmAfternoon(act, env, P, true);
     return done;
   }
   return done;
+}
+
+// Day 6 from 12:00: the ideal farmer gives the timer more fan time (WARM_TIMER); the warmTunnel
+// mistake runs two tunnel fans instead; at 17:00 the tunnel fans go off (the timer goes back to the
+// sign's in the 'late' round).
+function warmAfternoon(act, env, P, on) {
+  if (P.warm === 'timer' && on) act('vent.timer', WARM_TIMER);
+  if (P.warm === 'tunnel') env.setFans(on ? 2 : 0);
 }
 
 function fixLeak(act, farm) {

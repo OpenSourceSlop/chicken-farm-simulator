@@ -124,8 +124,10 @@ silently; a job appears only once the farmer has met a symptom (§7), titled by 
 - **Day 5**: the silo gauge reads about 280 kg; the plate says order below two days of feed (6,000 ×
   34 g ≈ 200 kg a day) → *Order feed for the silos* (office phone; ordered before 16:00, it comes the
   next morning 09:00).
-- **Day 6**: a warm afternoon (+4 °C outside): the controller shows the house over its target, chicks
-  pant along the walls → *The house is above its target this afternoon* → a tunnel fan.
+- **Day 6**: a hot, sunny afternoon (+3 °C outside and the sun on the roof): the controller shows the
+  house over its target, chicks pant along the walls → *The house is above its target this afternoon*
+  → the brooders are off by their thermostat; more fan time on the minimum ventilation timer (air in
+  at the side inlets, low air speed at the chicks). Tunnel fans chill week-1 chicks: they pile up.
 Each afternoon he raises nipples and feeders a little (the side view shows the chick's head moving up).
 
 ### Day 7 — weigh-in and result — about 5 minutes
@@ -276,7 +278,8 @@ cold night is forecast* (20:00–24:00: `controller.read` + 30 % coverage) · `p
 flow: find the cause* (done `water.clearFilter` fixed) · `p-leak` *Wet litter here: find what wets it*
 (done `water.fixLeak` fixed) → `p-wet-patch` *Put fresh litter on the wet patch* (`litter.patch`) ·
 `p-order-feed` *Order feed for the silos* (`feed.order`) · `p-warm` *The house is above its target
-this afternoon* (state `house-near-target`: house ≤ target + 1.5 °C for 30 farm min) · `p-report`
+this afternoon* (state `house-near-target`: what the chicks feel within ±1.5 °C of the target for 30
+farm min; final check, was house ≤ target + 1.5) · `p-report`
 *Report the deaths to the company vet* (ui `phone.report`).
 
 ## 5. Signs and equipment plates
@@ -363,7 +366,12 @@ abnormal deaths (Broiler Management 101). Nothing else may carry a guide name.
 - **Weather events** `addWeatherEvent({ id, fromDay, toDay, outsideDrop })` (negative drop = rise)
   with 2 h ramps. Owned by the farm: it adds them from `LEVEL1.problems` and rebuilds them on restore
   (they are not in the env save). Cold night −6 °C day 2 19:00 → day 3 07:00 (≈ 13 °C at 04:00);
-  warm afternoon +4 °C day 6 11:00 → 17:00 (≈ 33 °C at 15:00).
+  warm afternoon +3 °C day 6 11:00 → 17:00 (≈ 32 °C at 15:00) with sun on the roof, `heatPerH` 1.5 °C/h
+  into the house air (final check; the same ramps).
+- **Air at the chicks** (level, final check): the tunnel fans pull the air through the pad end along
+  the floor (0.42 m/s a fan at bird level, the wind chill above); the timer fans draw it in at the side
+  inlets, which throw it up under the roof: 0.1 × that air speed at bird level (model). The pad cools
+  only the tunnel fans' share of the air.
 - **Light** `setLightProgram({ darkStart, darkHours, dimmer })` (in code); lux at birds =
   `EQUIP.luxMax`·dimmer (model). Phase 1 default (dark 02:00–03:00, dimmer 1) unchanged.
 - **Cold night reference**: with the sign's timer the brooders just hold 33 °C at full burn (loss
@@ -483,7 +491,7 @@ tests are skipped while `farm.stub` is true). Profiles are scripted by `src/farm
 
 | Profile | Management | Expect |
 | --- | --- | --- |
-| **ideal** | setpoint by the sign from 07:00 day −1 (34 °C; then the table each morning); 8 cm litter; flush 20:00; flows and heights by the sign every morning; flood days 0–3, rim by `feederRimCmAt` after; 23 h light, dimmer 0.6; timer by the sign (1 fan) each morning; tipped in 6 sectors within 40 min, box weighed first; vent and crop checks; each problem found and fixed on the first round after its symptom (brooder 06:30 day 1; night check; filter at the day 4 morning flow test; leak 15:00 day 4 and patched; feed ordered day 5 morning; 1 tunnel fan 12:00–17:00 day 6) | ratio 4.6–4.95; uniformity 70–80 %; deaths + culls 0.4–0.9 %; FCR 0.83–0.92; mean litter ≤ 28 %; NH3 day 7 3–9 ppm; crop fill ≥ 95 %; floor ≥ 28 °C on ≥ 90 % at the first tip; meter change +5..+60 % every day except day 4 (−20..−4 %); skills Brooding level 2 and Water level 2 |
+| **ideal** | setpoint by the sign from 07:00 day −1 (34 °C; then the table each morning); 8 cm litter; flush 20:00; flows and heights by the sign every morning; flood days 0–3, rim by `feederRimCmAt` after; 23 h light, dimmer 0.6; timer by the sign (1 fan) each morning; tipped in 6 sectors within 40 min, box weighed first; vent and crop checks; each problem found and fixed on the first round after its symptom (brooder 06:30 day 1; night check; filter at the day 4 morning flow test; leak 15:00 day 4 and patched; feed ordered day 5 morning; day 6 timer 2 fans 120 s / 300 s 12:00–17:00, then the sign's timer) | ratio 4.6–4.95; uniformity 70–80 %; deaths + culls 0.4–0.9 %; FCR 0.83–0.92; mean litter ≤ 28 %; NH3 day 7 3–9 ppm; crop fill ≥ 95 %; floor ≥ 28 °C on ≥ 90 % at the first tip; meter change +5..+60 % every day except day 4 (−20..−4 %); skills Brooding level 2 and Water level 2 |
 | **small mistakes** | ideal but pressure left at 6 cm (16 ml/min) all week, nipples raised only on day 3, setpoint 1 °C under the sign, filter found at the day 4 afternoon | ratio 4.2–4.5, passes |
 | **late pre-heat** | ideal but the setpoint set at 02:00 day 0 | floor ≥ 28 °C on < 50 %; crop fill 85–93 %; ratio 4.45–4.75; uniformity ≥ 5 points under ideal; deaths 1.0–1.7 %; passes |
 | **no flush** | ideal without the flush | q = 0.85; deaths 0.05–0.3 points over ideal |
@@ -538,13 +546,20 @@ All §6.10 profiles pass with these values (`node scripts/test-sim.mjs`).
   the CV growth per day; f_air = 1 − 0.015 × (NH3 − 12 ppm), ≥ 0.5, and adds 0.05 × (1 − f_air).
 - **Over-flow**: spill = drunk × (0.02 + 0.7 × (f / need − 1.25)⁺ + 0.02 per cm too low); on days 0–3
   a nipple jetting more than 1.5 × need wets the chicks: a_i × clamp(1 − 0.5 × (f / need − 1.5), 0.5, 1).
-- **Warm afternoon**: outside +7 °C (≈ 36 °C at 15:00); `pantShare` counts cells over target + 2 when
-  e > 1.5 (or half of them when the mean is over 1.5). The ideal profile runs two tunnel fans
+- **Warm afternoon** (final check, replaces round 2's +7 °C and tunnel fans): outside +3 °C and the sun
+  on the roof (1.5 °C/h), so the closed house runs over its target and more air through it cools it;
+  timer fans give 0.1 × the tunnel air speed at the chicks. The ideal profile gives the timer 2 fans,
+  120 s / 300 s from 12:00 and the sign's timer again at 17:00 (`WARM_TIMER`); `warmTunnel` (two tunnel
+  fans 12:00–17:00) keeps e ≈ −2.0..−2.5 all afternoon (the brooders burn under the fans; look notes
+  "huddled under the brooder", "loud peeping"). `observe` says huddled from e < −1.5, as the drawn
+  birds pile up. Ideal ratio 4.79 (seed 1), so the `latePreheat` ratio band is 4.45–4.8 (was 4.75).
+  `pantShare` counts cells over target + 2 when
+  e > 1.5 (or half of them when the mean is over 1.5). Round 2: the ideal profile ran two tunnel fans
   12:00–17:00 (one fan with the hotter air leaves the chicks panting).
 - New profiles and targets in `PROFILE_TARGETS`: `pressure20` (≥ 0.12 under the ideal ratio, litter
   under the lines 35–70 % on day 6), `pansUp` (crop fill < 85 %, deaths ≥ 2 %, fails), `neverPlaced`
   (deaths ≥ 2 %, fails, no low-mortality / steady-heat / crop / weight points), `litter2cm` (comfort
-  share ≥ 5 points and uniformity ≥ 5 points under the ideal, no steady-heat), `warmNoFan` (house
+  share ≥ 5 points and uniformity ≥ 5 points under the ideal, no steady-heat), `warmNoAction` (was `warmNoFan`; house
   2–6 °C over target and ≥ 20 % panting at 15:00 day 6); `noMinVent` now also ≥ 0.15 under the ideal
   ratio and ≥ 3 points of uniformity; `brooderNeverRelit` ≥ 3 points of uniformity, ≥ 0.02 ratio and
   4 points of comfort share under the ideal, no steady-heat. Seeds 1–3 pass.
@@ -574,7 +589,7 @@ for the cause.
 | `blocked-filter` | day 3 10:00 | main filter at the water supply: every line's flow × 0.5 (`filterFactor`); intake × 0.72 | `water.flowtest` result < 0.8 × (day + 20) while active; `water.filter` with out < 0.8 × in | water supply panel: *Clean the filter* (a 5-game-minute bar in the panel, then `water.clearFilter` → `{ fixed: true }`) | drop-spotted if found by 12:00 day 4 |
 | `leaking-nipple` | day 4 10:00 | line 3 nipple at x −9.15 drips 0.6 L/h into its cell | zone r 1.5 m, dwell 2 s, `minMoisture` 35 (props `EV.NEAR`); `litter.squeeze` within 2 m reading ≥ 35 % | E at the drip (props `leak`): *Replace the nipple* → `water.fixLeak`; then a husk sack on the patch → `litter.patch` (cell to 15 %, caking gone) | leak-fixed if replaced before the cell caked |
 | `low-silo` | from day 4 06:00 (no event: the silo runs down from 1,100 kg) | — | `feed.silo` reading < 2 × today's need (6,000 × `feedStdGAt`) | office phone: *Order feed* kg → `feed.order` | — |
-| `warm-afternoon` | day 6 11:00 → 17:00 | outside +7 °C (≈ 36 °C at 15:00; review round 2, was +4) | `controller.read` with house ≥ target + 2; a listen stop while > 20 % of birds pant | tunnel fans, the timer or the cooling pad (`vent.fans` / `vent.timer` / `vent.pad` after the job opened) **and** the air the chicks feel (house − wind chill) ≤ target + 1.5 for 30 min; with no action the problem ends 'weather' and the job stays open | — |
+| `warm-afternoon` | day 6 11:00 → 17:00 | outside +3 °C (≈ 32 °C at 15:00) and sun on the roof 1.5 °C/h (final check; round 2 had +7 °C) | `controller.read` with house ≥ target + 2; a listen stop while > 20 % of birds pant | a change to the air or the heat (`vent.timer` / `heat.setpoint` / `vent.fans` / `vent.pad` after the job opened) **and** what the chicks feel (`feltNearTarget`: comfort e at chick level, wind chill included) within −1.5..+1.5 °C of the target for 30 min. Sign: brooders off by their thermostat, more timer fan time (2 fans 120 s / 300 s found at 14:00 → near target ≈ 14:50); tunnel fans chill the chicks below the band, so the job stays open while they run; with no action the problem ends 'weather' and the job stays open | — |
 | `abnormal-deaths` | conditional | — | dead birds counted at the bin in one day > 0.3 % of placed | office phone: *Report to the company vet* (`phone.report`) | — |
 
 `farm.problemZones()` → `[{ problemId, x, z, r, dwellSec, minMoisture? }]`, only for active,
@@ -1067,7 +1082,7 @@ found from real symptoms and fixed). `node scripts/test-level.mjs` checks the sa
 | 7 | over-pressure was the best strategy | spill 0.7 × over-flow, wet-chick access penalty days 0–3; profile `pressure20` |
 | 8 | a brooder out all week left no trace | per-group comfort, CV from the group spread, out-brooder air 6 °C × output, steady-heat 95 % of chick-minutes |
 | 9 | wet litter / no min vent did nothing | wet and thin litter chill, caked floor and bad air widen the CV, f_air from 12 ppm; profiles `litter2cm`, `noMinVent` targets |
-| 10 | day 6 warm afternoon never showed; job done by the weather | outside +7 °C; p-warm needs a fan / timer / pad action and the felt air near target; 'weather' fix; profile `warmNoFan` |
+| 10 | day 6 warm afternoon never showed; job done by the weather | outside +7 °C; p-warm needs a fan / timer / pad action and the felt air near target; 'weather' fix; profile `warmNoFan` (final check: +3 °C and sun on the roof, the timer is the answer, tunnel fans chill; profiles `warmNoAction`, `warmTunnel`) |
 | 11 | wet patch done with the sack anywhere | `litter.patch` → `{ onLeak }`; p-wet-patch matches it; the sack snaps to the patch |
 | 12 | missed jobs as ids on the wrong day | filed on their own day by title; "Not done: n jobs" with the list |
 | 13 | Replay kept the old run's UI | `ui.newRun()` from `level.start` / `resume` |

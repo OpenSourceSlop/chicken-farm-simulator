@@ -231,6 +231,16 @@ test('state rules: preheat and the 30-minute house-near-target', () => {
   L2.at(6, 13 + 31 / 60); assert(w.status === 'open', `near target but nothing done to the air: ${w.status}`);
   L2.act('vent.fans', { n: 1 });
   assert(w.status === 'done', `a tunnel fan on and 30 min near target: ${w.status}`);
+  // tunnel air that chills the chicks (felt more than 1.5 °C under the target) is not near target
+  const L3 = makeLevel({ startDay: 6, startHour: 13 });
+  L3.events.emit(EV.FARM_PROBLEM, { id: 'warm-afternoon', phase: 'symptom' });
+  L3.env.forceHouseTemp(L3.env.targetTemp + 0.5); L3.env.setFans(2); L3.act('vent.fans', { n: 2 }); L3.jobs.tick();
+  const w3 = L3.jobs.list().find((i) => i.id === 'p-warm');
+  L3.at(6, 13 + 40 / 60);
+  assert(w3.status === 'open' && L3.env.windChill > 2, `two tunnel fans chill the chicks ${(L3.env.houseTemp - L3.env.windChill - L3.env.targetTemp).toFixed(2)} °C: ${w3.status}`);
+  L3.env.setFans(0); L3.act('vent.timer', { fans: 2, onSec: 120, cycleSec: 300 }); L3.jobs.tick();
+  L3.at(6, 14 + 15 / 60);
+  assert(w3.status === 'done', `timer air, the chicks near target 30 min: ${w3.status}`);
 });
 
 test('nextOpening: before the truck, after the morning, never past the level end', () => {

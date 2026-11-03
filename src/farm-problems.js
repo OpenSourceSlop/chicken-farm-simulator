@@ -24,7 +24,7 @@ export function installWeather(farm, env) {
   for (const p of (farm.level || LEVEL1).problems) {
     if (!p.until) continue;
     const drop = p.outsideDrop != null ? p.outsideDrop : -(p.outsideRise || 0);
-    env.addWeatherEvent({ id: p.id, fromDay: at(p.day, p.hour), toDay: at(p.until.day, p.until.hour), outsideDrop: drop });
+    env.addWeatherEvent({ id: p.id, fromDay: at(p.day, p.hour), toDay: at(p.until.day, p.until.hour), outsideDrop: drop, heatPerH: p.sunPerH || 0 });
   }
 }
 
@@ -56,11 +56,23 @@ export function tickProblems(farm, env) {
   }
   const warm = stateOf(farm, 'warm-afternoon');
   if (warm && warm.phase === 'found') {
-    // the chicks feel the house air less the wind chill; cooled by his fans / pad, or by the weather
-    const ok = env.houseTemp - (env.windChill || 0) <= env.targetTemp + 1.5;
+    // the chicks feel the house air less the wind chill: back in the band round the target (not
+    // over it, and not chilled under it by moving air), by his timer / heat change or by the weather
+    const ok = feltNearTarget(env, farm);
     warm.okSince = ok ? (warm.okSince ?? env.day) : null;
-    if (ok && env.day - warm.okSince >= 0.5 / 24 - 1e-9) fixProblem(farm, env, 'warm-afternoon', warm.acted ? 'fans' : 'weather');
+    if (ok && env.day - warm.okSince >= 0.5 / 24 - 1e-9) fixProblem(farm, env, 'warm-afternoon', warm.acted ? 'air' : 'weather');
   }
+}
+
+/**
+ * What the chicks feel is within -1.5..+1.5 °C of the target: the comfort e of the brooding floor
+ * (felt at chick level, wind chill and walls included) once chicks are placed, else the house air
+ * less the wind chill. Tunnel air that chills the chicks is outside the band as much as heat is.
+ */
+export function feltNearTarget(env, farm) {
+  const e = farm && farm.flock && farm.flock.placed > 0 && farm.comfort && farm.comfort.e != null ? farm.comfort.e
+    : env.houseTemp - (env.windChill || 0) - env.targetTemp;
+  return e >= -1.5 && e <= 1.5;
 }
 
 /** The farmer met a symptom: phase 'found' and EV.FARM_PROBLEM symptom (once). */
@@ -76,7 +88,7 @@ export function fixProblem(farm, env, id, by) {
   const st = stateOf(farm, id);
   if (!st || st.phase === 'fixed' || st.phase === 'pending') return false;
   if (st.phase === 'active') findProblem(farm, env, id, by);
-  st.phase = 'fixed'; st.fixedAt = env.day;
+  st.phase = 'fixed'; st.fixedAt = env.day; st.fixedBy = by;
   applyEffects(farm, env);
   farm.emit(EV.FARM_PROBLEM, { id, phase: 'fixed', by });
   return true;
@@ -113,9 +125,9 @@ export function actionSymptoms(farm, env, id, args, result) {
       if (isActive(farm, 'warm-afternoon') && house >= env.targetTemp + 2) findProblem(farm, env, 'warm-afternoon', 'controller');
       break;
     }
-    case 'vent.fans': case 'vent.timer': case 'vent.pad': {
+    case 'vent.fans': case 'vent.timer': case 'vent.pad': case 'heat.setpoint': {
       const warm = stateOf(farm, 'warm-afternoon');
-      if (warm && warm.phase === 'found') warm.acted = true; // he changed the air after he saw it
+      if (warm && warm.phase === 'found') warm.acted = true; // he changed the air or the heat after he saw it
       break;
     }
     case 'phone.report':
@@ -174,7 +186,8 @@ export function observe(farm, env, x, z) {
   const fl = farm.flock;
   if (!fl.present || fl.alive <= 0) return { spread: 'no chicks here yet', droppings: 'none', sounds: 'quiet' };
   const e = env.comfort(x, z);
-  const spread = e < -2 ? 'huddled under the brooder' : e > 2 ? 'along the walls, beaks open' : 'evenly spread';
+  // cold from -1.5 °C, as the drawn birds pile up (flock-think ENTER); hot from +2 (they pant from +1.5..4.5)
+  const spread = e < -1.5 ? 'huddled under the brooder' : e > 2 ? 'along the walls, beaks open' : 'evenly spread';
   const droppings = fl.droppings === 'watery' ? 'wet and runny' : fl.droppings === 'few' ? 'few droppings' : 'firm, brown with a white cap';
   const C = farm.comfort, f = fl.factors;
   const distress = C.coldShare > 0.1 || f.fF < 0.6 || farm.water.access < 0.6;
