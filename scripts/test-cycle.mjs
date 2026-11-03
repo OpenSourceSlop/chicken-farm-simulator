@@ -5,6 +5,7 @@
 // (scripts/cycle-refs.mjs, env alone) run now; the profile tests skip while farm.cycleStub is true.
 //   node scripts/test-cycle.mjs
 import { makeWorld } from '../src/farm-profiles-run.js';
+import { EV } from '../src/events.js';
 import { CYCLE_PROFILES, runCycle } from '../src/farm-profiles-cycle.js';
 import { planSums, planOutcome } from '../src/farm-plan.js';
 import { LEVELS, SKILL_BRANCHES, weightAt, feedStdGAt, feedPerGainAt } from '../src/config.js';
@@ -135,9 +136,12 @@ export function checkCycle(name, run, ideal) {
 }
 
 let failed = 0, skipped = 0;
+const pending = [];
 function test(name, fn) {
-  try { const r = fn(); if (r === 'skip') { skipped++; console.log(`skip ${name}`); } else console.log(`ok   ${name}`); }
-  catch (err) { failed++; console.log(`FAIL ${name}\n     ${err.message}`); }
+  const done = (r) => { if (r === 'skip') { skipped++; console.log(`skip ${name}`); } else console.log(`ok   ${name}`); };
+  const fail = (err) => { failed++; console.log(`FAIL ${name}\n     ${err.message}`); };
+  try { const r = fn(); if (r && typeof r.then === 'function') pending.push(r.then(done, fail)); else done(r); }
+  catch (err) { fail(err); }
 }
 const assert = (c, msg) => { if (!c) throw new Error(msg); };
 const fmt = (v) => (typeof v === 'number' ? +v.toFixed(3) : v);
@@ -261,5 +265,177 @@ for (const name of CYCLE_PROFILES) {
   });
 }
 
+
+// ---- package checks (PHASE3.md §14.1 acceptance): speed, save sizes, restore, action shapes, null readings, the run store ----
+test('package: the whole cycle (-2 -> 67) in 15 s or less; farm.step <= 0.5 ms with the whole house in use; a 24 h skip <= 200 ms', () => {
+  if (STUB) return 'skip';
+  const t0 = performance.now(); const run = runCycle('ideal', { seed: 3 }); const ms = performance.now() - t0;
+  assert(run.levels.cleanout, 'the run reached the clean-out');
+  const w = makeWorld();
+  restoreBlob(w, runCycle('ideal', { seed: 1, from: 'plan', to: 'weeks45', keepStarts: true }).starts.weeks45);
+  w.env.skipHours(24); // warm up
+  const t1 = performance.now(); w.env.skipHours(24); const skip = performance.now() - t1;
+  const t2 = performance.now(); for (let i = 0; i < 300; i++) w.farm.step(w.env, 60); const per = (performance.now() - t2) / 300;
+  console.log(`     whole cycle ${(ms / 1000).toFixed(1)} s, 24 h skip ${skip.toFixed(0)} ms, farm.step ${per.toFixed(3)} ms (day ${w.env.dayNumber}, ${w.farm.litter.usedAll ? 576 : 300} cells)`);
+  assert(ms <= 15000, `whole cycle ${ms.toFixed(0)} ms`);
+  assert(skip <= 200, `24 h skip ${skip.toFixed(0)} ms`);
+  assert(per <= 0.5, `farm.step ${per.toFixed(3)} ms`);
+});
+
+function restoreBlob(w, blob) {
+  const b = JSON.parse(JSON.stringify(blob));
+  w.farm.start(LEVELS[1], { seed: b.farm.seed ?? 1, keepClock: true });
+  for (const [k, v] of Object.entries(b.env)) if (!['maxDay', 'curtainForced', 'cycleClimate', 'fansBroken', 'padWorking', 'fanStages', 'broodersUp'].includes(k)) w.env[k] = v;
+  w.env.setMaxDay(b.env.maxDay); w.env.setDay(Math.round(b.env.day - b.env.hour / 24)); w.env.setHour(b.env.hour);
+  w.farm.restore(b.farm); w.records.restore(b.records); w.skills.restore(b.skills);
+}
+test('package: every level start and the day 41 blob are 250 KB or less; restore -> serialize identical; the restored farm runs on', () => {
+  if (STUB) return 'skip';
+  const run = runCycle('ideal', { seed: 1, keepStarts: true });
+  const sizes = [];
+  for (const [id, blob] of Object.entries(run.starts)) {
+    const json = JSON.stringify(blob);
+    sizes.push(`${id} ${(json.length / 1024).toFixed(0)}`);
+    assert(json.length <= 250 * 1024, `${id} start ${(json.length / 1024).toFixed(0)} KB`);
+    const w = makeWorld();
+    restoreBlob(w, blob);
+    for (const k of ['farm', 'records', 'skills']) {
+      const a = JSON.stringify(blob[k]), b = JSON.stringify(w[k].serialize());
+      if (a !== b) { let i = 0; while (a[i] === b[i]) i++; throw new Error(`${id}: ${k} differs after restore at ${i}: ${a.slice(Math.max(0, i - 80), i + 60)} | ${b.slice(Math.max(0, i - 80), i + 60)}`); }
+    }
+    assert(w.env.cycleClimate === blob.env.cycleClimate && w.env.broodCurtain === (blob.env.curtainForced ?? w.env.broodCurtain) && w.env.maxDay === blob.env.maxDay, `${id}: env rebuilt from the farm`);
+    w.env.skipHours(3);
+    assert(w.farm.mode === 'level' && (id === 'plan' || id === 'level1' || id === 'cleanout' || w.farm.flock.alive > 0), `${id}: the restored farm runs on`);
+  }
+  const w41 = makeWorld();
+  restoreBlob(w41, run.starts.finish);
+  const day41 = JSON.stringify(run.starts.finish);
+  console.log(`     level starts (KB): ${sizes.join(', ')}; farm ${(JSON.stringify(run.starts.finish.farm).length / 1024).toFixed(0)} KB, records ${(JSON.stringify(run.starts.finish.records).length / 1024).toFixed(0)} KB at day 36`);
+  assert(day41.length <= 250 * 1024, `day 36 blob ${day41.length}`);
+});
+
+test('package: the day 41 run blob is 250 KB or less (ideal)', () => {
+  if (STUB) return 'skip';
+  const run = runCycle('ideal', { seed: 1, from: 'finish', to: 'finish' });
+  void run;
+  const w = makeWorld();
+  restoreBlob(w, runCycle('ideal', { seed: 1, from: 'plan', to: 'finish', keepStarts: true }).starts.finish);
+  w.env.skipHours(5 * 24 + 14); // day 41 20:00 with the ideal's settings
+  const json = JSON.stringify({ farm: w.farm.serialize(), records: w.records.serialize(), skills: w.skills.serialize() });
+  console.log(`     day ${w.env.dayNumber} blob ${(json.length / 1024).toFixed(0)} KB`);
+  assert(json.length <= 250 * 1024, `day 41 blob ${(json.length / 1024).toFixed(0)} KB`);
+});
+
+test('package: every farm action of PHASE3.md §13.3 answers with its result shape', () => {
+  if (STUB) return 'skip';
+  const w = makeWorld();
+  restoreBlob(w, runCycle('ideal', { seed: 1, from: 'plan', to: 'week3', keepStarts: true }).starts.week3);
+  const { farm } = w;
+  const shape = {
+    'bio.change': true, 'house.curtain': true, 'heat.brooders': true, 'light.lux': ['lux'], 'air.probe': ['speedMs', 'tempC', 'rh'], 'vent.stages': true,
+    'fan.fix': ['fixed'], 'pad.check': ['dry', 'flowing'], 'pad.flush': ['fixed'], 'pad.fixFloat': ['fixed'], 'gas.meter': ['kgLeft', 'kgUsed'],
+    'sample.bird': ['look', 'value'], 'chicks.cull': true, 'water.main': true, 'vaccine.mix': ['litres'], 'water.medicate': true, 'water.test': ['ph', 'chlorinePpm'],
+    'feed.valve': true, 'feed.order': ['arriveDay', 'arriveHour', 'kg'], 'feed.withdraw': true, 'feed.wash': true, 'litter.fork': ['caked'], 'litter.patch': ['onLeak', 'onPad'],
+    'water.disinfect': true, 'water.flush': ['flushClear', 'disinfected'], 'phone.bookCatch': ['booked', 'catchAt'], 'phone.bookChicks': ['booked', 'bookedDay'],
+    'catch.panels': true, 'load.ticket': ['crates', 'birds', 'grossKg', 'tareKg', 'netKg', 'doa'], 'clean.scrape': ['share'], 'clean.wash': ['share'], 'clean.spray': ['share'],
+    'clean.brush': true, 'clean.washbay': true, 'clean.bait': true, 'clean.swab': ['n'], 'house.close': true, 'plan.measure': ['m'],
+    'plan.send': ['chicksPerWeek', 'salePerWeek', 'densityKgM2', 'restDays'],
+  };
+  const args = { 'house.curtain': { open: true }, 'heat.brooders': { up: false }, 'light.lux': { x: 0, z: 0 }, 'air.probe': { x: 10, z: 0 }, 'vent.stages': { stages: null },
+    'fan.fix': { index: 3 }, 'sample.bird': { x: 0, z: 0, index: 0, look: 'droppings' }, 'chicks.cull': { n: 1, reason: 'sick' }, 'water.main': { open: true },
+    'vaccine.mix': { stabiliser: true }, 'water.medicate': { on: false }, 'feed.valve': { silo: 1, open: 1 }, 'feed.order': { kg: 500, type: 'grower' },
+    'feed.withdraw': { on: false }, 'feed.wash': { line: 0 }, 'litter.fork': { x: -10, z: 1.95 }, 'litter.patch': { x: -23, z: 0 }, 'water.disinfect': { on: true },
+    'water.flush': { line: 0, on: true }, 'phone.bookCatch': { day: 42, hour: 2 }, 'phone.bookChicks': { day: 60 }, 'load.ticket': { truck: 0 },
+    'clean.scrape': { x: 0, z: 0, r: 2 }, 'clean.wash': { x: 0, z: 0, r: 2.5 }, 'clean.spray': { x: 0, z: 0, r: 2.5 }, 'clean.brush': { part: 'fans' },
+    'clean.washbay': { item: 'boots' }, 'clean.bait': { x: -25.2, z: -6.8, i: 0 }, 'clean.swab': { x: -20, z: -1.95, spot: 0 }, 'plan.measure': { axis: 'length', m: 48 },
+    'plan.send': { houses: 6, birdsPerHouse: 6000, cycleDays: 67, lossesPct: 4, saleKg: 2.8 } };
+  for (const [id, keys] of Object.entries(shape)) {
+    const r = farm.act(id, args[id] || {});
+    if (keys === true) assert(r === true, `${id} -> ${JSON.stringify(r)}, want true`);
+    else for (const k of keys) assert(r && typeof r === 'object' && k in r, `${id} result has no ${k}: ${JSON.stringify(r)}`);
+  }
+  const no = farm.act('phone.bookCatch', { day: 40, hour: 2 });
+  assert(no.booked === false && typeof no.reason === 'string', `a booking outside the window: ${JSON.stringify(no)}`);
+  const chicks = farm.act('phone.bookChicks', { day: farm.clean.closedDay + 10 });
+  assert(chicks.booked === false && typeof chicks.reason === 'string', `chicks under 14 days after closing: ${JSON.stringify(chicks)}`);
+});
+
+test('package: rows hold null for every reading not taken (the Phase 3 fields too)', () => {
+  if (STUB) return 'skip';
+  const w = makeWorld();
+  restoreBlob(w, runCycle('ideal', { seed: 1, from: 'plan', to: 'week3', keepStarts: true }).starts.week3);
+  w.env.skipHours(14);
+  const row = w.records.sign(15);
+  for (const k of ['feedKg', 'waterL', 'litterMoisturePct', 'houseMinC', 'houseMaxC', 'darkHours', 'luxMeasured', 'houseRhMin', 'houseRhMax', 'airSpeedMs', 'fansMax', 'padOn',
+    'lameCulled', 'feedType', 'vaccine', 'gasKgUsed', 'deadByLook', 'flowsMlMin']) assert(row[k] === null, `row.${k} = ${JSON.stringify(row[k])} although nothing was read`);
+  assert(row.weightSource === 'scale' && row.alive > 5800, 'alive from the counts, weight from the bird scale');
+});
+
+test('package: harvest page, clean-out page and cycle summary from the ideal', () => {
+  if (STUB) return 'skip';
+  const run = idealRun || runCycle('ideal', { seed: 1 });
+  const s = run.records.cycleSummary({ plan: run.farm.plan, levels: run.levels });
+  for (const k of ['placed', 'sold', 'liveKg', 'meanLiveG', 'fcr', 'epef', 'mortalityPct', 'deathsByLevel', 'weights', 'feedKg', 'waterL', 'gasKg', 'restDays', 'swabsPositive', 'plan', 'actual', 'points'])
+    assert(k in s, `cycleSummary.${k}`);
+  assert(s.sold > 5700 && s.plan && s.plan.cycleDays === 67 && s.actual.cycleDays === 67 && s.restDays === 21 && s.weights.every((x) => x.weighedG > 0), JSON.stringify(s).slice(0, 300));
+  assert(Object.values(s.points).reduce((a, b) => a + b, 0) > 50, `points of the cycle ${JSON.stringify(s.points)}`);
+  const h = run.records.harvestPage();
+  assert(h && h.tickets.length === 2 && h.tickets.every((t) => t.grossKg - t.tareKg === t.netKg || Math.abs(t.grossKg - t.tareKg - t.netKg) <= 1), `harvest page ${JSON.stringify(h && h.tickets)}`);
+  const c = run.records.cleanPage();
+  assert(c && c.swabsTaken === 10 && c.restDays === 21 && c.lab, `clean page ${JSON.stringify(c).slice(0, 200)}`);
+  assert(run.records.timeline('week2').length === 7 && run.records.timeline('week2').every((r) => r.darkHours != null), 'timeline of week 2');
+});
+
+test('package: cycle problems start silently; zones, the radio, look words; env.heatBudget()', () => {
+  if (STUB) return 'skip';
+  const starts = runCycle('ideal', { seed: 1, from: 'plan', to: 'weeks45', keepStarts: true }).starts;
+  const w = makeWorld(), got = [];
+  w.events.on(EV.FARM_PROBLEM, (p) => got.push(`${p.id}:${p.phase}`));
+  restoreBlob(w, starts.week3);
+  const { farm, env } = w;
+  assert(/hot, up to 35/.test(farm.forecast(15).text), `radio on day 15: ${farm.forecast(15).text}`);
+  env.skipHours(2 * 24 + 5); // day 17 11:00: the pad overflows silently
+  assert(got.includes('pad-overflow:start') && !got.includes('pad-overflow:symptom') && farm.house.padFloatStuck, 'the pad overflows silently');
+  env.skipHours(3);
+  assert(farm.problemZones().some((z) => z.problemId === 'pad-overflow' && z.minMoisture === 35), 'the pad-end zone');
+  w.events.emit(EV.NEAR, { problemId: 'pad-overflow', x: -23, z: 0 });
+  assert(got.includes('pad-overflow:symptom') && farm.act('pad.fixFloat').fixed === true && got.includes('pad-overflow:fixed'), 'EV.NEAR finds it, the float valve fixes it');
+  const o = farm.observe(0, 0);
+  assert(o.spread && o.droppings && o.sounds && o.air, `look words ${JSON.stringify(o)}`);
+  const hb = env.heatBudget();
+  assert(['wallsCh', 'airCh', 'brooderCh', 'birdsCh', 'sunCh'].every((k) => Number.isFinite(hb[k])) && hb.birdsCh > 0, `heat budget ${JSON.stringify(hb)}`);
+  const w2 = makeWorld();
+  restoreBlob(w2, starts.weeks45);
+  w2.env.skipHours(5 * 24 + 4); // day 27 10:00: fan 4's belt broke at 09:00
+  assert(w2.env.fansBroken.includes(3) && w2.farm.problemZones().some((z) => z.problemId === 'fan-belt'), 'fan 4 broken with its zone');
+  w2.env.setFans(6);
+  assert(Math.abs(w2.env.airSpeed - 5 * 2.5 / 6) < 0.01, `six fans with one broken move ${w2.env.airSpeed} m/s`);
+  w2.farm.act('fan.fix', { index: 3 });
+  assert(!w2.env.fansBroken.length && Math.abs(w2.env.airSpeed - 2.5) < 0.01, 'the belt fitted: all six turn');
+});
+
+test('package: the run store (PHASE3.md §11): run key, level starts by day, clearStarts, quota drops the oldest start', async () => {
+  const { createRunStore } = await import('../src/save.js');
+  const mem = new Map(); let quota = Infinity;
+  globalThis.localStorage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => { const size = [...mem.entries()].filter(([x]) => x !== k).reduce((a, [, x]) => a + x.length, 0) + String(v).length; if (size > quota && k !== '__cf_probe__') throw new Error('quota'); mem.set(k, String(v)); },
+    removeItem: (k) => mem.delete(k), key: (i) => [...mem.keys()][i] ?? null, get length() { return mem.size; } };
+  try {
+    const st = createRunStore();
+    assert(st.available, 'available');
+    const blob = (day) => ({ env: { day: day + 6 / 24, hour: 6 }, pad: 'x'.repeat(1000) });
+    assert(st.saveStart('week2', 8, { levelId: 'week2' }, blob(8)) && st.saveStart('weeks45', 22, { levelId: 'weeks45' }, blob(22)) && st.saveStart('weeks45', 29, { levelId: 'weeks45' }, blob(29)), 'starts saved');
+    assert(st.loadStart('weeks45', 22).day === 22 && st.loadStart('weeks45').day === 29 && st.loadStart('week2').day === 8, 'starts by day, the latest without one');
+    assert(st.save({ levelId: 'weeks45' }, blob(30)) && st.load().run.levelId === 'weeks45' && st.info().day === 30 && st.info().starts.weeks45.join() === '22,29', `info ${JSON.stringify(st.info())}`);
+    assert(st.clearStarts('weeks45') === 2 && st.loadStart('weeks45') === null && st.loadStart('week2'), 'clearStarts from weeks45 keeps week2');
+    st.saveStart('week3', 15, { levelId: 'week3' }, blob(15));
+    quota = [...mem.values()].reduce((a, x) => a + x.length, 0) + 200;
+    assert(st.saveStart('finish', 36, { levelId: 'finish' }, blob(36)) && st.loadStart('week2') === null && st.loadStart('finish'), 'a full storage drops the oldest start (week 2) and retries');
+    mem.set('chickenFarm.level1.v1', JSON.stringify({ version: 1, savedAt: 5, env: { day: 3.5, hour: 12 }, level: { day: 3 } }));
+    const m = st.migratePhase2({ remove: true });
+    assert(m && m.levelId === 'level1' && m.blob.env.day === 3.5 && !mem.has('chickenFarm.level1.v1'), 'a Phase 2 save continues as a run at level1');
+  } finally { delete globalThis.localStorage; }
+});
+
+await Promise.all(pending);
 console.log(failed ? `${failed} failed` : `all passed${skipped ? ` (${skipped} skipped: farm.cycleStub)` : ''}`);
 process.exit(failed ? 1 : 0);

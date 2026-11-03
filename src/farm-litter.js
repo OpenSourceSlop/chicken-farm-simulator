@@ -25,9 +25,17 @@ for (let i = 0; i < N; i++) if (insideBrood(cellCentre(i))) BROOD_CELLS.push(i);
 /** Row of cells (cz) under each drinker line. */
 export const LINE_ROWS = DRINKER_LINES_Z.map((z) => Math.floor((z - FLOOR_GRID.z0) / FLOOR_GRID.cell));
 const UNDER_LINE = new Uint8Array(N);
-for (const i of BROOD_CELLS) if (LINE_ROWS.includes(cz(i))) UNDER_LINE[i] = 1;
-const LINE_CELLS = LINE_ROWS.map((row) => BROOD_CELLS.filter((i) => cz(i) === row));
-const W_SUM = BROOD_CELLS.length + (1.5 - 1) * BROOD_CELLS.filter((i) => UNDER_LINE[i]).length; // LITTER.underLine
+for (let i = 0; i < N; i++) if (LINE_ROWS.includes(cz(i))) UNDER_LINE[i] = 1;
+/** Every cell of the house (Phase 3: the floor in use after the curtain lift). */
+export const ALL_CELLS = Array.from({ length: N }, (_, i) => i);
+// The floor in use (PHASE3.md §6.2): the 300 brooding cells while the curtain is down (Phase 2's only
+// floor), all 576 after the lift. Each set: its cells, the cells under each drinker line, the weight sum.
+const makeSet = (cells) => ({ cells, line: LINE_ROWS.map((row) => cells.filter((i) => cz(i) === row)),
+  wSum: cells.length + (1.5 - 1) * cells.filter((i) => UNDER_LINE[i]).length }); // LITTER.underLine
+const SET_BROOD = makeSet(BROOD_CELLS), SET_ALL = makeSet(ALL_CELLS);
+const LINE_CELLS = SET_BROOD.line;
+/** The cells in use now: L.usedAll (the farm sets it when the curtain lifts) = the whole house. */
+export const usedCells = (L) => (L.usedAll ? ALL_CELLS : BROOD_CELLS);
 
 /** Mean moisture % of the brooding cells under the drinker lines (what a squeeze there reads). */
 export function underLineMoisture(L) {
@@ -53,7 +61,11 @@ export function createLitter() {
     cakedHours: new Float32Array(N),     // hours above 40 %
     cakedGrid: new Uint8Array(N),
     meanMoisturePct: LITTER.freshPct,
-    cakedShare: 0,                       // share of the brooding cells that are caked
+    cakedShare: 0,                       // share of the brooding cells that are caked (Phase 3: of the floor in use)
+    // Phase 3 (set by the farm from Week 2; Phase 2 never sets them, so the brooding week is unchanged)
+    usedAll: false,                      // the curtain is up: litter water, drying, caking and the mean over all 576 cells
+    dryBoost: 1,                         // drying x this (moving air over the litter, model)
+    coverAll: 0,                         // share of all 576 cells covered (house-ready)
     ammoniaPpm: 0,
     vapourGh: 0,
     version: 0,                          // bumps when the grids change (props repaint)
@@ -82,9 +94,11 @@ export function spread(L, x, z, r) {
 }
 
 export function updateCover(L) {
-  let c = 0;
+  let c = 0, a = 0;
   for (const i of BROOD_CELLS) c += L.coverGrid[i];
+  for (let i = 0; i < N; i++) a += L.coverGrid[i];
   L.cover = c / BROOD_CELLS.length;
+  L.coverAll = a / N;
 }
 
 /** Fresh husk on a wet patch: the cell (and the ones touching it within 0.8 m) back to 15 %. */
@@ -102,31 +116,43 @@ export function patch(L, x, z) {
 /** Mean house litter depth (cm over the covered brooding floor), for env.litterDepthCm. */
 export function meanDepth(L) {
   let s = 0, n = 0;
-  for (const i of BROOD_CELLS) { if (L.coverGrid[i] > 0) { s += L.depthGrid[i] * L.coverGrid[i]; n++; } }
+  for (const i of usedCells(L)) { if (L.coverGrid[i] > 0) { s += L.depthGrid[i] * L.coverGrid[i]; n++; } }
   return n ? s / n : 0;
 }
+
+/** Mean litter moisture % of the covered cells in a cell list (the brooding half, a zone). */
+export function meanMoistureOf(L, cells) {
+  let s = 0, n = 0;
+  for (const i of cells) if (L.coverGrid[i] >= 0.5) { s += L.moistureGrid[i]; n++; }
+  return n ? s / n : null;
+}
+/** Set a cell's moisture % (fresh husk: the fork and the patch). */
+export const setMoisture = (L, i, pct) => setPct(L, i, pct);
+/** Water (kg) into one cell (the pad overflow). */
+export const addWater = (L, i, kg) => { L.waterGrid[i] += kg; };
 
 /**
  * One step: droppings water (litres, spread over the brooding cells, x 1.5 under the lines),
  * spill per line, the leak into its cell, drying at the house humidity, caking, ammonia.
  */
 export function stepLitter(L, { hrs, droppingsL, spill, leakL, leakCell, rh, feedKg, airflow }) {
-  const wSum = W_SUM;
-  const per = droppingsL / wSum;
-  const dry0 = LITTER.dryRate / 0.5, dryK = dry0 * Math.max(0, 1 - rh / 100);
+  const S = L.usedAll ? SET_ALL : SET_BROOD, CELLS = S.cells;
+  const per = droppingsL / S.wSum;
+  const boost = L.dryBoost || 1;
+  const dry0 = (LITTER.dryRate / 0.5) * boost, dryK = dry0 * Math.max(0, 1 - rh / 100);
   let vap = 0, pot = 0, sumM = 0, nM = 0;
-  for (let k = 0; k < BROOD_CELLS.length; k++) {
-    const i = BROOD_CELLS[k];
+  for (let k = 0; k < CELLS.length; k++) {
+    const i = CELLS[k];
     L.waterGrid[i] += per * (UNDER_LINE[i] ? LITTER.underLine : 1);
   }
-  for (let li = 0; li < LINE_CELLS.length; li++) {
-    const cells = LINE_CELLS[li], s = (spill[li] || 0) / cells.length;
+  for (let li = 0; li < S.line.length; li++) {
+    const cells = S.line[li], s = (spill[li] || 0) / cells.length;
     if (s > 0) for (const i of cells) L.waterGrid[i] += s;
   }
   if (leakL > 0 && leakCell != null) L.waterGrid[leakCell] += leakL;
   let changed = false;
-  for (let k = 0; k < BROOD_CELLS.length; k++) {
-    const i = BROOD_CELLS[k];
+  for (let k = 0; k < CELLS.length; k++) {
+    const i = CELLS[k];
     const dry = dryOf(L, i);
     if (dry > 0 && L.coverGrid[i] >= 0.5) {
       const m = (100 * L.waterGrid[i]) / (dry + L.waterGrid[i]);
@@ -150,8 +176,8 @@ export function stepLitter(L, { hrs, droppingsL, spill, leakL, leakCell, rh, fee
   }
   L.meanMoisturePct = nM ? sumM / nM : LITTER.freshPct;
   let caked = 0;
-  for (let k = 0; k < BROOD_CELLS.length; k++) caked += L.cakedGrid[BROOD_CELLS[k]];
-  L.cakedShare = caked / BROOD_CELLS.length; // the chicks keep off caked litter (crowding, farm-flock)
+  for (let k = 0; k < CELLS.length; k++) caked += L.cakedGrid[CELLS[k]];
+  L.cakedShare = caked / CELLS.length; // the chicks keep off caked litter (crowding, farm-flock)
   L.vapourGh = (vap * 1000) / hrs;
   L.dryPotentialGh = pot * 1000; // drying at 0 % RH (the climate solves RH with it)
   L.ammoniaPpm = (LITTER.nh3K * feedKg * (0.4 + L.meanMoisturePct / 20)) / Math.sqrt(Math.max(1, airflow));
@@ -163,7 +189,9 @@ export function serializeLitter(L) {
   const ints = (a, k) => Array.from(a, (v) => Math.round(v * k));
   const caked = [];
   for (let i = 0; i < N; i++) if (L.cakedHours[i] > 0) caked.push(i, Math.round(L.cakedHours[i] * 100), L.cakedGrid[i]);
-  return { depthCm: L.depthCm, cover: rle(ints(L.coverGrid, 100)), depth: rle(ints(L.depthGrid, 10)), moisture: ints(L.moistureGrid, 10), caked };
+  const out = { depthCm: L.depthCm, cover: rle(ints(L.coverGrid, 100)), depth: rle(ints(L.depthGrid, 10)), moisture: ints(L.moistureGrid, 10), caked };
+  if (L.usedAll || L.dryBoost !== 1) { out.usedAll = L.usedAll; out.dryBoost = L.dryBoost; } // Phase 3 only (the brooding week's save is Phase 2's)
+  return out;
 }
 
 export function restoreLitter(L, d) {
@@ -180,9 +208,11 @@ export function restoreLitter(L, d) {
   }
   const c = d.caked || [];
   for (let k = 0; k + 2 < c.length; k += 3) { L.cakedHours[c[k]] = c[k + 1] / 100; L.cakedGrid[c[k]] = c[k + 2]; }
+  L.usedAll = !!d.usedAll; L.dryBoost = d.dryBoost ?? 1;
+  const cells = usedCells(L);
   let caked = 0;
-  for (const i of BROOD_CELLS) caked += L.cakedGrid[i];
-  L.cakedShare = caked / BROOD_CELLS.length;
+  for (const i of cells) caked += L.cakedGrid[i];
+  L.cakedShare = caked / cells.length;
   updateCover(L); L.version++;
 }
 

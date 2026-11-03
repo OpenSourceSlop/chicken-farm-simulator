@@ -51,6 +51,15 @@ import {
 //                   env.fansEffective = fansManual - broken among them (air, heat, wind chill use it)
 //   env.padWorking  0..1 share of the pad with water on it (the farm sets it; 1 by default)
 //   env.wetBulb()   outside wet-bulb °C (the pad's limit)
+//   env.setBroodersUp(on) / env.broodersUp   the brooders are off for good and winched up (heat.brooders
+//                   { up: true }, week 4): the thermostat asks for nothing, no radiant (the house look
+//                   winches them up 0.62 m)
+//   env.setFanStages({ stages: [{ overC, fans }], padOverC } | null) / env.fanStages   the fan panel's stage
+//                   table (unlock tunnelStages): each climate step the tunnel fans follow the house
+//                   temperature over the target (the most fans of every stage whose overC it passed), the
+//                   pad runs from padOverC; null = the fans and the pad by hand
+//   env.heatBudget() -> { wallsCh, airCh, brooderCh, birdsCh, sunCh, slabCh }   °C per hour each term moved the
+//                   house air in the last level-climate step (negative = cooling): the heat loss readout
 
 const HOUR = 3600;
 export const MAX_DAY = 42;  // the last day of the flock; after it the clock keeps day 42
@@ -118,6 +127,9 @@ function initialState() {
     fansBroken: [],                // Phase 3: tunnel fans with a broken belt (setFansBroken)
     fansEffective: 0,              // Phase 3: manual fans that move air
     padWorking: 1,                 // Phase 3: share of the pad with water on it (farm sets it)
+    broodersUp: false,             // Phase 3: brooders off for good and winched up (setBroodersUp)
+    fanStages: null,               // Phase 3: { stages: [{ overC, fans }], padOverC } or null (setFanStages)
+    heatTerms: null,               // Phase 3: the last level-climate step's terms, °C/h (heatBudget)
     // Phase 2 (see the contract at the top)
     ventTimer: null,               // { fans, onSec, cycleSec } or null (manual fans only)
     ventDuty: 0,
@@ -259,6 +271,19 @@ export function createSim() {
     setCycleClimate(on) { this.cycleClimate = !!on; derive(this); emit('weather'); },
     setFansBroken(list) { this.fansBroken = (list || []).filter((i) => i >= 0 && i < FAN_COUNT); derive(this); emit('controls'); },
     wetBulb() { return wetBulbOf(this.outsideTemp, this.outsideRH); },
+    setBroodersUp(on) { this.broodersUp = !!on; thermostat(this); if (this.broodersUp) this.heaterLevel = 0; derive(this); emit('controls'); },
+    setFanStages(t) {
+      const stages = t && Array.isArray(t.stages) ? t.stages.filter((x) => Number.isFinite(x.overC) && Number.isFinite(x.fans))
+        .map((x) => ({ overC: x.overC, fans: Math.max(0, Math.min(FAN_COUNT, Math.round(x.fans))) })).sort((a, b) => a.overC - b.overC) : null;
+      this.fanStages = stages && stages.length ? { stages, padOverC: Number.isFinite(t.padOverC) ? t.padOverC : null } : null;
+      if (this.fanStages) applyFanStages(this);
+      emit('controls');
+    },
+    heatBudget() {
+      const h = this.heatTerms || { wallsCh: 0, airCh: 0, brooderCh: 0, birdsCh: 0, sunCh: 0, slabCh: 0 };
+      const r = (v) => Math.round(v * 100) / 100;
+      return { wallsCh: r(h.wallsCh), airCh: r(h.airCh), brooderCh: r(h.brooderCh), birdsCh: r(h.birdsCh), sunCh: r(h.sunCh), slabCh: r(h.slabCh) };
+    },
     litterDepthAt: null,           // (x, z) -> cm, set by the farm in a level
     // Litter surface temperature (PHASE2.md §6.2): the slab under it plus a share k of the air and
     // brooder radiant above it, k = 0.1 + 0.02 x depth cm (model). Outside a level: the felt air.
@@ -352,10 +377,23 @@ function derive(env) {
 }
 
 // Brooder thermostat, measured on the house air: proportional output across HEAT_BAND.
+// Phase 3: brooders winched up (env.broodersUp) ask for nothing.
 function thermostat(env) {
-  const d = (env.heaterSetpoint + HEAT_OFF_ABOVE - env.houseTemp) / HEAT_BAND;
+  const d = env.broodersUp ? 0 : (env.heaterSetpoint + HEAT_OFF_ABOVE - env.houseTemp) / HEAT_BAND;
   env.heaterDemand = d < 0 ? 0 : d > 1 ? 1 : d;
   env.heatersOn = env.heaterDemand > 0.02;
+}
+
+// Phase 3: the fan panel's stage table sets the tunnel fans (and the pad) from the house over its target.
+function applyFanStages(env) {
+  const t = env.fanStages;
+  if (!t) return;
+  const over = env.houseTemp - env.targetTemp;
+  let n = 0;
+  for (const s of t.stages) if (over >= s.overC) n = Math.max(n, s.fans);
+  if (n !== env.fansManual) { env.fansManual = n; env.fansOn = n; derive(env); }
+  const pad = t.padOverC != null && over >= t.padOverC;
+  if (pad !== env.padOn) env.padOn = pad;
 }
 
 // Saturation water content of air, g/m3, at t °C (polynomial fit, good for 0-45 °C).
@@ -388,6 +426,9 @@ function levelClimate(env, hrs) {
   const exchange = AIR.wallLossPerH + env.airflowM3h / AIR.thermalM3;
   const sink = SLAB.sinkPerH * (env.houseTemp - env.slabTemp);
   const dT = heat + env.flockHeatPerH - exchange * (env.houseTemp - inlet) - sink;
+  const ht = env.heatTerms || (env.heatTerms = {});
+  ht.brooderCh = heat - (env.sunHeatPerH || 0); ht.sunCh = env.sunHeatPerH || 0; ht.birdsCh = env.flockHeatPerH;
+  ht.airCh = -(env.airflowM3h / AIR.thermalM3) * (env.houseTemp - inlet); ht.wallsCh = -AIR.wallLossPerH * (env.houseTemp - inlet); ht.slabCh = -sink;
   env.houseTemp += dT * hrs;
   env.slabTemp += ((env.houseTemp + SLAB.brooderC * env.heaterLevel - env.slabTemp) / SLAB.tauH) * hrs;
   // Absolute-humidity balance: inlet air (outside, plus what the pad adds: about 0.49 g/m3 per °C
@@ -419,6 +460,7 @@ function stepGame(env, gs, fast) {
     if (env.forcedHouseTemp != null) {
       env.houseTemp = env.forcedHouseTemp;
     } else if (env.levelClimate) {
+      if (env.fanStages) applyFanStages(env);
       levelClimate(env, hrs);
     } else {
       // Inlet air: through the wet pad it cools by about 1 °C for every 5 % of humidity it can still take up.
