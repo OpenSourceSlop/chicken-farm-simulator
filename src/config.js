@@ -490,7 +490,7 @@ export const WEEK3 = {
     { id: 'warm-afternoon3', day: 16, hour: 11, outsideRise: 2, sunPerH: 1, until: { day: 16, hour: 17 } },
     { id: 'pad-overflow', day: 17, hour: 10, litresPerCellH: 0.8, columns: 2 },
     { id: 'coccidiosis', day: 19, hour: 5 },
-    { id: 'gumboro', day: 20, hour: 6, conditional: 'vaccine', below: 0.85 },
+    { id: 'gumboro', day: 18, hour: 6, conditional: 'vaccine', below: 0.85 },
   ],
   target: { kind: 'weight', day: 21, minShare: 0.9 }, fail: { mortalityMaxPct: 1.0 },
 };

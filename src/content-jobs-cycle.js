@@ -48,7 +48,7 @@ export const JOBS_CYCLE = [
   D('pl-measure', -2, 'plan', 'Measure house 1: length and width', { spot: 'houseDoor', signs: ['sign-plan'], branch: 'planning',
     done: { type: 'each', id: 'plan.measure', key: 'axis', values: ['length', 'width'] } }),
   D('pl-house-dip', -2, 'plan', 'Dip your boots at the house door', { spot: 'houseDoor', signs: ['sign-gate'], branch: 'biosecurity', done: HOUSE_DIP }),
-  D('pl-sheet', -2, 'plan', 'Work out the plan on the planning sheet', { window: [7, 22], spot: 'officeDesk', signs: ['sign-plan', 'plan-sheet'], branch: 'planning', done: A('plan.send') }),
+  D('pl-sheet', -2, 'plan', 'Work out the plan on the planning sheet', { window: [7, 16], spot: 'officeDesk', signs: ['sign-plan', 'plan-sheet'], branch: 'planning', done: A('plan.send') }),
   D('pl-reply', -2, 'rel', 'Read the company’s reply', { rel: { anchor: 'sent', fromH: 1, toH: 12 }, after: 'pl-sheet', spot: 'officeDesk', signs: ['sign-plan'], branch: 'planning', done: A('plan.reply') }),
   D('pl-record', -2, 'eve', 'Sign the plan page at the office', { spot: 'officeDesk', signs: [], branch: null, done: SIGNED }),
 

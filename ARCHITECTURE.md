@@ -26,7 +26,8 @@ Not in scope yet: sound, settings, farm overview map (Phase 5), harder replays (
 - A day passes in a few minutes of play; a "next job" / skip button jumps ahead.
 - Every sign shows its source in small text: the guide's name (one of the six guides in
   `config.GUIDES`), or "general practice". No page numbers: the guide PDFs and content-map.md are
-  not in this repo, so only the facts listed in PHASE2.md §6.1 carry a guide name.
+  not in this repo, so only the facts listed in PHASE2.md §6.1 (and, provisionally, the bare week topics
+  of PHASE3.md §5.1) carry a guide name.
 - Art: simple shapes with flat colours (`flatShading`, Lambert/Standard materials), procedural
   geometry (no external model files: the sandbox has no network for assets). The house has its
   **roof cut away** so you see inside; walls between camera and farmer drop to a stub. From the yard
@@ -333,22 +334,44 @@ feeder *Running* / *Flood on*, *Weigh next* / *Weigh all*).
 
 ## Phase 3 — contracts on main (before the packages branch)
 
-`PHASE3.md` is the spec and §14 the four packages (`sim`, `run`, `panels`, `scene`). Committed now:
+`PHASE3.md` is the spec and §14 the four packages (`sim`, `run`, `panels`, `scene`); §13.9 gives every
+hand-over point one owner and one signature. Committed now (after the design review):
 - `src/config.js` Phase 3 section: `CYCLE`, `ROUNDS`, the level defs `PLAN_LEVEL`, `WEEK2`, `WEEK3`,
-  `WEEKS45`, `FINISH`, `CLEANOUT` and `LEVELS` (with `LEVEL1`), `levelById`, `levelOfDay`, `FEED_STD_TABLE`
-  (`feedStdGAt` unchanged to age 7), `MIN_VENT_PER_1000` to 3 kg (unchanged to 200 g), `FEED_TYPES`,
-  `LIGHT_PRESETS`, `HEAT`, `PLAN_CONTRACT`, `HARVEST`, `CLEAN`, `SPOTS3`, `houseSector`, `COMFORT_RAMP`,
-  `MOISTURE_RAMP`, 33 `UNLOCKS`, `RUN_SAVE`, `CONDITIONS`; `MIN_DAY` is −2 (the planning day).
-- `src/events.js`: `EV.RUN`, `EV.CATCH`, `EV.LETTER`, `ACTION_IDS` (every action id of both phases).
-- `src/sim.js`: `env.setMaxDay(n)` / `env.maxDay` (42 by default), `env.setBroodCurtain(closed | null)`.
-- Contract data: `src/content-jobs-cycle.js` (72 jobs), `src/content-signs-cycle.js` (new boards, plates,
-  extra lines by day, `boardsForDay`), `src/skills-cycle.js` (95 milestones; `skills.js ALL_MILESTONES`),
-  `src/farm-plan.js` (the planning sums, complete), `scripts/test-cycle.mjs CYCLE_TARGETS`.
-- Stubs: `src/farm-cycle.js` (the Phase 3 farm state, `enterLevel`, the actions it answers),
-  `src/farm-profiles-cycle.js` (placeholder care), `src/records-cycle.js`, `src/run.js`,
-  `level.debug.freeRun(day, hour)` (a level-mode farm at any age, no jobs), `src/ui-cycle-panels.js`
-  (placeholder panels, registered from `ui.js`), `__game.run / startRun / startLevel({ level }) / cycleAt`.
-- Tests: `npm test` adds `test-cycle.mjs` and `test-run.mjs` (their model and chaining parts skip on the
-  stubs); `test-contracts.mjs` checks the Phase 3 content; `scripts/p3-design-stubs.json` checks the stubs
-  in the browser. The brooding week plays and measures exactly as before (`test-level.mjs`, `test-sim.mjs`).
-
+  `WEEKS45`, `FINISH`, `CLEANOUT` and `LEVELS` (with `LEVEL1`; titles "Level n – …", `starts`: weeks 4–5
+  saves day 22 and day 29), `levelById`, `levelOfDay`, `FEED_STD_TABLE` (`feedStdGAt` unchanged to age 7),
+  `FPG_TABLE` / `feedPerGainAt` (unchanged to age 14; the ideal ≈ 5 % over `weightAt` on every weigh day),
+  `MIN_VENT_PER_1000` to 3 kg (unchanged to 200 g), `OUTSIDE_WATER_GM3`, `PAD_EFF`, `FEED_TYPES`,
+  `LIGHT_PRESETS`, `HEAT` (`padOffAboveRH` 90: the one temperature + humidity number), `PLAN_CONTRACT` (the
+  contract's terms: 4 % losses counted, 21 rest days, 6,000 a house, send by 16:00), `HARVEST` (the
+  sign-catch figures), `CLEAN` (ten `swabSpots`), `SPOTS3`, `houseSector`, `COMFORT_RAMP`, `MOISTURE_RAMP`,
+  33 `UNLOCKS`, `RUN_SAVE`, `CONDITIONS`; `MIN_DAY` is −2 (the planning day).
+- `src/events.js`: `EV.RUN`, `EV.CATCH`, `EV.LETTER`, `ACTION_IDS` (every action id of both phases, with
+  `water.disinfect`), `UI_ACTION_IDS_CYCLE`.
+- `src/sim.js`: `env.setMaxDay(n)`, `env.setBroodCurtain(closed | null)`, and the **cycle climate**
+  (`env.setCycleClimate(on)`, off in the sandbox and the brooding week): outside air at the day's water
+  content, event `rh` / `rhDrop`, the pad by the outside wet bulb × `PAD_EFF` × `env.padWorking`;
+  `env.setFansBroken` / `env.fansEffective` (no broken fans = Phase 2's numbers exactly).
+- `src/farm-heat.js` (complete): what growing birds feel (humidity term), panting, heat deaths and intake
+  by age and weight, the dust index. `scripts/cycle-refs.mjs`: the climate and growth references, run on
+  the env alone by `test-cycle.mjs` now (the §6.3 table of PHASE3.md is their output).
+- Contract data: `src/content-jobs-cycle.js` (73 jobs), `src/content-signs-cycle.js` (new
+  boards, plates, extra lines by day, `boardsForDay`; `ui-boards.js buildPlate` reads it),
+  `src/skills-cycle.js` (98 milestones; `skills.js ALL_MILESTONES` with Phase 2's
+  tagged `level1`, and `evaluate()` filters by the checkpoint's level), `src/farm-plan.js` (`planSums`,
+  `planOutcome` with the terms), `scripts/test-cycle.mjs` `CYCLE_TARGETS`, `SNAPS`, `checkCycle`.
+- Stubs: `src/farm-cycle.js` (the Phase 3 farm state, `enterLevel`, `farm.debug.set`, and the minimal
+  state changes the run's flows wait on: vaccine drunk, the catch, the clean grids, the lab letter, the
+  bookings), `src/farm-profiles-cycle.js` (placeholder care, `climateCare` kept exported until the run
+  merge), `src/records-cycle.js`, `src/run.js`, `level.debug.freeRun(day, hour)` (a level-mode farm at any
+  age, no jobs), `src/ui-cycle-panels.js` (placeholder panels; the api has `plate`, `openPanel`, panels may
+  define `take(p)`), `__game.run / startRun / startLevel({ level }) / cycleAt`.
+- Tests: `npm test` adds `test-cycle.mjs` (the climate, growth and plan checks run now; the profiles skip
+  on the stub) and `test-run.mjs` (the chaining tests skip while `run.stub` or `farm.cycleStub`);
+  `test-contracts.mjs` checks the Phase 3 content and the skills level filter; `scripts/p3-design-stubs.json`
+  checks the stubs in the browser. The brooding week plays and measures exactly as before
+  (`test-level.mjs`, `test-sim.mjs`: ratio 4.873, FCR 0.840); its result head now reads "Level 2 – The
+  brooding week".
+- **Guide tags (provisional):** PHASE3.md §5.1 maps each week's plan topic to that week's guide (Week 2,
+  Week 3, Week 4 guide for weeks 4–5) by inference from the plan's level list; the guide-tagged lines hold
+  only that bare topic and every cause, rule and figure is general. The mapping stays provisional until the
+  farmer answers PHASE3.md open question 1.

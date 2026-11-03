@@ -7,7 +7,8 @@
 //     feedLeftKg, withdrawalH, notes: string[] }                      (day 42; plain numbers only)
 //   cleanPage(records, farm) -> null | { litterOutAt, washedPct, dryPct, disinfectedPct, lines, pans,
 //     washbay, baits, swabsTaken, lab: { positive, of, places? }, closedDay, bookedDay, restDays }
-//   cycleSummary(records, farm, run) -> CycleSummary (PHASE3.md §8.5)
+//   cycleSummary(records, farm, { plan, levels }) -> CycleSummary (PHASE3.md §8.5); the records object
+//     exposes it as records.cycleSummary({ plan, levels }) (the one signature others call, §13.9)
 //   compact(records, beforeDay)   folds old notebook lines into the rows (save size, PHASE3.md §8.6)
 //
 // @typedef {{ placed: number, sold: number|null, liveKg: number|null, meanLiveG: number|null,
@@ -25,7 +26,7 @@ export function harvestPage() { return null; }
 export function cleanPage() { return null; }
 
 /** STUB: what the counts already give (no harvest yet). */
-export function cycleSummary(records, farm, run) {
+export function cycleSummary(records, farm, run = {}) { // run = { plan, levels }
   const fl = farm?.flock || {};
   const placed = fl.placed || 0;
   const dead = (fl.deadTotal || 0) + (fl.culls || 0);
