@@ -98,9 +98,11 @@ function start(saved = {}) {
     ui.update(dt);
   }
 
-  // Frame-time governor: if the median frame over 2 s is slower than about 50 fps, render fewer
-  // pixels (1.5 -> 1.0 -> 0.85), then use a cheaper sun shadow. It only ever steps down, and waits
-  // 3 s between steps. Off under automation (the screenshot harness renders in software).
+  // Frame-time governor: if the median frame over 2 s is slower than about 28 fps, step quality
+  // down: high-DPI screens to 1.0 pixel ratio first, then a cheaper sun shadow, and only below
+  // about 20 fps a 0.85 render scale (which softens the picture). A browser capped at 30 fps
+  // (battery saver) never triggers it. It only steps down, waits 3 s between steps, and is off
+  // under automation (the screenshot harness renders in software).
   const governor = { on: !navigator.webdriver, times: new Float32Array(120), n: 0, acc: 0, hold: 4 };
   function govern(rawDt) {
     perf.fps += (1 / Math.max(rawDt, 1e-3) - perf.fps) * 0.05;
@@ -111,11 +113,11 @@ function start(saved = {}) {
     const k = Math.min(governor.n, governor.times.length);
     const sorted = Array.from(governor.times.subarray(0, k)).sort((a, b) => a - b);
     governor.acc = 0; governor.n = 0;
-    if (sorted[k >> 1] <= 0.02) return;
+    const median = sorted[k >> 1];
+    if (median <= 0.036) return;
     governor.hold = 3;
     const ratio = renderer.getPixelRatio();
     if (ratio > 1.01) quality.ratioCap = 1;
-    else if (ratio > 0.86) quality.ratioCap = 0.85;
     else if (world.sun && world.sun.shadow.mapSize.x > 1024) {
       renderer.shadowMap.type = THREE.PCFShadowMap;
       world.sun.shadow.mapSize.set(1024, 1024);
@@ -123,7 +125,8 @@ function start(saved = {}) {
       world.sun.shadow.map = null;
       perf.shadowMap = 1024;
       scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
-    } else { governor.on = false; return; }
+    } else if (ratio > 0.86 && median > 0.05) quality.ratioCap = 0.85;
+    else { governor.on = false; return; }
     quality.step++;
     resize();
   }
