@@ -90,7 +90,8 @@ export function buildFittings(kit) {
 
   // BROODER HEATERS sign on the column at SPOTS.signBrooder
   const sx = SPOTS.signBrooder.x, sy = 1.5;
-  stat.box(1.12, 0.79, 0.04, sx, sy, FACE_Z - 0.02, 0x5d646a);
+  stat.box(1.12, 0.79, 0.04, sx, sy, FACE_Z - 0.02, 0x9aa2a8);
+  for (const dy of [-0.25, 0.25]) stat.box(1.0, 0.05, 0.03, sx, sy + dy, FACE_Z + 0.005, 0x7c858c);   // mounting rails
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.08, 0.76), new THREE.MeshLambertMaterial({ map: signTexture() }));
   sign.position.set(sx, sy, FACE_Z - 0.042);
   sign.rotation.y = back;
@@ -109,8 +110,8 @@ export function buildFittings(kit) {
   const bulbMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, color: 0xd9d6cf, emissive: 0xfff0cc, emissiveIntensity: 0 });
   group.add(bulbs.mesh(bulbMat, { cast: false, receive: false }));
   const lamps = [-16, 0, 16].map((x) => {
-    const l = new THREE.PointLight(0xffd6a2, 0, 26, 1.5);
-    l.position.set(x, 3.6, 0);   // up near the ridge: a top-down fill like the many bulbs give
+    const l = new THREE.PointLight(0xffd6a2, 0, 30, 1.5);
+    l.position.set(x, 4.6, 0);   // above the ridge: a top-down fill like the many bulbs give
     group.add(l);
     return l;
   });
@@ -148,7 +149,7 @@ export function buildFittings(kit) {
       bulbK = smooth(bulbK, env.lightsOn ? 1 : 0, 6, dt);
       lampK = smooth(lampK, env.lightsOn ? night : 0, 6, dt);
       bulbMat.emissiveIntensity = bulbK * (0.7 + 1.3 * night);
-      for (const l of lamps) l.intensity = lampK * 20;
+      for (const l of lamps) l.intensity = lampK * 30;
       // probes follow the drinker height (bird head height)
       const py = nippleHeight(env.day) + 0.05;
       if (Math.abs(py - lastProbeY) > 1e-4) {

@@ -124,13 +124,18 @@ export function buildFans(kit) {
   const speed = new Float32Array(FAN_COUNT), angle = new Float32Array(FAN_COUNT), open = new Float32Array(FAN_COUNT);
   for (let i = 0; i < FAN_COUNT; i++) angle[i] = i * 0.37;
   const M = new THREE.Matrix4();
+  // per-frame placement without allocations: rotation about x (rotor) or z (slat) + translation
   function place() {
+    const e = M.elements;
     for (let i = 0; i < FAN_COUNT; i++) {
-      rotors.setMatrixAt(i, M.copy(mat(BOX_IN + 0.24, CY, FAN_Z[i], angle[i], 0, 0)));
-      const a = open[i] * 1.25;
-      for (let s = 0; s < SLATS; s++) {
-        const y = CY + BOX / 2 - 0.06 - s * ((BOX - 0.12) / SLATS);
-        slats.setMatrixAt(i * SLATS + s, M.copy(mat(BOX_OUT - 0.04, y, FAN_Z[i], 0, 0, a)));
+      const c = Math.cos(angle[i]), s = Math.sin(angle[i]);
+      M.set(1, 0, 0, BOX_IN + 0.24, 0, c, -s, CY, 0, s, c, FAN_Z[i], 0, 0, 0, 1);
+      rotors.setMatrixAt(i, M);
+      const a = open[i] * 1.25, ca = Math.cos(a), sa = Math.sin(a);
+      M.set(ca, -sa, 0, BOX_OUT - 0.04, sa, ca, 0, 0, 0, 0, 1, FAN_Z[i], 0, 0, 0, 1);
+      for (let k = 0; k < SLATS; k++) {
+        e[13] = CY + BOX / 2 - 0.06 - k * ((BOX - 0.12) / SLATS);
+        slats.setMatrixAt(i * SLATS + k, M);
       }
     }
     rotors.instanceMatrix.needsUpdate = true;

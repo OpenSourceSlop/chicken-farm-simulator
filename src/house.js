@@ -7,7 +7,7 @@ import { Batch, makeMaterials, smooth, clamp01 } from './house-kit.js';
 import { buildFloor, buildWalls, buildFrame, H, T } from './house-shell.js';
 import { buildDoor, buildApron, houseSign } from './house-door.js';
 import { buildPad } from './house-pad.js';
-import { buildFans } from './house-fans.js';
+import { buildFans, FAN_Z } from './house-fans.js';
 import { buildFeeders, PAN_X, feederRim } from './house-feeders.js';
 import { buildDrinkers, NIPPLE_X, nippleHeight } from './house-drinkers.js';
 import { buildBrooders } from './house-brooders.js';
@@ -52,6 +52,8 @@ export function buildHouse(ctx) {
     { type: 'box', minX: d.x + d.width / 2, maxX: xMax + T, minZ: zMax - 0.12, maxZ: zMax + T },
     { type: 'box', minX: xMin - T - 0.1, maxX: xMin + 0.12, minZ: zMin - T, maxZ: zMax + T },
     { type: 'box', minX: xMax - 0.3, maxX: xMax + T + 0.1, minZ: zMin - T, maxZ: zMax + T },
+    // tunnel fan discharge cones stick out 1.1 m onto the east apron
+    { type: 'box', minX: xMax + T, maxX: xMax + T + 1.15, minZ: Math.min(...FAN_Z) - 0.9, maxZ: Math.max(...FAN_Z) + 0.9 },
   ];
 
   const interactables = [
