@@ -19,13 +19,22 @@ function legAngles(p, run, out) {
   const s = Math.sin(a);
   const wh = 0.46 * s;
   const wk = -(0.07 + 0.95 * pos(Math.cos(a + 0.35)) ** 2);
-  const rh = 0.78 * s + 0.12;
-  const rk = -(0.32 + 1.5 * pos(Math.cos(a + 0.6)) ** 1.3);
+  const rh = 0.62 * s + 0.1;
+  const rk = -(0.28 + 1.4 * pos(Math.cos(a + 0.6)) ** 1.3);
   out.hip = lerp(wh, rh, run);
   out.knee = lerp(wk, rk, run);
   out.ankle = -(out.hip + out.knee) * lerp(0.8, 0.6, run) + lerp(0.16, 0.3, run) * s;
   return out;
 }
+
+function blendLeg(l, m, idle) {
+  l.hip *= m;
+  l.knee = l.knee * m - 0.03 * idle;
+  l.ankle = l.ankle * m + 0.03 * idle;
+}
+
+// Did the cycle phase pass q going from a to b (wrapping at 1)?
+const crossed = (a, b, q) => (a < q && b >= q) || (a > b && (a < q || b >= q));
 
 // How far below the hip joint the lowest point of the boot sole hangs.
 function legReach(l) {
@@ -75,15 +84,15 @@ export function createFarmerAnimator(model, rand = Math.random) {
     if (speed > 0.01) st.phase = (st.phase + (dt * speed) / lerp(WALK_CYCLE, RUN_CYCLE, run)) % 1;
     let step = null;
     if (m > 0.4 && dt > 0) {
-      const crossed = (q) => (prev < q && st.phase >= q) || (prev > st.phase && (prev < q || st.phase >= q));
-      if (crossed(0.25)) step = 'L';
-      else if (crossed(0.75)) step = 'R';
+      if (crossed(prev, st.phase, 0.25)) step = 'L';
+      else if (crossed(prev, st.phase, 0.75)) step = 'R';
     }
 
     // Legs
     legAngles(st.phase, run, L);
     legAngles(st.phase + 0.5, run, R);
-    for (const l of [L, R]) { l.hip *= m; l.knee = l.knee * m - 0.03 * idle; l.ankle = l.ankle * m + 0.03 * idle; }
+    blendLeg(L, m, idle);
+    blendLeg(R, m, idle);
     j.hipL.rotation.set(L.hip, 0, -0.035);
     j.kneeL.rotation.x = L.knee;
     j.ankleL.rotation.set(L.ankle, 0, 0.035);
@@ -94,7 +103,7 @@ export function createFarmerAnimator(model, rand = Math.random) {
     // Pelvis height: the longer leg touches the ground; running adds a flight phase.
     const reach = Math.max(legReach(L), legReach(R));
     const a = TAU * st.phase;
-    const flight = run * m * 0.055 * pos(Math.sin(2 * a - 0.9));
+    const flight = run * m * 0.07 * pos(Math.sin(2 * a - 0.9));
     const breath = Math.sin((TAU * st.t) / 3.6);
     const sway = Math.sin((TAU * st.t) / 7.5);
     j.pelvis.position.set(
@@ -119,7 +128,7 @@ export function createFarmerAnimator(model, rand = Math.random) {
     j.shoulderR.position.set(base.shoulderR.x, base.shoulderR.y + lift, base.shoulderR.z);
 
     // Arms swing opposite to the legs; elbows bend more when running
-    const armAmp = lerp(0.42, 0.8, run) * m;
+    const armAmp = lerp(0.42, 0.7, run) * m;
     const armL = -Math.sin(a) * armAmp + 0.05 * run * m;
     const armR = Math.sin(a) * armAmp + 0.05 * run * m;
     const out = 0.07 + 0.06 * run * m + 0.01 * breath * idle;

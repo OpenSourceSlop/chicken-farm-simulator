@@ -4,42 +4,45 @@ import * as THREE from 'three';
 const RING_LIFE = 1.6;
 
 export function createTargetMarker(scene) {
-  const mat = new THREE.MeshBasicMaterial({
-    color: 0xfff4cf, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide,
+  const common = {
+    transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
-  });
+  };
+  const light = new THREE.MeshBasicMaterial({ color: 0xfffbea, ...common });
+  const dark = new THREE.MeshBasicMaterial({ color: 0x1d2a22, ...common });
   const group = new THREE.Group();
   group.name = 'walkTarget';
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.42, 28), mat);
-  ring.rotation.x = -Math.PI / 2;
-  const dot = new THREE.Mesh(new THREE.CircleGeometry(0.075, 12), mat);
-  dot.rotation.x = -Math.PI / 2;
+  const flat = (geo, mat) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.renderOrder = 2; return m; };
+  const ring = new THREE.Group();
+  ring.add(flat(new THREE.RingGeometry(0.27, 0.47, 32), dark), flat(new THREE.RingGeometry(0.31, 0.43, 32), light));
+  const dot = new THREE.Group();
+  dot.add(flat(new THREE.CircleGeometry(0.1, 14), dark), flat(new THREE.CircleGeometry(0.065, 14), light));
+  for (const g of [ring, dot]) { g.children[1].position.y = 0.002; g.children[1].renderOrder = 3; }
   group.add(ring, dot);
-  group.position.y = 0.035;
   group.visible = false;
-  group.renderOrder = 2;
   scene.add(group);
-  const st = { t: RING_LIFE, fadeOut: false };
+  const st = { t: RING_LIFE };
 
   return {
     group,
     show(x, z) {
       group.position.set(x, 0.035, z);
       st.t = 0;
-      st.fadeOut = false;
       group.visible = true;
     },
     // Fade quickly (arrived or cancelled).
-    hide() { if (group.visible) { st.fadeOut = true; st.t = Math.max(st.t, RING_LIFE - 0.25); } },
-    update(dt) {
+    hide() { if (group.visible) st.t = Math.max(st.t, RING_LIFE - 0.25); },
+    // size: world scale so the ring keeps a similar size on screen at any zoom
+    update(dt, size = 1) {
       if (!group.visible) return;
       st.t += dt;
-      if (st.t >= RING_LIFE) { group.visible = false; mat.opacity = 0; return; }
+      if (st.t >= RING_LIFE) { group.visible = false; light.opacity = dark.opacity = 0; return; }
       const pop = Math.min(1, st.t / 0.22);
-      const s = 1 + 0.6 * (1 - pop) * (1 - pop);
-      ring.scale.setScalar(s);
-      const fade = st.t < 0.7 ? 1 : 1 - (st.t - 0.7) / (RING_LIFE - 0.7);
-      mat.opacity = 0.92 * Math.max(0, fade);
+      group.scale.setScalar(size);
+      ring.scale.setScalar(1 + 0.7 * (1 - pop) * (1 - pop));
+      const fade = Math.max(0, st.t < 0.8 ? 1 : 1 - (st.t - 0.8) / (RING_LIFE - 0.8));
+      light.opacity = 0.95 * fade;
+      dark.opacity = 0.4 * fade;
     },
   };
 }
@@ -89,7 +92,7 @@ export function createDust(scene) {
         p.m.position.y += p.vy * dt;
         p.m.position.z += p.vz * dt;
         p.m.scale.setScalar(p.s * (0.45 + 0.9 * Math.sqrt(u)));
-        p.m.material.opacity = 0.5 * (1 - u) * (1 - u);
+        p.m.material.opacity = 0.62 * (1 - u) * (1 - u);
       }
     },
   };

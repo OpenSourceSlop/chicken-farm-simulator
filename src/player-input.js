@@ -81,7 +81,7 @@ export function createInput(canvas) {
   function onPointerMove(e) {
     const d = st.drag;
     if (!d || e.pointerId !== d.id) return;
-    if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > DRAG_PX) { d.moved = true; d.last = e.clientX; }
+    if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > DRAG_PX) d.moved = true;
     // Right or middle drag turns the view; a left drag (beyond the click threshold) does too,
     // which helps on laptop touchpads where a right-drag is awkward.
     if (d.moved) st.orbitPx += e.clientX - d.last;

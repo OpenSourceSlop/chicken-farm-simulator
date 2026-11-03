@@ -18,7 +18,8 @@ const C = {
   eye: 0x1a120d,
   mouth: 0x7c3a2b,
   cap: 0xf1ede2,
-  capBrim: 0x2a4a73,
+  capBrim: 0xd8d0bb,
+  capBand: 0x2a4a73,
   logo: 0x5e9e3c,
 };
 
@@ -30,7 +31,8 @@ export const DIMS = {
   shin: 0.39,
   ankle: 0.07, // ankle joint to sole
 };
-const RIG_SCALE = 0.965; // brings the cap top to about 1.71 m
+const RIG_SCALE = 0.945; // brings the cap top to about 1.73 m
+const HEAD_SCALE = 1.15; // a slightly large head reads better from the high camera
 
 export function buildFarmerModel() {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
@@ -93,32 +95,35 @@ export function buildFarmerModel() {
     .box(0.022, 0.37, 0.01, C.zip, 0, 0.2, -0.123)
     .box(0.095, 0.085, 0.012, C.suitDark, -0.105, 0.285, -0.124)
     .box(0.1, 0.022, 0.018, C.suitDark, -0.105, 0.333, -0.127)
-    .box(0.11, 0.045, 0.06, C.suitDark, -0.06, 0.41, -0.09, 0, 0, 0.35)
-    .box(0.11, 0.045, 0.06, C.suitDark, 0.06, 0.41, -0.09, 0, 0, -0.35)
-    .box(0.22, 0.06, 0.07, C.suitDark, 0, 0.415, 0.075), 'torso');
+    .box(0.062, 0.1, 0.014, C.suitDark, -0.05, 0.37, -0.125, 0, 0, -0.5)
+    .box(0.062, 0.1, 0.014, C.suitDark, 0.05, 0.37, -0.125, 0, 0, 0.5)
+    .box(0.2, 0.055, 0.08, C.suitDark, 0, 0.41, 0.065), 'torso');
 
   // Head (pivot at the base of the neck)
   const neck = joint(spine, 0, 0.42, 0, 'neck');
+  const headPivot = joint(neck, 0, 0.0, 0, 'headPivot');
+  headPivot.scale.setScalar(HEAD_SCALE);
   const head = new PartList()
     .cyl(0.055, 0.062, 0.12, 6, C.skin, 0, 0.03, 0.005)
     .frustum(0.18, 0.2, 0.215, 0.23, 0.24, C.skin, 0, 0.18, -0.005)
-    .box(0.032, 0.04, 0.02, C.eye, -0.048, 0.19, -0.115)
-    .box(0.032, 0.04, 0.02, C.eye, 0.048, 0.19, -0.115)
-    .box(0.052, 0.014, 0.02, C.hair, -0.05, 0.226, -0.118, 0, 0, 0.08)
-    .box(0.052, 0.014, 0.02, C.hair, 0.05, 0.226, -0.118, 0, 0, -0.08)
+    .box(0.034, 0.044, 0.02, C.eye, -0.05, 0.183, -0.114)
+    .box(0.034, 0.044, 0.02, C.eye, 0.05, 0.183, -0.114)
+    .box(0.055, 0.016, 0.02, C.hair, -0.05, 0.222, -0.118, 0, 0, 0.1)
+    .box(0.055, 0.016, 0.02, C.hair, 0.05, 0.222, -0.118, 0, 0, -0.1)
     .frustum(0.034, 0.03, 0.026, 0.02, 0.055, C.skinDark, 0, 0.155, -0.122)
     .box(0.056, 0.013, 0.012, C.mouth, 0, 0.105, -0.108)
     .box(0.03, 0.06, 0.05, C.skin, -0.11, 0.18, 0.005)
     .box(0.03, 0.06, 0.05, C.skin, 0.11, 0.18, 0.005)
-    .box(0.21, 0.12, 0.04, C.hair, 0, 0.215, 0.106)
-    .box(0.02, 0.07, 0.09, C.hair, -0.107, 0.24, 0.045)
-    .box(0.02, 0.07, 0.09, C.hair, 0.107, 0.24, 0.045)
-    // cap: crown, button, front logo, brim
-    .frustum(0.236, 0.252, 0.2, 0.21, 0.085, C.cap, 0, 0.3, 0.004)
-    .box(0.03, 0.014, 0.03, C.capBrim, 0, 0.347, 0.004)
-    .box(0.07, 0.035, 0.01, C.logo, 0, 0.3, -0.118, -0.23, 0, 0)
-    .box(0.21, 0.018, 0.13, C.capBrim, 0, 0.268, -0.17, -0.14, 0, 0);
-  attach(neck, head, 'head');
+    .box(0.205, 0.1, 0.035, C.hair, 0, 0.225, 0.108)
+    .box(0.02, 0.045, 0.06, C.hair, -0.106, 0.24, 0.07)
+    .box(0.02, 0.045, 0.06, C.hair, 0.106, 0.24, 0.07)
+    // cap: domed crown (two tiers), button, front logo, brim
+    .frustum(0.238, 0.254, 0.226, 0.24, 0.05, C.cap, 0, 0.282, 0.004)
+    .frustum(0.226, 0.24, 0.15, 0.16, 0.045, C.cap, 0, 0.3295, 0.004)
+    .box(0.026, 0.012, 0.026, C.capBand, 0, 0.356, 0.004)
+    .box(0.075, 0.035, 0.01, C.logo, 0, 0.288, -0.121)
+    .box(0.185, 0.016, 0.095, C.capBrim, 0, 0.262, -0.165, -0.06, 0, 0);
+  attach(headPivot, head, 'head');
 
   // Arms
   const arms = {};
@@ -126,14 +131,14 @@ export function buildFarmerModel() {
     const sx = side === 'L' ? -1 : 1;
     const shoulder = joint(spine, sx * 0.215, 0.37, 0, `shoulder${side}`);
     attach(shoulder, new PartList()
-      .box(0.135, 0.12, 0.145, C.suit, sx * 0.005, -0.015, 0)
+      .frustum(0.125, 0.135, 0.1, 0.11, 0.12, C.suit, sx * 0.008, -0.03, 0)
       .frustum(0.1, 0.11, 0.12, 0.13, 0.3, C.suit, 0, -0.14, 0), `upperArm${side}`);
     const elbow = joint(shoulder, 0, -0.28, 0, `elbow${side}`);
     attach(elbow, new PartList()
       .frustum(0.085, 0.095, 0.105, 0.115, 0.24, C.suit, 0, -0.11, 0)
       .box(0.1, 0.035, 0.11, C.suitDark, 0, -0.215, 0)
-      .frustum(0.075, 0.09, 0.07, 0.085, 0.11, C.skin, 0, -0.29, -0.005)
-      .box(0.026, 0.05, 0.03, C.skin, -sx * 0.025, -0.265, -0.045), `forearm${side}`);
+      .frustum(0.085, 0.1, 0.082, 0.098, 0.125, C.skin, 0, -0.295, -0.005)
+      .box(0.03, 0.06, 0.035, C.skin, -sx * 0.026, -0.27, -0.05), `forearm${side}`);
     arms[side] = { shoulder, elbow };
   }
 

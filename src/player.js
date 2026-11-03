@@ -185,7 +185,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
       const sp = Math.max(0.01, st.vel.length());
       dust.puff(foot.x, foot.z, st.vel.x / sp, st.vel.z / sp, p.x > HOUSE_BOUNDS.xMin && p.x < HOUSE_BOUNDS.xMax ? 0.8 : 1);
     }
-    marker.update(dt);
+    marker.update(dt, Math.min(2.6, Math.max(0.8, cam.distance / 15)));
     dust.update(dt);
     cam.update(dt, p, st.vel);
   }
@@ -208,6 +208,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
     get zoom() { return cam.distance; },
     get speed() { return st.animSpeed; },
     get walking() { return !!st.path; },
+    get colliders() { return colliders; },
     teleport(x, z, yaw) {
       if (!Number.isFinite(x) || !Number.isFinite(z)) return;
       root.position.set(x, 0, z);
