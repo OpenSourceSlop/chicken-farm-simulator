@@ -4,6 +4,7 @@
 // ui-only action on the bus); the panel shows what the machine shows, never a verdict.
 import { EQUIP, FEEDER_LINES_Z, LEVEL1 } from './config.js';
 import { BOARDS } from './content-signs.js';
+import { BOARDS_CYCLE } from './content-signs-cycle.js';
 import { h, button, setText, uniqueId, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
@@ -20,8 +21,10 @@ export function equipShell({ cls = '', icon, title, sub, plates = [], onClose, s
   const { el, closeBtn } = dialogShell(`equip ${cls}`, titleId, onClose);
   const main = h('div', { class: 'equip-main' });
   const plateEls = plates.map((id) => buildPlate(id));
+  // Phase 3: a link may name a board of the full cycle (content-signs-cycle.js BOARDS_CYCLE)
+  const board = (id) => BOARDS[id] || BOARDS_CYCLE[id];
   const links = signLinks.length ? h('p', { class: 'equip-links' }, h('span', { html: ICONS.facts, 'aria-hidden': 'true' }),
-    `Facts also on: ${signLinks.map((id) => `${BOARDS[id].title} (${BOARDS[id].where.toLowerCase()})`).join('; ')}`) : null;
+    `Facts also on: ${signLinks.filter(board).map((id) => `${board(id).title} (${board(id).where.toLowerCase()})`).join('; ')}`) : null;
   const side = plateEls.length ? h('div', { class: 'equip-side' }, plateEls.map((p) => p.el), links) : null;
   if (!plateEls.length && links) { links.classList.add('equip-links--below'); }
   const screws = ['tl', 'tr', 'bl', 'br'].map((p) => h('span', { class: `screw screw--${p}`, 'aria-hidden': 'true' }));
@@ -29,7 +32,21 @@ export function equipShell({ cls = '', icon, title, sub, plates = [], onClose, s
     h('header', { class: 'ctrl-brand' }, h('span', { class: 'ctrl-logo', html: icon || ICONS.sliders, 'aria-hidden': 'true' }),
       h('div', null, h('h2', { id: titleId }, title), sub ? h('p', null, sub) : null)),
     h('div', { class: `equip-grid${side ? '' : ' equip-grid--solo'}` }, main, side), side ? null : links), closeBtn);
-  return { el, main, plates: plateEls, foldPlates() { for (const p of plateEls) p.fold(); } };
+  return {
+    el, main, plates: plateEls,
+    foldPlates() { for (const p of plateEls) p.fold(); },
+    /** Phase 3: rebuild a plate whose merged board of today has more lines (BOARD_EXTRA_ITEMS fromDay);
+     *  the brooding week's plates never change. Panels call it when they open. */
+    refreshPlates() {
+      plateEls.forEach((p, i) => {
+        const fresh = buildPlate(p.id, { open: p.open });
+        const n = (x) => x.el.querySelectorAll('.plate-items > li').length;
+        if (n(fresh) === n(p)) return;
+        p.el.replaceWith(fresh.el);
+        plateEls[i] = fresh;
+      });
+    },
+  };
 }
 
 /** A labelled row of the working plate: led, label (+ small), controls. */
