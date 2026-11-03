@@ -59,6 +59,7 @@ export function buildFloor() {
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const col = new Float32Array(pos.count * 3);
+  const dryCol = new Float32Array(pos.count * 3);   // Level 1: the same litter without the baked damp lines
   // a little darker than COLORS.litter: in the even roof shade the chicks must stand out on it
   const base = new THREE.Color(COLORS.litter).multiplyScalar(0.88);
   const damp = new THREE.Color(0xb39058);
@@ -67,6 +68,9 @@ export function buildFloor() {
     const x = pos.getX(i), z = pos.getZ(i);
     const n = vnoise(x * 0.45, z * 0.45) * 0.6 + vnoise(x * 1.7 + 40, z * 1.7) * 0.4;
     c.copy(base).multiplyScalar(0.93 + n * 0.16);
+    const edge0 = Math.min(z - zMin, zMax - z, x - xMin, xMax - x);
+    const k0 = edge0 < 0.4 ? 0.9 + (edge0 / 0.4) * 0.1 : 1;
+    dryCol[i * 3] = c.r * k0; dryCol[i * 3 + 1] = c.g * k0; dryCol[i * 3 + 2] = c.b * k0;
     // damper, darker litter under the nipple lines
     let wet = 0;
     for (const dz of DRINKER_LINES_Z) wet = Math.max(wet, 1 - Math.abs(z - dz) / 0.45);
@@ -82,6 +86,7 @@ export function buildFloor() {
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('colorDry', new THREE.BufferAttribute(dryCol, 3));
   const mat = new THREE.MeshLambertMaterial({ map: huskTexture(), vertexColors: true });
   const floor = new THREE.Mesh(geo, mat);
   floor.position.set((xMin + xMax) / 2, 0.02, (zMin + zMax) / 2);

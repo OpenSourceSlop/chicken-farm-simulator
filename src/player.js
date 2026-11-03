@@ -13,6 +13,7 @@ import { createInput } from './player-input.js';
 import { moveAndSlide } from './player-collide.js';
 import { findPath, freeSpot } from './player-path.js';
 import { createTargetMarker, createDust, createContactShadow } from './player-fx.js';
+import { createCarry } from './player-carry.js';
 
 const RADIUS = 0.35;
 const WALK = 4.0; // m/s
@@ -46,6 +47,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
   const marker = createTargetMarker(scene);
   const dust = createDust(scene);
   createContactShadow(root);
+  const carry = createCarry(root, model.material, model.joints);
 
   const st = {
     yaw: FARM.spawn.yaw ?? 0,
@@ -198,6 +200,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
     // Animate
     st.animSpeed += (actual - st.animSpeed) * (1 - Math.exp(-14 * dt));
     const step = anim.update(dt, st.animSpeed, turnRate);
+    carry.apply(dt);
     if (step && anim.state.run > 0.55 && st.animSpeed > 4.6) {
       model.joints[step === 'L' ? 'ankleL' : 'ankleR'].getWorldPosition(foot);
       const sp = Math.max(0.01, st.vel.length());
@@ -241,13 +244,15 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
       cam.snapTo(root.position);
     },
     walkTo(x, z, run = false) { if (input.enabled) walkTo(x, z, run); },
-    // Phase 2 contract (package "props"). STUB: no visible change yet.
-    // carry(kind): what the farmer holds in his hands: null | 'barrow' | 'boxes' | 'dead' | 'scale'
-    // | 'chick' (a chick in his hands while a sample panel is open). pose(name, seconds): a short
-    // action pose, 'crouch' (probe, squeeze, pick up) | 'reach' (nipple, valve) | null.
+    // Phase 2 (package "props", player-carry.js). carry(kind): the mesh of what the farmer holds,
+    // called only by props.startCarry / props.drop: null | 'barrow' | 'sack' | 'boxes' (hand truck
+    // with ten chick boxes) | 'bucket' | 'frame' (folded catching frame + hand scale) | 'chick';
+    // props also shows 'scale' (only the hand scale) while the frame stands on the litter.
+    // pose(name, seconds): a short action pose, 'crouch' (probe, squeeze, pick up, tip) |
+    // 'reach' (nipple, valve, relight) | null.
     carrying: null,
-    carry(kind) { api.carrying = kind || null; },
-    pose(name, seconds = 1) { void name; void seconds; },
+    carry(kind) { api.carrying = kind === 'scale' ? 'frame' : kind || null; carry.set(kind || null); },
+    pose(name, seconds = 1) { carry.pose(name, seconds); },
     update,
     dispose() {
       input.dispose();

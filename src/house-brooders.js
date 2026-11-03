@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { COLORS, HEATERS, HEATER_HEIGHT, HOUSE, HOUSE_BOUNDS } from './config.js';
 import { Batch, mat, lathe, canvasTexture, smooth } from './house-kit.js';
 import { TRUSS_Y, T } from './house-shell.js';
+import { Tags, brooderMask } from './house-level.js';
 
 const { xMin, zMin, zMax } = HOUSE_BOUNDS;
 const HH = HEATER_HEIGHT;
@@ -43,6 +44,7 @@ export function buildBrooders(kit) {
   ], 16);
   const rib = new THREE.TorusGeometry(0.3, 0.012, 4, 16);
   const burners = new Batch();
+  const burnerTags = new Tags(burners);
   const brood = new Batch();   // canopies and valve housings: ride up when winched
   const hang = new Batch();    // chains and gas hoses, built relative to HANG_Y: shorten when winched
   const toHang = new THREE.Matrix4().makeTranslation(0, -HANG_Y, 0);
@@ -66,7 +68,7 @@ export function buildBrooders(kit) {
   stat.box(0.05, 0.04, 0.16, xGas, 0.6, zMin - T - 0.36, 0xd8322f);
   stat.rod([xGas, 0.3, zMin - T - 0.3], [xGas, 0.0, zMin - T - 0.3], 0.02, GAS, 6);
 
-  for (const h of HEATERS) {
+  for (const [hi, h] of HEATERS.entries()) {
     const s = Math.sign(h.z);
     brood.add(canopy, COLORS.heater, mat(h.x, HH, h.z));
     brood.add(rib, 0x7f888e, mat(h.x, HH + 0.112, h.z, Math.PI / 2, 0, 0));
@@ -87,15 +89,22 @@ export function buildBrooders(kit) {
     // ceramic burner under the canopy, with a hot rim
     burners.cyl(0.2, 0.05, h.x, HH + 0.07, h.z, 0xffffff, 16);
     burners.add(new THREE.TorusGeometry(RIM_R - 0.03, 0.012, 4, 24), 0x9a6040, mat(h.x, HH - 0.005, h.z, Math.PI / 2, 0, 0));
+    burnerTags.fill(hi);
     const pg = new THREE.PlaneGeometry(4.6, 4.6);
     pg.rotateX(-Math.PI / 2);
     pg.translate(h.x, 0.032, h.z);
+    pg.setAttribute('aHeater', new THREE.Float32BufferAttribute(new Array(pg.attributes.position.count).fill(hi), 1));
     glowGeos.push(pg);
   }
 
   const burnerMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, color: 0x6a4030, emissive: COLORS.heaterGlow, emissiveIntensity: 0 });
+  // Level 1: a brooder in env.brooderOut shows no flame (uOut mask, house-level.js)
+  const burnerOut = brooderMask(burnerMat, 'house-burners', 'emissive');
+  const burnerGeo = burners.geometry();
+  burnerGeo.setAttribute('aHeater', burnerTags.attribute());
+  const burnerMesh = new THREE.Mesh(burnerGeo, burnerMat);
   const lift = new THREE.Group();          // moves up by LIFT * winch
-  lift.add(brood.mesh(mats.vc, { cast: false }), burners.mesh(burnerMat, { cast: false, receive: false })); // in the roof shade: no shadows
+  lift.add(brood.mesh(mats.vc, { cast: false }), burnerMesh); // in the roof shade: no shadows
   group.add(lift);
   const hangGroup = new THREE.Group();     // origin at HANG_Y; y scale shortens chains and hoses
   hangGroup.position.y = HANG_Y;
@@ -109,6 +118,7 @@ export function buildBrooders(kit) {
     map: glowTexture(), color: 0xff5a14, transparent: true, opacity: 0,
     blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
   });
+  const glowOut = brooderMask(glowMat, 'house-brooder-glow', 'alpha');
   const glow = new THREE.Mesh(mergeGeometries(glowGeos), glowMat);
   glow.renderOrder = 1;
   glow.visible = false;
@@ -146,6 +156,9 @@ export function buildBrooders(kit) {
       lift.position.y = LIFT * winch;
       hangGroup.scale.y = Math.max(0.05, (chainLen - LIFT * winch) / chainLen);
       level = env.heaterLevel;
+      // Level 1: brooders in env.brooderOut are not burning (no flame, no glow pool)
+      const out = kit.farm && kit.farm.mode === 'level' ? env.brooderOut || [] : [];
+      for (let i = 0; i < 8; i++) burnerOut.value[i] = glowOut.value[i] = out.includes(i) ? 1 : 0;
       burnerMat.emissiveIntensity = 2.2 * level;
       glow.visible = level > 0.01;
       glowMat.opacity = 0.3 * level;
