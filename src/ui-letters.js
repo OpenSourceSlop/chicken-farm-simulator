@@ -9,7 +9,7 @@
 import { PLAN_CONTRACT, HARVEST, CLEAN, HOUSE_BOUNDS, LEVELS, PLACEMENT_DAY, weightAt, levelById } from './config.js';
 import { h, button } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
-import { int, one, two, hhmm, dayTime } from './ui-format.js';
+import { int, one, two, num, hhmm, dayTime } from './ui-format.js';
 import { harvestPage as harvestData, cleanPage as cleanData } from './records-cycle.js';
 
 const C = PLAN_CONTRACT;
@@ -32,7 +32,7 @@ export function replyLines(plan) {
   const t = Object.fromEntries((o.terms || []).map((x) => [x.key, x]));
   return [
     `${int(d.houses)} houses × ${int(d.birdsPerHouse)} chicks every ${int(d.cycleDays)} days`,
-    `losses counted ${one(o.lossesCountedPct)} %`,
+    `losses counted ${num(o.lossesCountedPct)} %`,
     t.salePerWeek && `${int(t.salePerWeek.value)} birds for sale a week (contract ${int(t.salePerWeek.limit)})`,
     t.density && `${one(t.density.value)} kg/m² at catching (limit ${int(t.density.limit)})`,
     t.rest && `${int(t.rest.value)} rest days (at least ${int(t.rest.limit)})`,
