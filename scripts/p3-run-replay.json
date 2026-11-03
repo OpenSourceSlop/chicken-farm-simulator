@@ -1,0 +1,18 @@
+[
+  {"wait": 600},
+  {"clearStorage": true},
+  {"eval": "__game.stop(), window.__t = () => 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel, 'loop stopped'"},
+  {"eval": "const t0 = performance.now(); __game.startLevel({ level: 'week2', from: 'standard', seed: 1 }); 'standard start of week 2: ' + __game.level.def.id + ' ' + __t() + ' in ' + Math.round(performance.now() - t0) + ' ms'"},
+  {"expect": "__game.level.mode === 'level' && __game.level.def.id === 'week2' && __game.env.dayNumber === 8 && Math.abs(__game.env.hour - 6) < 0.05 && 'week 2 at ' + __t()", "label": "a standard start of week 2: day 8 06:00"},
+  {"eval": "window.__farm8 = JSON.stringify(__game.farm.serialize()).length, __game.level.debug.goto(10, 9, { auto: true }), 'played to ' + __t()"},
+  {"eval": "__game.level.debug.result(false), 'result shown: ' + __game.level.mode"},
+  {"advance": 0.3},
+  {"expect": "(() => { const b = [...document.querySelectorAll('.result-btns .btn')].map((x) => x.textContent.trim()); const h = document.querySelector('.result .outcome h3').textContent; return b.includes('Replay Week 2') && b.some((x) => x.startsWith('Replay the brooding week')) && /Level 3 – Week 2 not passed/.test(h) && 'fail screen: ' + h + ' · ' + b.join(' | '); })()", "label": "fail screen: Replay Week 2 and Replay the brooding week"},
+  {"shot": "p3-replay-01-fail-screen"},
+  {"clickText": "Replay Week 2"},
+  {"advance": 0.3},
+  {"expect": "__game.level.mode === 'level' && __game.level.def.id === 'week2' && __game.env.dayNumber === 8 && Math.abs(__game.env.hour - 6) < 0.05 && !__game.level.result && __game.run.state().levels.week2.attempts === 2 && 'replayed: week 2 at ' + __t() + ', attempt ' + __game.run.state().levels.week2.attempts", "label": "Replay Week 2: back at day 8 06:00, the second attempt"},
+  {"expect": "(() => { const open = __game.jobs().filter((j) => j.status === 'open').map((j) => j.key); return open.includes('w2-lights@8') && !__game.jobs().some((j) => j.key.endsWith('@10')) && 'the day 8 jobs again, nothing of day 10: ' + open.length + ' open'; })()", "label": "the jobs of the saved start"},
+  {"advance": 0.5},
+  {"shot": "p3-replay-02-day8-again"}
+]

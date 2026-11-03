@@ -67,7 +67,7 @@ export function promptVerb(id) {
 // The title card (PHASE3.md §1 "Title card and run screen"): one flock, from the plan to the clean house.
 export const LEVEL_TEXT = {
   title: 'Chicken Farm — one flock, from the plan to the clean house',
-  kicker: 'Chicken Farm',
+  kicker: 'House 1 · 6,000 broiler chicks',
   line: 'Plan the farm, take in 6,000 chicks, grow them to the harvest and rest the clean house: seven levels on one flock.',
   start: 'Start a new flock',
   startBrooding: 'Start at the brooding week',

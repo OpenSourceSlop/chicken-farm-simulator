@@ -35,6 +35,8 @@ export const RUN_ORDER = LEVELS.map((l) => l.id);
 export const nextLevelId = (id) => RUN_ORDER[RUN_ORDER.indexOf(id) + 1] ?? null;
 export const prevLevelId = (id) => { const i = RUN_ORDER.indexOf(id); return i > 0 ? RUN_ORDER[i - 1] : null; };
 const clone = (o) => (o == null ? o : JSON.parse(JSON.stringify(o)));
+/** A level's short name inside a sentence: "the brooding week", "Week 2", "Plan the farm". */
+const inText = (def) => (def?.short || '').replace(/^The /, 'the ');
 const startKey = (id, day, def = levelById(id)) => `${RUN_SAVE.startPrefix}${id}${def && def.starts.length > 1 ? `.${day}` : ''}`;
 
 function storage() {
@@ -234,11 +236,11 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       const pid = prevLevelId(id), pe = pid && levels[pid];
       const pdef = pid && levelById(pid);
       res.run = {
-        next: res.pass && ndef ? { id: nid, title: ndef.title, short: ndef.short, label: `${RUN_CARD.continueTo} ${ndef.short}` } : null,
+        next: res.pass && ndef ? { id: nid, title: ndef.title, short: ndef.short, label: `${RUN_CARD.continueTo} ${inText(ndef)}` } : null,
         last: !nid,
-        replays: starts.map((d) => ({ id, day: d, label: starts.length > 1 ? `${RUN_CARD.replay} ${def.short} ${RUN_CARD.fromDay(d)}` : `${RUN_CARD.replay} ${def.short}` })),
+        replays: starts.map((d) => ({ id, day: d, label: starts.length > 1 ? `${RUN_CARD.replay} ${inText(def)} ${RUN_CARD.fromDay(d)}` : `${RUN_CARD.replay} ${inText(def)}` })),
         previous: pid && pe ? { id: pid, day: Math.max(...(pe.starts.length ? pe.starts : [pdef.startDay])), title: pdef.title, short: pdef.short,
-          label: `${RUN_CARD.replay} ${pdef.short} ${RUN_CARD.fromDay(Math.max(...(pe.starts.length ? pe.starts : [pdef.startDay])))}`, carried: [...(e.carried || [])] } : null,
+          label: `${RUN_CARD.replay} ${inText(pdef)} ${RUN_CARD.fromDay(Math.max(...(pe.starts.length ? pe.starts : [pdef.startDay])))}`, carried: [...(e.carried || [])] } : null,
         summary: res.pass && !nid ? summary : null,
       };
       return res;

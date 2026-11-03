@@ -3,10 +3,14 @@
 // day 0 the "Before the truck" group, then the rest in list order; jobs later today dimmed with
 // their time; done jobs fold into a count, missed ones struck through. The current job shows where
 // to go, its fact links and its bar. Footer: Next job, Notebook (N), Skill tree (K).
-// Owner: package "level".
-import { DRINKER_LINES_Z, FARM, FLOOR_GRID, HEATERS, HEATER_HEIGHT, LEVEL1, SPOTS, SPOTS2 } from './config.js';
+// Phase 3 (PHASE3.md §3.2): headers for the planning day, the clean-out and the rest; the facts links read
+// the merged boards of the day; the cycle's spots (SPOTS3, the lame bird, the stopped fan, the next bait
+// station or swab place). Owner: package "run" (Phase 2: "level").
+import { CLEAN, DRINKER_LINES_Z, FARM, FLOOR_GRID, HEATERS, HEATER_HEIGHT, LEVEL1, ROUNDS, SPOTS, SPOTS2, SPOTS3 } from './config.js';
 import { BOARDS } from './content-signs.js';
-import { JOB_WHERE } from './content-jobs.js';
+import { boardsForDay } from './content-signs-cycle.js';
+import { jobWhere } from './content-jobs.js';
+import { FAN_Z } from './house-fans.js';
 import { EV } from './events.js';
 import { h, button, setText, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
@@ -17,50 +21,76 @@ const BOARD_SPOT = {
   'sign-gate': SPOTS.signGate, 'sign-brooder': SPOTS.signBrooder, 'sign-water': SPOTS2.signWater, 'sign-vent': SPOTS2.signVent,
   'sign-litter': SPOTS2.signLitter, 'sign-chicks': SPOTS2.signChicks, 'sign-health': SPOTS2.signHealth, 'feeder-box': SPOTS2.feederBox,
   silo: SPOTS2.silo, 'controller-lights': SPOTS.controller, 'bird-scale': SPOTS2.birdScale, 'water-supply': SPOTS2.waterSupply, drinker: SPOTS2.drinkers[0],
+  // Phase 3 boards and plates
+  'sign-plan': SPOTS3.signPlan, 'sign-light': SPOTS3.signLight, 'sign-curtain': SPOTS3.signCurtain, 'sign-legs': SPOTS3.signLegs, 'sign-air': SPOTS3.signAir,
+  'sign-droppings': SPOTS3.signDroppings, 'sign-heat': SPOTS3.signHeat, 'sign-feed': SPOTS3.signFeed, 'sign-catch': SPOTS3.signCatch, 'sign-clean': SPOTS3.signClean,
+  'guard-hut': SPOTS3.guardHut, 'plan-sheet': SPOTS2.officeDesk, vaccine: SPOTS2.waterSupply, medicator: SPOTS2.waterSupply, 'pad-pump': SPOTS3.padPump,
+  'fan-panel': SPOTS3.fanPanel, 'gas-tank': SPOTS3.gasTank, 'bird-check': SPOTS2.birdScale, 'loading-bay': SPOTS3.loadingBay, 'wash-bay': SPOTS3.washBay,
 };
 /** The panel that shows a board or plate (a plate lives inside its machine). */
-export const BOARD_PANEL = { 'controller-lights': 'controller', drinker: 'drinker-0' };
+export const BOARD_PANEL = { 'controller-lights': 'controller', drinker: 'drinker-0', vaccine: 'water-supply', medicator: 'water-supply', 'plan-sheet': 'office-desk' };
+const boardTitle = (id, day) => boardsForDay(day)[id]?.title ?? BOARDS[id]?.title ?? id;
 
 /** Round label for the card header. */
-export function roundLabel(env, anchors) {
+export function roundLabel(env, anchors, farm = null) {
   const d = env.dayNumber, hr = env.hour;
+  if (d <= -2) return 'Planning day · no birds yet';
   if (d < 0) return 'Prep day — chicks arrive tomorrow 08:00';
+  if (d >= 43 && d <= 46) return `Clean-out day ${d - 42}`;
+  if (d > 46) { const b = farm?.clean?.bookedDay; return `Rest day ${d - 46}${b != null ? ` · chicks booked for day ${b}` : ''}`; }
+  if (d === 42) return farm?.harvest?.started && !farm?.harvest?.result ? 'Day 42 · catching' : 'Day 42 · the catch';
   if (d === 0 && hr < LEVEL1.arrivalHour && hr >= 6) return 'Day 0 · Before the truck (08:00)';
   if (d === 0 && anchors.truck != null && anchors.placed == null) return 'Day 0 · The chicks are here';
   const R = LEVEL1.rounds;
   const span = (r) => `${r.label} ${hhmm(r.from)}–${hhmm(r.to)}`;
   if (hr >= R.am.from && hr < R.am.to) return `Day ${d} · ${span(R.am)}`;
   if (hr >= R.pm.from && hr < R.pm.to) return `Day ${d} · ${span(R.pm)}`;
+  if (hr >= R.pm.to && d >= 15 && hr < ROUNDS.night.to) return `Day ${d} · ${span(ROUNDS.night)}`;
   if (hr >= R.pm.to) return `Day ${d} · ${span(R.eve)}`;
   if (hr >= R.am.to && hr < R.pm.from) return `Day ${d} · Midday`;
   return `Day ${d} · Night`;
 }
 
 // Text under the bar: what has been done of the job so far, in plain counts.
+const EACH_WORD = { line: 'lines', spot: 'places', part: 'parts', item: 'items', truck: 'tickets', axis: 'measures' };
 function progressText(inst, ctx) {
   const r = inst.def.done, st = inst.st;
   switch (r.type) {
-    case 'each': return `${r.values.filter((v) => String(v) in st.seen).length} / ${r.values.length} lines`;
+    case 'each': return `${r.values.filter((v) => String(v) in st.seen).length} / ${r.values.length} ${EACH_WORD[r.key] || 'done'}`;
     case 'count': {
       const parts = [`${st.list.length} / ${r.n}`];
       if (r.sectors) parts.push(`${new Set(st.list.map((x) => x.s)).size} / ${r.sectors} parts of the floor`);
       if (r.nearDrinker) parts.push(`${Math.min(r.nearDrinker, st.list.filter((x) => x.near).length)} / ${r.nearDrinker} under a line`);
       return parts.join(' · ');
     }
-    case 'coverage': return `floor seen ${Math.round((st.cells.length / 300) * 100)} %${r.listen ? (st.listened ? ' · listened' : ' · stand still to listen') : ''}`;
+    case 'coverage': {
+      const c = ctx.level?.engine?.coverage?.(inst) || { seen: st.cells.length, need: r.frac * 300, size: 300 };
+      const capped = c.need < r.frac * c.size - 1e-6;   // a walk capped at week 1's cells (PHASE3.md §3.1 maxCells)
+      const seen = capped ? `floor walked ${Math.min(100, Math.round((100 * c.seen) / c.need))} % of the walk` : `floor seen ${Math.round((c.seen / c.size) * 100)} %`;
+      return `${seen}${r.listen ? (st.listened ? ' · listened' : ' · stand still to listen') : ''}`;
+    }
     case 'state': {
       const f = ctx.farm;
       if (r.test === 'litter-covered') return `floor covered ${Math.round((f.litter.cover ?? 0) * 100)} %`;
       if (r.test === 'lines-flushed') return `${f.water.lines.filter((l) => l.flushClear >= 0.99).length} / 4 lines ran clear`;
       if (r.test === 'pans-flooded') return `${f.feed.lines.filter((l) => l.flood && l.panFill >= 0.95).length} / 3 lines flooded and full`;
       if (r.test === 'all-placed') return `${Math.round((f.flock.placed || 0) / (LEVEL1.chicksPlaced / LEVEL1.stacks))} / ${LEVEL1.stacks} stacks tipped`;
+      const g = f.litter?.coverGrid, cover = g ? Array.from(g).reduce((a, v) => a + Math.min(1, v), 0) / g.length : 0, C = f.clean || {};
+      if (r.test === 'house-ready') return `house floor covered ${Math.round(cover * 100)} %`;
+      if (r.test === 'litter-removed') return `litter left on the floor ${Math.round(cover * 100)} %`;
+      if (r.test === 'house-washed') return `floor washed ${Math.round((C.washShare ?? 0) * 100)} %`;
+      if (r.test === 'house-disinfected') return `floor disinfected ${Math.round((C.sprayShare ?? 0) * 100)} %`;
+      if (r.test === 'house-dry') return `floor wet ${Math.round((C.wetShare ?? 0) * 100)} %`;
+      if (r.test === 'lines-disinfected') return `${(C.lines || []).filter((v) => v >= 1).length} / 4 lines disinfected`;
+      if (r.test === 'pans-grower' || r.test === 'pans-finisher') { const t = r.test.slice(5); return `${t} in the pans ${Math.round((f.feed?.panType?.[t] ?? 0) * 100)} %`; }
       return '';
     }
     case 'all': return `${st.met.filter(Boolean).length} / ${r.of.length}`;
     default: return '';
   }
 }
-const hasBar = (inst) => { const t = inst.def.done.type; return t === 'each' || t === 'count' || t === 'coverage' || t === 'all' || (t === 'state' && ['litter-covered', 'lines-flushed', 'pans-flooded', 'all-placed'].includes(inst.def.done.test)); };
+const BAR_TESTS = ['litter-covered', 'lines-flushed', 'pans-flooded', 'all-placed', 'house-ready', 'litter-removed', 'house-washed', 'house-disinfected', 'house-dry', 'lines-disinfected', 'pans-grower', 'pans-finisher'];
+const hasBar = (inst) => { const t = inst.def.done.type; return t === 'each' || t === 'count' || t === 'coverage' || t === 'all' || (t === 'state' && BAR_TESTS.includes(inst.def.done.test)); };
 
 export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook, onSkills, nextLabel }) {
   const titleId = uniqueId('ljobs-title');
@@ -99,7 +129,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
   function nearestHeater(p) { let b = HEATERS[0], bd = Infinity; for (const ht of HEATERS) { const d = Math.hypot(ht.x - p.x, ht.z - p.z); if (d < bd) { bd = d; b = ht; } } return b; }
   function keySpot(k) {
     if (k.startsWith('drinkers.')) return SPOTS2.drinkers[+k.split('.')[1]];
-    return SPOTS[k] || SPOTS2[k] || FARM[k] || null;
+    return SPOTS[k] || SPOTS2[k] || SPOTS3[k] || FARM[k] || null;
   }
   function place(s) {
     if (!s) return null;
@@ -119,6 +149,18 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     }
     return best;
   }
+  function coveredCell(p) {
+    const g = ctx.farm.litter.coverGrid; if (!g) return null;
+    let best = null, bd = Infinity;
+    for (let i = 0; i < g.length; i++) {
+      if (g[i] < 0.5) continue;
+      const x = FLOOR_GRID.x0 + ((i % FLOOR_GRID.nx) + 0.5) * FLOOR_GRID.cell, z = FLOOR_GRID.z0 + (Math.floor(i / FLOOR_GRID.nx) + 0.5) * FLOOR_GRID.cell;
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (d < bd) { bd = d; best = { x, z }; }
+    }
+    return best;
+  }
+  function nearestOf(list, p) { let b = null, bd = Infinity; for (const s of list) { const d = Math.hypot(s.x - p.x, s.z - p.z); if (d < bd) { bd = d; b = s; } } return b; }
   function spotFor(inst, p) {
     if (factsTarget) return place(BOARD_SPOT[factsTarget]);
     const d = inst.def, st = inst.st, carrying = ctx.props?.carrying;
@@ -131,6 +173,9 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
       case 'r-dips': return place(st.met[0] ? SPOTS.houseDoor : FARM.footDipGate);
       case 'r-feeders': return place(st.met[0] ? SPOTS2.silo : SPOTS2.feederBox);
       case 'p-wet-patch': if (carrying !== 'sack') return place(SPOTS2.litterHeap); break;
+      case 'w2-ready': if (carrying === 'barrow') { const c = uncoveredCell(p); return c ? ground(c, 1.6) : null; } break;
+      case 'c-litter': if (carrying === 'scraper') { const c = coveredCell(p); return c ? ground(c, 1.6) : null; } break;
+      case 'w3-topup': case 'p-pad-patch': if (carrying === 'sack' || carrying === 'fork') return null; break;
       default: break;
     }
     if ((d.spot === 'dead') && carrying === 'bucket') return place(SPOTS2.deadBin);
@@ -139,6 +184,15 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
       case 'heater-out': { const i = ctx.env.brooderOut?.[0] ?? LEVEL1.problems.find((x) => x.id === 'brooder-out')?.heater ?? 0; const ht = HEATERS[i]; return { x: ht.x, z: ht.z, y: HEATER_HEIGHT + 1, gz: 0 }; }
       case 'dead': { const near = ctx.flock?.dead?.near?.(p.x, p.z, 80) || []; return near.length ? ground(near[0], 1.2) : place(SPOTS2.deadBin); }
       case 'leak': { const lk = ctx.farm.water.leak || LEVEL1.problems.find((x) => x.id === 'leaking-nipple'); return lk ? ground({ x: lk.x, z: DRINKER_LINES_Z[lk.line ?? 2] }, 1.6) : null; }
+      case 'lame': { const b = nearestOf((ctx.flock?.debug?.sickBirds?.() || []).filter((x) => x.lame), p); return b ? ground(b, 1.2) : place(SPOTS2.birdScale); }
+      case 'fan-broken': { const i = (ctx.env.fansBroken || [])[0] ?? 3; return { x: 23.2, z: FAN_Z[i] ?? 0, y: 2.6, gz: 0 }; }
+      case 'bait': { const left = SPOTS3.bait.filter((b, i) => !ctx.farm.clean?.baits?.[i]); return place(nearestOf(left.length ? left : SPOTS3.bait, p)); }
+      case 'swab': {
+        if (carrying !== 'swabs') return place(SPOTS3.washBay);
+        const left = CLEAN.swabSpots.filter((s, i) => !(String(i) in (st.seen || {})));
+        const s = nearestOf(left.length ? left : CLEAN.swabSpots, p);
+        return s ? ground(s, 1.4) : null;
+      }
       default: return place(keySpot(d.spot));
     }
   }
@@ -168,7 +222,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     const missed = today.filter((i) => i.status === 'missed' && i.day === day);
     const done = today.filter((i) => i.status === 'done' && i.day === day);
     const key = [day, cur?.key, factsTarget, ...[...g.pinned, ...g.problems, ...g.preTruck, ...g.rest, ...waiting, ...missed].map((i) => `${i.key}:${i.status}`), done.length].join('|');
-    setText(head, roundLabel(env, eng.anchors));
+    setText(head, roundLabel(env, eng.anchors, ctx.farm));
     setText(count, `${done.length} done`);
     if (key === sig) return;
     sig = key;
@@ -178,9 +232,9 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
       const isCur = cur && inst.key === cur.key;
       let extra = null;
       if (isCur) {
-        const where = h('p', { class: 'job-where' }, h('span', { html: ICONS.pin, 'aria-hidden': 'true' }), h('span', null, JOB_WHERE[inst.id] || ''));
+        const where = h('p', { class: 'job-where' }, h('span', { html: ICONS.pin, 'aria-hidden': 'true' }), h('span', null, jobWhere(inst.id)));
         const links = inst.def.signs.length ? h('p', { class: 'job-facts' }, h('span', { class: 'job-facts-k' }, 'Facts:'),
-          inst.def.signs.map((id) => { const b = button({ class: `fact-link${factsTarget === id ? ' is-on' : ''}` }, BOARDS[id].title); b.addEventListener('click', (e) => { e.stopPropagation(); factsTarget = factsTarget === id ? null : id; sig = ''; }); return b; })) : null;
+          inst.def.signs.map((id) => { const b = button({ class: `fact-link${factsTarget === id ? ' is-on' : ''}` }, boardTitle(id, day)); b.addEventListener('click', (e) => { e.stopPropagation(); factsTarget = factsTarget === id ? null : id; sig = ''; }); return b; })) : null;
         const bar = h('span', { class: 'job-bar' });
         const prog = hasBar(inst) ? h('div', { class: 'job-progress' }, bar) : null;
         const ptext = hasBar(inst) ? h('p', { class: 'job-ptext' }) : null;
@@ -210,7 +264,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
           return li;
         }
         const hr = splitDay(group[0].opensAt).hour + 1e-6, R = LEVEL1.rounds;
-        const name = hr >= R.am.from && hr < R.am.to ? R.am.label : hr >= R.pm.from && hr < R.pm.to ? R.pm.label : hr >= R.eve.from ? R.eve.label : 'Later';
+        const name = hr >= R.am.from && hr < R.am.to ? R.am.label : hr >= R.pm.from && hr < R.pm.to ? R.pm.label : day >= 15 && hr >= ROUNDS.night.from && hr < ROUNDS.night.to ? ROUNDS.night.label : hr >= R.eve.from ? R.eve.label : 'Later';
         return h('li', { class: 'job is-waiting', title: group.map((i) => i.def.title).join(' · ') }, h('span', { class: 'job-mark', 'aria-hidden': 'true' }),
           h('div', { class: 'job-body' }, h('p', { class: 'job-title' }, `${name} · ${group.length} jobs`, h('span', { class: 'job-when' }, ` from ${t}`))));
       })));

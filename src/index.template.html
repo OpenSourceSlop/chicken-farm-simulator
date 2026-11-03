@@ -772,6 +772,70 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .result .week .book-note { color: var(--ink-faint); }
 .result .ledger--week tr.notes-row td { color: var(--ink-faint); }
 
+/* ================= Phase 3: the run ================= */
+/* title card: the buttons on the left, the run card on the right */
+.title-card { width: min(940px, 100%); max-height: calc(100vh - 2 * var(--gutter)); overflow: auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 22px; padding: 22px 24px 18px; }
+.title-card .title-h { font-size: 28px; }
+.title-card .title-line { font-size: 15px; margin-bottom: 14px; }
+.title-btns .btn.is-confirm { background: var(--sign-yellow); border-color: var(--sign-yellow); color: var(--sign-yellow-ink); }
+.runcard { min-width: 0; padding: 12px 12px 10px; border-radius: 8px; background: var(--panel-sunk); border: 1px solid var(--panel-edge); }
+.runcard-h { margin: 0 0 8px; font: 700 12.5px/1.2 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--sign-yellow); }
+.runcard-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.runcard-row { display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; background: var(--panel-raised); border: 1px solid transparent; }
+.runcard-row.is-playing { border-color: rgba(242, 140, 40, 0.55); }
+.runcard-row.is-later { background: transparent; border-color: var(--panel-edge); }
+.runcard-row.is-later .runcard-title, .runcard-row.is-later .runcard-target { color: var(--ink-faint); }
+.runcard-n { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--panel-sunk); font: 700 13px/1 var(--font-display); color: var(--ink-dim); }
+.runcard-body { min-width: 0; }
+.runcard-title { margin: 0; font: 700 14px/1.2 var(--font-display); color: var(--ink); }
+.runcard-title small { font: 500 12px/1 var(--font-body, inherit); color: var(--ink-faint); }
+.runcard-target, .runcard-meta { margin: 1px 0 0; font-size: 12px; line-height: 1.3; color: var(--ink-dim); }
+.runcard-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 8px; }
+.runcard-state { font-weight: 600; color: var(--ink); }
+.runcard-state--not-reached { font-weight: 400; color: var(--ink-faint); }
+.runcard-key { color: var(--ink); }
+.runcard-replay { min-height: 24px; padding: 1px 8px; font-size: 11.5px; white-space: nowrap; }
+.runcard-replay .icon { font-size: 14px; }
+.runcard-replay.is-confirm { white-space: normal; max-width: 190px; border-color: var(--sign-yellow); color: var(--sign-yellow); }
+.runcard-harder, .runcard-note { margin: 8px 2px 0; font-size: 12px; line-height: 1.4; color: var(--ink-faint); }
+.runcard-note { color: var(--sign-yellow); }
+/* the card while a standard start plays the ideal farmer */
+.busy { position: absolute; inset: 0; z-index: 12; display: grid; place-items: center; background: var(--scrim); pointer-events: auto; }
+.busy-card { display: flex; align-items: center; gap: 12px; padding: 16px 22px; font: 600 16px/1.3 var(--font-display); color: var(--ink); }
+.busy-icon .icon { font-size: 24px; color: var(--accent); }
+
+/* record book: week tables by level, phone selects, letters, the pages of the plan, harvest and clean-out */
+.book-tab { padding: 8px 12px 7px; }
+.book-subtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
+.book-subtab { padding: 5px 10px; border: 1.5px solid var(--ledger-ink); border-radius: 14px; background: transparent; color: var(--ledger-ink); font: 600 12px/1 var(--font-display); letter-spacing: 0.04em; cursor: pointer; }
+.book-subtab[aria-selected="true"] { background: var(--ledger-ink); color: var(--ledger-paper); }
+.book-select { min-height: 34px; padding: 4px 8px; border: 1.5px solid var(--ledger-ink); border-radius: 6px; background: #fffaf0; color: var(--ledger-ink); font: 600 13px/1 var(--font-display); }
+.letter { margin: 0 0 8px; }
+.letter-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 1.5px solid var(--ledger-rule); border-radius: 6px; background: #fffaf0; color: var(--ledger-ink); font: 600 14px/1.2 var(--font-display); text-align: left; cursor: pointer; }
+.letter-head.is-open { border-color: var(--ledger-ink); }
+.letter-body { padding: 8px 12px 4px; }
+.letter-lines { margin: 4px 0 8px; padding-left: 18px; font-size: 14px; line-height: 1.55; }
+.letter-big { margin: 4px 0; font: 700 18px/1.3 var(--font-display); }
+.result-paper { margin-top: 4px; min-height: 0; background: var(--ledger-paper); }
+.result-carried { margin: 2px 0 10px; font-size: 13.5px; line-height: 1.45; color: var(--ink-dim); }
+.result-carried b { font-weight: 600; color: var(--ink); }
+.graph--dark svg { color: var(--ink); --ledger-ink: var(--ink); --ledger-ink2: var(--sky); --ledger-rule: var(--panel-edge); }
+.bigs--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.summary .bigs--4 .big-v { font-size: 30px; }
+
+/* skill tree: every branch a button; the picked one shows its milestones */
+.branch--pick { display: block; width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.branch--pick:hover { border-color: rgba(242, 140, 40, 0.75); }
+.branch--pick.is-picked { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.tree-miles--one { grid-template-columns: minmax(0, 1fr); }
+.tree-miles--one .miles { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+.mile-level { color: var(--ink-faint); }
+@media (max-width: 860px) {
+  .title-card { grid-template-columns: minmax(0, 1fr); }
+  .tree-miles--one .miles { grid-template-columns: minmax(0, 1fr); }
+}
+
+
 /* ---------- smaller screens ---------- */
 @media (max-width: 1100px) {
   :root { --jobs-w: 260px; }

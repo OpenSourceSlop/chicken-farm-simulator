@@ -34,6 +34,9 @@ export function button(attrs, ...children) {
   return b;
 }
 
+/** Children for replaceChildren: arrays flattened, null / false dropped (h() does the same for its children). */
+export const nodes = (...c) => c.flat(4).filter((x) => x != null && x !== false);
+
 // Write text only when it changed (keeps per-frame HUD updates cheap).
 export function setText(el, s) {
   if (el.__text !== s) { el.__text = s; el.textContent = s; }

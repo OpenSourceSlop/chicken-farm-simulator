@@ -1,0 +1,23 @@
+[
+  {"wait": 600},
+  {"clearStorage": true},
+  {"eval": "__game.stop(), window.__t = () => 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel, __game.level.toTitle(), 'title: ' + __game.level.mode"},
+  {"advance": 0.3},
+  {"shot": "p3-title-01-run-card"},
+  {"expect": "(() => { const rows = [...document.querySelectorAll('.title .runcard-row')]; const t = document.querySelector('.title-h').textContent; return rows.length === 7 && /one flock, from the plan to the clean house/.test(t) && rows[0].textContent.includes('Plan the farm') && rows[6].textContent.includes('Clean-out and rest') && 'run card: ' + rows.map((r) => r.querySelector('.runcard-title').textContent.split(' · ')[0]).join(' | '); })()", "label": "title card: the run card lists the seven levels"},
+  {"expect": "(() => { const b = [...document.querySelectorAll('.title .btn')].filter((x) => !x.hidden).map((x) => x.textContent.trim()); return b.some((x) => x.startsWith('Start a new flock')) && b.some((x) => x.startsWith('Start at the brooding week')) && b.some((x) => x.startsWith('Walk the Phase 1 farm')) && b.some((x) => x.startsWith('Skill tree')) && !b.some((x) => x.startsWith('Continue')) && 'buttons: ' + b.join(' | '); })()", "label": "title card buttons (no Continue without a save)"},
+  {"expect": "document.documentElement.scrollWidth <= innerWidth && (() => { const r = document.querySelector('.title-card').getBoundingClientRect(); return r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1 && 'title card ' + Math.round(r.width) + ' x ' + Math.round(r.height) + ' in ' + innerWidth + ' x ' + innerHeight; })()", "label": "title card fits the window, no sideways scroll"},
+  {"clickText": "Start a new flock"},
+  {"advance": 0.3},
+  {"expect": "__game.level.mode === 'level' && __game.level.def.id === 'plan' && __game.env.dayNumber === -2 && Math.abs(__game.env.hour - 7) < 0.05 && Math.hypot(__game.player.position.x + 40, __game.player.position.z - 40.5) < 1 && __game.farm.flock.alive === 0 && 'planning day ' + __t() + ', at the gate, no birds'", "label": "Start a new flock: the planning day, 07:00 at the gate"},
+  {"expect": "(() => { const h = document.querySelector('.ljobs .jobs-head h2').textContent, d = document.querySelector('.clock-day').textContent; return /Planning day/.test(h) && d === 'Planning day' && 'job card: ' + h + ' · HUD ' + d; })()", "label": "job card and HUD on the planning day"},
+  {"shot": "p3-title-02-planning-day"},
+  {"eval": "__game.level.toTitle(), 'title again: continue ' + [...document.querySelectorAll('.title .btn')].filter((b) => !b.hidden && b.textContent.startsWith('Continue')).map((b) => b.textContent).join('')"},
+  {"advance": 0.2},
+  {"shot": "p3-title-03-continue"},
+  {"expect": "(() => { const r = document.querySelector('.title .runcard-row.is-playing'); return r && r.textContent.includes('Plan the farm') && 'run card: playing ' + r.querySelector('.runcard-meta').textContent; })()", "label": "the run card shows the plan level playing"},
+  {"clickText": "Start at the brooding week", "times": 2},
+  {"advance": 0.3},
+  {"expect": "__game.level.mode === 'level' && __game.level.def.id === 'level1' && __game.level.inRun && __game.env.dayNumber === -1 && Math.abs(__game.env.hour - 7) < 0.05 && __game.run.state().plan === null && 'brooding week ' + __t() + ', run without a plan'", "label": "Start at the brooding week (second press confirms): the prep day 07:00, no plan"},
+  {"expect": "document.querySelector('.clock-day').textContent === 'Prep day' && 'HUD Prep day'", "label": "HUD on the prep day"}
+]

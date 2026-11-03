@@ -55,6 +55,7 @@ import * as cycleProfiles from './farm-profiles-cycle.js';
 import { planSums } from './farm-plan.js';
 import { ALL_MILESTONES } from './skills.js';
 import { hhmm, splitDay, two, int } from './ui-format.js';
+import { dayLabel } from './content.js';
 
 const H = 1 / 24;
 const CARRY_KINDS = new Set(['boxes', 'barrow', 'sack', 'frame']);
@@ -512,6 +513,8 @@ export function createLevel(ctx, deps = {}) {
       setFast(on) { fast = !!on; userPaused = false; },
       get fast() { return fast; },
       get userPaused() { return userPaused; },
+      /** The HUD's day (PHASE3.md §2.3). */
+      dayText() { const c = farm.clean; return dayLabel(env.dayNumber, { bookedDay: env.dayNumber > 46 ? c?.bookedDay : null }); },
       rateLabel() {
         if (env.paused) return userPaused ? 'Paused' : 'Stopped';
         if (env.timeScale === 0) return 'Stopped';
@@ -579,6 +582,7 @@ export function createLevel(ctx, deps = {}) {
       reached.add(`${next.id}@${next.startDay}`);
       engine.start(next.startDay, next);
       ui?.jobCard?.reset?.();
+      ui?.clearCaptions?.();
       player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw);
       prevDay = env.day;
       enterMode('start');
