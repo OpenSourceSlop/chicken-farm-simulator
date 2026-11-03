@@ -103,6 +103,7 @@ export const KEEP_OUT = [
   { x0: FARM.silos[0].x - 2.5, x1: FARM.silos[1].x + 2.5, z0: FARM.silos[0].z - 2.8, z1: -6 },
   { x0: GATE.x0 - 8, x1: SPOTS.signGate.x + 3, z0: SPRAY_Z - 2.5, z1: F.zMax + 1 },
   { x0: FARM.doorPath[0].x - 2.5, x1: FARM.doorPath[0].x + 2.5, z0: 6, z1: 16 },
+  { x0: -6, x1: 18, z0: 21, z1: 33 }, // reservoir pond
 ];
 export function inKeepOut(x, z, pad = 0) {
   for (const r of KEEP_OUT) if (x > r.x0 - pad && x < r.x1 + pad && z > r.z0 - pad && z < r.z1 + pad) return true;
@@ -124,9 +125,21 @@ export const GROVES = [
   { x: 175, z: 160, r: 34 }, { x: -200, z: 60, r: 24 }, { x: 110, z: -190, r: 30 }, { x: -130, z: -200, r: 34 },
 ];
 
+// Farm reservoir pond on the south lawn (raw water for the pump house)
+export const POND = { x: 6, z: 27, rx: 9, rz: 4.4, water: -0.28 };
+// Normalised pond radius at (x, z): < 1 inside the water line
+export function pondR(x, z) {
+  const a = Math.atan2(z - POND.z, x - POND.x);
+  const wobble = 1 + 0.08 * Math.sin(a * 3 + 1) + 0.05 * Math.sin(a * 5 + 2);
+  return Math.hypot((x - POND.x) / POND.rx, (z - POND.z) / POND.rz) / wobble;
+}
+
 export function terrainHeight(x, z) {
   const d = raisedDist(x, z);
-  if (d <= 0) return 0;
+  if (d <= 0) {
+    const e = pondR(x, z);
+    return e < 1.35 ? -0.75 * smoothstep(1.35, 0.75, e) : 0;
+  }
   let h = LOW_Y * smoothstep(0, 3.2, d);
   for (const g of GROVES) {
     const gd = Math.hypot(x - g.x, z - g.z);

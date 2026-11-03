@@ -9,7 +9,7 @@ import { coconutPalm, bananaClump, mangoTree, rainTree, makeFoliageMaterial } fr
 const PLACED = [
   ['coconut', -26.6, 26.8, 8.5], ['coconut', -25.4, 21.5, 9.5], ['coconut', -24.2, 24.6, 7.2],
   ['banana', -27.0, 18.9, 1.0], ['banana', -33.2, 18.8, 0.9],
-  ['mango', -20.5, 33.0, 1.1], ['banana', -4, 34.6, 0.9], ['banana', 9, 34.4, 1.0],
+  ['mango', -19.5, 34.2, 1.05], ['banana', -4, 34.6, 0.9], ['banana', 9, 34.4, 1.0],
   ['coconut', 47, 24, 9], ['mango', 50, 30.5, 1.0], ['banana', 43, 32.5, 1.0],
   ['mango', -47, 24, 1.0], ['coconut', -50.5, 28.5, 9],
   ['rain', -44, -26, 1.1], ['mango', 20, -25, 1.1], ['rain', 44, -24, 1.0],

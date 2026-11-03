@@ -4,7 +4,7 @@
 // sky (dome, stars, sun/moon, fog), ground (yard, roads), fields (paddies, groves, hills),
 // gate (fence, gate, guard hut, spray arch, foot dip, sign), buildings (office, generator,
 // water tower), silos (silos, auger, spirit house), yard (trees inside the fence), trees, signs,
-// lamps (yard lights that glow at night).
+// lamps (yard lights that glow at night), props (pickup, motorbike, flag).
 import * as THREE from 'three';
 import { SPOTS } from './config.js';
 import { GeoBuilder, makeMaterials, occlusion } from './world-util.js';
@@ -16,7 +16,9 @@ import { buildBuildings } from './world-buildings.js';
 import { buildSilos, spiritHouse } from './world-silos.js';
 import { buildYardTrees } from './world-yard.js';
 import { makeSignTextures } from './world-signs.js';
+import { POND } from './world-layout.js';
 import { buildLamps } from './world-lamps.js';
+import { buildProps } from './world-props.js';
 
 export function buildWorld(ctx) {
   const { scene } = ctx;
@@ -41,6 +43,12 @@ export function buildWorld(ctx) {
   root.add(shrine.mesh(mats.flat, { name: 'spirit-house' }));
   const sway = buildYardTrees(root, colliders);
   const lamps = buildLamps(root, mats, colliders);
+  const props = buildProps(root, mats, colliders);
+
+  // the pond: overlapping circles along its long axis
+  for (const k of [-0.86, -0.6, -0.22, 0.22, 0.6, 0.86]) {
+    colliders.push({ type: 'circle', x: POND.x + k * POND.rx, z: POND.z, r: POND.rz * 1.12 * Math.sqrt(1 - k * k * 0.92) + 0.2 });
+  }
 
   const interactables = [
     { id: 'sign-gate', label: SPOTS.signGate.label, x: SPOTS.signGate.x, z: SPOTS.signGate.z, radius: 2.2 },
@@ -56,6 +64,7 @@ export function buildWorld(ctx) {
     update(dt, env, view) {
       time += dt;
       sway.uTime.value = time;
+      props.update(time);
       sky.update(dt, env, view);
       fields.update(sky);
       lamps.update(sky.state.night);

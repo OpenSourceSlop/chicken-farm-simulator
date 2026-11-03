@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { COLORS } from './config.js';
 import { GeoBuilder, rng, fbm, rectDist, unitBox, unitCone } from './world-util.js';
-import { F, CORRIDOR, PUBLIC_ROAD_Z, PADDY_Y, LOW_Y, GROVES, terrainHeight } from './world-layout.js';
+import { F, CORRIDOR, PUBLIC_ROAD_Z, PADDY_Y, LOW_Y, GROVES, POND, terrainHeight } from './world-layout.js';
 import { treeGeometry } from './world-trees.js';
 
 const EXCLUDE = [
@@ -56,12 +56,12 @@ function seedlingTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const g = c.getContext('2d');
-  g.fillStyle = '#c4dde4';
+  g.fillStyle = '#8fb6bc';
   g.fillRect(0, 0, 128, 128);
   for (let y = 4; y < 128; y += 16) {
-    for (let x = 3; x < 128; x += 10) {
-      g.fillStyle = (x + y) % 3 ? '#5f9a3a' : '#6faa40';
-      g.fillRect(x, y + ((x / 10) % 2) * 2, 4, 6);
+    for (let x = 2; x < 128; x += 8) {
+      g.fillStyle = (x + y) % 3 ? '#6aa83c' : '#7cba46';
+      g.fillRect(x, y + ((x / 8) % 2), 5, 8);
     }
   }
   const t = new THREE.CanvasTexture(c);
@@ -111,13 +111,64 @@ function buildPaddies(group, mats) {
     bund(bunds, p.x1, p.z0, p.x1, p.z1, c);
     bund(bunds, p.x0, p.z1, p.x1, p.z1, c);
   }
-  const waterMat = new THREE.MeshPhongMaterial({ color: 0x9cc4d4, specular: 0xb8c8d0, shininess: 90 });
-  const seedMat = new THREE.MeshPhongMaterial({ map: seedlingTexture(), specular: 0x8899a0, shininess: 60 });
+  buildPond(water, rice);
+  const waterMat = new THREE.MeshPhongMaterial({ color: 0x9cc4d4, specular: 0x4c565c, shininess: 160 });
+  const seedMat = new THREE.MeshPhongMaterial({ map: seedlingTexture(), specular: 0x3c4448, shininess: 140 });
   group.add(rice.mesh(mats.flat, { cast: false, receive: false, name: 'paddy-rice' }));
   group.add(water.mesh(waterMat, { cast: false, receive: false, name: 'paddy-water' }));
   group.add(seed.mesh(seedMat, { cast: false, receive: false, name: 'paddy-seedlings' }));
   group.add(bunds.mesh(mats.flat, { cast: false, receive: false, name: 'paddy-bunds' }));
   return { plots, waterMat, seedMat };
+}
+
+// Farm reservoir pond: water surface, lotus pads and flowers, reeds along the bank
+function buildPond(water, deco) {
+  const n = 40, y = POND.water;
+  const edge = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const wob = 1 + 0.08 * Math.sin(a * 3 + 1) + 0.05 * Math.sin(a * 5 + 2);
+    const r = (1.2 * wob) / Math.hypot(Math.cos(a) / POND.rx, Math.sin(a) / POND.rz);
+    edge.push([POND.x + Math.cos(a) * r, y, POND.z + Math.sin(a) * r]);
+  }
+  const c = [POND.x, y, POND.z];
+  for (let i = 0; i < n; i++) {
+    const p = edge[i], q = edge[(i + 1) % n];
+    water.tri(...c, ...q, ...p, 0xffffff, [0.5, 0.5, 0, 0, 0, 0]);
+  }
+  const r = rng(61);
+  const pad = new THREE.CylinderGeometry(1, 1, 1, 9, 1);
+  for (let i = 0; i < 16; i++) {
+    const a = r() * Math.PI * 2, d = 0.25 + 0.6 * Math.sqrt(r());
+    const x = POND.x + 2.5 + Math.cos(a) * d * POND.rx * 0.45, z = POND.z + Math.sin(a) * d * POND.rz * 0.7;
+    const s = 0.28 + r() * 0.22;
+    deco.add(pad, i % 3 ? 0x4f8a3a : 0x5f9a44, { x, y: y + 0.02, z, sx: s, sy: 0.02, sz: s });
+    if (i % 4 === 0) {
+      deco.add(unitCone(5), 0xf28fb4, { x: x + 0.1, y: y + 0.2, z: z + 0.05, sx: 0.12, sy: 0.22, sz: 0.12 });
+      deco.add(unitCone(5), 0xf6b8cf, { x: x + 0.1, y: y + 0.16, z: z + 0.05, sx: 0.16, sy: 0.12, sz: 0.16, rx: Math.PI });
+    }
+  }
+  for (let i = 0; i < 9; i++) {
+    const a = r() * Math.PI * 2, wob = 1 + 0.08 * Math.sin(a * 3 + 1) + 0.05 * Math.sin(a * 5 + 2);
+    const rr = (1.08 * wob) / Math.hypot(Math.cos(a) / POND.rx, Math.sin(a) / POND.rz);
+    const x = POND.x + Math.cos(a) * rr, z = POND.z + Math.sin(a) * rr;
+    for (let k = 0; k < 7; k++) {
+      deco.add(unitCone(3), k % 2 ? 0x6f9a3e : 0x88a84a, { x: x + (r() - 0.5) * 0.8, y: y + 0.45, z: z + (r() - 0.5) * 0.8, sx: 0.05, sy: 0.9 + r() * 0.5, sz: 0.05, rx: (r() - 0.5) * 0.4, rz: (r() - 0.5) * 0.4 });
+    }
+  }
+}
+
+// Great egret standing in shallow water (for instancing)
+function egretGeometry() {
+  const b = new GeoBuilder();
+  b.add(new THREE.IcosahedronGeometry(1, 0), 0xf6f6f2, { y: 0.55, sx: 0.13, sy: 0.12, sz: 0.3, rx: -0.35 });
+  b.pipe(0, 0.6, 0.18, 0, 0.82, 0.24, 0.035, 0xf6f6f2, 4);
+  b.pipe(0, 0.82, 0.24, 0, 0.98, 0.2, 0.03, 0xf6f6f2, 4);
+  b.add(new THREE.IcosahedronGeometry(1, 0), 0xf6f6f2, { y: 1.0, z: 0.22, s: 0.055 });
+  b.add(unitCone(4), 0xe8b030, { y: 0.99, z: 0.33, sx: 0.02, sy: 0.16, sz: 0.02, rx: Math.PI / 2 + 0.15 });
+  b.pipe(0.04, 0.0, -0.02, 0.04, 0.48, 0.0, 0.012, 0x2b2b2b, 3);
+  b.pipe(-0.04, 0.0, 0.02, -0.04, 0.48, 0.0, 0.012, 0x2b2b2b, 3);
+  return b.geometry();
 }
 
 function instanced(geo, mat, list, castShadow = false) {
@@ -171,6 +222,19 @@ function buildTreeline(group, mats, plots) {
     extra.add(unitBox(), 0x8a6a48, { x, y: top - 0.55, z, sx: 2.6, sy: 0.12, sz: 2.2, ry });
     extra.add(unitCone(4), 0xb39a62, { x, y: top + 1.0, z, sx: 2.4, sy: 1.3, sz: 2.0, ry: ry + Math.PI / 4 });
   }
+  // egrets wading in the flooded and newly planted plots near the farm
+  const egrets = [];
+  for (let i = 0; i < 400 && egrets.length < 26; i++) {
+    const p = plots[Math.floor(r() * plots.length)];
+    if (p.type !== 'water' && p.type !== 'seed') continue;
+    const cx = (p.x0 + p.x1) / 2, cz = (p.z0 + p.z1) / 2;
+    if (rectDist(cx, cz, F.xMin, F.xMax, F.zMin, F.zMax) > 70) continue;
+    const n = 1 + Math.floor(r() * 3);
+    for (let k = 0; k < n; k++) {
+      egrets.push({ x: p.x0 + 1 + r() * (p.x1 - p.x0 - 2), y: PADDY_Y - 0.12, z: p.z0 + 1 + r() * (p.z1 - p.z0 - 2), s: 0.9 + r() * 0.25, ry: r() * 6.28 });
+    }
+  }
+  group.add(instanced(egretGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), egrets));
   group.add(extra.mesh(mats.flat, { cast: false, receive: false, name: 'village' }));
   const treeMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
   group.add(instanced(treeGeometry('village', 3), treeMat, village));
@@ -230,7 +294,7 @@ export function buildFields(ctx, mats) {
   const { plots, waterMat, seedMat } = buildPaddies(group, mats);
   buildTreeline(group, mats, plots);
   const hillMat = buildHills(group);
-  const base = { water: new THREE.Color(0x7fb0c4), seed: new THREE.Color(0xffffff), hill: new THREE.Color(0x5f7f6a) };
+  const base = { water: new THREE.Color(0x4a8c98), seed: new THREE.Color(0xffffff), hill: new THREE.Color(0x5f7f6a) };
   const tmp = new THREE.Color();
   return {
     group,
@@ -238,7 +302,7 @@ export function buildFields(ctx, mats) {
     update(sky) {
       const light = 0.35 + 0.65 * sky.state.dayLight;
       tmp.copy(sky.horizon).lerp(sky.zenith, 0.35);
-      waterMat.color.copy(base.water).lerp(tmp, 0.55).multiplyScalar(0.55 + 0.45 * light);
+      waterMat.color.copy(base.water).lerp(tmp, 0.38).multiplyScalar(0.5 + 0.5 * light);
       seedMat.color.copy(base.seed).lerp(tmp, 0.3).multiplyScalar(0.45 + 0.55 * light);
       hillMat.color.copy(sky.horizon).lerp(base.hill, 0.42 * light + 0.15).multiplyScalar(0.85 + 0.1 * light);
     },

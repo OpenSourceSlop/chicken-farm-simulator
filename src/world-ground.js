@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { COLORS, FARM, HOUSE_BOUNDS } from './config.js';
 import { GeoBuilder, fbm, vnoise, smoothstep, rectDist, rng } from './world-util.js';
 import {
-  F, HOUSE_ZONE, PUBLIC_ROAD_Z, SPRAY_Z, ROAD_W, PATH_W, ROAD_SAMPLES, roadDist, raisedDist, terrainHeight, inKeepOut,
+  F, HOUSE_ZONE, PUBLIC_ROAD_Z, SPRAY_Z, pondR, ROAD_W, PATH_W, ROAD_SAMPLES, roadDist, raisedDist, terrainHeight, inKeepOut,
 } from './world-layout.js';
 
 const C = (hex) => new THREE.Color(hex);
@@ -42,6 +42,8 @@ function groundColor(x, z, y, out) {
     out.lerp(GRASS_DRY, smoothstep(0.58, 0.78, fbm(x * 0.03 + 50, z * 0.03, 2, 3)) * 0.55);
     const s = soilAmount(x, z);
     if (s > 0) out.lerp(tmpC.copy(LATERITE).lerp(SOIL_DK, 0.25 - small * 0.5), s * 0.9);
+    const e = pondR(x, z);
+    if (e < 1.4) out.lerp(e < 1.12 ? SOIL_DK : GRASS_DK, e < 1.12 ? 0.85 : 0.6 * smoothstep(1.4, 1.12, e));
     out.multiplyScalar(1 + small * 0.05);
     return out;
   }
@@ -215,7 +217,7 @@ function buildTufts() {
       if (fbm(x * 0.08, z * 0.08, 2, 44) < 0.45 && r() < 0.7) continue; // clumped, not uniform
     }
     if (x > FARM.gate.x - 4 && x < FARM.gate.x + 4 && z > 30) continue;
-    if (roadDist(x, z) < 3.3) continue;
+    if (roadDist(x, z) < 3.3 || pondR(x, z) < 1.25) continue;
     if (inKeepOut(x, z, 0.3)) continue;
     if (x > HOUSE_BOUNDS.xMin - 5 && x < HOUSE_BOUNDS.xMax + 5 && z > HOUSE_BOUNDS.zMin - 5 && z < HOUSE_BOUNDS.zMax + 5) continue;
     const sc = tall ? 0.7 + r() * 0.9 : 0.45 + r() * 0.5;
