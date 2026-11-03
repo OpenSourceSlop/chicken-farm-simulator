@@ -129,12 +129,12 @@ export function createFarmerAnimator(model, rand = Math.random) {
 
     // Arms swing opposite to the legs; elbows bend more when running
     const armAmp = lerp(0.42, 0.7, run) * m;
-    const armL = -Math.sin(a) * armAmp + 0.05 * run * m;
-    const armR = Math.sin(a) * armAmp + 0.05 * run * m;
-    const out = 0.07 + 0.06 * run * m + 0.01 * breath * idle;
+    const armL = -Math.sin(a) * armAmp + 0.05 * run * m + 0.06 * idle;
+    const armR = Math.sin(a) * armAmp + 0.05 * run * m + 0.06 * idle;
+    const out = 0.07 + 0.06 * run * m + (0.025 + 0.012 * breath) * idle;
     j.shoulderL.rotation.set(armL, 0, -out);
     j.shoulderR.rotation.set(armR, 0, out);
-    const elBase = lerp(0.18, 1.35, run) * m + 0.12 * idle;
+    const elBase = lerp(0.18, 1.35, run) * m + 0.24 * idle;
     j.elbowL.rotation.x = elBase + lerp(0.35, 0.2, run) * pos(armL / Math.max(armAmp, 0.01)) * m;
     j.elbowR.rotation.x = elBase + lerp(0.35, 0.2, run) * pos(armR / Math.max(armAmp, 0.01)) * m;
 
