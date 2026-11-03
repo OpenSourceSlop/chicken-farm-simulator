@@ -27,7 +27,11 @@ export function createUI(ctx, { player, flock, interactables = [] }) {
   // top right: today's jobs
   const tr = h('div', { class: 'hud-tr' });
   root.appendChild(tr);
-  const tasks = createTasks(tr, ctx, { player });
+  const tasks = createTasks(tr, ctx, {
+    player,
+    root,
+    avoid: () => [tr, root.querySelector('.hud-tl'), root.querySelector('.hud-bl'), root.querySelector('.hud-br')].filter(Boolean),
+  });
 
   // bottom left: controls legend and time controls
   const help = createHelp();

@@ -36,6 +36,7 @@ export const ICONS = {
   pin: wrap('<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'),
   sliders: wrap('<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>'),
   chevron: wrap('<path d="M6 9.5l6 6 6-6"/>'),
+  arrow: wrap('<path d="M5 12h13M13 6.5l5.5 5.5-5.5 5.5"/>', ' stroke-width="2.4"'),
   clipboard: wrap('<rect x="5" y="4.5" width="14" height="17" rx="2"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10.5h7M8.5 14h7M8.5 17.5h4"/>'),
   minus: wrap('<path d="M6 12h12"/>', ' stroke-width="2.6"'),
   plus: wrap('<path d="M6 12h12M12 6v12"/>', ' stroke-width="2.6"'),

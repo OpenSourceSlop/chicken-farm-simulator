@@ -191,6 +191,11 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 @keyframes job-pop { from { transform: scale(1.3); } to { transform: none; } }
 .jobs-done { margin: 9px 2px 1px; padding-top: 10px; border-top: 1px solid var(--panel-edge); font-size: 13.5px; line-height: 1.45; color: var(--ink); }
 
+/* edge pointer toward an off-screen job */
+.edge-pointer { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 7px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); box-shadow: var(--shadow); font: 600 13px/1 var(--font-display); white-space: nowrap; will-change: transform; }
+.edge-arrow { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); }
+.edge-arrow .icon { font-size: 17px; }
+
 /* "E  Read the ... sign" prompt */
 .prompt { display: flex; align-items: center; gap: 11px; padding: 6px 18px 6px 6px; border-radius: 999px; border: 1px solid var(--panel-edge); background-color: var(--panel); color: var(--ink); box-shadow: var(--shadow); font: 500 15px/1.2 var(--font-body); cursor: pointer; white-space: nowrap; }
 .prompt:hover { background-color: var(--panel-raised); }

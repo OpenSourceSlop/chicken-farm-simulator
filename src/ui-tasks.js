@@ -17,8 +17,9 @@ function cssColor(name, fallback) {
   }
 }
 
-export function createTasks(parent, ctx, { player }) {
-  const { THREE, scene } = ctx;
+// avoid(): HUD elements the edge pointer must not hide under.
+export function createTasks(parent, ctx, { player, root, avoid }) {
+  const { THREE, scene, camera } = ctx;
   let index = 0;            // current task; TASKS.length = all done
   let watched = 0;          // seconds spent near a brooder during task 4
   const flags = { sign: false, setpoint: false };
@@ -127,7 +128,7 @@ export function createTasks(parent, ctx, { player }) {
     }
 
     marker.visible = index < TASKS.length;
-    if (!marker.visible) return;
+    if (!marker.visible) { pointer.hidden = true; return; }
     const s = markerSpot(index, p);
     const still = reducedMotion();
     ring.position.set(0, 0.05, 0);
@@ -136,6 +137,43 @@ export function createTasks(parent, ctx, { player }) {
     gem.rotation.y = still ? 0.6 : t * 1.3;
     const pulse = still ? 1 : 1 + 0.12 * Math.sin(t * 3.1);
     ring.scale.set(pulse, pulse, pulse);
+    if (openId) pointer.hidden = true;
+    else updatePointer(s, p);
+  }
+
+  // ---------- edge pointer: when the marker is off screen, an arrow at the screen edge points to it ----------
+  const pointerIcon = h('span', { class: 'edge-arrow', html: ICONS.arrow });
+  const pointerText = h('span');
+  const pointer = h('div', { class: 'edge-pointer', hidden: true, 'aria-hidden': 'true' }, pointerIcon, pointerText);
+  (root || parent).prepend(pointer); // first in the HUD, so the cards paint over it
+  const ndc = new THREE.Vector3();
+  let lastMetres = -1;
+  let rects = [];
+  let rectAge = 0;
+  function updatePointer(s, p) {
+    camera.updateMatrixWorld();
+    ndc.set(s.x, s.y * 0.6, s.z + s.gz).project(camera);
+    let x = ndc.x, y = ndc.y;
+    const behind = ndc.z > 1;
+    if (behind) { x = -x; y = -y; }
+    if (!behind && Math.abs(x) < 0.94 && Math.abs(y) < 0.94) { pointer.hidden = true; return; }
+    const W = (root || parent).clientWidth, H = (root || parent).clientHeight;
+    // on an ellipse-ish box inside the screen, clear of the clock card above and the time controls below
+    const k = Math.max(Math.abs(x) / 0.86, Math.abs(y) / (y > 0 ? 0.66 : 0.7), 1e-6);
+    const px = (x / k * 0.5 + 0.5) * W;
+    let py = (-y / k * 0.5 + 0.5) * H;
+    // never hide under a HUD card: step above or below it (card rects re-read twice a second)
+    if ((rectAge -= 1) <= 0) { rectAge = 30; rects = avoid ? avoid().map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0) : []; }
+    for (const r of rects) {
+      if (px > r.left - 34 && px < r.right + 34 && py > r.top - 22 && py < r.bottom + 22) {
+        py = (r.top + r.bottom) / 2 < H / 2 ? r.bottom + 24 : r.top - 24;
+      }
+    }
+    pointer.hidden = false;
+    pointer.style.transform = `translate(${px.toFixed(0)}px, ${py.toFixed(0)}px) translate(-50%, -50%)`;
+    pointerIcon.style.transform = `rotate(${Math.atan2(-y, x).toFixed(3)}rad)`;
+    const metres = Math.round(Math.hypot(s.x - p.x, s.z - p.z));
+    if (metres !== lastMetres) { lastMetres = metres; setText(pointerText, `${metres} m`); }
   }
 
   // Events from the panels. They only count for the job that is current now.
