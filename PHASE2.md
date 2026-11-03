@@ -550,8 +550,11 @@ All §6.10 profiles pass with these values (`node scripts/test-sim.mjs`).
   on the roof (1.5 °C/h), so the closed house runs over its target and more air through it cools it;
   timer fans give 0.1 × the tunnel air speed at the chicks. The ideal profile gives the timer 2 fans,
   120 s / 300 s from 12:00 and the sign's timer again at 17:00 (`WARM_TIMER`); `warmTunnel` (two tunnel
-  fans 12:00–17:00) keeps e ≈ −2.0..−2.5 all afternoon (the brooders burn under the fans; look notes
-  "huddled under the brooder", "loud peeping"). `observe` says huddled from e < −1.5, as the drawn
+  fans 12:00–17:00) keeps e ≈ −2.0..−2.5 all afternoon (the brooders come back on under the fans in
+  the early and late afternoon; look notes "huddled under the brooder", "loud peeping"; targets: felt
+  air at 15:00 −6..−1.5 °C, cold share 0.2–1, 180–400 cold minutes, comfort share ≥ 1.5 points under
+  the ideal). A test plays the problem found on the controller at 14:00: the warm timer brings the
+  chicks within ±1.5 °C by 15:15, tunnel fans keep it open while they run, nothing ends it 'weather'. `observe` says huddled from e < −1.5, as the drawn
   birds pile up. Ideal ratio 4.79 (seed 1), so the `latePreheat` ratio band is 4.45–4.8 (was 4.75).
   `pantShare` counts cells over target + 2 when
   e > 1.5 (or half of them when the mean is over 1.5). Round 2: the ideal profile ran two tunnel fans
