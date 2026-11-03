@@ -197,6 +197,7 @@ function start(saved = {}) {
   const game = {
     ready: true,
     THREE, scene, camera, renderer, env, world, house, player, flock, ui,
+    config,                       // the config module (steps files read the signs' numbers from it)
     // Phase 2 (PHASE2.md "Test hooks")
     events, farm, records, skills, save, props, interact, level,
     // Phase 3 (PHASE3.md §15): the run; startLevel({ level }) for a later level is a standard start

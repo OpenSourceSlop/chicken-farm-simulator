@@ -34,6 +34,8 @@
 //                            starts with this (default scope: the whole HUD)
 //   {"advanceUntil": "js expr", "max": 120, "step": 0.5}  advance in steps until the expression is truthy
 //   {"pressIf": "e", "if": "js expr"}   a real key press only while the expression is truthy (retries)
+//   {"walkToExpr": "js expr", "tol": 0.5}  walkTo the [x, z] the expression returns in the page (null: no walk)
+//   {"clickTextUntil": "One second more", "until": "js expr", "max": 80}  real clicks on that button until the expression holds
 //   {"expect": "js expr", "label": "..."}   evaluate; print PASS / FAIL (a FAIL makes the exit code 1)
 import { createRequire } from 'node:module';
 import http from 'node:http';
@@ -164,6 +166,11 @@ async function main() {
   let expectFails = 0;
   for (const step of loadSteps()) {
     if (step.walkTo) console.log(`walkTo [${step.walkTo}] ->`, await walkTo(page, step.walkTo, step));
+    else if (step.walkToExpr) {
+      // the target worked out in the page (e.g. the nearest dead bird); null skips the walk
+      const to = await page.evaluate(step.walkToExpr);
+      console.log(`walkToExpr ${step.label || step.walkToExpr} ->`, to ? `[${to.map((v) => v.toFixed(1))}] ${await walkTo(page, to, step)}` : 'nothing to walk to');
+    }
     else if (step.clickText) {
       const at = await page.evaluate(([text, scope]) => {
         const els = [...document.querySelectorAll(`${scope} button, ${scope} label, ${scope} [role=tab]`)];
@@ -178,6 +185,24 @@ async function main() {
         for (let i = 0; i < (step.times ?? 1); i++) await page.mouse.click(at[0], at[1]);
         console.log(`clickText "${step.clickText}"${step.times ? ` x${step.times}` : ''}`);
       }
+    } else if (step.clickTextUntil) {
+      // real clicks on one button until the expression is truthy (a farmer pressing + until the display shows his number)
+      let n = 0;
+      const max = step.max ?? 80;
+      while (n < max && !(await page.evaluate(step.until))) {
+        const at = await page.evaluate(([text, scope]) => {
+          const els = [...document.querySelectorAll(`${scope} button, ${scope} label, ${scope} [role=tab]`)];
+          const b = els.find((x) => x.offsetParent !== null && !x.disabled && (x.textContent.replace(/\s+/g, ' ').trim().startsWith(text) || (x.getAttribute('aria-label') || '').startsWith(text)));
+          if (!b) return null;
+          b.scrollIntoView({ block: 'center' });
+          const r = b.getBoundingClientRect();
+          return [r.left + r.width / 2, r.top + r.height / 2];
+        }, [step.clickTextUntil, step.in || '#hud']);
+        if (!at) break;
+        await page.mouse.click(at[0], at[1]);
+        n++;
+      }
+      console.log(`clickTextUntil "${step.clickTextUntil}" x${n}: ${(await page.evaluate(step.until)) ? 'met' : 'NOT MET'}`);
     } else if (step.advanceUntil) {
       const r = await page.evaluate(([expr, max, dt]) => {
         const f = new Function(`return (${expr});`);

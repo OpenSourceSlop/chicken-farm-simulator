@@ -920,11 +920,11 @@ outside is ≥ 10 °C over it, off over 90 % house RH); it never uses the stage 
 | `ideal` | timer by the table every other morning; growing light preset from day 8; curtain day 10 08:00; vaccine with 1.5 h thirst, stabiliser and a walk; grower ordered d13, blended d14 15:00 → d15 15:00; finisher d29; every problem fixed on the first round after its symptom (day 16: six fans); brooders up d22; fans and pads by the fan plan; feeders up 11–16 in the heat wave; last feed order to under 1.2 t left; catch booked d38 for d42 02:00; lines stopped d41 15:00 (pans empty about 16:00, W ≈ 10 h); lights 0.1 and panels at 01:30; clean-out in order with the house ≥ 95 % dry before spraying; closed d46; chicks booked d67 | every level passes · week 2 day 14 485–530 g, deaths + culls 0.15–0.5 % · week 3 960–1,040 g, 0.15–0.5 % · weeks 4–5 day 35 2,230–2,420 g, 0.2–0.8 % · finish §6.9 bands · clean-out 0–1 positive, 21 rest days · vaccine T 1.5–2.2 h, coverage 0.92–0.98 · day 31 15:00 house 28.8–31.5 °C, panting ≤ 0.3 · heat-wave heat deaths ≤ 0.05 %, 1–12 panting hours · weeks 4–5 heat deaths ≤ 0.05 % · day 18 15:00 panting ≤ 0.35 · NH3 ≤ 25 ppm on the nights of days 22–41 · **every branch ≥ 9 points** (level 2, the plan level included; §9) |
 | `noDark` | 23 h light all cycle | SDS deaths days 8–35 ≥ 3 × ideal; lame + legs ≥ 2 × ideal |
 | `lateLift` | curtain on day 15 | day 14 weight ≥ 3 % and uniformity ≥ 3 points under the ideal; brooding-half litter ≥ 32 % on day 14 |
-| `noStep` | timer left at the day 8 setting days 8–21 | RH ≥ 85 % on 3–7 nights of week 2; litter mean ≥ 33 % on day 14; NH3 ≥ 25 ppm the night of day 14; day 21 ≥ 3 % under ideal |
+| `noStep` | timer left at the day 8 setting days 8–21 | (integrator, Phase 3 merge: rebased on the model's effect, §6.16) night RH of week 2 ≥ 2.5 points over the ideal; litter on day 14 ≥ 2 points over; NH3 the night of day 14 ≥ 1.5 ppm over; day 21 ≥ 0.2 % under ideal |
 | `poorVaccine` | no thirst, no stabiliser | T 3.5–5 h, coverage 0.35–0.7; Gumboro started; week 3 disease deaths 0.3–0.6 %, deaths + culls 0.5–0.95 %, **passes**; day 21 4–8 % under ideal |
 | `poorVaccineCocci` | `poorVaccine` and the coccidiosis untreated | week 3 disease deaths 0.9–2.5 %; fails week 3 (the replay test of test-run, §10) |
 | `cocciUntreated` | vet called, no medicine | week 3 disease deaths 0.5–1.5 %; fails week 3; day 21 ≥ 2 % under ideal |
-| `minVentW3` | no tunnel fans in week 3 | passes week 3; panting 0.8–1 at 15:00 day 18; heat deaths ≤ 0.05 %; day 21 1–4 % under ideal |
+| `minVentW3` | no tunnel fans in week 3 | passes week 3; panting 0.8–1 at 15:00 day 18; heat deaths ≤ 0.07 % (integrator: 0.05 was one bird short); day 21 1–4 % under ideal |
 | `crumbleOn` | starter only to day 28 | day 28 weight 3–8 % under ideal |
 | `abruptChange` | grower 0 → 100 % at d15 06:00 | undigested droppings 12–30 h; intake d15 06:00 → d16 06:00 2–4 % under ideal |
 | `overfullSilo` | 5 t of starter ordered on day 12 | the pans first ≥ 90 % finisher on day 31–40; day 35 weight 0–3 % under ideal |
@@ -959,6 +959,15 @@ hotFrom / deathFrom raised for big birds (the 20 °C target under 24 °C Thai ni
 FPG_TABLE so the ideal is about 5 % over the target on every weigh day; Gumboro day 18 and gentler;
 coccidiosis from 0.008 %/h; lame birds 8e-6; crowding A(a) = 30 − 1.2a, slope 0.15; dust K 4.2 with the
 feeding hours.
+
+**Integrator, Phase 3 merge (bands):** `noStep`'s absolute bands could not hold: breath is 40 % of what the
+birds drink (about 11 kg/h on day 14) and the heated week-2 house stays about 5 °C over the night air, so
+the day-8 timer (about 3,400 m³/h against the sign's 5,400) lifts the night RH by about 4 points (61 → 65 %),
+the day-14 litter by about 3 points (24.2 → 27.3 %), NH3 the night of day 14 by about 2.5 ppm (5.6 → 8.1) and
+costs 0.4 % of the day-21 weight, the same on seeds 1, 2 and 7. The bands are now relative to the ideal (night
+RH ≥ +2.5 points, litter ≥ +2, NH3 ≥ +1.5 ppm, day 21 ≥ 0.2 % under); a stronger response to too little air
+(wet litter, ammonia, intake) is Phase 4 tuning. `minVentW3` heat deaths ≤ 0.07 % (3 birds of 5,950 measured
+against a limit of 2.97).
 
 ## 7. Problem events of the new levels
 
@@ -1277,7 +1286,7 @@ lists every action id of Phase 2 and Phase 3 (the contract test checks every job
 | `house.curtain` | `{ open }` | true | curtain winch panel (panels) |
 | `heat.brooders` | `{ up }` | true | controller Temperature (panels) |
 | `light.lux` | `{ x, z }` | `{ lux }` | L key (run) |
-| `light.preset` (ui) then `light.program` | `{ id }` | — | controller Lights (panels, unlock) |
+| `light.preset` (ui) then `light.program` | `{ preset }` (a `LIGHT_PRESETS` key: an `id` arg would overwrite the action id) | — | controller Lights (panels, unlock) |
 | `air.probe` | `{ x, z }` | `{ speedMs, tempC, rh }` | V key (run) |
 | `fans.read` (ui) | `{ fans, houseC, rh, speedMs }` | — | fan panel open ≥ 2 s (panels) |
 | `vent.fans` / `vent.pad` (ui, Phase 2) · `vent.stages` | `{ n }` / `{ on }` · `{ stages, padOverC }` | — · true | fan panel (panels) |

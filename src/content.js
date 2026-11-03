@@ -139,7 +139,9 @@ export const LEVEL_HELP_KEYS = [
 ];
 
 // What the farmer sees and hears on a listen stop, as the caption shows it (neutral words).
-export const lookCaption = (o) => `You see: chicks ${o.spread}; droppings ${o.droppings}. You hear: ${o.sounds}.`;
+/** The look note as a caption: "chicks" in the brooding week, "birds" from day 8; an empty house as it is. */
+export const lookCaption = (o, who = 'chicks') => (/^no birds/.test(o.spread) ? `You see: ${o.spread}. You hear: ${o.sounds}.`
+  : `You see: ${who} ${o.spread}; droppings ${o.droppings}. You hear: ${o.sounds}.`);
 
 // Today's jobs. `where` tells the player where to go; ui-tasks.js decides when each is done.
 export const TASKS = [
