@@ -112,7 +112,8 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
     const mixed = v.state !== 'none' && v.state !== 'thirst';
     mixBtn.disabled = mixed; stab.disabled = mixed;
     if (mixed && v.stabiliser != null) stab.checked = !!v.stabiliser;
-    setText(tank, mixed ? `${memo.litres != null ? `${int(memo.litres)} L of vaccine water` : 'Vaccine water'}${v.stabiliser ? ' with stabiliser' : ''}, mixed ${whenText(v.mixedAt)}.` : 'Empty: mix the vaccine for about 2 hours of drinking.');
+    const litres = memo.litres ?? (v.state === 'mixed' && Number.isFinite(v.tankL) ? v.tankL : null);
+    setText(tank, mixed ? `${litres != null ? `${int(litres)} L of vaccine water` : 'Vaccine water'}${v.stabiliser ? ' with stabiliser' : ''}, mixed ${whenText(v.mixedAt)}.` : 'Empty: mix the vaccine for about 2 hours of drinking.');
     const m = farm.health?.medication || {};
     const medOn = medNow();
     med.set(medOn); medRow.led.classList.toggle('is-on', medOn);

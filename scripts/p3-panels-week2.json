@@ -42,7 +42,7 @@
   {"shot": "p3-panels-vaccine"},
   {"eval": "__game.ui.closePanel(), 'walking the birds up'"},
   {"advanceUntil": "__game.farm.health.vaccine.state === 'drunk'", "max": 120, "step": 1},
-  {"expect": "(() => { const v = __game.farm.health.vaccine; const h = (v.drunkAt - v.startAt) * 24; return v.state === 'drunk' && h >= 1.9 && h <= 2.2 && 'drunk ' + h.toFixed(2) + ' game hours after the lines opened'; })()", "label": "farm.health.vaccine.state 'drunk' 2 game hours later (the stub's state change)"},
+  {"expect": "(() => { const v = __game.farm.health.vaccine; const h = (v.drunkAt - v.startAt) * 24; return v.state === 'drunk' && h >= (__game.farm.cycleStub ? 1.9 : 1) && h <= (__game.farm.cycleStub ? 2.2 : 5) && 'drunk ' + h.toFixed(2) + ' game hours after the lines opened'; })()", "label": "farm.health.vaccine.state 'drunk' about 2 game hours later (the stub: exactly 2 h; the model: the time they took)"},
   {"eval": "__game.ui.openPanel('water-supply')"},
   {"advance": 0.3},
   {"expect": "__open().textContent.includes('vaccine drunk in') && __open().scrollWidth <= __open().clientWidth + 1 && 'the tab shows the hours it took; no sideways scroll'", "label": "the Vaccine tab shows how long they took to drink it"},
