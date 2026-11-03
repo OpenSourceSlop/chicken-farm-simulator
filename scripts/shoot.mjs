@@ -108,6 +108,8 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
   const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: vw, height: vh } });
+  // Software WebGL on a busy shared machine can be slow; give every action plenty of time.
+  page.setDefaultTimeout(180000);
   const problems = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') problems.push(`[console.${m.type()}] ${m.text()}`); });
   page.on('pageerror', (e) => problems.push(`[pageerror] ${e.message}\n${e.stack || ''}`));
@@ -125,7 +127,7 @@ async function main() {
 
   await page.goto(url);
   try {
-    await page.waitForFunction(() => window.__game && window.__game.ready, null, { timeout: 30000 });
+    await page.waitForFunction(() => window.__game && window.__game.ready, null, { timeout: 120000 });
   } catch {
     console.log('GAME DID NOT BOOT. Problems:\n' + problems.join('\n'));
     await page.screenshot({ path: path.join(outDir, 'boot-failure.png') });
