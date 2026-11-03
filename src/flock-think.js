@@ -59,11 +59,19 @@ function tryWarm(S, field, ctx, cx, cz) {
 }
 
 // Cold: the warmest reachable floor (where |comfort| is smallest), usually right under a brooder.
-function warmSpot(S, i, field, env, ctx) {
+// fresh = the bird just turned cold (any old target is meaningless).
+function warmSpot(S, i, field, env, ctx, fresh) {
   const { rand } = S;
   const x = S.px[i], z = S.pz[i];
+  const settled = !fresh && S.arrived[i];
   // bias to stay put, strong once settled in the huddle (no endless pushing to the middle)
-  bx = x; bz = z; bs = warmScore(field, ctx, ctx.grid, x, z) + (S.arrived[i] && S.act[i] === ACT.HUDDLE ? 1.0 : 0.3);
+  bx = x; bz = z; bs = warmScore(field, ctx, ctx.grid, x, z) + (settled ? 1.0 : 0.3);
+  let keep = settled;
+  if (!fresh && !S.arrived[i]) {
+    // on the way: keep heading for the current target unless something is clearly better
+    const s = warmScore(field, ctx, ctx.grid, S.tx[i], S.tz[i]) + 0.3;
+    if (s > bs) { bs = s; bx = S.tx[i]; bz = S.tz[i]; keep = true; }
+  }
   if (env.heaterLevel > 0.05) {
     const h = HEATERS[nearestHeater(x, z)];
     if (h.x <= S.bounds.xMax) {
@@ -76,7 +84,9 @@ function warmSpot(S, i, field, env, ctx) {
     const a = rand() * 6.283, r = 0.5 + rand() * 2.5;
     tryWarm(S, field, ctx, x + Math.cos(a) * r, z + Math.sin(a) * r);
   }
-  if (bx === x && bz === z && S.act[i] === ACT.HUDDLE) return; // nothing better: stay put
+  const here = bx === x && bz === z;
+  if (keep && (here || (bx === S.tx[i] && bz === S.tz[i]))) return; // nothing better: carry on
+  if (here) { setTarget(S, i, x, z); return; } // best right here: settle on the spot
   // aim at a point scattered around the best spot so the huddle is a blob, not a single point
   const a = rand() * 6.283, r = Math.sqrt(rand()) * S.huddleSpread;
   setTarget(S, i, bx + Math.cos(a) * r, bz + Math.sin(a) * r);
@@ -119,9 +129,8 @@ function wanderSpot(S, i, field, ctx, grid, reach) {
   const { rand } = S;
   const x = S.px[i], z = S.pz[i];
   bx = x; bz = z; bs = 1e9;
-  // where it is crowded, also look far along the house: this is how the flock fills the whole
-  // house once the brooding curtain goes
-  // If this part of the house is fuller than the rest, also try far spots toward the emptier end
+  // If this part of the house is fuller than the rest, also try far spots toward the emptier end:
+  // this is how the flock fills the whole house once the brooding curtain goes
   const here = grid.slice(x), east = grid.slice(x + 7), west = grid.slice(x - 7);
   const far = here > 1.1 && Math.min(east, west) < here - 0.15 ? 2 : 0;
   const dir = east < west ? 1 : -1;
@@ -150,6 +159,12 @@ function nearestLine(lines, z, rand) {
   return rand() < 0.75 || db > 4 ? a : b;
 }
 
+// A feeder or nipple is acceptable if it is comfortable, or at least no worse than where the bird
+// stands now (a uniformly warm or cool house must not stop the flock eating).
+function okComfort(S, i, ctx) {
+  return Math.max(1.2, Math.abs(ctx.field.sample(S.px[i], S.pz[i])) + 0.3);
+}
+
 // Claim a feeder pan near the bird; returns false if every nearby pan is crowded.
 function feederSpot(S, i, ctx) {
   const { rand } = S;
@@ -157,6 +172,7 @@ function feederSpot(S, i, ctx) {
   const per = S.panPerLine, cap = S.L < 0.3 ? 7 : 5;
   const j0 = Math.round((S.px[i] - LINE_X.start) / FEEDER_PAN_SPACING);
   const spread = 8 + 16 * Math.max(0, ctx.grid.crowd(S.px[i], S.pz[i]) - 1); // crowded: look further
+  const ok = okComfort(S, i, ctx);
   let best = -1, use = 255;
   for (let k = 0; k < 3; k++) {
     const j = j0 + Math.round((rand() - 0.5) * spread);
@@ -165,7 +181,7 @@ function feederSpot(S, i, ctx) {
     const px = S.pans[r * 2];
     if (px > S.bounds.xMax - 0.25 || px < S.bounds.xMin + 0.25) continue;
     if (farmerPenalty(ctx, px, S.pans[r * 2 + 1])) continue;
-    if (Math.abs(ctx.field.sample(px, S.pans[r * 2 + 1])) > 1.2) continue;
+    if (Math.abs(ctx.field.sample(px, S.pans[r * 2 + 1])) > ok) continue;
     if (S.resUse[r] < use) { use = S.resUse[r]; best = r; }
   }
   if (best < 0 || use >= cap) return false;
@@ -184,6 +200,7 @@ function drinkerSpot(S, i, ctx) {
   const per = S.nipPerLine;
   const j0 = Math.round((S.px[i] - LINE_X.start) / NIPPLE_SPACING);
   const spread = 12 + 30 * Math.max(0, ctx.grid.crowd(S.px[i], S.pz[i]) - 1);
+  const ok = ctx.anyTemp ? 1e9 : okComfort(S, i, ctx);
   let best = -1, use = 255;
   for (let k = 0; k < 3; k++) {
     const j = j0 + Math.round((rand() - 0.5) * spread);
@@ -192,7 +209,7 @@ function drinkerSpot(S, i, ctx) {
     const nx = S.nips[r * 2];
     if (nx > S.bounds.xMax - 0.2 || nx < S.bounds.xMin + 0.2) continue;
     if (farmerPenalty(ctx, nx, S.nips[r * 2 + 1])) continue;
-    if (!ctx.anyTemp && Math.abs(ctx.field.sample(nx, S.nips[r * 2 + 1])) > 1.2) continue;
+    if (Math.abs(ctx.field.sample(nx, S.nips[r * 2 + 1])) > ok) continue;
     if (S.resUse[S.nPans + r] < use) { use = S.resUse[S.nPans + r]; best = r; }
   }
   if (best < 0 || use >= 2) return false;
@@ -250,11 +267,11 @@ export function thinkBird(S, i, field, env, ctx, grid) {
   const a = S.act[i];
 
   if (th === COLD) {
-    if (changed || a !== ACT.HUDDLE) { startActivity(S, i, ACT.HUDDLE, 2 + rand() * 3); warmSpot(S, i, field, env, ctx); }
+    if (changed || a !== ACT.HUDDLE) { startActivity(S, i, ACT.HUDDLE, 2 + rand() * 3); warmSpot(S, i, field, env, ctx, true); }
     else if (S.actT[i] <= 0) {
       // look again for warmer floor; a bird already in the warmest spot stays put
       S.actT[i] = 3 + rand() * 4;
-      warmSpot(S, i, field, env, ctx);
+      warmSpot(S, i, field, env, ctx, false);
     }
     return;
   }

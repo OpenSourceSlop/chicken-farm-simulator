@@ -27,9 +27,9 @@ export function createState(n) {
   const F = () => new Float32Array(n);
   const S = {
     n, rand,
-    px: F(), pz: F(), vx: F(), vz: F(), fx: F(), fz: F(), tx: F(), tz: F(), ox: F(), oz: F(),
+    px: F(), pz: F(), vx: F(), vz: F(), fx: F(), fz: F(), tx: F(), tz: F(),
     size: F(), phase: F(), tint: F(), sitPref: F(), boldness: F(),
-    act: new Uint8Array(n), actT: F(), thinkT: F(), retarget: F(),
+    act: new Uint8Array(n), actT: F(), thinkT: F(),
     therm: new Int8Array(n), tIdx: F(), tAmb: F(), arrived: new Uint8Array(n), res: new Int32Array(n).fill(-1),
     rad: F(), spd: F(), scare: F(), stuck: F(),
     sitA: F(), wingA: F(), hp: F(), hl: F(), ht: F(), beak: F(), stride: F(),
@@ -100,11 +100,9 @@ export function placeFlock(S) {
     const a = rand() * Math.PI * 2;
     S.fx[i] = Math.cos(a); S.fz[i] = Math.sin(a);
     S.tx[i] = S.px[i]; S.tz[i] = S.pz[i];
-    S.ox[i] = S.oz[i] = 0;
     S.act[i] = ACT.IDLE;
     S.actT[i] = rand() * 3;
     S.thinkT[i] = rand() * 0.5;
-    S.retarget[i] = 0;
     S.therm[i] = RIGHT;
     S.tIdx[i] = 0; S.tAmb[i] = 0;
     S.arrived[i] = 1;

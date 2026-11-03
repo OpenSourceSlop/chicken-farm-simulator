@@ -32,12 +32,14 @@ export function poseAll(S, dt, stage) {
 
     // walking cycle: small fast steps for chicks, slower strides for broilers
     const spd = S.spd[i];
-    const walk = Math.min(1, spd / (0.35 * base * si));
-    stride[i] += dt * TAU * (spd / (0.3 * s) + 0.0);
+    // a bird that has arrived and is only being jostled shuffles its feet but keeps its pose
+    const walkRaw = Math.min(1, spd / (0.35 * base * si));
+    const walk = arr ? (spd > 0.4 * base ? 0.5 * walkRaw : 0) : walkRaw;
+    stride[i] += dt * TAU * (spd / (0.3 * s));
     const st = stride[i];
 
     let pitch, lift, turn = 0, beakT = 0;
-    if (walk > 0.35 && sitA[i] < 0.5) {
+    if (walk > 0.35 && !arr && sitA[i] < 0.5) {
       pitch = 0.12 + 0.1 * Math.sin(2 * st);
       lift = 0.012 * Math.sin(2 * st + 1);
     } else if (a === ACT.EAT && arr) {
