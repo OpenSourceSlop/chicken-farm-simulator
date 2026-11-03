@@ -1,21 +1,34 @@
 // House climate and farm clock. Pure logic, no three.js.
 // Owner: systems/UI agent. Other modules read `env`; only ui.js and test hooks call the setters.
 import {
-  HEATERS, HOUSE, BIRD_BOUNDS, FAN_COUNT, TIME, WEATHER, MIN_DAY, targetTempAt, weightAt,
+  HEATERS, HOUSE, BIRD_BOUNDS, FAN_COUNT, TIME, WEATHER, MIN_DAY, AIR, EQUIP, targetTempAt, weightAt,
 } from './config.js';
 //
-// Phase 2 additions (package "sim", see PHASE2.md). Contract, already callable:
+// Phase 2 additions (package "sim", PHASE2.md §6.2). The level climate runs only while
+// env.levelClimate is true (farm.start sets it, farm.stop clears it). With it false the climate is
+// exactly Phase 1's (the sandbox; scripts/test-sim.mjs checks a digest of it).
 //   env.addStepper(fn(env, gameSeconds, fast))  called after every <= 60 game-second step (the farm
 //                                               model integrates here, also during skipHours)
+//   env.setLevelClimate(on)                     level climate on / off (the farm calls it)
 //   env.setVentTimer({ fans, onSec, cycleSec } | null)   minimum ventilation fan timer
 //   env.ventTimer, env.ventDuty (0..1 share of the cycle the timer fans run)
+//   env.fansManual  tunnel fans switched on by hand (setFans). In a level env.fansOn shows the
+//                   manual fans plus the timer fans during the on-part of each cycle (phase from the
+//                   game clock), so the LED and the blades cycle. A panel that steps the fans by
+//                   one should call env.setFans(env.fansManual +- 1).
+//   env.fanMean     mean running fans (manual + timer fans x duty): air, heat, wind chill use it
+//   env.airflowM3h  fresh air, m3/h = AIR.infiltrationM3h + fanMean x EQUIP.fanM3h
 //   env.setLightProgram({ darkStart, darkHours, dimmer }) light program (Phase 1 default: dark 02-03)
 //   env.lightProgram, env.lightLevel (0..1: dimmer while lit, 0 in the dark period)
-//   env.addWeatherEvent({ id, fromDay, toDay, outsideDrop })   e.g. the cold night (day = N + h/24)
+//   env.addWeatherEvent({ id, fromDay, toDay, outsideDrop })   (day = N + h/24; a negative drop is
+//                   a rise; 2 h ramps inside the window). The farm owns them, rebuilt on restore.
 //   env.slabTemp (°C, concrete under the litter), env.floorTemp(x, z) litter surface °C
-//   env.litterDepthCm (set by the farm model; 0 = bare concrete), env.airflowM3h (fresh air m3/h)
+//   env.litterDepthCm (house mean) and env.litterDepthAt(x, z) (cm, set by the farm; 0 = concrete)
+//   env.setBrooderOut([i]) / env.brooderOut  HEATERS indices whose flame is out (no radiant, heat
+//                   rate x (8 - out) / 8)
+//   env.flockHeatPerH (°C/h from the birds) and env.vapourGh (g/h of water vapour: breath and
+//                   litter drying) are set by the farm each step; the climate uses them next step.
 //   env.dayNumber may be MIN_DAY (-1) on the prep day.
-// STUB: the vent timer, slab and weather events are inert until package "sim" implements them.
 
 const HOUR = 3600;
 export const MAX_DAY = 42;  // the last day of the flock; after it the clock keeps day 42
@@ -24,6 +37,10 @@ export const MAX_DAY = 42;  // the last day of the flock; after it the clock kee
 // A steady output instead of an on/off relay that would flip every few real seconds at game speed.
 const HEAT_BAND = 1.5, HEAT_OFF_ABOVE = 0.3;
 const HEAT_RATE = 6.5;      // °C per hour from 8 brooders at full output
+// Concrete slab under the litter (model, PHASE2.md §6.2): it follows the house air (+1 °C per unit
+// of brooder output) with a 30 h time constant and pulls the house air toward itself.
+const SLAB = { tauH: 30, brooderC: 1.0, sinkPerH: 0.3, kBare: 0.1, kPerCm: 0.02 };
+const RAMP_DAYS = 2 / 24;   // weather events ramp in and out over 2 h
 
 // The farm clock keeps `day` and `hour` in step: the whole number of `day` is the calendar day of
 // the flock (it changes at midnight) and the fraction is the time of day, so day = N + hour / 24.
@@ -64,8 +81,14 @@ function initialState() {
     lightLevel: 1,
     weatherEvents: [],
     slabTemp: 27,
-    airflowM3h: 250,               // fresh air through the house (infiltration + fans), m3/h
+    airflowM3h: AIR.infiltrationM3h, // fresh air through the house (infiltration + fans), m3/h
     litterDepthCm: 5,
+    levelClimate: false,           // Level 1 climate (slab, timer, humidity balance) instead of Phase 1's
+    fansManual: 0,                 // fans switched on by hand (setFans)
+    fanMean: 0,                    // mean running fans (manual + timer x duty)
+    brooderOut: [],                // HEATERS indices that are out
+    flockHeatPerH: 0,              // set by the farm (level mode)
+    vapourGh: 0,                   // set by the farm (level mode)
   };
 }
 
@@ -92,10 +115,11 @@ export function createSim() {
       let t = this.houseTemp - this.windChill + this.brooderHeat(x, z);
       const wallDist = Math.min(z - BIRD_BOUNDS.zMin, BIRD_BOUNDS.zMax - z);
       if (wallDist < 1.5) t -= 1.0 * (1 - wallDist / 1.5);
-      if (this.fansOn > 0) {
+      const fans = this.levelClimate ? this.fanMean : this.fansOn;
+      if (fans > 0) {
         // air warms as it travels from the pad (west) to the fans (east)
         const along = (x - BIRD_BOUNDS.xMin) / (BIRD_BOUNDS.xMax - BIRD_BOUNDS.xMin);
-        t += (along - 0.5) * 1.5 * (this.fansOn / FAN_COUNT);
+        t += (along - 0.5) * 1.5 * (fans / FAN_COUNT);
       }
       return t;
     },
@@ -106,8 +130,10 @@ export function createSim() {
     brooderHeat(x, z) {
       if (this.heaterLevel <= 0.01) return 0;
       let r = 0;
-      for (const h of HEATERS) {
-        const dx = x - h.x, dz = z - h.z;
+      const out = this.brooderOut;
+      for (let i = 0; i < HEATERS.length; i++) {
+        if (out.length && out.includes(i)) continue; // a brooder whose flame is out gives no radiant
+        const h = HEATERS[i], dx = x - h.x, dz = z - h.z;
         r += Math.exp(-(dx * dx + dz * dz) / (2 * 1.6 * 1.6));
       }
       return 7 * this.heaterLevel * Math.min(1, r);
@@ -125,7 +151,7 @@ export function createSim() {
     // Test hook: jump the burner output straight to what the thermostat asks for now (setState
     // uses it after changing the setpoint or the house temperature with the clock paused).
     settleHeaters() { thermostat(this); this.heaterLevel = this.heaterDemand; },
-    setFans(n) { this.fansOn = Math.max(0, Math.min(FAN_COUNT, Math.round(n))); derive(this); emit('controls'); },
+    setFans(n) { this.fansOn = this.fansManual = Math.max(0, Math.min(FAN_COUNT, Math.round(n))); derive(this); emit('controls'); },
     setPad(on) { this.padOn = !!on; emit('controls'); },
     forceHouseTemp(t) { this.forcedHouseTemp = t == null ? null : t; if (t != null) this.houseTemp = t; derive(this); emit('controls'); },
     skipHours(h) {
@@ -159,13 +185,27 @@ export function createSim() {
     setVentTimer(t) {
       this.ventTimer = t && t.fans > 0 && t.cycleSec > 0 ? { fans: Math.min(FAN_COUNT, Math.round(t.fans)), onSec: Math.max(0, Math.min(t.cycleSec, t.onSec)), cycleSec: t.cycleSec } : null;
       this.ventDuty = this.ventTimer ? this.ventTimer.onSec / this.ventTimer.cycleSec : 0;
+      derive(this);
       emit('controls');
     },
     setLightProgram(p) { this.lightProgram = { ...this.lightProgram, ...p }; derive(this); emit('controls'); },
-    addWeatherEvent(ev) { this.weatherEvents.push({ ...ev }); derive(this); },
-    clearWeatherEvents() { this.weatherEvents.length = 0; derive(this); },
-    // STUB: the litter surface follows the felt air; package "sim" adds the slab and litter depth.
-    floorTemp(x, z) { return this.houseTemp + this.brooderHeat(x, z) * 0.6; },
+    addWeatherEvent(ev) { this.weatherEvents = this.weatherEvents.filter((e) => e.id !== ev.id); this.weatherEvents.push({ ...ev }); derive(this); },
+    clearWeatherEvents() { this.weatherEvents = []; derive(this); },
+    setLevelClimate(on) {
+      this.levelClimate = !!on;
+      if (!on) this.fansOn = this.fansManual; // the timer fans stop showing
+      derive(this); emit('controls');
+    },
+    setBrooderOut(list) { this.brooderOut = (list || []).slice(); emit('controls'); },
+    litterDepthAt: null,           // (x, z) -> cm, set by the farm in a level
+    // Litter surface temperature (PHASE2.md §6.2): the slab under it plus a share k of the air and
+    // brooder radiant above it, k = 0.1 + 0.02 x depth cm (model). Outside a level: the felt air.
+    floorTemp(x, z) {
+      if (!this.levelClimate) return this.houseTemp + this.brooderHeat(x, z) * 0.6;
+      const depth = this.litterDepthAt ? this.litterDepthAt(x, z) : this.litterDepthCm;
+      const k = SLAB.kBare + SLAB.kPerCm * depth;
+      return this.slabTemp + k * (this.houseTemp + this.brooderHeat(x, z) - this.slabTemp);
+    },
 
     on(name, fn) { (listeners[name] ||= []).push(fn); return () => { listeners[name] = listeners[name].filter((f) => f !== fn); }; },
   };
@@ -186,14 +226,37 @@ function outsideTempAt(weather, hour) {
   return mean + amp * Math.sin(((hour - 9) / 24) * Math.PI * 2);
 }
 
+// Weather events (cold night, warm afternoon): °C taken off the outside air now, 2 h ramps.
+function weatherDrop(env) {
+  let d = 0;
+  for (const ev of env.weatherEvents) {
+    if (!(env.day > ev.fromDay && env.day < ev.toDay)) continue;
+    d += ev.outsideDrop * Math.min(1, (env.day - ev.fromDay) / RAMP_DAYS, (ev.toDay - env.day) / RAMP_DAYS);
+  }
+  return d;
+}
+
 function derive(env) {
   env.outsideTemp = outsideTempAt(env.weather, env.hour);
+  if (env.weatherEvents.length) env.outsideTemp -= weatherDrop(env);
   env.outsideRH = WEATHER[env.weather].rh;
   // The target follows the whole flock day (the brooder sign's table): day 1 is 34 °C all day.
   env.targetTemp = targetTempAt(dayNumberOf(env));
   env.bodyWeight = weightAt(env.day);
   env.broodCurtain = env.day < HOUSE.broodUntilDay;
-  env.airSpeed = env.fansOn * (2.5 / FAN_COUNT);
+  if (env.levelClimate) {
+    // Level: manual fans plus the minimum ventilation timer. Air, heat and wind chill use the mean;
+    // fansOn shows the timer fans during the on-part of each cycle (phase from the game clock).
+    const t = env.ventTimer;
+    env.fanMean = Math.min(FAN_COUNT, env.fansManual + (t ? t.fans * env.ventDuty : 0));
+    const onPart = !!t && ((env.hour * HOUR) % t.cycleSec) < t.onSec;
+    env.fansOn = Math.min(FAN_COUNT, env.fansManual + (onPart ? t.fans : 0));
+    env.airSpeed = env.fanMean * (2.5 / FAN_COUNT);
+  } else {
+    env.fanMean = env.fansOn;
+    env.airSpeed = env.fansOn * (2.5 / FAN_COUNT);
+  }
+  env.airflowM3h = AIR.infiltrationM3h + env.fanMean * EQUIP.fanM3h;
   // Wind chill felt by the birds (general practice): young birds feel moving air more.
   const ageK = 3.0 - 1.6 * Math.max(0, Math.min(1, (env.day - 7) / 28));
   env.windChill = env.airSpeed * ageK;
@@ -210,6 +273,28 @@ function thermostat(env) {
   const d = (env.heaterSetpoint + HEAT_OFF_ABOVE - env.houseTemp) / HEAT_BAND;
   env.heaterDemand = d < 0 ? 0 : d > 1 ? 1 : d;
   env.heatersOn = env.heaterDemand > 0.02;
+}
+
+// Saturation water content of air, g/m3, at t °C (polynomial fit, good for 0-45 °C).
+export function absHumSat(t) { return 5.018 + 0.32321 * t + 8.1847e-3 * t * t + 3.1243e-4 * t * t * t; }
+
+// Level 1 climate step (PHASE2.md §6.2): one airflow figure for heat, humidity (and, in the farm,
+// ammonia); brooders with some out; the concrete slab as a slow heat store under the litter; the
+// flock's heat and vapour from the farm model.
+function levelClimate(env, hrs) {
+  const padDrop = env.padOn && env.fanMean > 0 ? Math.min(9, (100 - env.outsideRH) / 5) * 0.85 : 0;
+  const inlet = env.outsideTemp - padDrop;
+  const lit = HEATERS.length - env.brooderOut.length;
+  const heat = (HEAT_RATE * env.heaterLevel * lit) / HEATERS.length;
+  const exchange = AIR.wallLossPerH + env.airflowM3h / AIR.thermalM3;
+  const sink = SLAB.sinkPerH * (env.houseTemp - env.slabTemp);
+  const dT = heat + env.flockHeatPerH - exchange * (env.houseTemp - inlet) - sink;
+  env.houseTemp += dT * hrs;
+  env.slabTemp += ((env.houseTemp + SLAB.brooderC * env.heaterLevel - env.slabTemp) / SLAB.tauH) * hrs;
+  // Absolute-humidity balance: inlet air (outside, plus what the pad adds: about 0.49 g/m3 per °C
+  // of evaporative cooling) plus the flock's vapour spread through the air that passes.
+  const xIn = (absHumSat(env.outsideTemp) * env.outsideRH) / 100 + 0.49 * padDrop + env.vapourGh / env.airflowM3h;
+  env.houseRH = Math.max(20, Math.min(98, (100 * xIn) / absHumSat(env.houseTemp)));
 }
 
 // Advance the farm by `gs` game seconds in steps of at most one game minute.
@@ -231,6 +316,8 @@ function stepGame(env, gs, fast) {
 
     if (env.forcedHouseTemp != null) {
       env.houseTemp = env.forcedHouseTemp;
+    } else if (env.levelClimate) {
+      levelClimate(env, hrs);
     } else {
       // Inlet air: through the wet pad it cools by about 1 °C for every 5 % of humidity it can still take up.
       const padDrop = env.padOn && env.fansOn > 0 ? Math.min(9, (100 - env.outsideRH) / 5) * 0.85 : 0;
