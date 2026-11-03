@@ -67,7 +67,8 @@ export function createUI(ctx, deps) {
   const help = createHelp();
   const lhelp = createHelp(LEVEL_HELP_KEYS, 'chicken-farm.level-help-dismissed');
   lhelp.toggleBtn.hidden = true; lhelp.hide();
-  const nextBar = button({ class: 'btn', title: 'Next job', 'aria-label': 'Next job' }, h('span', { html: ICONS.next, 'aria-hidden': 'true' }), h('span', null, 'Next job'));
+  const nextBar = button({ class: 'btn', title: 'Next job', 'aria-label': 'Next job' });
+  nextBar.innerHTML = `${ICONS.next}<span>Next job</span>`; // icon outside a span: narrow screens hide the text spans
   nextBar.hidden = true;
   hud.timebar.append(nextBar, h('div', { class: 'timebar-sep', 'aria-hidden': 'true' }), help.toggleBtn, lhelp.toggleBtn);
   let helpAuto = help.visible;
