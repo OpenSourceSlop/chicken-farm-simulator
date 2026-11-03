@@ -152,14 +152,15 @@ export function serializeLitter(L) {
   const ints = (a, k) => Array.from(a, (v) => Math.round(v * k));
   const caked = [];
   for (let i = 0; i < N; i++) if (L.cakedHours[i] > 0) caked.push(i, Math.round(L.cakedHours[i] * 100), L.cakedGrid[i]);
-  return { depthCm: L.depthCm, cover: ints(L.coverGrid, 100), depth: ints(L.depthGrid, 10), moisture: ints(L.moistureGrid, 10), caked };
+  return { depthCm: L.depthCm, cover: rle(ints(L.coverGrid, 100)), depth: rle(ints(L.depthGrid, 10)), moisture: ints(L.moistureGrid, 10), caked };
 }
 
 export function restoreLitter(L, d) {
   if (!d) return;
   L.depthCm = d.depthCm ?? L.depthCm;
+  const cover = unrle(d.cover), depth = unrle(d.depth);
   for (let i = 0; i < N; i++) {
-    L.coverGrid[i] = (d.cover?.[i] ?? 0) / 100; L.depthGrid[i] = (d.depth?.[i] ?? 0) / 10;
+    L.coverGrid[i] = (cover[i] ?? 0) / 100; L.depthGrid[i] = (depth[i] ?? 0) / 10;
     const pct = (d.moisture?.[i] ?? LITTER.bareReadsPct * 10) / 10;
     const dry = dryOf(L, i);
     L.waterGrid[i] = dry > 0 && L.coverGrid[i] >= 0.5 ? (dry * pct) / (100 - pct) : 0;
@@ -169,4 +170,16 @@ export function restoreLitter(L, d) {
   const c = d.caked || [];
   for (let k = 0; k + 2 < c.length; k += 3) { L.cakedHours[c[k]] = c[k + 1] / 100; L.cakedGrid[c[k]] = c[k + 2]; }
   updateCover(L); L.version++;
+}
+
+/** Run-length pairs [value, count, ...] for grids that are mostly one value (cover, depth). */
+function rle(a) {
+  const out = [];
+  for (let i = 0; i < a.length;) { let j = i; while (j < a.length && a[j] === a[i]) j++; out.push(a[i], j - i); i = j; }
+  return out;
+}
+function unrle(r) {
+  const out = [];
+  for (let k = 0; r && k + 1 < r.length; k += 2) for (let n = 0; n < r[k + 1]; n++) out.push(r[k]);
+  return out;
 }

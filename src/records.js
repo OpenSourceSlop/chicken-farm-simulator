@@ -45,6 +45,7 @@ const PROBLEM_WORDS = {
   'abnormal-deaths': 'more dead birds than usual',
 };
 const r2 = (v) => Math.round(v * 100) / 100;
+const r1 = (v) => Math.round(v * 10) / 10;
 const strip = (p) => { const o = { ...p }; delete o.id; delete o.result; delete o.quiet; return o; };
 
 export function createRecords({ farm, env, events } = {}) {
@@ -105,8 +106,18 @@ export function createRecords({ farm, env, events } = {}) {
   if (events) {
     events.on(EV.ACTION, (p) => {
       if (!live() || !p || !p.id) return;
-      const where = p.x != null && p.z != null ? [r2(p.x), r2(p.z)] : undefined;
-      if (SETTINGS.has(p.id)) { if (!p.quiet) records.note('setting', { id: p.id, ...strip(p) }); return; }
+      const where = p.x != null && p.z != null && p.id !== 'sample.weigh' ? [r1(p.x), r1(p.z)] : undefined;
+      if (SETTINGS.has(p.id)) {
+        if (p.quiet) return;
+        // a setting is written down when it changes (the same pressure set again is not a new line)
+        const v = { id: p.id, ...strip(p) }, js = JSON.stringify(v);
+        for (let i = notebook.length - 1; i >= 0; i--) {
+          const n = notebook[i];
+          if (n.kind === 'setting' && n.value.id === v.id && n.value.line === v.line) { if (JSON.stringify(n.value) === js) return; break; }
+        }
+        records.note('setting', v);
+        return;
+      }
       const kind = KIND[p.id];
       if (!kind) return;
       if (kind === 'text') { records.note('text', TEXT[p.id]); return; }

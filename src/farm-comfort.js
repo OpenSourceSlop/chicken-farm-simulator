@@ -34,18 +34,36 @@ for (let p = 0; p < P; p++) {
   ZONE[p] = best;
 }
 const felt = new Float64Array(P), sorted = new Float64Array(P), zoneMin = new Float64Array(HEATERS.length);
+const R_ALL = new Float64Array(P); // radiant weight with every brooder burning
+for (let p = 0; p < P; p++) { let r = 0; for (let i = 0; i < HEATERS.length; i++) r += G[p * HEATERS.length + i]; R_ALL[p] = Math.min(1, r); }
+const K30 = Math.floor(0.3 * (P - 1));
+// the brooding cell nearest each brooder centre
+const CENTRE = HEATERS.map((h) => { let best = 0, bd = Infinity; for (let p = 0; p < P; p++) { const d = (PX[p] - h.x) ** 2 + (PZ[p] - h.z) ** 2; if (d < bd) { bd = d; best = p; } } return best; });
+/** k-th smallest of a[0..n) (quickselect, reorders a). */
+function select(a, k) {
+  let lo = 0, hi = a.length - 1;
+  while (hi > lo) {
+    const pv = a[(lo + hi) >> 1];
+    let i = lo, j = hi;
+    while (i <= j) { while (a[i] < pv) i++; while (a[j] > pv) j--; if (i <= j) { const t = a[i]; a[i] = a[j]; a[j] = t; i++; j--; } }
+    if (k <= j) hi = j; else if (k >= i) lo = i; else return a[k];
+  }
+  return a[k];
+}
 
 /** Felt temperature at every brooding cell now (fills `felt`): the terms of env.localTemp. */
 function fill(env) {
   const out = env.brooderOut, lvl = env.heaterLevel > 0.01 ? env.heaterLevel : 0;
   const fans = env.levelClimate ? env.fanMean : env.fansOn;
   const base = env.houseTemp - env.windChill, outAir = env.levelClimate && out.length > 0;
+  const anyOut = out.length > 0;
   for (let p = 0; p < P; p++) {
     let r = 0;
     if (lvl > 0) {
-      for (let i = 0; i < HEATERS.length; i++) if (!out.length || !out.includes(i)) r += G[p * HEATERS.length + i];
+      if (!anyOut) r = R_ALL[p];
+      else { for (let i = 0; i < HEATERS.length; i++) if (!out.includes(i)) r += G[p * HEATERS.length + i]; r = Math.min(1, r); }
     }
-    let t = base + 7 * lvl * Math.min(1, r) - WALL[p];
+    let t = base + 7 * lvl * r - WALL[p];
     if (fans > 0) t += (ALONG[p] - 0.5) * 1.5 * (fans / FAN_COUNT);
     if (outAir) t += env.outAirDev(PX[p], PZ[p]);
     felt[p] = t;
@@ -74,15 +92,15 @@ export function comfortNow(env, out = {}) {
     if (e > 2.5) hot++;
     if (e < zoneMin[ZONE[p]]) zoneMin[ZONE[p]] = e;
   }
-  sorted.sort();
-  out.e = sorted[Math.floor(0.3 * (P - 1))] - tgt;
+  out.e = select(sorted, K30) - tgt;
   out.meanOver = sum / P;
   out.coldShare = cold / P;
   // the birds move away from a hot brooder: they pant only where the whole floor is hot
   out.pantShare = out.e > 2 ? hot / P : out.meanOver > 2 ? (hot / P) * 0.5 : 0;
   let ok = 0;
   for (let i = 0; i < HEATERS.length; i++) {
-    const warmest = env.localTemp(HEATERS[i].x, HEATERS[i].z) - tgt;
+    // the warmest spot of a group: under its own brooder (the cell holding the brooder centre)
+    const warmest = felt[CENTRE[i]] - tgt;
     if (warmest >= -1.5 && zoneMin[i] <= 2) ok++;
   }
   out.groupShare = ok / HEATERS.length;

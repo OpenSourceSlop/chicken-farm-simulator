@@ -89,6 +89,8 @@ export function createFarm(env, { events } = {}) {
     comfort: { e: 0, meanOver: 0, coldShare: 0, pantShare: 0 },
     truckLeft: false,
     drinkLh: 0,               // drinking smoothed over ~6 h, L/h (breath vapour)
+    ctlMem: null,             // controller min / max memory since the last controller.read
+    comfortH: 0, litAcc: { h: 0, drop: 0, leak: 0, spill: [0, 0, 0, 0] }, // slow parts: time and inputs since they last ran
     emit,
     /** Flock age in days (env.day - PLACEMENT_DAY), negative before 08:00 on day 0. */
     get age() { return flockAgeAt(env.day); },
@@ -97,11 +99,13 @@ export function createFarm(env, { events } = {}) {
     forecast(day = env.dayNumber) { return forecast(farm, env, day); },
     /** What the farmer sees and hears standing at (x, z): neutral words for the notebook. */
     observe(x, z) { return observe(farm, env, x, z); },
+    /** The climate controller's memory: house min / max (°C) since its last reading (controller.read). */
+    controllerMemory() { const m = farm.ctlMem; return m ? { minC: +m.minC.toFixed(1), maxC: +m.maxC.toFixed(1), since: m.since } : { minC: +env.houseTemp.toFixed(1), maxC: +env.houseTemp.toFixed(1), since: env.day }; },
 
     /** Start Level 1 from the prep day (bare floor, empty house, lines high, no chicks). */
     start(level = LEVEL1, { seed = 1, keepClock = false } = {}) {
       Object.assign(farm, { mode: 'level', level, seed, rng: createRng(seed), flock: createFlock(), water: createWater(),
-        feed: createFeed(), litter: createLitter(), problems: createProblems(level), stats: freshStats(), truckLeft: false, drinkLh: 0,
+        feed: createFeed(), litter: createLitter(), problems: createProblems(level), stats: freshStats(), truckLeft: false, drinkLh: 0, ctlMem: null, comfortH: 0, litAcc: { h: 0, drop: 0, leak: 0, spill: [0, 0, 0, 0] },
         light: { darkStart: 2, darkHours: 1, dimmer: 1, luxAtBirds: EQUIP.luxMax }, vent: { fans: 0, onSec: 0, cycleSec: 300 } });
       farm.flock.weightQuantile = makeQuantile(farm.flock);
       if (!keepClock) { env.setDay(level.startDay); env.setHour(level.startHour); }
@@ -167,7 +171,11 @@ export function createFarm(env, { events } = {}) {
   if (events) {
     // The farm is the only owner of deadOnFloor (flock.dead mirrors it).
     events.on(EV.DEAD_PICK, (p) => { farm.flock.deadOnFloor = Math.max(0, farm.flock.deadOnFloor - (p.n || 0)); });
-    events.on(EV.ACTION, (p) => { if (farm.mode === 'level' && p.result === undefined && UI_ACTIONS.has(p.id)) actionSymptoms(farm, env, p.id, p, undefined); });
+    events.on(EV.ACTION, (p) => {
+      if (farm.mode !== 'level' || p.result !== undefined || !UI_ACTIONS.has(p.id)) return;
+      actionSymptoms(farm, env, p.id, p, undefined);
+      if (p.id === 'controller.read') farm.ctlMem = null; // the controller's min / max memory restarts at each read
+    });
     events.on(EV.NEAR, (p) => { if (farm.mode === 'level') onNear(farm, env, p); });
     events.on(EV.LISTEN, () => { if (farm.mode === 'level') onListen(farm, env); });
     events.on(EV.HOUSE_ENTER, (p) => { if (farm.mode === 'level' && p && p.dipped === false) farm.flock.lapses++; });
@@ -181,6 +189,9 @@ export const cellIndex = litterCell;
 function stepFarm(farm, env, hrs, spill) {
   const fl = farm.flock, water = farm.water, feed = farm.feed, st = farm.stats, lv = farm.level || LEVEL1;
   tickProblems(farm, env);
+  const cm = farm.ctlMem || (farm.ctlMem = { minC: env.houseTemp, maxC: env.houseTemp, since: env.day });
+  if (env.houseTemp < cm.minC) cm.minC = env.houseTemp;
+  if (env.houseTemp > cm.maxC) cm.maxC = env.houseTemp;
   if (st.truckAt == null && env.day >= lv.arrivalDay + lv.arrivalHour / 24 - 1e-9) {
     deliver(farm, env);
     femit(farm, EV.FARM_DELIVERY, { kind: 'chicks', phase: 'arrive' });
@@ -204,7 +215,10 @@ function stepFarm(farm, env, hrs, spill) {
   let drunkL = 0, breathL = 0;
   const C = farm.comfort;
   if (fl.placed > 0 && fl.alive > 0) {
-    comfortNow(env, C);
+    // what the chicks feel changes with the house air: recomputed every 5 game minutes (and at once
+    // when the brooders that are out change)
+    farm.comfortH += hrs;
+    if (farm.comfortH >= SLOW_H - 1e-9 || C.out !== env.brooderOut.length || C.e == null) { comfortNow(env, C); C.out = env.brooderOut.length; farm.comfortH = 0; }
     const io = { feedAccess: feedAccess(feed, age, env.dayNumber), eat: (kg) => eat(feed, kg), waterPerKg: waterPerKg(env.houseTemp) };
     const r = stepFlock(farm, env, hrs, C, io);
     drunkL = r.drunkL; breathL = r.breathL;
@@ -212,27 +226,34 @@ function stepFarm(farm, env, hrs, spill) {
   } else spill.fill(0);
   if (st.pansEmptyAt == null && fl.placed > 0 && meanPanFill(feed) < 0.05) st.pansEmptyAt = env.day;
   // litter, air
-  const L = farm.litter;
-  stepLitter(L, { hrs, droppingsL: 0.5 * drunkL, spill, leakL, leakCell: water.leak ? water.leak.cell : null,
-    rh: env.houseRH, feedKg: feed.meterKg, airflow: env.airflowM3h });
+  // the litter integrates what fell on it every 5 game minutes (moisture changes over hours)
+  const L = farm.litter, la = farm.litAcc;
+  la.h += hrs; la.drop += 0.5 * drunkL; la.leak += leakL;
+  for (let i = 0; i < 4; i++) la.spill[i] += spill[i] || 0;
+  if (la.h >= SLOW_H - 1e-9) {
+    stepLitter(L, { hrs: la.h, droppingsL: la.drop, spill: la.spill, leakL: la.leak, leakCell: water.leak ? water.leak.cell : null,
+      rh: env.houseRH, feedKg: feed.meterKg, airflow: env.airflowM3h });
+    la.h = 0; la.drop = 0; la.leak = 0; la.spill.fill(0);
+  }
   // breath follows the day's drinking (smoothed over ~6 h: the birds breathe in the dark hour too)
   farm.drinkLh += (breathL / hrs - farm.drinkLh) * (1 - Math.exp(-hrs / 6));
   env.vapourGh = 0.4 * farm.drinkLh * 1000;
   env.dryPotentialGh = L.dryPotentialGh;
   const birds = fl.alive, w = fl.meanWeightG;
   env.flockHeatPerH = birds > 0 ? (0.2 * birds) / 6000 + (1.3 * birds * w) / (6000 * 2850) : 0;
-  env.litterDepthCm = meanDepth(L);
+  if (farm.depthVersion !== L.version) { farm.depthVersion = L.version; env.litterDepthCm = meanDepth(L); }
 }
 
 const femit = (farm, t, p) => farm.emit(t, p);
+const SLOW_H = 5 / 60; // comfort and litter update every 5 game minutes
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
 function serializeFarm(farm, env) {
   const fl = { ...farm.flock }; delete fl.weightQuantile; delete fl.qVersion;
   return {
-    v: 1, mode: farm.mode, seed: farm.seed, rng: farm.rng.state, truckLeft: farm.truckLeft, drinkLh: farm.drinkLh,
+    v: 1, mode: farm.mode, seed: farm.seed, rng: farm.rng.state, truckLeft: farm.truckLeft, drinkLh: farm.drinkLh, ctlMem: farm.ctlMem, comfortH: farm.comfortH, litAcc: clone(farm.litAcc),
     flock: clone(fl),
-    water: clone({ ...farm.water, hist: farm.water.hist.map((v) => Math.round(v * 100) / 100) }),
+    water: clone({ ...farm.water, hist: farm.water.hist.map((v) => Math.round(v * 10) / 10) }),
     feed: clone(farm.feed), litter: serializeLitter(farm.litter),
     light: { ...farm.light }, vent: { ...farm.vent }, fansManual: env.fansManual,
     problems: clone(farm.problems), stats: clone(farm.stats),
@@ -245,7 +266,8 @@ function restoreFarm(farm, env, d) {
   if (farm.mode !== 'level') { farm.stop(); return; }
   farm.level = LEVEL1; farm.seed = d.seed ?? 1;
   farm.rng = createRng(1); farm.rng.state = d.rng ?? 1;
-  farm.truckLeft = !!d.truckLeft; farm.drinkLh = d.drinkLh || 0;
+  farm.truckLeft = !!d.truckLeft; farm.drinkLh = d.drinkLh || 0; farm.ctlMem = d.ctlMem ? { ...d.ctlMem } : null;
+  farm.comfortH = d.comfortH || 0; farm.litAcc = d.litAcc ? clone(d.litAcc) : { h: 0, drop: 0, leak: 0, spill: [0, 0, 0, 0] };
   farm.flock = Object.assign(createFlock(), clone(d.flock));
   farm.flock.weightQuantile = makeQuantile(farm.flock);
   farm.water = Object.assign(createWater(), clone(d.water));

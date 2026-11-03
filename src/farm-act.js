@@ -152,7 +152,7 @@ export function doAct(farm, env, id, a) {
     case 'sample.vent': {
       const t = Math.max(37.5, Math.min(42, 40 + 0.3 * (env.localTemp(a.x ?? 0, a.z ?? 0) - env.targetTemp) + (rng.next() * 2 - 1) * 0.25));
       const tempC = r1(t);
-      st.ventReadings.push({ t: env.day, sector: broodSector(a.x ?? 0, a.z ?? 0), tempC });
+      st.ventReadings.push({ t: +env.day.toFixed(5), sector: broodSector(a.x ?? 0, a.z ?? 0), tempC });
       return { tempC };
     }
     case 'sample.crop': {
@@ -166,7 +166,7 @@ export function doAct(farm, env, id, a) {
     }
     case 'sample.weigh': {
       const weightG = Math.round(drawBird(fl, rng) + (rng.next() * 2 - 1));
-      st.weighed.push({ t: env.day, sector: broodSector(a.x ?? 0, a.z ?? 0), weightG });
+      st.weighed.push({ t: +env.day.toFixed(5), sector: broodSector(a.x ?? 0, a.z ?? 0), weightG });
       return { weightG };
     }
     default: return true; // ui-only ids and anything not modelled: done is done

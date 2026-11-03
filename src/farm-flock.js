@@ -23,6 +23,8 @@ export const FLOCK = {
   otherRate: 0.00001, otherFromDay: 3, otherPerLapse: 0.3, otherBadWater: 2.0,
 };
 const CAUSES = ['cold', 'heat', 'dehydration', 'weak', 'starveout', 'other', 'box'];
+const RATE_CAUSES = ['weak', 'starveout', 'cold', 'heat', 'dehydration', 'other'];
+const RATES = new Float64Array(RATE_CAUSES.length); // reused every step (no garbage)
 
 export function createFlock() {
   return {
@@ -195,22 +197,24 @@ export function stepFlock(farm, env, hrs, C, io) {
   const fF = io.feedAccess;
   const A = farm.water.access, fW = Math.pow(Math.max(0, A), 0.8);
   const fAir = Math.max(0, 1 - 0.01 * Math.max(0, farm.litter.ammoniaPpm - 20));
-  Object.assign(fl.factors, { fT, fL, fF, fW, fAir });
+  const FX = fl.factors; FX.fT = fT; FX.fL = fL; FX.fF = fF; FX.fW = fW; FX.fAir = fAir;
   const f = fT * fL * fF * fW * fAir;
   // ---- intake, spread over the lit hours ----
   const lit = env.lightsOn ? 24 / litH : 0;
   const std = feedStdGAt(age) / 1000 * (hrs / 24) * lit;  // kg per bird this step at full rate
   const lateK = age < FLOCK.lateEarlyAge ? FLOCK.lateIntakeEarly : FLOCK.lateIntakeAfter;
-  const want = { good: c.good.n * std * f, late: c.late.n * std * f * lateK, weak: c.weak.n * std * f * FLOCK.weakIntake };
-  const wantKg = want.good + want.late + want.weak;
+  const wGood = c.good.n * std * f, wLate = c.late.n * std * f * lateK, wWeak = c.weak.n * std * f * FLOCK.weakIntake;
+  const wantKg = wGood + wLate + wWeak;
   const gotKg = wantKg > 0 ? io.eat(wantKg) : 0;
   const k = wantKg > 0 ? gotKg / wantKg : 0;
   const coldDef = Math.max(0, -1.5 - C.e);
   const gainK = (1000 * k * Math.max(0, 1 - FLOCK.coldGain * coldDef)) / fpg(age);
-  for (const key of ['good', 'late', 'weak']) if (c[key].n > 0) c[key].w += (want[key] / c[key].n) * gainK;
+  if (c.good.n > 0) c.good.w += (wGood / c.good.n) * gainK;
+  if (c.late.n > 0) c.late.w += (wLate / c.late.n) * gainK;
+  if (c.weak.n > 0) c.weak.w += (wWeak / c.weak.n) * gainK;
   const fEff = f * (wantKg > 0 ? k : 1);
   const dcv = (FLOCK.cvBase + FLOCK.cvTemp * (1 - fT) + FLOCK.cvWater * (1 - A) + FLOCK.cvFeed * (1 - Math.min(1, fF * (wantKg > 0 ? k : 1)))) * (hrs / 24);
-  for (const co of cohortList(fl)) co.cv += dcv;
+  c.good.cv += dcv; c.late.cv += dcv; c.weak.cv += dcv;
   fl.cumFeedKg += gotKg; fl.feedTodayKg += gotKg;
   const drunkL = gotKg * io.waterPerKg;
   fl.waterTodayL += drunkL;
@@ -229,16 +233,16 @@ export function stepFlock(farm, env, hrs, C, io) {
   }
   // ---- deaths (expected per hour, fractional counters per cause) ----
   const alive = c.good.n + c.late.n + c.weak.n;
-  const rates = {
-    weak: c.weak.n * weakRate(age),
-    starveout: age >= FLOCK.starveFrom && age < FLOCK.starveTo ? c.late.n * FLOCK.starveRate : 0,
-    cold: C.e < FLOCK.coldFrom ? alive * FLOCK.coldRate * (FLOCK.coldFrom - C.e) ** 2 : 0,
-    heat: C.meanOver > FLOCK.heatFrom ? alive * FLOCK.heatRate * (C.meanOver - FLOCK.heatFrom) ** 2 : 0,
-    dehydration: A < FLOCK.dehydBelow ? alive * FLOCK.dehydRate * ((FLOCK.dehydBelow - A) / FLOCK.dehydBelow) : 0,
-    other: env.dayNumber >= FLOCK.otherFromDay ? alive * FLOCK.otherRate * (1 + FLOCK.otherPerLapse * fl.lapses) * (farm.water.quality < 1 ? FLOCK.otherBadWater : 1) : 0,
-  };
+  const rates = RATES;
+  rates[0] = c.weak.n * weakRate(age);
+  rates[1] = age >= FLOCK.starveFrom && age < FLOCK.starveTo ? c.late.n * FLOCK.starveRate : 0;
+  rates[2] = C.e < FLOCK.coldFrom ? alive * FLOCK.coldRate * (FLOCK.coldFrom - C.e) ** 2 : 0;
+  rates[3] = C.meanOver > FLOCK.heatFrom ? alive * FLOCK.heatRate * (C.meanOver - FLOCK.heatFrom) ** 2 : 0;
+  rates[4] = A < FLOCK.dehydBelow ? alive * FLOCK.dehydRate * ((FLOCK.dehydBelow - A) / FLOCK.dehydBelow) : 0;
+  rates[5] = env.dayNumber >= FLOCK.otherFromDay ? alive * FLOCK.otherRate * (1 + FLOCK.otherPerLapse * fl.lapses) * (farm.water.quality < 1 ? FLOCK.otherBadWater : 1) : 0;
   let next12 = 0;
-  for (const [cause, r] of Object.entries(rates)) {
+  for (let ci = 0; ci < RATE_CAUSES.length; ci++) {
+    const cause = RATE_CAUSES[ci], r = rates[ci];
     next12 += r * 12;
     if (r <= 0) continue;
     fl.acc[cause] += r * hrs;
