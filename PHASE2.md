@@ -1076,7 +1076,7 @@ found from real symptoms and fixed). `node scripts/test-level.mjs` checks the sa
 | # | Finding | Fix |
 | --- | --- | --- |
 | 1 | notebook settings read like a debug log | `ui-format.settingText` / `placeWords`; notebook label "Set"; places in words |
-| 2 | week table rows hundreds of px tall | notes in a full-width row under each day's numbers; house and light columns first |
+| 2 | week table rows hundreds of px tall | notes in a full-width row under each day's numbers; house and light columns first (final check: 700–1100 px windows get tighter cells and the weight source in small text, so the records and result week tables fit at 960 px with no sideways scroll; `p2-review2-ui.json` checks it) |
 | 3 | drinker line out of the picture at 50 cm | line drawn at the top with "▲ line at 50 cm"; Shift steps winch / pans 5 cm |
 | 4, 27 | brooder sign source tags run into the value | own Source column, guide name, 11.5 px after a 14 px gap (CSS specificity fixed) |
 | 5 | no hand weighing gave a better result | `farm.stats.scaleAtWeighInG` (scale at age 7.0) in `computeResult`; test-level case |

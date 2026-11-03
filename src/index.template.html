@@ -664,6 +664,15 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .ledger--week .notes-missed[open] summary { margin-bottom: 2px; }
 .ledger--week tr.is-draft td, .ledger--week tr.is-draft th { color: var(--ledger-ink2); }
 .ledger--week tr.is-empty td { color: var(--ledger-ink-dim); }
+.ledger--week .wk-src { font-size: 10.5px; letter-spacing: 0.02em; color: var(--ledger-ink-dim); }
+.ledger--dark .wk-src { color: inherit; opacity: 0.7; }
+/* 960-1100 px windows: the week tables fit their box without sideways scroll (tighter cells) */
+@media (max-width: 1100px) and (min-width: 700px) {
+  .ledger.ledger--week { font-size: 12.5px; }
+  .ledger.ledger--week th, .ledger.ledger--week td { padding: 4px 4px 3px; }
+  .ledger.ledger--week thead th { min-width: 28px; letter-spacing: 0.03em; }
+  .ledger.ledger--week tr.notes-row td { padding: 0 4px 6px 30px; }
+}
 .locked { display: flex; align-items: center; gap: 12px; padding: 18px; border: 2px dashed var(--ledger-rule); border-radius: 6px; color: var(--ledger-ink-dim); }
 .locked .icon { font-size: 26px; }
 .graph svg { display: block; color: var(--ledger-ink); font-family: var(--font-display); }

@@ -146,7 +146,7 @@ export function weekTable(L, { dark = false } = {}) {
       h('td', null, r.mortalityCumPct != null ? two(r.mortalityCumPct) : '—'),
       h('td', null, r.houseMinC != null ? `${one(r.houseMinC)} / ${one(r.houseMaxC)} · ${one(r.targetC)}` : r.day >= 0 && r.targetC ? `— · ${one(r.targetC)}` : '—'),
       h('td', null, r.lightHours != null ? one(r.lightHours) : '—'),
-      h('td', null, r.weightG != null ? `${int(r.weightG)} ${r.weightSource === 'weighed' ? '(weighed)' : '(scale)'}` : '—'),
+      h('td', null, r.weightG != null ? [`${int(r.weightG)} `, h('small', { class: 'wk-src' }, r.weightSource === 'weighed' ? 'weighed' : 'scale')] : '—'),
       h('td', null, r.day >= 0 ? int(r.targetWeightG || weightAt(r.day)) : '—'),
       h('td', null, r.weightRatio != null ? two(r.weightRatio) : r.weightG != null && chick ? two(r.weightG / chick) : '—'),
       h('td', null, r.uniformityPct != null ? int(r.uniformityPct) : '—'),
