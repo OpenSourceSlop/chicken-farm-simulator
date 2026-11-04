@@ -78,6 +78,7 @@ function stepTank(farm, env, hrs) {
   const padLh = ((0.49 * full * env.fansEffective * EQUIP.fanM3h) / 1000) * (Math.min(1, env.padWorking) + WATER_TANK.padBleed);
   const pumpLh = !T.fixing && env.powerOn !== false && T.levelPct < WATER_TANK.fullPct ? WATER_TANK.pumpM3h * 1000 * T.pumpShare : 0;
   const L = Math.max(0, Math.min(cap, (T.levelPct / 100) * cap + (pumpLh - padLh) * hrs - birdsL));
+  if (pumpLh > 0 && hrs > 0) T.pumpHours = +((T.pumpHours || 0) + hrs).toFixed(4);   // the pump's run hours (the panel's counter)
   T.levelPct = (100 * L) / cap;
   if (T.levelPct < T.lowPct) { T.lowPct = T.levelPct; T.lowAt = +env.day.toFixed(5); }
   const d = env.dayNumber, D = X.tankDays[d] || (X.tankDays[d] = { low: 100, lowAt: null, padMaxLh: 0, birdsMaxLh: 0, under20H: 0 });

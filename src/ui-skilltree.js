@@ -5,12 +5,10 @@
 // Phase 4 (PHASE4.md §7): the condition milestones (skills-cond.js MILESTONES_COND) under their branches, marked with
 // the condition's name ("Hot season"); they are earned only in a run of that condition.
 import { SKILL_LEVEL_POINTS, UNLOCKS, LEVELS, conditionLabel } from './config.js';
-import { ALL_MILESTONES as ALL_P3 } from './skills.js';
-import { MILESTONES_COND } from './skills-cond.js';
+import { ALL_MILESTONES_P4 } from './skills.js';
 
-/** Every milestone the tree lists: skills.js ALL_MILESTONES (with MILESTONES_COND once the sim package merges them) and
- *  the condition ones it does not have yet. */
-const ALL_MILESTONES = [...ALL_P3, ...MILESTONES_COND.filter((m) => !ALL_P3.some((x) => x.id === m.id))];
+/** Every milestone the tree lists: skills.js ALL_MILESTONES_P4 (Phase 2's, the cycle's and the conditions'). */
+const ALL_MILESTONES = ALL_MILESTONES_P4;
 import { h, button, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';

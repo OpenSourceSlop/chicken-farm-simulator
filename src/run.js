@@ -297,7 +297,7 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   let storedCycle;                  // a finished cycle in the stored run save (read once: the save is large)
   function cyclesDone() {
     const v = level.profile?.cycles?.()?.cyclesDone;
-    if (Number.isFinite(v)) return v;
+    if (Number.isFinite(v) && v > 0) return v;   // the skill profile's count (0 in a profile that never counted: a Phase 3 one)
     if (lastCycle) return 1;
     if (storedCycle === undefined) { try { storedCycle = !!store.load?.()?.run?.lastCycle; } catch { storedCycle = false; } }
     return storedCycle ? 1 : 0;

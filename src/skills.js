@@ -172,8 +172,9 @@ export function createSkills({ events, records, farm } = {}) {
       return true;
     },
     reset() { earned.clear(); },
-    /** Phase 4: the profile's cycles (the gate of the harder flocks) — { cyclesDone, conditionsDone: { [id]: n } } (a copy). */
-    get profile() { return { cyclesDone: profile.cyclesDone, conditionsDone: { ...profile.conditionsDone } }; },
+    /** Phase 4: the profile's cycles (the gate of the harder flocks) — { cyclesDone, conditionsDone: { [id]: n } }: the live
+     *  object (level.js keeps its counters in it and saves it; a harness may set __game.skills.profile.cyclesDone). */
+    get profile() { return profile; },
     /** The run raises it at a cycle's end: every finished run counts; `condition` once the run was played under that one
      *  condition from its start level through the clean-out (PHASE4.md §3.1). Returns the profile. */
     cycleDone({ condition = null, underOne = true } = {}) {

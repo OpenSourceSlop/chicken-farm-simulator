@@ -32,6 +32,8 @@ export function gradingFor(L) {
   function sync() {
     const ta = farm.stats?.truckAt ?? null;
     if (ta !== g.truckAt) { g.truckAt = ta; g.results = {}; g.told = null; if (g.job) { g.job.cancel(); g.job = null; g.stack = null; g.host = null; } }
+    // the farm keeps each graded stack's answer (flock.stacks[i].gradedR): a reloaded game shows the table as it was
+    (farm.flock?.stacks || []).forEach((st, i) => { if (st?.graded && st.gradedR && !g.results[i]) g.results[i] = { stack: i, minutes: GRADE_MIN, ...st.gradedR }; });
   }
   g.sync = sync;
   g.busy = () => !!g.job?.running;

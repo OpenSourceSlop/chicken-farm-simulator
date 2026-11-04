@@ -67,6 +67,7 @@ export function chicksAct(farm, env, id, a = {}) {
         fl.gradedOut = (fl.gradedOut || 0) + culled;
         dayZeroCull(farm, env, culled);
       }
+      if (!st.graded) st.gradedR = { looked, weak, culled, at: +env.day.toFixed(5) };   // the table's answer, kept for a reload
       st.graded = true;
       X.graded = (X.graded || 0) + (culled >= 0 ? 1 : 0); (X.gradedStacks || (X.gradedStacks = [])).push(i);
       return { stack: i, looked, weak, culled, minutes: CHICKS_P4.gradeMin };

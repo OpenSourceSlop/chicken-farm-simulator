@@ -36,6 +36,7 @@ import { int, one, feelWords } from './ui-format.js';
 import { FLOOR_TEMP_RAMP, COMFORT_RAMP, MOISTURE_RAMP, levelById, conditionLabel } from './config.js';
 import { sectorOf } from './job-engine.js';
 import { BOARDS_CYCLE } from './content-signs-cycle.js';
+import { BOARDS_COND } from './content-signs-cond.js';
 import { RUN_CARD } from './content.js';
 import { createBusyCard } from './ui-run.js';
 import { setFarmTimeHooks, tickFarmTimeNotes, clearFarmTimeNotes } from './ui-farmtime.js';
@@ -120,7 +121,7 @@ export function createUI(ctx, deps) {
       tasks.notify(`open:${id}`); prompt.show(null); root.classList.add('has-panel');
       if (mode !== 'sandbox') {
         events.emit(EV.PANEL_OPEN, { id });
-        if ((BOARDS[id] || BOARDS_CYCLE[id]) && id.startsWith('sign-')) uiAct('sign.read', { board: id });
+        if ((BOARDS[id] || BOARDS_CYCLE[id] || BOARDS_COND[id]) && id.startsWith('sign-')) uiAct('sign.read', { board: id });
       }
     },
     onClose: () => {
@@ -304,6 +305,8 @@ export function createUI(ctx, deps) {
   for (const id of Object.keys(BOARDS)) if (id.startsWith('sign-') && !SIGNS[id]) panels.register(id, () => buildBoardPanel(id, env, closePanel), { kind: 'sign' });
   // Phase 3 boards (scene paints them at SPOTS3; the panel reads the merged boards of the day)
   for (const id of Object.keys(BOARDS_CYCLE)) if (id.startsWith('sign-')) panels.register(id, () => buildBoardPanel(id, env, closePanel), { kind: 'sign' });
+  // Phase 4 boards (the scene paints sign-power by the generator in the rainy season; the panel reads the day's merge)
+  for (const id of Object.keys(BOARDS_COND)) if (id.startsWith('sign-') && !BOARDS[id] && !BOARDS_CYCLE[id]) panels.register(id, () => buildBoardPanel(id, env, closePanel), { kind: 'sign' });
   panels.register('controller', lvl(() => buildLevelControllerPanel(L), () => buildControllerPanel(env, { onClose: closePanel, onSetpoint: () => tasks.notify('setpoint') })));
   panels.register('feeder-box', () => buildFeederPanel(L));
   // the job strip (ui-jobstrip.js): the open job done at a machine shows at the top of its panel

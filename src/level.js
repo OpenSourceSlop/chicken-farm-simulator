@@ -55,11 +55,13 @@
 import { FARM, LEVEL1, LEVELS, CYCLE, PLAN_LEVEL, WEEKS45, FINISH, CLEANOUT, HARVEST, PLACEMENT_DAY, GENERATOR, CONDITIONS, levelById, levelOfDay, weightAt, conditionLevel, conditionLabel } from './config.js';
 import { EV } from './events.js';
 import { createJobEngine, LEVEL_END_DAY } from './job-engine.js';
-import { applyRound } from './farm-profiles.js';
+import { applyRound, profileOf } from './farm-profiles.js';
+// a condition's own rounds of the brooding week and its Phase 2 profile (package "sim", farm-profiles-cond.js)
+import { broodStopsCond, p2ProfileFor } from './farm-profiles-cond.js';
 // the cycle profiles (package "sim"): applyCycleRound at the rounds cycleStops lists (goto auto, free runs)
 import * as cycleProfiles from './farm-profiles-cycle.js';
 import { planSums } from './farm-plan.js';
-import { ALL_MILESTONES } from './skills.js';
+import { ALL_MILESTONES_P4 as ALL_MILESTONES } from './skills.js'; // Phase 2 + cycle + the condition milestones
 import { hhmm, splitDay, two, int } from './ui-format.js';
 import { dayLabel } from './content.js';
 import { clock as stepClock } from './clock.js';
@@ -500,6 +502,9 @@ export function createLevel(ctx, deps = {}) {
   // sign's reference plan (IDEAL_PLAN); from week 2: farm-profiles-cycle.applyCycleRound at its cycleStops
   /** A condition's ideal profile (the sim package's cycleProfileOf(name, { condition }); a name in the normal season). */
   const profileFor = (name = 'ideal') => (condNow() && cycleProfiles.cycleProfileOf ? cycleProfiles.cycleProfileOf(name, { condition: condNow() }) : name);
+  /** The brooding week's ideal under the farm's condition: Phase 2's ideal plus the condition's (the sim's playBrooding:
+   *  the hot season drops the warm-afternoon timer; a bad batch grades, calls, follows the warmer row). */
+  const p2Profile = () => (condNow() ? { ...profileOf('ideal'), ...p2ProfileFor(cycleProfiles.cycleProfileOf('ideal', { condition: condNow() })) } : 'ideal');
   function autoStopsL1(target) {
     const st = farm.stats, out = [];
     const truckH = lv().delivery?.arrivalHour ?? LEVEL1.arrivalHour;   // a bad batch's truck comes late (PHASE4.md §4.3)
@@ -520,13 +525,14 @@ export function createLevel(ctx, deps = {}) {
       add(d, d === 4 ? 15 : 13.25, 'pm');   // day 4: the leak shows by the afternoon (10:00 + 5 h)
       add(d, 20, 'sign');
     }
-    // a condition's own rounds of the brooding week (the sim package's cycleStops(from, to, condition) for days <= 7:
-    // the hot season's 11:00 pad, a bad batch's grading and call): played with the condition's ideal (applyCycleRound)
-    if (condNow()) for (const s of cycleProfiles.cycleStops(Math.max(LEVEL1.startDay, env.dayNumber), Math.min(Math.floor(target), LEVEL1.endDay), condNow()) || []) {
+    // a condition's own rounds of the brooding week (the sim's broodStopsCond: the hot season's 11:00 pad and its 18:00
+    // end, the storms' flaps, the water test, a bad batch's crops at 48 h and warmer thermostat), after Phase 2's rounds
+    // of the same minute (as the sim's playBrooding sorts them); played by applyRound with the condition's Phase 2 profile
+    if (condNow()) for (const s of broodStopsCond(condNow(), farm.delivery).stops) {
       const t = s.d + s.h * H;
-      if (s.d <= LEVEL1.endDay && !L1_ROUNDS.has(s.r) && t > env.day + 1e-9 && t < target) out.push({ d: s.d, r: s.r, t, cond: true });
+      if (s.d >= env.dayNumber && s.d <= LEVEL1.endDay && !L1_ROUNDS.has(s.r) && t > env.day + 1e-9 && t < target) out.push({ d: s.d, r: s.r, t, late: 1 });
     }
-    return out.sort((a, b) => a.t - b.t);
+    return out.sort((a, b) => a.t - b.t || (a.late || 0) - (b.late || 0));
   }
   function autoStops(target) {
     if (is(def, LEVEL1)) return autoStopsL1(target);
@@ -566,13 +572,12 @@ export function createLevel(ctx, deps = {}) {
     const r = s.r;
     if (r === 'sign') { if (!records?.row?.(s.d)?.signed) records?.sign?.(s.d); return; }
     if (is(def, PLAN_LEVEL)) { planRound(r); return; }
-    if (is(def, LEVEL1) && s.cond) { try { cycleProfiles.applyCycleRound(farm, env, s.d, r, profileFor(profile)); } catch (err) { console.error('applyCycleRound failed', err); } return; }
     if (is(def, LEVEL1)) {
       if (r === 'truck' && !(farm.flock.inBoxes > 0)) return;
       if (r === 'vent' && !jobOpen('d0-vent')) return;
       if (r === 'crop' && !jobOpen('d1-crop')) return;
       if (r === 'weigh' && !jobOpen('d7-weigh')) return;
-      try { applyRound(farm, env, s.d, r, 'ideal'); } catch (err) { console.error('applyRound failed', err); }
+      try { applyRound(farm, env, s.d, r, p2Profile()); } catch (err) { console.error('applyRound failed', err); }
       if (r === 'am' || r === 'pm') pickDead();
       return;
     }
@@ -629,7 +634,7 @@ export function createLevel(ctx, deps = {}) {
       /** A run reached its cycle summary with every level passed: cyclesDone + 1 (from `base` when the profile has none
        *  yet), and conditionsDone[condition] + 1 for a run played under that condition alone. Saved at once. */
       raiseCycle(condition = null, base = 0) {
-        cyc.cyclesDone = (cyc.cyclesDone ?? base) + 1;
+        cyc.cyclesDone = (cyc.cyclesDone || base) + 1;   // 0 or none: from `base` (a Phase 3 profile with a finished cycle stored)
         if (condition && CONDITIONS[condition]) cyc.conditionsDone[condition] = (cyc.conditionsDone[condition] ?? 0) + 1;
         saveProfile();
         return { cyclesDone: cyc.cyclesDone, conditionsDone: { ...cyc.conditionsDone } };

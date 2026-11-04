@@ -168,28 +168,32 @@ test('keep walking after the end: the clock stops at 23:59 on day 7, the farm st
 
 // ---------------- Phase 4 (PHASE4.md §3.4): a bad batch's brooding week ----------------
 test('a bad batch: the level counts the claimed chicks apart (2.5 % limit); unclaimed graded-out chicks count as culls and the result says why', () => {
+  // the ideal of goto(auto) (the sim's bad:ideal brooding rounds) grades the six stacks at the table and calls the hatchery
   const L = makeLevel();
   L.level.start({ seed: 1, condition: 'badChicks' });
   assert(L.farm.condition === 'badChicks', 'the condition is on the farm');
   L.level.debug.goto(0, 12, { auto: true });
-  const fl = L.farm.flock, placed = fl.placed || 6000;
-  // the grading at the table (the stub answers 41 culled a stack) and the farm's claim
-  for (let st = 0; st < 4; st++) L.events.emit(EV.ACTION, { id: 'chicks.grade', stack: st, result: { stack: st, looked: 1000, weak: 45, culled: 41, minutes: 6 } });
-  fl.culls = (fl.culls || 0) + 164;
-  const base = L.level.levelDeaths().pct;
-  fl.claimed = 164;
+  const fl = L.farm.flock, placed = fl.placed, claimed = fl.claimed;
+  assert(claimed > 0 && claimed <= fl.culls && fl.gradedOut > 0, `the farm claims the graded-out chicks: claimed ${claimed}, culls ${fl.culls}, graded out ${fl.gradedOut}`);
   const withClaim = L.level.levelDeaths().pct;
-  assert(Math.abs(base - withClaim - (100 * 164) / placed) < 1e-6, `claimed apart: ${base.toFixed(3)} -> ${withClaim.toFixed(3)} %`);
-  assert(L.level.badBatch().gradedOut === 164 && L.level.badBatch().looked === 4000, JSON.stringify(L.level.badBatch()));
+  fl.claimed = 0; const base = L.level.levelDeaths().pct; fl.claimed = claimed;
+  assert(Math.abs(base - withClaim - (100 * claimed) / placed) < 1e-6, `claimed apart: ${base.toFixed(3)} -> ${withClaim.toFixed(3)} %`);
+  const b = L.level.badBatch();
+  assert(b.gradedOut === fl.gradedOut && b.looked >= 5900 && b.called != null, JSON.stringify(b));
   const r = L.level.debug.result();
-  assert(r.mortalityMaxPct === 2.5 && r.claimedApart && r.claimed === 164 && r.weightRatioMin === 4, `the merged limits: ${r.mortalityMaxPct}, claimed ${r.claimed}`);
-  // no claim (the hatchery not told): the 164 are culls of the level; past 2.5 % the fail text names the missing call
+  assert(r.mortalityMaxPct === 2.5 && r.claimedApart && r.claimed === claimed && r.weightRatioMin === 4 && r.hatcheryCalled, `the merged limits: ${r.mortalityMaxPct}, claimed ${r.claimed}`);
+  // no claim (the hatchery not told): four stacks graded by hand at the table, every stack tipped, no call; the
+  // graded-out chicks are culls of the level, past 2.5 % at the day's close, and the fail text names the missing call
   const M = makeLevel();
   M.level.start({ seed: 1, condition: 'badChicks' });
-  M.level.debug.goto(0, 12, { auto: true });
-  for (let st = 0; st < 4; st++) M.events.emit(EV.ACTION, { id: 'chicks.grade', stack: st, result: { stack: st, looked: 1000, weak: 45, culled: 41, minutes: 6 } });
-  M.farm.flock.culls = (M.farm.flock.culls || 0) + 164;
-  M.farm.flock.deadTotal += Math.ceil((M.farm.flock.placed || 6000) * 0.012);
+  M.level.debug.goto(0, 10.05);
+  assert(M.farm.flock.inBoxes > 0, `the late truck has come: ${M.farm.flock.inBoxes} in boxes`);
+  const TIPS = [[-16, -1], [-16, 1], [-10, -1], [-10, 1], [-4, -1], [-4, 1]];
+  for (let st = 0; st < 6; st++) {
+    if (st < 4) M.farm.act('chicks.grade', { stack: st });
+    M.farm.act('chicks.tip', { stack: st, chicks: LEVEL1.chicksPlaced / LEVEL1.stacks, x: TIPS[st][0], z: TIPS[st][1] });
+  }
+  assert(!(M.farm.flock.claimed > 0) && M.level.badBatch().gradedOut > 100, `graded out ${M.level.badBatch().gradedOut}, claimed ${M.farm.flock.claimed}`);
   M.level.debug.goto(1, 21, { auto: true });
   M.records.sign(1);
   const f = M.level.result;

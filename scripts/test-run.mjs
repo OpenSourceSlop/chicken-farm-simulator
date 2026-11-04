@@ -9,16 +9,17 @@
 import { makeWorld } from '../src/farm-profiles-run.js';
 import { createLevel, IDEAL_PLAN } from '../src/level.js';
 import { createRun } from '../src/run.js';
-import { LEVELS, LEVEL1, CONDITIONS, levelById } from '../src/config.js';
+import { LEVELS, LEVEL1, CONDITIONS, CONDITION_IDS, levelById } from '../src/config.js';
 import { EV } from '../src/events.js';
 import { planSums } from '../src/farm-plan.js';
 
 let failed = 0, skipped = 0;
 const ON_STUB = !!process.env.RUN_ON_STUB;
 function test(name, fn) {
+  if (process.env.ONLY && !name.includes(process.env.ONLY)) return;   // ONLY=<part of a name>: one test (debugging)
   const t0 = Date.now();
   try { const r = fn(); if (r === 'skip') { skipped++; console.log(`skip ${name}`); } else console.log(`ok   ${name} (${((Date.now() - t0) / 1000).toFixed(1)} s)`); }
-  catch (err) { failed++; console.log(`FAIL ${name}\n     ${err.message}`); }
+  catch (err) { failed++; console.log(`FAIL ${name}\n     ${err.message}`); if (process.env.TRACE) console.log(err.stack); }
 }
 const assert = (c, msg) => { if (!c) throw new Error(msg); };
 const H = 1 / 24;
@@ -315,7 +316,7 @@ test('Phase 4: the harder flocks are shut before the first full cycle and open a
   assert(!R.run.harderOpen && R.run.conditionsAvailable().every((c) => !c.canStart && !c.open), 'shut before a full cycle');
   assert(R.run.conditionsAvailable().length === 4 && R.run.conditionsAvailable().every((c) => c.label && c.summary), 'four conditions, named');
   const p = R.level.profile.cycles();
-  assert(p.cyclesDone === undefined && JSON.stringify(p.conditionsDone) === '{}', `a Phase 3 profile reads none: ${JSON.stringify(p)}`);
+  assert(!(p.cyclesDone > 0) && JSON.stringify(p.conditionsDone) === '{}', `a Phase 3 profile reads none: ${JSON.stringify(p)}`);
   R.skills.profile.cyclesDone = 1;            // the harness's way (__game.skills.profile.cyclesDone)
   assert(R.run.harderOpen && R.run.conditionsAvailable().every((c) => c.open), 'open after a cycle');
   const was = CONDITIONS.hot.available;
@@ -384,8 +385,28 @@ chain('Phase 4: the same condition on a level row keeps the run; a normal cycle 
   assert(R.farm.condition === 'water' && R.run.state().startedAt === 'cleanout', where(R));
   const r = playLevel(R);
   const sum = R.run.state().summary;
+  assert(r?.pass && sum, `the water clean-out: ${r?.pass} ${r?.failText} · ${where(R)} · summary ${!!sum}`);
   assert(r.pass && sum.condition === 'water' && sum.compare && sum.compare.sold === R.run.state().lastNormal.compare.sold, `the water cycle draws the normal one beside it: ${JSON.stringify(sum?.compare)?.slice(0, 80)}`);
   assert(R.level.profile.cycles().conditionsDone.water === 1 && R.level.profile.cycles().cyclesDone === 2, JSON.stringify(R.level.profile.cycles()));
+});
+
+// integrator (Phase 4 merge): the standard starts under a condition are level.js's goto(auto) with the condition's ideal
+// (the brooding week's condition rounds from the sim's broodStopsCond, Phase 2's profile with the condition's additions)
+chain('Phase 4: every condition\'s ideal passes every level through level.js goto(auto) (what its standard starts play)', (R0) => {
+  for (const cond of CONDITION_IDS) {
+    const R = cond === CONDITION_IDS[0] ? R0 : makeRun(), out = [];
+    R.run.startRun({ seed: 1, at: 'plan', condition: cond });
+    for (let i = 0; i < 8; i++) {
+      const id = R.level.def.id, r = playLevel(R);
+      out.push(`${id} ${r.pass ? 'passes' : r.failText}`);
+      assert(r.pass && R.farm.condition === cond, `${cond}: ${out.join(' · ')}`);
+      if (id === 'cleanout') break;
+      R.run.next();
+    }
+    const s = R.run.state().summary;
+    assert(s && s.condition === cond, `${cond}: the summary names it`);
+    console.log(`     ${cond}: every level passes, ${s.sold ?? '?'} sold, EPEF ${s.epef ?? '?'}`);
+  }
 });
 
 console.log(failed ? `${failed} failed` : `all passed${skipped ? ` (${skipped} skipped: run.stub / farm.cycleStub)` : ''}`);

@@ -54,7 +54,7 @@ export const PICS = {
 /** A painted sign board (sign-*): Phase 2's BOARDS and Phase 3's BOARDS_CYCLE, merged for the day
  *  (boardsForDay: the extra lines from their fromDay; the brooding week reads exactly Phase 2's). */
 export function buildBoardPanel(id, env, onClose) {
-  const boardOf = () => boardsForDay(env.dayNumber, plateCondition())[id] || BOARDS[id];
+  const boardOf = () => boardsForDay(env.dayNumber, plateCondition())[id] || BOARDS[id] || BOARDS_COND[id]; // Phase 4: sign-power
   let b = boardOf(), itemsDay = env.dayNumber;
   const titleId = uniqueId('board-title');
   const many = b.items.length > 5 || !!b.table;

@@ -212,6 +212,7 @@ function start(saved = {}) {
     // Phase 3 (PHASE3.md §15): the run; startLevel({ level }) for a later level is a standard start
     // (stub: level.debug.freeRun to its start); cycleAt(day, hour) = a level-mode farm at any age
     run,
+    condScene,                    // Phase 4: the conditions' scene (rain, the power cut, the machines; its debug hooks)
     audio,                        // Phase 5: settings, state(), debug.measure(opts) (audio-measure.js)
     startRun(opts = {}) { return run.startRun(opts); },
     startLevel(opts = {}) { return opts.level && opts.level !== 'level1' ? run.startLevel(opts.level, opts) : level.start(opts); },

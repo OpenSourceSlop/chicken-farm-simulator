@@ -689,7 +689,7 @@ export const WATER_TANK = { m3: 6, pumpM3h: 1.2, fullPct: 95, startPct: 95, lowP
 // Phase 4 build switches (the integrator sets them at the merges; a harness may set them on __game.config.PHASE4):
 //   tunedSigns  the sign lines of the tuned model (content-signs-cond.js BOARD_P4_ITEMS) in every run; true at the sim
 //               merge, when the model that the lines describe goes live (until then every board reads as Phase 3)
-export const PHASE4 = { tunedSigns: false };
+export const PHASE4 = { tunedSigns: true };
 
 /**
  * The harder replay conditions (PHASE4.md §3-§4), offered after the first full cycle (skills profile cyclesDone)
@@ -718,7 +718,7 @@ export const PHASE4 = { tunedSigns: false };
  */
 export const CONDITIONS = {
   hot: {
-    label: 'Hot season', months: 'April–May', available: false, weather: 'hot', cycleClimateFrom: 'level1',
+    label: 'Hot season', months: 'April–May', available: true, weather: 'hot', cycleClimateFrom: 'level1',
     sun: { fromHour: 11, toHour: 17, perH: 1.5 },     // every afternoon is Phase 2's warm afternoon, in 38 °C air
     summary: 'April–May: afternoons of 37–38 °C with the sun on the roof, nights hardly under 28 °C, a heat wave to about 41 °C in week 5. The cooling pads decide, from the first day.',
     levels: {
@@ -735,7 +735,7 @@ export const CONDITIONS = {
     },
   },
   rainy: {
-    label: 'Rainy season', months: 'August–September', available: false, weather: 'rainy', cycleClimateFrom: 'level1',
+    label: 'Rainy season', months: 'August–September', available: true, weather: 'rainy', cycleClimateFrom: 'level1',
     summary: 'August–September: damp air day and night (about 96 % at dawn), storms every week, wet litter, weak pad cooling and a power cut in week 5 that needs the generator.',
     levels: {
       level1: { problems: [{ id: 'storm-5', day: 5, hour: 14, outsideDrop: 4, rh: 98, storm: true, until: { day: 5, hour: 18 } }] },
@@ -760,7 +760,7 @@ export const CONDITIONS = {
     },
   },
   badChicks: {
-    label: 'A bad batch of chicks', months: '', available: false, cycleClimateFrom: null,
+    label: 'A bad batch of chicks', months: '', available: true, cycleClimateFrom: null,
     summary: 'Chicks from a young parent flock after a long trip: small (about 36 g) and uneven, many weak ones. Grade them, cull the weak, report the batch and brood them closer.',
     levels: {
       level1: {
@@ -780,7 +780,7 @@ export const CONDITIONS = {
     },
   },
   water: {
-    label: 'A water problem', months: '', available: false, cycleClimateFrom: null,
+    label: 'A water problem', months: '', available: true, cycleClimateFrom: null,
     summary: 'Iron in the well water and an old well pump: the filter and the nipples clog, and in week 4 the pump wears and the tank runs low in the afternoons. Find it from the pump\'s gauges, the water meter and the birds.',
     levels: {
       level1: { problems: [{ id: 'iron-water', day: -1, hour: 7 }] },

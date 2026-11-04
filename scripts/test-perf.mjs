@@ -34,5 +34,18 @@ console.log(`calibration loop ${calib.toFixed(0)} ms (about 25-40 ms on the dev 
   check('weeks 4-5: a 24 h skip', best(3, () => w.env.skipHours(24)), 200);
   check('weeks 4-5: farm.step x 300', best(3, () => { for (let i = 0; i < 300; i++) w.farm.step(w.env, 60); }), 150);
 }
+// Phase 4: each condition's ideal through the whole cycle (≤ 15 s) and a 24 h skip in weeks 4-5 under it (≤ 200 ms)
+for (const [cond, name] of [['hot', 'hot:ideal'], ['rainy', 'rainy:ideal'], ['badChicks', 'bad:ideal'], ['water', 'water:ideal']]) {
+  check(`${cond}: the whole cycle (-2 -> 67)`, best(1, () => runCycle(name, { seed: 3, condition: cond })), 15000);
+  const blob = runCycle(name, { seed: 1, from: 'plan', to: 'weeks45', keepStarts: true, condition: cond }).starts.weeks45;
+  const w = makeWorld(), b = JSON.parse(JSON.stringify(blob));
+  w.farm.start(LEVELS[1], { seed: b.farm.seed ?? 1, keepClock: true, condition: cond });
+  for (const [k, v] of Object.entries(b.env)) if (!['maxDay', 'curtainForced', 'cycleClimate', 'fansBroken', 'padWorking', 'fanStages', 'broodersUp'].includes(k)) w.env[k] = v;
+  w.env.setMaxDay(b.env.maxDay); w.env.setDay(Math.round(b.env.day - b.env.hour / 24)); w.env.setHour(b.env.hour);
+  w.farm.restore(b.farm); w.records.restore(b.records); w.skills.restore(b.skills);
+  if (w.farm.condition !== cond) { failed++; console.log(`FAIL ${cond}: the restored farm's condition is ${w.farm.condition}`); }
+  w.env.skipHours(24);
+  check(`${cond}: weeks 4-5, a 24 h skip`, best(3, () => w.env.skipHours(24)), 200);
+}
 console.log(failed ? `${failed} failed` : 'all passed');
 process.exit(failed ? 1 : 0);

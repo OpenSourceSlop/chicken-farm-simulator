@@ -390,7 +390,12 @@ function answerProblems(farm, env, act, P, day) {
   if (found('rainy-spell') && !(P.timer === 'day8' && day <= 21)) { const t = signTimer(farm); t.onSec = Math.round(t.onSec * 1.5); act('vent.timer', t); }
   if (found('dusty-air') && P.dustAnswer && !noTunnelOn(P, day)) fansTo(act, env, Math.max(2, env.fansManual), env.padOn);
   if (found('low-silo')) keepFed(farm, env, act, day);
-  if (found('abnormal-deaths')) act('phone.report');
+  if (found('abnormal-deaths')) {
+    act('phone.report');
+    // week 3's deaths up with no cause seen yet: the droppings of ten birds again (blood in them: the vet and the medicine
+    // on the next round). The day-19 check can come before the blood shows on a dry floor (integrator, Phase 4 merge).
+    if (day >= 19 && day <= 21 && !isState(farm, 'coccidiosis', 'found') && !isState(farm, 'coccidiosis', 'fixed')) for (let i = 0; i < 10; i++) { const [x, z] = SPOTS[i % 6]; act('sample.bird', { x, z, index: 20 + i, look: 'droppings' }); }
+  }
   const m = farm.health.medication;
   if (m.on && m.onH >= 72) act('water.medicate', { on: false });
   if (P.condition) condAnswer(farm, env, act, P);

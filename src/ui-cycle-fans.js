@@ -1,8 +1,8 @@
 // The fan panel (east end, north wall) and the cooling pad pump (outside the west end): PHASE3.md §1 Week 3
 // to the catch, §6.3, §13.3. Package "panels". House °C and humidity side by side, six fan switches with
 // their lamps and air vanes (a lamp on with a still vane: no air from that fan), the pad pump, the air
-// speed. Open 2 s = fans.read (once per opening). Unlocks: windChill (the Birds feel readout: Phase 4, the model's felt
-// temperature farm.comfort.feltMean, the wind chill and the damp named under it),
+// speed. Open 2 s = fans.read (once per opening). Birds feel (always, Phase 4: the model's felt
+// temperature farm.comfort.feltMean); unlocks: windChill (the wind chill and the damp named under Birds feel),
 // tunnelStages (the stage table, vent.stages), fanChart (24 hours of fans, pad and house).
 import { FAN_COUNT } from './config.js';
 import { h, button, setText, fmt1, fmt0 } from './ui-dom.js';
@@ -44,7 +44,7 @@ export function buildFanPanel(api) {
   const { env, skills } = L;
   const shell = equipShell({ cls: 'equip--fans', icon: ICONS.fan, title: 'Fan panel', sub: 'Six tunnel fans · pad pump · air at bird height', plates: ['fan-panel'], signLinks: ['sign-heat'], onClose: L.close });
   const lcd = climateLcd(env, [['Air at birds', 'm/s'], ['Outside', '°C']]);
-  // Wind chill (unlock): what the birds feel in the moving air, with the cooling as a plain offset (no minus sign).
+  // Birds feel: what the birds feel in the moving air (always); its parts under it are the wind chill unlock.
   const chill = lcdCell('Birds feel', '°C');
   chill.el.classList.add('cyc-windchill', 'lcd-cell--wide');
   const chillSub = h('span', { class: 'lcd-sub' });
@@ -112,12 +112,14 @@ export function buildFanPanel(api) {
   function refresh() {
     const broken = env.fansBroken || [], manual = env.fansManual ?? env.fansOn;
     lcd.set([fmt1(env.houseTemp), fmt0(env.houseRH), fmt1(env.airSpeed ?? 0), fmt1(env.outsideTemp)]);
+    // Birds feel = the model's felt temperature (the damp included), always shown: the heat sign's panting line reads
+    // it ("felt: the fan panel's Birds feel reading", integrator's choice at the Phase 4 merge). The wind chill unlock
+    // (Heat & Ventilation level 1) is the line under it: how many degrees the moving air takes off, the damp, the floor.
     const showChill = !!skills?.unlocked?.('windChill');
-    chill.el.hidden = !showChill;
+    const f = birdsFeel(env, L.farm);
+    setText(chill.value, fmt1(f.felt));
+    chillSub.hidden = !showChill;
     if (showChill) {
-      // Birds feel = the model's felt temperature (the damp included); the line under it names its parts
-      const f = birdsFeel(env, L.farm);
-      setText(chill.value, fmt1(f.felt));
       const parts = [f.chill > 0.05 ? `wind chill ${fmt1(f.chill)} °C cooler in ${fmt1(env.airSpeed ?? 0)} m/s air` : 'still air: no wind chill',
         f.damp > 0.05 ? `damp air +${fmt1(f.damp)} °C at ${fmt0(env.houseRH)} % humidity` : null,
         Math.abs(f.rest) > 0.15 ? `the floor and the walls ${f.rest > 0 ? '+' : '−'}${fmt1(Math.abs(f.rest))} °C` : null].filter(Boolean);

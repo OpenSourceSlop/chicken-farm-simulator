@@ -87,6 +87,8 @@ export function buildGenerator(api) {
   shell.main.append(top, state, shell.timeNote.el, h('div', { class: 'ctrl-rows' }, engine.el, sw.el, test.el, fuel.el));
 
   function leverNow() {
+    // the farm's transfer switch position (farm.power.switch: what the switch feeds the house from, kept in the save)
+    if (P().switch === 'generator' || P().switch === 'mains') return P().switch;
     const s = P().source;
     if (s === 'generator' || s === 'mains') return s;
     return lever || 'mains';
