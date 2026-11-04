@@ -21,7 +21,8 @@ export const MENU_ID = 'menu';
 const MENU_CSS = `
 .menu { --p5-w: 440px; }
 .menu-head { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; padding-right: 92px; }
-.menu-head .icon { font-size: 26px; color: var(--accent); grid-row: span 2; }
+.menu-head .menu-icon { grid-row: span 2; align-self: start; font-size: 26px; line-height: 1; color: var(--accent); }
+.menu-head h2, .menu-where { grid-column: 2; }
 .menu-head h2 { margin: 0; }
 .menu-where { margin: 0; color: var(--ink-dim); font: 600 13px/1.35 var(--font-display); letter-spacing: 0.03em; }
 .menu-note { margin: 10px 0 12px; color: var(--ink-dim); font-size: 13px; line-height: 1.45; }
@@ -63,7 +64,7 @@ export function createGameMenu({ register, openPanel, closePanel, events = null,
     list = h('ul', { class: 'menu-list' });
     const whereLine = h('p', { class: 'menu-where' });
     el.append(h('div', { class: 'menu-case card' },
-      h('header', { class: 'menu-head' }, h('span', { html: ICONS.gear, 'aria-hidden': 'true' }), h('h2', { id: titleId }, 'Paused'), whereLine),
+      h('header', { class: 'menu-head' }, h('span', { class: 'menu-icon', html: ICONS.gear, 'aria-hidden': 'true' }), h('h2', { id: titleId }, 'Paused'), whereLine),
       h('p', { class: 'menu-note' }, 'The farm clock stands still while this menu is open.'),
       list), closeBtn);
     menuWhere = () => { let t = ''; try { t = where?.() || ''; } catch { t = ''; } setText(whereLine, t); whereLine.hidden = !t; };
