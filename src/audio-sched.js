@@ -3,7 +3,7 @@
 // so nothing ever falls into a beat; pitch, length, timbre and place vary on every call.
 // Rate limits run on the audio clock: a burst of game steps in one task (the harness's advance(), a
 // skip) never stacks sounds up, because the clock has not moved and the voices are still busy.
-import { dbToGain, LEVELS, nextGap, pick, range, lerp, nearWeight, birdRate, distantRates } from './audio-mix.js';
+import { dbToGain, gainToDb, LEVELS, nextGap, pick, range, lerp, nearWeight, birdRate, distantRates } from './audio-mix.js';
 import * as V from './audio-voices.js';
 
 // Peak level of one event over its layer's LEVELS (dB): calibrated with scripts/p5-sound.json so the
@@ -39,18 +39,19 @@ export function createScheduler({ pools, E, S, rng, pan, note = () => {} }) {
   function flockEvent(kind, t, M) {
     const d = source();
     if (d < 0) return;
-    let ok = false;
     const w = nearWeight(d), p = pan(B.x - S.x, B.z - S.z);
     const near = 0.3 + 0.7 * Math.sqrt(w), age = M.age, P = pools.flock;
+    let ok = false, rel = near;
     if (kind === 'chirp') { // contented calls: habituated (M.habit) after a minute among a calm flock
       const h = near * (M.habit ?? 1);
+      rel = h;
       if (age > 0.55 && rng() < (age - 0.55) / 0.45) ok = V.cluck(P, t, peak('cluck', 'flock') * h, p, range(rng, 360, 470), rng);
       else ok = V.chirp(P, t, peak('chirp', 'flock') * h, p, lerp(3900, 2400, Math.min(1, age / 0.55)), rng);
     } else if (kind === 'distress') ok = V.distressPeep(P, t, peak('distress', 'distress') * near, p, lerp(4100, 1900, age), rng);
     else if (kind === 'snick') ok = V.snick(P, t, peak('snick', 'snick') * near, p, rng);
     else if (kind === 'rattle') ok = V.rattle(P, t, peak('rattle', 'snick') * near, p, rng);
     else if (kind === 'flutter') ok = V.flutter(P, t, peak('flutter', 'pant') * near, p, rng);
-    if (ok) note(kind, t);
+    if (ok) note(kind, t, -1, gainToDb(rel)); // its gain against the nominal (the hour check's level table)
   }
 
   function sing(at, first) {
@@ -60,7 +61,7 @@ export function createScheduler({ pools, E, S, rng, pan, note = () => {} }) {
     if (bird.kind === 0) ok = V.twitter(P, at, peak('twitter', 'birds') * g, bird.pan, rng);
     else if (bird.kind === 1) ok = V.bulbul(P, at, peak('bulbul', 'birds') * g, bird.pan, rng);
     else ok = V.dove(P, at, peak('dove', 'birds') * g, bird.pan, rng);
-    if (ok && first) note('bird', at, bird.kind); // a phrase's first call (its repeats from the same branch follow it)
+    if (ok && first) note('bird', at, bird.kind, gainToDb(g)); // a phrase's first call (its repeats from the same branch follow it)
   }
 
   return {
@@ -83,7 +84,7 @@ export function createScheduler({ pools, E, S, rng, pan, note = () => {} }) {
             u.burst = expo(rng);
             const x = burst.x + range(rng, -1, 1), z = burst.z + range(rng, -1, 1);
             const d = Math.hypot(x - S.x, z - S.z), g = peak('burst', 'flock') * A.flockAtten / (1 + d / 6);
-            if (V.chirp(pools.flock, t, g, pan(x - S.x, z - S.z), range(rng, 3600, 4300), rng)) note('burst', t);
+            if (V.chirp(pools.flock, t, g, pan(x - S.x, z - S.z), range(rng, 3600, 4300), rng)) note('burst', t, -1, gainToDb(g / peak('burst', 'flock')));
           }
         }
       }

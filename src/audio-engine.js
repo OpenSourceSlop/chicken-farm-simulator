@@ -5,7 +5,7 @@
 //   buses: outside (low-pass: muffled inside) · house · flock (low-pass and attenuation through the
 //   walls) · cues; each -> its layer gain -> master (the volume) -> soft clipper -> destination, and a
 //   send to one shared room reverb.
-import { makeRng, dbToGain, LEVELS, indoorness, ambientTargets, flockLoudness, flockMix, surfaceAt,
+import { makeRng, dbToGain, gainToDb, LEVELS, indoorness, ambientTargets, flockLoudness, flockMix, surfaceAt,
   createStepTracker, stepHabituation, flockHabituation, flockSignature } from './audio-mix.js';
 import { noiseBuffers, noiseSource, roomImpulse, clipperCurve, makeWaves, voicePool, gainNode, biquad, toward } from './audio-synth.js';
 import { buildBeds } from './audio-beds.js';
@@ -128,8 +128,8 @@ export function createEngine(ac, opts = {}) {
     const t = Math.max(now + look, lastAt[i] + gap);
     if (t > now + 0.6) return; // a flood of one kind (goto, a skip): the rest are dropped
     if (!on.cues || !lim.allow(name, t)) return; // a silent layer schedules nothing; the per-minute caps (PHASE5.md §2.2)
-    let g = dbToGain(LEVELS[lv] + db), p = 0;
-    if (Number.isFinite(x)) { const dx = x - S.x, dz = z - S.z; p = pan(dx, dz); g /= 1 + Math.hypot(dx, dz) / 6; }
+    let g = dbToGain(LEVELS[lv] + db), p = 0, rel = 0;
+    if (Number.isFinite(x)) { const dx = x - S.x, dz = z - S.z, k = 1 + Math.hypot(dx, dz) / 6; p = pan(dx, dz); g /= k; rel = -gainToDb(k); }
     const P = pools.cues;
     let ok = false;
     switch (name) {
@@ -150,7 +150,7 @@ export function createEngine(ac, opts = {}) {
       case 'pen': ok = C.pen(P, t, g, rng); break;
       case 'clunk': ok = C.clunk(P, t, g, rng); break;
     }
-    if (ok) { lastAt[i] = t; note(name, t); }
+    if (ok) { lastAt[i] = t; note(name, t, -1, rel); }
   }
 
   /** calibration (audio-measure opts.calibrate): every bed silent but `name`, which plays at gain 1 */

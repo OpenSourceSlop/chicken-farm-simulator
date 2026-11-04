@@ -3,7 +3,7 @@
 // twice), thunder (flash-driven: createThunderPlanner, shared with the captions so both hear the same rumble), the power
 // cut's alarm with its growing gap, the generator's start / stop on the machine bed, the ear's habituation to the crew and
 // the generator. Every event goes through the per-minute caps (audio-limit.js) and is logged for the hour check.
-import { dbToGain, nextGap, pick, range, lerp, smooth, clamp } from './audio-mix.js';
+import { dbToGain, gainToDb, nextGap, pick, range, lerp, smooth, clamp } from './audio-mix.js';
 import { PLACES, CAPS, machineOwner, dayCicadas, dripRate, thunderOf, THUNDER_TIMER, alarmGap, ALARM, deskFanTarget,
   crewTarget, crateRate, wallDistance, MACHINES } from './audio-rules.js';
 import { VARIANTS } from './audio-cues.js';
@@ -116,7 +116,7 @@ export function createScenes({ pools, machines, S, rng, pan, lim }) {
         if (p.t > t + 0.05) continue;
         pend.splice(i, 1);
         const ang = rng() * Math.PI * 2;
-        if (on.out && machines.thunder(Math.max(p.t, t), p, peak('thunder'), !!S.inside, pan(Math.cos(ang), Math.sin(ang)), p.v)) lim.note('thunder', Math.max(p.t, t), p.v, EVENT5_DB.thunder, p.delay);
+        if (on.out && machines.thunder(Math.max(p.t, t), p, peak('thunder'), !!S.inside, pan(Math.cos(ang), Math.sin(ang)), p.v)) lim.note('thunder', Math.max(p.t, t), p.v, gainToDb((S.inside ? 0.5 : 1) * (p.near ? 1 : 0.5)), p.delay);
       }
       // drips off the eaves (outside, within 6 m of a wall, after the rain)
       const dr = on.out ? dripRate(S) : 0;
@@ -125,7 +125,7 @@ export function createScenes({ pools, machines, S, rng, pan, lim }) {
         if (lim.allow('drip', t)) {
           const B = HOUSE_BOUNDS, x = clamp(S.x + range(rng, -4, 4), B.xMin, B.xMax), z = S.z > 0 ? B.zMax + 0.6 : B.zMin - 0.6;
           const v = pick(rng, VARIANTS.drip, last.drip), g = peak('drip') * range(rng, 0.6, 1) / (1 + wallDistance(S.x, S.z, false) / 4);
-          if (C.drip(pools.out, t, g, pan(x - S.x, z - S.z), v, rng)) { last.drip = v; lim.note('drip', t, v, EVENT5_DB.drip); }
+          if (C.drip(pools.out, t, g, pan(x - S.x, z - S.z), v, rng)) { last.drip = v; lim.note('drip', t, v, gainToDb(g / peak('drip'))); }
         }
       }
       // crate clacks near the crew and the panels
@@ -136,7 +136,7 @@ export function createScenes({ pools, machines, S, rng, pan, lim }) {
           const cx = Number.isFinite(S.crewX) ? S.crewX : PLACES.catchPanels.x, cz = Number.isFinite(S.crewZ) ? S.crewZ : PLACES.catchPanels.z;
           const x = cx + range(rng, -2, 2), z = cz + range(rng, -1.5, 1.5), d = Math.hypot(x - S.x, z - S.z);
           const v = pick(rng, VARIANTS.crate, last.crate), g = peak('crate') * range(rng, 0.6, 1) / (1 + d / 5);
-          if (C.crate(pools.cues, t, g, pan(x - S.x, z - S.z), v, rng)) { last.crate = v; lim.note('crate', t, v, EVENT5_DB.crate); }
+          if (C.crate(pools.cues, t, g, pan(x - S.x, z - S.z), v, rng)) { last.crate = v; lim.note('crate', t, v, gainToDb(g / peak('crate'))); }
         }
       }
       // the controller's alarm in a dark house: every 6 s for the first two minutes, then every 15 s, never stopping
@@ -148,7 +148,7 @@ export function createScenes({ pools, machines, S, rng, pan, lim }) {
           const P = PLACES.controller, d = Math.hypot(S.x - P.x, S.z - P.z);
           if (on.cues && d < 30 && lim.allow('alarm', t, dark >= ALARM.lateAfter + 60)) {
             const g = peak('alarm') / (1 + d / 6);
-            if (C.alarm2(pools.cues, t, g, at(P))) lim.note('alarm', t, -1, EVENT5_DB.alarm, dark);
+            if (C.alarm2(pools.cues, t, g, at(P))) lim.note('alarm', t, -1, gainToDb(g / peak('alarm')), dark);
           }
         }
       } else darkAt = -1;
@@ -160,7 +160,7 @@ export function createScenes({ pools, machines, S, rng, pan, lim }) {
         if (on.cues && t >= genCueAt + 2 && lim.allow(kind, t)) {
           genCueAt = t;
           const g = dbToGain(run ? -30 : -34) * Math.exp(-Math.hypot(S.x - PLACES.generator.x, S.z - PLACES.generator.z) / 20) * (S.inside ? 0.4 : 1);
-          if ((run ? C.crank : C.genStop)(pools.cues, t, g, rng)) lim.note(kind, t, -1, run ? -30 : -34);
+          if ((run ? C.crank : C.genStop)(pools.cues, t, g, rng)) lim.note(kind, t, -1, gainToDb(g / dbToGain(run ? -30 : -34)));
         }
       }
       lastGen = run;
@@ -169,7 +169,7 @@ export function createScenes({ pools, machines, S, rng, pan, lim }) {
     /** a footfall at t on `surface`: the scraper scrapes on the litter, the washer's hiss rises with the step */
     step(t, surface, on) {
       if (S.washer === 2) machines.stepPulse(t);
-      if (on.cues && S.scraper && surface === 'litter' && C.scrape(pools.cues, t + 0.01, dbToGain(-34), rng)) lim.note('scrape', t, -1, -34);
+      if (on.cues && S.scraper && surface === 'litter' && C.scrape(pools.cues, t + 0.01, dbToGain(-34), rng)) lim.note('scrape', t, -1, 0);
     },
     get pending() { return pend.length; },
   };

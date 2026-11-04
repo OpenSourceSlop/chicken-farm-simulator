@@ -1,98 +1,68 @@
-// Sound layer, the controls: a speaker button at the end of the time bar (bottom left) that opens a
-// small card with Sound on / off and a volume slider, and a "U  Sound on or off" row in both controls
-// legends. Built from here into the HUD that ui.js made (no edit to ui.js); styles are injected once.
-// The values live in audio-settings.js (the Phase 5 settings menu can drive the same store).
+// Sound layer, the speaker key (PHASE5.md §2.5): the last key of the time bar, a one-click sound on / off whose icon and
+// label say the state (U still toggles: keys.js 'sound'); Shift+click opens Settings -> Sound, which holds the volume and
+// the three layer sliders. The Phase 4 sound card (#sound-pop) is gone and the controls legend draws its U row from
+// keys.js (the experience package). Mounted into the HUD ui.js built (no edit to ui.js); its looks in #sound-ui-style.
 import { SOUND_KEY } from './audio-settings.js';
 
+const STYLE_ID = 'sound-ui-style';
 const CSS = `
 .sound-btn .icon { font-size: 18px; }
 .sound-btn.is-muted { color: var(--ink-faint); }
-.sound-pop { width: 248px; padding: 10px 12px 11px; }
-.sound-pop[hidden] { display: none; }
-.sound-pop-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
-.sound-pop-head h2 { margin: 0; font-size: 12px; color: var(--ink); }
-.sound-pop-head .btn { margin-left: auto; min-height: 28px; padding: 4px 10px; font-size: 12px; }
-.sound-vol { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-dim); }
-.sound-vol input { width: 100%; accent-color: var(--accent); }
-.sound-vol output { min-width: 30px; text-align: right; font: 600 12px/1 var(--font-display); color: var(--ink); }
-.sound-note { margin: 8px 0 0; font-size: 12px; line-height: 1.35; color: var(--ink-faint); }
+.sound-btn.is-muted .icon { opacity: 0.85; }
+.sound-btn .sound-off-bar { stroke: var(--warn, #e2a33a); }
 `;
 const svg = (body) => `<svg class="icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 const SPEAKER = '<path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/>';
 const ICON_ON = svg(`${SPEAKER}<path d="M15.5 9.2a4 4 0 0 1 0 5.6"/><path d="M18 6.8a7.5 7.5 0 0 1 0 10.4"/>`);
-const ICON_OFF = svg(`${SPEAKER}<path d="M16 9.5l5 5M21 9.5l-5 5"/>`);
+const ICON_OFF = svg(`${SPEAKER}<path class="sound-off-bar" d="M16 9.5l5 5M21 9.5l-5 5"/>`);
 
-function el(tag, attrs, ...kids) {
-  const e = document.createElement(tag);
-  for (const k of Object.keys(attrs || {})) {
-    if (k === 'class') e.className = attrs[k];
-    else if (k === 'html') e.innerHTML = attrs[k];
-    else e.setAttribute(k, attrs[k]);
-  }
-  for (const c of kids) if (c != null) e.append(c);
-  return e;
-}
-
-export function createSoundUI(settings, { unlock } = {}) {
-  if (!document.getElementById('sound-ui-style')) {
-    const st = el('style', { id: 'sound-ui-style' });
+/**
+ * settings: the sound view (volume, muted, toggleMute, subscribe); opts: { unlock(), keys (keys.js: the live label of
+ * 'sound'), openSettings(tab), fresh() (true when this very press started the sound: it stays on) }
+ */
+export function createSoundUI(settings, { unlock, keys, openSettings, fresh } = {}) {
+  if (!document.getElementById(STYLE_ID)) {
+    const st = document.createElement('style');
+    st.id = STYLE_ID;
     st.textContent = CSS;
     document.head.appendChild(st);
   }
-  const btn = el('button', { type: 'button', class: 'btn btn--icon sound-btn', 'aria-expanded': 'false', 'aria-controls': 'sound-pop' });
-  const mute = el('button', { type: 'button', class: 'btn sound-mute' });
-  const slider = el('input', { type: 'range', min: '0', max: '100', step: '1', 'aria-label': 'Sound volume' });
-  const shown = el('output', { 'aria-hidden': 'true' });
-  const pop = el('section', { class: 'card sound-pop', id: 'sound-pop', 'aria-labelledby': 'sound-pop-title', hidden: '' },
-    el('div', { class: 'sound-pop-head' }, el('h2', { class: 'label', id: 'sound-pop-title' }, 'Sound'), mute),
-    el('label', { class: 'sound-vol' }, el('span', null, 'Volume'), slider, shown),
-    el('p', { class: 'sound-note' }, `Quiet farm sounds: the yard, the house's machines and the flock. ${SOUND_KEY.label} turns them on and off.`));
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn--icon sound-btn';
+  btn.dataset.sound = 'toggle';
+  const keyLabel = () => { try { return keys?.label?.('sound') || SOUND_KEY.label; } catch { return SOUND_KEY.label; } };
 
   function refresh() {
-    const { volume, muted } = settings.state();
+    const muted = !!settings.muted, k = keyLabel();
     btn.innerHTML = muted ? ICON_OFF : ICON_ON;
     btn.classList.toggle('is-muted', muted);
-    const label = muted ? `Sound is off: open the sound controls (${SOUND_KEY.label})` : `Sound is on: open the sound controls (${SOUND_KEY.label})`;
-    btn.setAttribute('aria-label', label);
-    btn.title = `Sound (${SOUND_KEY.label})`;
-    mute.textContent = muted ? 'Sound on' : 'Sound off';
-    mute.setAttribute('aria-pressed', String(muted));
-    const v = String(Math.round(volume * 100));
-    if (slider.value !== v) slider.value = v;
-    shown.textContent = v;
+    btn.dataset.state = muted ? 'off' : 'on';
+    btn.setAttribute('aria-label', muted ? `Sound is off (${k}): click to turn it on, Shift+click for the sound settings`
+      : `Sound is on (${k}): click to turn it off, Shift+click for the sound settings`);
+    btn.title = muted ? `Sound off (${k}) · Shift+click: sound settings` : `Sound on (${k}) · Shift+click: sound settings`;
   }
-  const open = (on) => { pop.hidden = !on; btn.setAttribute('aria-expanded', String(on)); };
-  btn.addEventListener('click', (e) => { unlock?.(); open(pop.hidden); if (e.detail > 0) btn.blur(); });
-  mute.addEventListener('click', (e) => { unlock?.(); settings.toggleMute(); if (e.detail > 0) mute.blur(); });
-  slider.addEventListener('input', () => { unlock?.(); settings.set({ volume: +slider.value / 100, muted: false }); });
-  slider.addEventListener('change', () => slider.blur());
-  const onDocDown = (e) => { if (!pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) open(false); };
-  const onKey = (e) => { if (e.key === 'Escape' && !pop.hidden) open(false); };
-  document.addEventListener('pointerdown', onDocDown, true);
-  window.addEventListener('keydown', onKey);
+  btn.addEventListener('click', (e) => {
+    const started = fresh?.() === true;
+    unlock?.();
+    if (e.shiftKey) { openSettings?.('sound'); }
+    else if (!(started && !settings.muted)) settings.toggleMute(); // the press that started the sound leaves it playing
+    if (e.detail > 0) btn.blur();
+  });
   const off = settings.subscribe(refresh);
+  const offKeys = keys?.subscribe ? keys.subscribe(refresh) : null;
   refresh();
 
-  // mount into the HUD ui.js built: the time bar's end, the card above it, a row in each controls legend
+  // mount at the end of the time bar ui.js built (after the map and gear keys: the speaker mounts last)
   let tries = 0, raf = 0;
   function mount() {
     const bar = document.querySelector('#hud .timebar');
     if (!bar) { if (++tries < 120) raf = requestAnimationFrame(mount); return; }
     bar.appendChild(btn);
-    bar.parentElement?.insertBefore(pop, bar);
-    for (const list of document.querySelectorAll('#hud .help-list')) {
-      if (list.querySelector('.sound-help')) continue;
-      list.append(el('dt', { class: 'sound-help' }, el('kbd', { class: 'kbd' }, SOUND_KEY.label)), el('dd', { class: 'sound-help' }, 'Sound on or off'));
-    }
   }
   mount();
   return {
-    button: btn, card: pop, refresh,
-    dispose() {
-      cancelAnimationFrame(raf); off();
-      document.removeEventListener('pointerdown', onDocDown, true);
-      window.removeEventListener('keydown', onKey);
-      btn.remove(); pop.remove();
-    },
+    button: btn, refresh,
+    dispose() { cancelAnimationFrame(raf); off(); offKeys?.(); btn.remove(); },
   };
 }
