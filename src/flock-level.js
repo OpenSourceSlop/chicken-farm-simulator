@@ -10,7 +10,7 @@
 // Events: listens to farm:death (lay dead birds) and farm:placed (placeBatch); emits bird:pick,
 // bird:release, dead:pick. Providers: 'chick' and 'sick-bird' (5), 'dead-bird' (6).
 import { EV } from './events.js';
-import { ACT, COLD, HOT } from './flock-state.js';
+import { ACT, COLD, HOT, makeRand } from './flock-state.js';
 import { ST } from './flock-pop.js';
 import { createAccess, refreshAccess, thinkSick, updateSick } from './flock-sick.js';
 import { createDeadBirds } from './flock-dead.js';
@@ -53,6 +53,12 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
 
   // ---- events ----
   const ev = ctx.events;
+  /** A level start or a saved start always draws the same flock: the drawn birds' generator restarts from the
+   *  level seed and the minute of the farm clock (it ran on from page load before, frame by frame). */
+  function reseed() {
+    const seed = ((ctx.farm?.seed ?? 1) * 2654435761 + Math.round((ctx.env?.day ?? 0) * 1440) * 40503) >>> 0;
+    S.rand = makeRand(seed || 1);
+  }
   if (ev) {
     ev.on(EV.FARM_DEATH, (p) => { if (isLevel()) { sync(); dead.add(Math.max(0, Math.round(p?.n ?? 1)), p?.cause); } });
     ev.on(EV.FARM_PLACED, (p) => { if (isLevel()) { sync(); pop.placeBatch(p?.x ?? -10, p?.z ?? 0, p?.chicks ?? 0); } });
@@ -138,6 +144,7 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
     },
     placeBatch(x, z, chicks) { if (isLevel()) { sync(); pop.placeBatch(x, z, chicks); } },
     resetLevel() {
+      reseed();
       if (isLevel()) { S.levelMode = false; switchMode(true); return; }
       catcher.clear(); dead.clear();
     },
@@ -147,6 +154,7 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
     },
     restore(d) {
       if (!d || d.v !== 1) return;
+      reseed();
       if (isLevel()) { S.levelMode = false; switchMode(true); } // fresh floor, birds from the counts
       pop.aheadOfCount = +d.ahead || 0;
       pop.batchBirds = d.batch | 0;

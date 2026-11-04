@@ -34,9 +34,10 @@ const even = (a, b) => { const o = []; for (let d = a; d <= b; d += 2) o.push(d)
 //                 the pad runs (or is off with house RH > HEAT.padOffAboveRH), for 30 game min: met by doing what the
 //                 heat sign and the pad plate say, even while the weather still makes some birds pant
 //   pad-humid-ok  (pad off, or house RH <= HEAT.padOffAboveRH) and env.fansEffective >= 5, for 30 game min
+//   dark-period   the light program gives a dark block of at least 4 hours (the light sign: about 4-6 hours)
 export const STATE_TEST_IDS_CYCLE = ['house-ready', 'rh-under', 'lame-cleared', 'vaccine-drunk', 'pans-grower', 'pans-finisher',
   'caked-cleared', 'air-clear', 'heat-handled', 'pad-humid-ok', 'house-empty', 'litter-removed', 'house-washed',
-  'house-disinfected', 'house-dry', 'lines-disinfected', 'rest-done'];
+  'house-disinfected', 'house-dry', 'lines-disinfected', 'rest-done', 'dark-period'];
 const SWABS = { type: 'each', id: 'clean.swab', key: 'spot', values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] }; // config CLEAN.swabSpots
 
 export const JOBS_CYCLE = [
@@ -53,10 +54,10 @@ export const JOBS_CYCLE = [
   D('pl-record', -2, 'eve', 'Sign the plan page at the office', { spot: 'officeDesk', signs: [], branch: null, done: SIGNED }),
 
   // ---------------- Level 3: Week 2 (days 8-14) ----------------
-  D('w2-lights', 8, 'am', 'Set the light program for the growing birds', { spot: 'controller', signs: ['controller-lights', 'sign-light'], branch: 'lighting', done: A('light.program') }),
+  D('w2-lights', 8, 'am', 'Set the light program for the growing birds', { spot: 'controller', signs: ['controller-lights', 'sign-light'], branch: 'lighting', done: ALL(ANY('light.program', 'light.preset'), ST('dark-period')) }),
   D('w2-lux', 8, 'am', 'Measure the light at bird level (L)', { spot: 'signLight', signs: ['sign-light'], branch: 'lighting',
     done: { type: 'count', id: 'light.lux', n: 3, sectors: 3, sectorsOf: 'used' } }),
-  R('r-minvent', [8, 20], 'am', 'Step up the minimum ventilation for the birds’ weight', { onDays: even(8, 20), spot: 'controller', signs: ['sign-vent'], branch: 'moisture', done: A('vent.timer') }),
+  R('r-minvent', [8, 20], 'am', 'Step up the minimum ventilation for the birds’ weight', { onDays: even(8, 20), spot: 'controller', signs: ['sign-vent'], branch: 'moisture', done: A('vent.timer', { result: { stepUp: true } }) }),
   D('w2-ready', 9, 'pm', 'Get the rest of the house ready for the birds', { spot: 'litterHeap', signs: ['sign-curtain', 'sign-litter'], branch: 'brooding', done: ST('house-ready') }),
   D('w2-curtain', 9, 'pm', 'Lift the brooding curtain and let the birds spread', { window: [13, 66], pin: true, spot: 'curtainWinch', signs: ['sign-curtain'], branch: 'brooding',
     done: A('house.curtain', { open: true }) }),
@@ -71,7 +72,7 @@ export const JOBS_CYCLE = [
   P('p-damp', 'The air in the house feels damp', { problem: 'rainy-spell', spot: 'controller', signs: ['sign-vent', 'sign-air'], branch: 'moisture',
     done: ALL(ANY('vent.timer', 'vent.fans'), ST('rh-under')) }),
   P('p-lame', 'Birds that cannot walk well', { problem: 'lame-birds', spot: 'lame', signs: ['sign-legs'], branch: 'biosecurity', done: ST('lame-cleared') }),
-  P('p-sds', 'Big birds found dead on their backs', { problem: 'sudden-deaths', spot: 'controller', signs: ['sign-light', 'controller-lights'], branch: 'lighting', done: A('controller.read') }),
+  P('p-sds', 'Big birds found dead on their backs', { problem: 'sudden-deaths', spot: 'controller', signs: ['sign-light', 'controller-lights'], branch: 'lighting', done: ALL(A('controller.read'), ST('dark-period')) }),
 
   // ---------------- Level 4: Week 3 (days 15-21) ----------------
   D('w3-change', 15, 'am', 'Change the feed lines to grower pellets', { window: [6, 42], pin: true, spot: 'silo', signs: ['sign-feed', 'silo', 'feeder-box'], branch: 'feed', done: ST('pans-grower') }),
@@ -115,7 +116,8 @@ export const JOBS_CYCLE = [
 
   // ---------------- Level 6: Finishing and harvest (days 36-42) ----------------
   D('f-order', 36, 'am', 'Order the last feed for the flock', { window: [6, 16], spot: 'officeDesk', signs: ['sign-feed', 'silo'], branch: 'planning', done: A('feed.order') }),
-  D('f-book', 37, 'am', 'Book the catching crew and the trucks', { window: [6, 66], spot: 'officeDesk', signs: ['sign-catch'], branch: 'planning', done: A('phone.bookCatch', { result: { booked: true } }) }),
+  // to day 39 06:00: the latest catch the crew takes (day 42 06:00) is then still 3 days ahead (sign-catch)
+  D('f-book', 37, 'am', 'Book the catching crew and the trucks', { window: [6, 54], spot: 'officeDesk', signs: ['sign-catch'], branch: 'planning', done: A('phone.bookCatch', { result: { booked: true } }) }),
   D('f-weigh', 40, 'am', 'Weigh sample birds before catching', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
   D('f-withdraw', 41, 'rel', 'Take the feed away before catching', { rel: { anchor: 'catch', fromH: -14, toH: -6 }, spot: 'feederBox', signs: ['sign-feed', 'sign-catch'], branch: 'feed',
     done: A('feed.withdraw', { on: true }) }),

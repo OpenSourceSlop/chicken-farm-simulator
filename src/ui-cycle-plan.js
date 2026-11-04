@@ -4,7 +4,7 @@
 // (plan.send). The company's reply is the run's letter. Unlocks: planningCalc (his sums live, worked by
 // planSums for his decisions), planCarry (the sheet starts from the last cycle's numbers).
 import { PLAN_CONTRACT, CYCLE } from './config.js';
-import { planSums, PLAN_FIELDS } from './farm-plan.js';
+import { planSums, PLAN_FIELDS, saleMax } from './farm-plan.js';
 import { h, button, setText, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { equipShell } from './ui-equipment.js';
@@ -21,6 +21,7 @@ const SUM_LINES = [
 const C = PLAN_CONTRACT;
 const TERMS = [
   `${int(C.salePerWeek)} birds for sale every week, about ${one(C.saleKg)} kg live weight`,
+  `the plant takes at most ${int(saleMax(C))} birds a week (${int(C.saleMaxPct - 100)} % over the contract)`,
   `the company counts at least ${C.lossesMinPct} % losses from chick to catching`,
   `at least ${C.restMinDays} days of rest between flocks`,
   `at most ${int(C.houseBirds)} chicks a house (the drinkers and feeders of house 1)`,

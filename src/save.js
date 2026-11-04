@@ -77,6 +77,7 @@ export function createSaveStore({ key = SAVE.key, profileKey = SAVE.profileKey, 
 //                                  day 22 and day 29; without it the latest start of that level)
 //   saveStart(id, day, run, blob)  a level start under `${startPrefix}${id}[.${day}]` (the day only when the level
 //                                  has more than one saved start); quota as save()
+//   clearStart(id, day)            delete one level start
 //   clearStarts(fromId)            delete the starts of that level and of every later one (a replay from the run
 //                                  card truncates the run)
 //   info()                         for the title card: { levelId, day, hour, savedAt, starts: { [levelId]: [day] } } or null
@@ -112,6 +113,8 @@ export function createRunStore({ key = RUN_SAVE.key, startPrefix = RUN_SAVE.star
       return null;
     },
     saveStart(id, day, run, blob) { return write(startKey(id, day), { version, levelId: id, day, savedAt: Date.now(), run, blob }, id); },
+    /** Delete one saved start (weeks 4-5: a replay from day 22 drops the day 29 start). */
+    clearStart(id, day) { remove(startKey(id, day)); },
     clearStarts(fromId) {
       const i0 = LEVELS.findIndex((l) => l.id === fromId);
       if (i0 < 0) return 0;

@@ -69,20 +69,25 @@ export function planSums(plan = {}, houseM2 = plan.houseM2 ?? PLAN_CONTRACT.hous
  * PLAN_CONTRACT.lossesMinPct losses (or the farmer's own figure if it is higher); at least
  * PLAN_CONTRACT.restMinDays days of rest between flocks; at most PLAN_CONTRACT.houseBirds chicks a house
  * (its drinkers and feeders); at most densityMaxKgM2 kg/m² at catching; and at least salePerWeek birds for
- * sale every week. `pass` = every term met. Accepts the decisions (planSums runs on them) or a sent plan's
+ * sale every week, at most saleMaxPct % of it (the plant's room). `pass` = every term met. Accepts the decisions (planSums runs on them) or a sent plan's
  * `{ decisions, sums }`. Nothing here is a verdict: the reply shows each number beside its term.
  * @returns {{ pass: boolean, lossesCountedPct: number, salePerWeek: number, contractPerWeek: number,
  *   densityKgM2: number, densityMaxKgM2: number, restDays: number, restMinDays: number, birdsPerHouse: number,
  *   houseBirds: number, chicksPerWeek: number, overPct: number,
- *   terms: { key: 'salePerWeek'|'density'|'rest'|'houseBirds', value: number, limit: number, met: boolean }[] }}
+ *   terms: { key: 'salePerWeek'|'density'|'rest'|'houseBirds', value: number, limit: number, max?: number, met: boolean }[] }}
  */
+/** The most birds a week the plant takes (the contract letter's line): salePerWeek x saleMaxPct %. */
+export const saleMax = (contract = PLAN_CONTRACT) => Math.round((contract.salePerWeek * (contract.saleMaxPct ?? Infinity)) / 100);
+
 export function planOutcome(plan, houseM2, contract = PLAN_CONTRACT) {
   const decisions = cleanPlan(plan && plan.decisions ? plan.decisions : plan);
   const m2 = houseM2 ?? (plan && plan.sums ? plan.sums.houseM2 : undefined) ?? plan?.houseM2 ?? contract.houseM2Drawings;
   const lossesCountedPct = Math.max(decisions.lossesPct, contract.lossesMinPct);
   const s = planSums({ ...decisions, lossesPct: lossesCountedPct }, m2);
   const terms = [
-    { key: 'salePerWeek', value: s.salePerWeek, limit: contract.salePerWeek, met: s.salePerWeek >= contract.salePerWeek - 1e-9 },
+    // at least the contract's birds a week and at most saleMaxPct of it: the plant has no room for more
+    { key: 'salePerWeek', value: s.salePerWeek, limit: contract.salePerWeek, max: saleMax(contract),
+      met: s.salePerWeek >= contract.salePerWeek - 1e-9 && s.salePerWeek <= saleMax(contract) + 1e-9 },
     { key: 'density', value: s.densityKgM2, limit: contract.densityMaxKgM2, met: s.densityKgM2 <= contract.densityMaxKgM2 + 1e-9 },
     { key: 'rest', value: s.restDays, limit: contract.restMinDays, met: s.restDays >= contract.restMinDays },
     { key: 'houseBirds', value: decisions.birdsPerHouse, limit: contract.houseBirds, met: decisions.birdsPerHouse <= contract.houseBirds },

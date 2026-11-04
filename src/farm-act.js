@@ -28,9 +28,12 @@ export function doAct(farm, env, id, a) {
     }
     case 'vent.timer': {
       const t = { fans: Math.max(0, Math.min(FAN_COUNT, Math.round(a.fans ?? 0))), onSec: Math.max(0, a.onSec ?? 0), cycleSec: Math.max(1, a.cycleSec ?? 300) };
+      // the air the timer gives (fan-seconds per second) beside the setting before: r-minvent counts a step up
+      const air = (v) => (v && v.fans > 0 && v.onSec > 0 ? (v.fans * v.onSec) / Math.max(1, v.cycleSec || 300) : 0);
+      const prevAir = air(farm.vent), nowAir = air(t);
       farm.vent = t;
       env.setVentTimer(t.fans > 0 && t.onSec > 0 ? t : null);
-      return true;
+      return { air: Math.round(nowAir * 1000) / 1000, prevAir: Math.round(prevAir * 1000) / 1000, stepUp: nowAir > 0 && nowAir >= prevAir - 1e-9 };
     }
     case 'light.program': {
       const p = { darkStart: a.darkStart ?? farm.light.darkStart, darkHours: Math.max(0, Math.min(12, a.darkHours ?? farm.light.darkHours)), dimmer: Math.max(0, Math.min(1, a.dimmer ?? farm.light.dimmer)) };

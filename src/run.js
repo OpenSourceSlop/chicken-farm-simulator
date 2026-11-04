@@ -61,6 +61,7 @@ export function keyText(id, key) {
   }
 }
 
+const VACCINE_DAY = 12; // content-jobs-cycle w2-vaccine (the vaccine plate: day 12)
 /** What the model carries from the previous level into this one, as plain record lines (PHASE3.md §10). */
 function carriedLines({ def, farm, levels }) {
   const out = [];
@@ -68,7 +69,13 @@ function carriedLines({ def, farm, levels }) {
   if (!prevDef || def === LEVEL1 || def === PLAN_LEVEL) return out;
   const v = farm.health?.vaccine;
   const vDay = v?.startAt ?? v?.mixedAt ?? v?.thirstFrom;
-  if (v && v.hours != null && v.hours > 2.5 && vDay != null && Math.floor(vDay) >= prevDef.startDay && Math.floor(vDay) <= prevDef.endDay) out.push(`vaccine drunk in ${one(v.hours)} h on day ${Math.floor(vDay)}`);
+  const inPrev = vDay != null && Math.floor(vDay) >= prevDef.startDay && Math.floor(vDay) <= prevDef.endDay;
+  if (v && v.hours != null && v.hours > 2.5 && inPrev) out.push(`vaccine drunk in ${one(v.hours)} h on day ${Math.floor(vDay)}`);
+  else if (v && v.coverage != null && v.coverage < 0.85 && inPrev) out.push(`vaccine reached ${int(v.coverage * 100)} % of the birds on day ${Math.floor(vDay)}`);
+  // the week 2 jobs that the next weeks pay for: the vaccination (day 12) and the curtain (about day 10)
+  if (prev === 'week2' && v && v.state === 'none') out.push(`no vaccine given on day ${VACCINE_DAY}`);
+  else if (prev === 'week2' && v && v.state !== 'drunk') out.push(`the vaccine was not drunk by day ${def.startDay}`);
+  if (prev === 'week2' && farm.house && !farm.house.curtainOpen) out.push(`brooding curtain still down on day ${def.startDay}`);
   const pk = levels[prev]?.key;
   if (pk != null && prev !== 'plan') {
     const wDay = prev === 'level1' ? LEVEL1.endDay : prevDef.target?.day;
@@ -103,7 +110,10 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     for (const k of Object.keys(levels)) delete levels[k];
     Object.assign(levels, clone(d.levels) || {});
   }
-  function saveRun(blob = level.saveBlob()) {
+  /** The run key carries the run beside the blob: the blob's own copy (level.run, for the hot reload) is left out. */
+  const lean = (blob) => (blob && blob.level && blob.level.run ? { ...blob, level: (({ run, ...rest }) => rest)(blob.level) } : blob);
+  function saveRun(full = level.saveBlob()) {
+    const blob = lean(full);
     const d = { version: RUN_SAVE.version, savedAt: Date.now(), run: serialize(), blob };
     memRun = clone(d);
     return store.save(d.run, blob);
@@ -112,7 +122,7 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     const e = entry(id);
     if (!e.starts.includes(day)) e.starts.push(day);
     e.starts.sort((a, b) => a - b);
-    const r = serialize(), blob = level.saveBlob();
+    const r = serialize(), blob = lean(level.saveBlob());
     mem.set(startKey(id, day), clone({ version: RUN_SAVE.version, levelId: id, day, savedAt: Date.now(), run: r, blob }));
     store.saveStart(id, day, r, blob);
   }
@@ -191,6 +201,8 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   function standardStart(id, s) {
     const target = levelById(id);
     const snap = level.profile?.snapshot?.();
+    // the player's own entries of the levels before (attempts, keys): the ideal farmer's play does not replace them
+    const before = Object.fromEntries(RUN_ORDER.slice(0, Math.max(0, RUN_ORDER.indexOf(id))).filter((k) => levels[k]).map((k) => [k, clone(levels[k])]));
     try {
       level.start({ seed: s, run: true });
       started(LEVEL1);
@@ -202,6 +214,10 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
         if (!run.next()) return false;
         cur = levelById(levelId);
       }
+      // a new flock from here: the later levels of the abandoned one and their saved starts are gone
+      clearStarts(nextLevelId(id));
+      for (const [k, v] of Object.entries(before)) levels[k] = { ...v, starts: [...new Set([...(v.starts || []), ...(levels[k]?.starts || [])])].sort((a, b) => a - b) };
+      saveRun();
       return true;
     } finally { if (snap) level.profile.restore(snap); }
   }
@@ -254,7 +270,7 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       clearStarts(nextLevelId(id));       // later levels and their starts are gone
       // this level's starts after the one restored are gone too (weeks 4-5 from day 22: the day 29 start)
       const e = entry(id);
-      for (const d of def.starts) if (d > s.day) mem.delete(startKey(id, d));
+      for (const d of def.starts) if (d > s.day) { mem.delete(startKey(id, d)); store.clearStart?.(id, d); }
       e.starts = [...new Set([...e.starts, s.day])].filter((d) => d <= s.day).sort((a, b) => a - b);
       return started(def, { restored: true });
     },

@@ -33,7 +33,8 @@ import { createTitle } from './ui-title.js';
 import { createJobCard } from './ui-jobs.js';
 import { createCaption, createFloatLabel } from './ui-caption.js';
 import { int, one, feelWords } from './ui-format.js';
-import { broodSector, FLOOR_TEMP_RAMP, COMFORT_RAMP, MOISTURE_RAMP, levelById } from './config.js';
+import { FLOOR_TEMP_RAMP, COMFORT_RAMP, MOISTURE_RAMP, levelById } from './config.js';
+import { sectorOf } from './job-engine.js';
 import { BOARDS_CYCLE } from './content-signs-cycle.js';
 import { RUN_CARD } from './content.js';
 import { createBusyCard } from './ui-run.js';
@@ -193,8 +194,12 @@ export function createUI(ctx, deps) {
     history: () => hist,
     lastFlows: () => lastFlows,
     weighings() {
-      const l = weigh.day === env.dayNumber ? weigh.list : [];
-      const ok = l.filter((x) => Number.isFinite(x.w));
+      // the level's own list on a weigh day (saved, so a reload keeps it), else this page's; the places are
+      // counted as the weigh job counts its parts (the brooding floor in week 1, the whole house from week 2)
+      const kept = ctx.level?.weighsToday?.() || [];
+      const l = kept.length ? kept : weigh.day === env.dayNumber ? weigh.list : [];
+      const rule = { sectorsOf: env.dayNumber >= 8 ? 'house' : 'brood' };
+      const ok = l.filter((x) => Number.isFinite(x.w)).map((x) => ({ ...x, s: sectorOf(rule, x.x ?? 0, x.z ?? 0, env) }));
       return { n: ok.length, mean: ok.length ? ok.reduce((a, b) => a + b.w, 0) / ok.length : null, sectors: new Set(ok.map((x) => x.s)).size, list: ok };
     },
     sampleTally(purpose) {
@@ -234,7 +239,7 @@ export function createUI(ctx, deps) {
     if (p.id === 'water.flowtest' && p.result) lastFlows[p.line] = { mlMin: p.result.mlMin, hour: env.hour };
     if (p.id === 'sample.weigh') {
       if (weigh.day !== env.dayNumber) weigh = { day: env.dayNumber, list: [] };
-      weigh.list.push({ w: p.result?.weightG, s: broodSector(p.x ?? 0, p.z ?? 0) });
+      weigh.list.push({ w: p.result?.weightG, x: p.x ?? 0, z: p.z ?? 0 });
     }
     if (p.id === 'chicks.tip' && p.result && typeof p.result === 'object') {
       const dead = p.result.deadInBoxes || 0;
@@ -485,6 +490,7 @@ export function createUI(ctx, deps) {
       prompt.show(panels.openId || narrow.open || title.open || busy.open ? null : nearestTarget());
     },
     // hooks for level.js, the integrator and tests
+    busy,
     openPanel,
     closePanel,
     get openPanelId() { return panels.openId; },

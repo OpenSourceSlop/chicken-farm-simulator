@@ -23,7 +23,7 @@ const RANGE = {
   abruptChange: ['week2', 'week3'], overfullSilo: ['week2', 'weeks45'], dustOn: ['weeks45', 'weeks45'], noTunnel: ['weeks45', 'weeks45'],
   fansNoPad: ['weeks45', 'weeks45'], padInHumid: ['weeks45', 'weeks45'], fanUnfixed: ['weeks45', 'weeks45'], noWithdrawal: ['finish', 'finish'],
   longWithdrawal: ['finish', 'finish'], brightCatch: ['finish', 'finish'], wetDisinfect: ['cleanout', 'cleanout'], litterLeft: ['cleanout', 'cleanout'],
-  shortRest: ['cleanout', 'cleanout'],
+  shortRest: ['cleanout', 'cleanout'], noCare: ['week2', 'week2'], padWeek3: ['week3', 'week3'],
 };
 const CACHE = new Map();   // `${seed}:${levelId}` -> the ideal's state at that level's start (exact) and its trace so far
 const r3 = (v) => (Number.isFinite(v) ? Math.round(v * 1000) / 1000 : v);
@@ -229,7 +229,7 @@ function playCycleLevel(world, def, P, trace) {
       continue;
     }
     applyCycleRound(farm, env, s.d, s.r, P);
-    pickDead(world);
+    if (!P.noCare) pickDead(world);
     if (farm.house.curtainOpen) once('curtain');
     if (farm.health.vaccine.state === 'drunk') once('vaccine');
     if (s.r === 'weigh') { cp(world, def, 'weighin'); }
@@ -264,7 +264,7 @@ function levelResult(world, def, failed, endDay) {
     const pass = !failed && r.meanLiveG >= def.target.minShare * weightAt(r.ageAtCatch) * HARVEST.shrink && deathsPct <= def.fail.mortalityMaxPct + 1e-9;
     const w = lastWeighing(st.weighed);
     return { pass, endDay, liveG: r.meanLiveG, fcr: r.fcr, mortalityPct: r.mortalityPct, uniformityPct: w ? w.uniformityPct : null, epef: r.epef,
-      doaPct: r.doaPct, withdrawalH: r.withdrawalH, gutFull: r.gutFull, feedLeftKg: r.feedLeftKg, sold: r.sold, deathsPct };
+      doaPct: r.doaPct, withdrawalH: r.withdrawalH, gutFull: r.gutFull, gutKg: r.gutKg, paidKg: r.liveKg, feedLeftKg: r.feedLeftKg, sold: r.sold, deathsPct };
   }
   if (def.target.kind === 'clean') {
     const C = farm.clean, lab = C.lab || C.labs[C.labs.length - 1] || null;

@@ -85,8 +85,8 @@ export const MILESTONES_CYCLE = [
   // ---------------- Heat & Ventilation (max 15) ----------------
   M('warm-timer', 'ventilation', 'level1', 'level-end', 'Warm afternoon: the timer brought the chicks back',
     [[1, 'warm-afternoon fixed by "air" (PHASE2.md §7)']]),
-  M('w3-heat', 'ventilation', 'week3', 'problem', 'First warm afternoon of week 3: birds panting for under 2 hours after it was found',
-    [[1, 'warm-afternoon3 fixed by "air" (heat-handled) within 2 h of being found']]),
+  M('w3-heat', 'ventilation', 'week3', 'problem', 'First warm afternoon of week 3: birds panting for under 2 hours after it was found, none chilled',
+    [[1, 'warm-afternoon3 fixed by "air" (heat-handled) within 2 h of being found, no cold deaths in between']]),
   M('air-measured', 'ventilation', 'weeks45', 'day', 'Air speed measured at bird height in three parts of the house',
     [[1, '>= 3 air.probe from 3 house sectors by the day 23 record']]),
   M('hot-first', 'ventilation', 'weeks45', 'problem', 'First hot afternoon: fewer than one bird in ten panting again the same afternoon',

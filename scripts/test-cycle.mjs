@@ -48,12 +48,18 @@ export const CYCLE_TARGETS = {
   fansNoPad: { weeks45: { pass: false, endDay: [30, 31] }, snaps: { houseWave30At15: [38, 40.5], heatwaveHeatDeathsPct: [2, Infinity] } },
   padInHumid: { snaps: { felt33At15OverIdeal: [1.5, 3.5], heatDeaths33Pct: [0.15, 1] } },
   fanUnfixed: { snaps: { airSpeed6Fans: [2.0, 2.2], heatwavePantHoursVsIdeal: [2, Infinity] } },
-  noWithdrawal: { snaps: { gutFull: true, liveOverIdealPct: [1, Infinity] } },
+  // review: the plant deducts the gut fill (3 % of the weighed kg), so skipping the withdrawal pays less than
+  // an 8-12 h withdrawal and its FCR is worse (it was better on every number before)
+  noWithdrawal: { snaps: { gutFull: true, fcrOverIdeal: [0, Infinity], paidKgUnderIdeal: [1, Infinity], epefUnderIdeal: [1, Infinity] } },
   longWithdrawal: { snaps: { liveUnderIdealPct: [3.5, 6], doaVsIdeal: [2, Infinity] } },
   brightCatch: { snaps: { doaVsIdeal: [1.4, Infinity] } },
   wetDisinfect: { cleanout: { pass: false, positive: [3, 7] } },
   litterLeft: { cleanout: { positive: [3, 10] } },
   shortRest: { cleanout: { pass: false, restDays: [14, 14] } },
+  // review: a week 2 with no care at all (no light program, curtain, vaccine, raising, weighing, dead birds picked
+  // up) does not pass on the automatic scale; six fans and the pad on 16-day-old birds chill them and earn no point
+  noCare: { week2: { pass: false } },
+  padWeek3: { snaps: { w3HeatEarned: false, heat3FixedByAir: false, coldDeathsDay16: [1, Infinity] } },
 };
 
 // ---- the trace runCycle must return (PHASE3.md §6.14) ----
@@ -115,7 +121,13 @@ export const SNAPS = {
   dustyHoursDay23: (r) => between(r, 23, 24).filter((x) => x.dust > 1).length,
   airSpeed6Fans: (r) => { const x = between(r, 30, 33).find((h) => h.fansEffective >= 5 && h.airSpeed > 0 && h.fansManual === 6); return x ? x.airSpeed : null; }, // m/s with six fans switched on
   gutFull: (r) => !!r.levels.finish?.gutFull,
+  w3HeatEarned: (r) => (r.skills.milestones('ventilation').find((m) => m.id === 'w3-heat')?.tier ?? null) != null,
+  heat3FixedByAir: (r) => (r.levelEnds.week3?.problems || []).some((p) => p.id === 'warm-afternoon3' && p.fixedBy === 'air'),
+  coldDeathsDay16: (r) => { const a = between(r, 16 + 12 / 24, 17); return a.length ? deadOf(a[a.length - 1], 'cold') - deadOf(a[0], 'cold') : null; }, // birds, d16 12:00-24:00
   liveOverIdealPct: (r, i) => -under(r.levels.finish?.liveG, i.levels.finish?.liveG),
+  fcrOverIdeal: (r, i) => (r.levels.finish?.fcr != null && i.levels.finish?.fcr != null ? r.levels.finish.fcr - i.levels.finish.fcr : null), // FCR points
+  paidKgUnderIdeal: (r, i) => (r.levels.finish?.paidKg != null && i.levels.finish?.paidKg != null ? i.levels.finish.paidKg - r.levels.finish.paidKg : null), // kg paid
+  epefUnderIdeal: (r, i) => (r.levels.finish?.epef != null && i.levels.finish?.epef != null ? i.levels.finish.epef - r.levels.finish.epef : null), // EPEF points
   liveUnderIdealPct: (r, i) => under(r.levels.finish?.liveG, i.levels.finish?.liveG),
   doaVsIdeal: (r, i) => ratio(r.levels.finish?.doaPct, i.levels.finish?.doaPct),
   minBranchPoints: (r) => Math.min(...SKILL_BRANCHES.map((b) => r.points?.[b.id] ?? 0)),           // the ideal from the plan level: level 2 everywhere
@@ -245,6 +257,8 @@ test('plan sums (§6.11): the contract\'s terms count at least 4 % losses and 21
   assert(!P(6, 6000, 63, 4).pass && P(6, 6000, 63, 4).restDays === 17, '63 days leaves 17 rest days');
   assert(!P(6, 6000, 67, 6).pass, 'his losses figure above 4 % is used as he wrote it (3,535 a week)');
   assert(!P(6, 6500, 67, 4).pass && P(6, 6500, 67, 4).densityKgM2 <= 32, 'more chicks a house than its drinkers and feeders are for (6,000)');
+  const big = P(12, 6000, 67, 4);
+  assert(!big.pass && big.terms[0].max === 3960 && !big.terms[0].met, `12 houses: ${big.salePerWeek} a week, over the plant's ${big.terms[0].max}`);
   const o = P(6, 6000, 67, 4);
   assert(o.terms.length === 4 && o.terms.every((x) => x.met) && o.lossesCountedPct === 4, `the reply's terms ${JSON.stringify(o.terms)}`);
 });

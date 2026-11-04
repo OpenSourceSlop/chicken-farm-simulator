@@ -16,6 +16,7 @@ import { EV } from './events.js';
 import { LEVEL1, MIN_DAY, targetTempAt, weightAt, nippleHeightCmAt, flowTargetAt, minVentM3hPer1000, EQUIP } from './config.js';
 import { buildRow, settingsNow } from './records-rows.js';
 import { harvestPage, cleanPage, cycleSummary, compact } from './records-cycle.js';
+import { roundDeep } from './round.js';
 import { levelById, LEVELS } from './config.js';
 import { jobById as jobByIdP2 } from './content-jobs.js';
 import { jobByIdCycle } from './content-jobs-cycle.js';
@@ -74,6 +75,11 @@ const PROBLEM_WORDS = {
   'brooder-out': 'a brooder not burning', 'cold-night': 'a cold night forecast', 'blocked-filter': 'low water flow',
   'leaking-nipple': 'a wet patch of litter', 'low-silo': 'the silo running low', 'warm-afternoon': 'the house above its target',
   'abnormal-deaths': 'more dead birds than usual',
+};
+// weather the farmer did not meet (no problem job opened): one plain line on the day's row when it passed
+const PASSED_WORDS = {
+  'rainy-spell': 'The rainy spell passed', 'warm-afternoon3': 'The warm afternoon passed', 'hot-afternoon': 'The hot afternoon passed',
+  'dusty-air': 'The dry, dusty spell passed', 'humid-heat': 'The hot, humid spell passed', 'hot-finish': 'The hot afternoon passed', 'heat-wave': 'The heat wave passed',
 };
 const r2 = (v) => Math.round(v * 100) / 100;
 const r1 = (v) => Math.round(v * 10) / 10;
@@ -137,7 +143,7 @@ export function createRecords({ farm, env, events } = {}) {
     rowsOf(levelId) { const L = levelById(levelId); return L ? records.rows().filter((r) => r.day >= L.startDay && r.day <= Math.min(L.endDay, LAST_ROW_DAY)) : []; },
     reset() { notebook.length = 0; rows.clear(); jobLog.length = 0; for (const k of Object.keys(extras)) delete extras[k]; state.closedThrough = null; state.points = {}; },
     // notebook lines saved as [day, hour, kind, value, where?] (the autosave stays small all week)
-    serialize() { return { v: 1, notebook: notebook.map((n) => (n.where ? [n.day, n.hour, n.kind, n.value, n.where] : [n.day, n.hour, n.kind, n.value])), rows: records.rows(), jobLog: jobLog.map((j) => [j.key, j.day]), extras: JSON.parse(JSON.stringify(extras)), closedThrough: state.closedThrough, ...(Object.keys(state.points).length ? { points: { ...state.points } } : {}) }; },
+    serialize() { return { v: 1, notebook: notebook.map((n) => { const v = roundDeep(n.value, 2); return n.where ? [n.day, n.hour, n.kind, v, n.where] : [n.day, n.hour, n.kind, v]; }), rows: records.rows(), jobLog: jobLog.map((j) => [j.key, j.day]), extras: JSON.parse(JSON.stringify(extras)), closedThrough: state.closedThrough, ...(Object.keys(state.points).length ? { points: { ...state.points } } : {}) }; },
     restore(d) {
       records.reset();
       if (!d) return;
@@ -212,9 +218,11 @@ export function createRecords({ farm, env, events } = {}) {
       records.note('look', text, [r2(p.x), r2(p.z)]);
     });
     events.on(EV.FARM_PROBLEM, (p) => {
+      if (live() && p.phase === 'passed' && PASSED_WORDS[p.id]) { ex(today()).notes.push(PASSED_WORDS[p.id]); return; }
       if (!live() || !PROBLEM_WORDS[p.id]) return;
       if (p.phase === 'symptom') ex(today()).notes.push(`Seen: ${PROBLEM_WORDS[p.id]}`);
       if (p.phase === 'fixed') ex(today()).notes.push(`Dealt with: ${PROBLEM_WORDS[p.id]}`);
+      if (p.phase === 'passed') ex(today()).notes.push(`Passed with the weather: ${PROBLEM_WORDS[p.id]}`);
     });
     events.on(EV.FARM_DELIVERY, (p) => {
       if (!live() || p.phase !== 'arrive') return;

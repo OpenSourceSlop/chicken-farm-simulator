@@ -267,7 +267,7 @@ test('package: every action id answers with its result shape', () => {
   const seen = [];
   events.on(EV.ACTION, (p) => seen.push(p.id));
   const shape = {
-    'heat.relight': ['fixed'], 'vent.timer': null, 'light.program': null, 'light.lux': ['lux'], 'litter.depth': null, 'litter.spread': ['cover'],
+    'heat.relight': ['fixed'], 'vent.timer': ['air', 'prevAir', 'stepUp'], 'light.program': null, 'light.lux': ['lux'], 'litter.depth': null, 'litter.spread': ['cover'],
     'litter.patch': ['onLeak'], 'litter.squeeze': ['moisturePct', 'feel'], 'floor.probe': ['tempC'], 'water.flush': ['flushClear'], 'water.pressure': null,
     'water.height': null, 'water.flowtest': ['mlMin'], 'water.meter': ['litres', 'litres24h', 'per1000', 'changePct'], 'water.filter': ['inBar', 'outBar'],
     'water.clearFilter': ['fixed'], 'water.fixLeak': ['fixed'], 'feed.line': null, 'feed.meter': ['kg'], 'feed.silo': ['kg'], 'feed.order': ['arriveDay', 'arriveHour'],

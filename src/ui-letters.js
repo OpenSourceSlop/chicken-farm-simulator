@@ -8,6 +8,7 @@
 //   lettersPage(L, again)  the letters on the desk (contract, reply, vet, lab)
 import { PLAN_CONTRACT, HARVEST, CLEAN, HOUSE_BOUNDS, LEVELS, PLACEMENT_DAY, weightAt, levelById } from './config.js';
 import { h, button } from './ui-dom.js';
+import { saleMax } from './farm-plan.js';
 import { ICONS } from './ui-icons.js';
 import { int, one, two, num, hhmm, dayTime } from './ui-format.js';
 
@@ -15,6 +16,7 @@ const C = PLAN_CONTRACT;
 /** The contract letter's terms, as plain lines (PHASE3.md §1 Level 1). */
 export const CONTRACT_LINES = [
   `${int(C.salePerWeek)} birds for sale every week, about ${one(C.saleKg)} kg live weight`,
+  `The plant takes at most ${int(saleMax(C))} birds a week (${int(C.saleMaxPct - 100)} % over the contract)`,
   `We count at least ${int(C.lossesMinPct)} % losses from chick to catching`,
   `At least ${int(C.restMinDays)} days of rest between flocks`,
   `At most ${int(C.houseBirds)} chicks a house (the drinkers and feeders of house 1)`,
@@ -32,7 +34,7 @@ export function replyLines(plan) {
   return [
     `${int(d.houses)} houses × ${int(d.birdsPerHouse)} chicks every ${int(d.cycleDays)} days`,
     `losses counted ${num(o.lossesCountedPct)} %`,
-    t.salePerWeek && `${int(t.salePerWeek.value)} birds for sale a week (contract ${int(t.salePerWeek.limit)})`,
+    t.salePerWeek && `${int(t.salePerWeek.value)} birds for sale a week (contract ${int(t.salePerWeek.limit)}${t.salePerWeek.max != null ? `, at most ${int(t.salePerWeek.max)}` : ''})`,
     t.density && `${one(t.density.value)} kg/m² at catching (limit ${int(t.density.limit)})`,
     t.rest && `${int(t.rest.value)} rest days (at least ${int(t.rest.limit)})`,
     t.houseBirds && `${int(t.houseBirds.value)} chicks a house (at most ${int(t.houseBirds.limit)})`,
@@ -87,9 +89,9 @@ export function harvestPage(L) {
   const page = records.harvestPage() || {};
   const tickets = page.tickets || (hv.trucks || []).map((t, i) => ({ truck: i, crates: t.crates, birds: t.birds, grossKg: t.netKg + HARVEST.tareKg, tareKg: HARVEST.tareKg, netKg: t.netKg, doa: t.doa ?? null }));
   out.push(h('div', { class: 'ledger-scroll', tabindex: '0', role: 'region', 'aria-label': 'Weight tickets' }, h('table', { class: 'ledger ledger--week' },
-    h('thead', null, h('tr', null, ['Truck', 'Crates', 'Birds', 'Gross kg', 'Empty kg', 'Net kg', 'Dead on arrival'].map((t) => h('th', { scope: 'col' }, t)))),
+    h('thead', null, h('tr', null, ['Truck', 'Crates', 'Birds', 'Gross kg', 'Empty kg', 'Deducted kg', 'Net paid kg', 'Dead on arrival'].map((t) => h('th', { scope: 'col' }, t)))),
     h('tbody', null, tickets.map((t) => h('tr', { class: 'day-row' }, h('th', { scope: 'row' }, String((t.truck ?? 0) + 1)), h('td', null, int(t.crates)), h('td', null, int(t.birds)),
-      h('td', null, int(t.grossKg)), h('td', null, int(t.tareKg)), h('td', null, int(t.netKg)), h('td', null, t.doa != null ? int(t.doa) : '—')))))));
+      h('td', null, int(t.grossKg)), h('td', null, int(t.tareKg)), h('td', null, int(t.gutKg || 0)), h('td', null, int(t.netKg)), h('td', null, t.doa != null ? int(t.doa) : '—')))))));
   if (!r) { out.push(h('p', { class: 'book-note' }, 'The crew is catching.')); return out; }
   const targets = !!L.skills?.unlocked?.('recordsTargets');
   const age = (hv.startedAt ?? hv.catchAt) - PLACEMENT_DAY, expect = weightAt(age) * HARVEST.shrink;
@@ -104,7 +106,7 @@ export function harvestPage(L) {
     ['Production efficiency (EPEF)', r.epef != null ? `${int(r.epef)} = livability % × live kg ÷ (age days × FCR) × 100` : '—'],
     ['Feed left at catching', r.feedLeftKg != null ? `${int(r.feedLeftKg)} kg` : '—'],
     ['Feed withdrawal', r.withdrawalH != null ? `${one(r.withdrawalH)} h from empty pans to the catch` : '—'],
-    ['The plant’s note', r.gutFull ? 'feed in the guts of the birds' : (page.notes || []).join(' · ') || '—'],
+    ['The plant’s note', (page.notes || []).join(' · ') || '—'],
   ]));
   return out;
 }

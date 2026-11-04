@@ -22,8 +22,14 @@ const day = (farm, env) => { const d = farm.stats.daily || (farm.stats.daily = {
 
 /** The vet's answer on the phone (EV.LETTER { kind: 'vet' }): what the farmer reported, the advice. */
 function vetAnswer(farm, env, a) {
+  // the vet answers what the farmer reported and what he has seen, never the flock's hidden state: medicine only
+  // for blood in the droppings once the bird checks showed it (coccidiosis found) or the floor shows it
   const h = farm.health, coc = farm.problems.find((p) => p.id === 'coccidiosis');
-  const advice = coc && (coc.phase === 'found' || coc.phase === 'active') && h.cocciTreatedAt == null ? 'medicine in the water for 3 days' : 'keep the records and call again if the deaths rise';
+  const reason = String(a.reason ?? '').toLowerCase();
+  const seenBlood = !!coc && (coc.phase === 'found' || (coc.phase === 'active' && h.droppings === 'bloody'));
+  const advice = /blood/.test(reason) && seenBlood && h.cocciTreatedAt == null ? 'medicine in the water for 3 days'
+    : /blood|hunched|white|watery|something else/.test(reason) ? 'look at the vent and droppings of ten birds at the bird check, and call again with what you see; keep the records'
+      : 'keep the records and call again if the deaths rise';
   h.vet.push({ day: env.dayNumber, hour: r1(env.hour), reason: a.reason ?? null, advice });
   farm.emit(EV.LETTER, { kind: 'vet', day: env.dayNumber });
 }

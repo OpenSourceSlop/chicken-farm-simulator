@@ -440,7 +440,8 @@ test('every Phase 3 state test, on the farm stub with its fields set (held ones 
     ['pans-finisher', (L) => { L.farm.feed.panType = { starter: 0, grower: 0.05, finisher: 0.95 }; }, 0, (L) => { L.farm.feed.panType = { starter: 0, grower: 0.2, finisher: 0.8 }; }],
     ['caked-cleared', (L) => { L.farm.litter.cakedGrid.fill(0); }, 0, (L) => { L.farm.litter.cakedGrid.fill(0); for (let i = 0; i < 40; i++) L.farm.litter.cakedGrid[i * 7] = 1; }],
     ['air-clear', (L) => { L.farm.air.dustIndex = 0.6; L.farm.air.ammoniaPpm = 9; }, 120, (L) => { L.farm.air.dustIndex = 1.4; }],
-    ['heat-handled', (L) => { L.farm.comfort.pantShare = 0.5; L.env.setFans(6); L.env.setPad(true); }, 30, (L) => { L.farm.comfort.pantShare = 0.5; L.env.setFans(4); L.env.setPad(true); }],
+    // (day 20: birds under 21 days, every fan without the pad; the pad branch is for big birds, below)
+    ['heat-handled', (L) => { L.farm.comfort.pantShare = 0.5; L.farm.comfort.meanOver = 3; L.env.setFans(6); L.env.setPad(false); }, 30, (L) => { L.farm.comfort.pantShare = 0.5; L.env.setFans(4); L.env.setPad(false); }],
     ['pad-humid-ok', (L) => { L.env.setFans(6); L.env.setPad(false); }, 30, (L) => { L.env.setFans(3); L.env.setPad(false); }],
     ['house-empty', (L) => { L.farm.harvest.started = true; L.farm.flock.alive = 0; }, 0, (L) => { L.farm.harvest.started = false; L.farm.flock.alive = 0; }],
     ['litter-removed', (L) => g(L, 0.02), 0, (L) => g(L, 0.3)],
@@ -449,6 +450,7 @@ test('every Phase 3 state test, on the farm stub with its fields set (held ones 
     ['house-dry', (L) => { C(L).washShare = 0.97; C(L).wetShare = 0.05; }, 0, (L) => { C(L).washShare = 0; C(L).wetShare = 0; }],
     ['lines-disinfected', (L) => { C(L).lines = [1, 1, 1, 1]; }, 0, (L) => { C(L).lines = [1, 1, 0, 1]; }],
     ['rest-done', (L) => { C(L).bookedDay = 20; }, 0, (L) => { C(L).bookedDay = 21; }],
+    ['dark-period', (L) => { L.env.setLightProgram({ darkStart: 22, darkHours: 6 }); }, 0, (L) => { L.env.setLightProgram({ darkStart: 22, darkHours: 0 }); }],
   ];
   assert(CASES.length === STATE_TEST_IDS_CYCLE.length && CASES.every(([t]) => STATE_TEST_IDS_CYCLE.includes(t)), 'one case per STATE_TEST_IDS_CYCLE entry');
   for (const [test, yes, mins, no] of CASES) {
@@ -465,11 +467,22 @@ test('every Phase 3 state test, on the farm stub with its fields set (held ones 
     }
     assert(Y.st(`t-${test}@20`) === 'done', `${test}: met (${Y.st(`t-${test}@20`)})`);
   }
-  // heat-handled with a broken fan: the five that turn and the pad are every fan that turns
-  const B = makeCycle(CLEANOUT, { day: 20, hour: 6, jobs: [T('t-hb', { type: 'state', test: 'heat-handled' })] });
-  B.env.setFansBroken([3]); B.env.setFans(6); B.env.setPad(true); B.farm.comfort.pantShare = 0.6;
-  B.at(20, 6.6); B.farm.comfort.pantShare = 0.6; B.jobs.tick();
-  assert(B.st('t-hb@20') === 'done', `five fans that turn and the pad (fansEffective ${B.env.fansEffective})`);
+  // heat-handled with a broken fan (big birds, day 30): the five that turn and the pad are every fan that turns
+  const B = makeCycle(CLEANOUT, { day: 30, hour: 6, jobs: [T('t-hb', { type: 'state', test: 'heat-handled' }, { day: 30 })] });
+  B.env.forceHouseTemp(31); // a hot house for big birds (target 20 °C), so the farm's own comfort stays warm while it holds
+  B.env.setFansBroken([3]); B.env.setFans(6); B.env.setPad(true); B.farm.comfort.pantShare = 0.6; B.farm.comfort.meanOver = 4;
+  B.at(30, 6.6); B.farm.comfort.pantShare = 0.6; B.farm.comfort.meanOver = 4; B.jobs.tick();
+  assert(B.st('t-hb@30') === 'done', `five fans that turn and the pad (fansEffective ${B.env.fansEffective}, ${B.st('t-hb@30')})`);
+  // review: 16-day-old birds under six fans and the pad are not handled (the heat sign: as few fans as the heat
+  // allows; the pad is for big birds), and chilled birds (mean felt comfort under -1.5 °C) never are
+  const Y = makeCycle(CLEANOUT, { day: 16, hour: 13, jobs: [T('t-hy', { type: 'state', test: 'heat-handled' }, { day: 16, round: 'pm' })] });
+  const young = () => { Y.env.setFans(6); Y.env.setPad(true); Y.farm.comfort.pantShare = 0.4; Y.farm.comfort.meanOver = 2; };
+  young(); Y.at(16, 13.6); young(); Y.jobs.tick();
+  assert(Y.st('t-hy@16') === 'open', `young birds: six fans and the pad do not handle the heat (${Y.st('t-hy@16')})`);
+  const K = makeCycle(CLEANOUT, { day: 16, hour: 13, jobs: [T('t-hk', { type: 'state', test: 'heat-handled' }, { day: 16, round: 'pm' })] });
+  const chill = () => { K.env.setFans(6); K.env.setPad(false); K.farm.comfort.pantShare = 0; K.farm.comfort.meanOver = -4; };
+  chill(); K.at(16, 13.6); chill(); K.jobs.tick();
+  assert(K.st('t-hk@16') === 'open', `chilled birds (no panting, mean e -4 °C) are not handled (${K.st('t-hk@16')})`);
 });
 
 test('problem jobs only of the current level (and the recurring ones); missed at the level end', () => {

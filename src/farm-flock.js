@@ -30,6 +30,9 @@ export const FLOCK = {
   otherRate: 0.00001, otherFromDay: 3, otherPerLapse: 0.3, otherBadWater: 2.0,
   // Phase 3 (from Week 2; PHASE3.md §6.16)
   cvCycleK: 0.25, liftKeep: 0.88, liftCatchUp: 0.9,
+  // Phase 3: birds that find no feed lose weight (maintenance, about 2 % of body weight a day with empty pans;
+  // model, general) before they die of it, so the scale shows the drop a day or more before the deaths
+  starveLossPerDay: 0.02,
 };
 const CAUSES = ['cold', 'heat', 'dehydration', 'weak', 'starveout', 'other', 'box'];
 /** Tuning aid (node only): per-day CV terms and intake factors while on. */
@@ -295,6 +298,13 @@ export function stepFlock(farm, env, hrs, C, io) {
   if (c.good.n > 0) c.good.w += (wGood / c.good.n) * gainK;
   if (c.late.n > 0) c.late.w += (wLate / c.late.n) * gainK;
   if (c.weak.n > 0) c.weak.w += (wWeak / c.weak.n) * gainK;
+  // Phase 3: no feed in the pans (not the withdrawal before catching, not the heat-wave lift): weight goes down
+  // (the share of the birds that find feed: the pans' reach, then what the pans held of what they wanted)
+  const fed = Math.min(1, farm.feed.reach ?? 1) * (wantKg > 0 ? Math.min(1, k) : 1);
+  if (X && lit > 0 && fed < 0.98 && !farm.feed.withdrawn && !X.liftOn) {
+    const loss = Math.min(0.5, FLOCK.starveLossPerDay * (1 - fed) * (hrs / 24) * lit);
+    for (const g of [c.good, c.late, c.weak]) if (g.n > 0) g.w *= 1 - loss;
+  }
   const fEff = f * (wantKg > 0 ? k : 1);
   // Phase 3: older birds' spread grows less from the same stress (model: Phase 2's terms x cvCycleK from Week 2)
   const dcv = (FLOCK.cvBase + (FLOCK.cvTemp * (1 - fT) + FLOCK.cvGroup * fTsd + FLOCK.cvWater * (1 - A)

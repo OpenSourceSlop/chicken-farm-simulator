@@ -20,7 +20,7 @@ import { feedLeftKg } from './farm-silos.js';
 /** Profile names (keys of CYCLE_TARGETS in scripts/test-cycle.mjs). */
 export const CYCLE_PROFILES = ['ideal', 'noDark', 'lateLift', 'noStep', 'poorVaccine', 'poorVaccineCocci', 'cocciUntreated', 'minVentW3',
   'crumbleOn', 'abruptChange', 'overfullSilo', 'dustOn', 'noTunnel', 'fansNoPad', 'padInHumid', 'fanUnfixed', 'noWithdrawal',
-  'longWithdrawal', 'brightCatch', 'wetDisinfect', 'litterLeft', 'shortRest', 'determinism'];
+  'longWithdrawal', 'brightCatch', 'wetDisinfect', 'litterLeft', 'shortRest', 'noCare', 'padWeek3', 'determinism'];
 
 const IDEAL = {
   light: 'growing', curtain: { day: 10, hour: 8 }, vaccine: { thirstH: 1.5, stabiliser: true, walk: true }, timer: 'table',
@@ -52,6 +52,8 @@ const MODS = {
   wetDisinfect: { sprayAfterWashH: 1 },
   litterLeft: { scrapeShare: 0.75 },
   shortRest: { restDays: 14 },
+  noCare: { noCare: true },          // nothing at all is done (week 2 from its standard start): the level does not pass
+  padWeek3: { padWeek3: true },      // the week 3 warm afternoon met with all six fans and the pad on 16-day-old birds
 };
 export const cycleProfileOf = (name) => (typeof name === 'object' && name ? name : { ...IDEAL, ...(MODS[name] || {}), name: name || 'ideal' });
 
@@ -151,6 +153,8 @@ function fanPlan(farm, env, act, P, day) {
   if (noTunnelOn(P, day)) n = 0;
   let pad = P.pads === 'never' || P.noTunnel ? false : idealPad({ ...envView(env), padOn: env.padOn }, n);
   if (P.padInHumid && n >= 6 && day === 33 && env.hour >= 10 && env.hour < 18) pad = true;
+  // padWeek3: the pad stays on with six fans through the warm afternoon of day 16 (the mistake under test)
+  if (P.padWeek3 && day === 16 && n >= 6 && env.hour >= 11 && env.hour < 18) pad = true;
   fansTo(act, env, n, pad);
 }
 /** Tomorrow's 05:00 outside temperature (the weather's low and the level's weather events). */
@@ -166,6 +170,7 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
   const P = cycleProfileOf(profile), done = [];
   const act = (id, args = {}) => { const result = farm.act(id, args); done.push({ id, args, result }); return result; };
   if (farm.mode !== 'level') return done;
+  if (P.noCare) return done;
   // the level of the day (a no-op inside a run, which enters each level at its 06:00 start; level.debug.freeRun
   // and other callers that never entered it get the level's problems, weather and the cycle climate here)
   const lv = levelOfDay(day);
@@ -340,7 +345,7 @@ function answerProblems(farm, env, act, P, day) {
   // a heat problem found: every fan on, the pad by its plate (the switches pressed even when they were on)
   for (const id of ['warm-afternoon3', 'hot-afternoon', 'hot-finish']) if (found(id) && !noTunnelOn(P, day)) {
     env.setFans(6); act('vent.fans', { n: 6 });
-    const pad = P.pads !== 'never' && idealPad(envView(env), 6);
+    const pad = (P.padWeek3 && id === 'warm-afternoon3') || (P.pads !== 'never' && idealPad(envView(env), 6));
     if (pad !== env.padOn || pad) { env.setPad(pad); act('vent.pad', { on: pad }); }
   }
   if (found('rainy-spell') && !(P.timer === 'day8' && day <= 21)) { const t = signTimer(farm); t.onSec = Math.round(t.onSec * 1.5); act('vent.timer', t); }

@@ -386,7 +386,8 @@ export function replay() {
 }
 
 // ---------------- writing the files ----------------
-const START = [{ wait: 600 }, { clearStorage: true }, SETUP];
+// the loop stops before anything runs in real time: a run from the same steps draws the same flock (review)
+const START = [{ eval: "__game.stop(), 'stopped at boot'" }, { clearStorage: true }, SETUP];
 function write(path, steps) { writeFileSync(path, `[\n${steps.map((s) => `  ${JSON.stringify(s)}`).join(',\n')}\n]\n`); console.log(`${path}: ${steps.length} steps`); }
 if (process.argv[1] && process.argv[1].endsWith('p3-cycle-steps.mjs')) {
   const dev = process.argv.indexOf('--dev');

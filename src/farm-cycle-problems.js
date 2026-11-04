@@ -115,12 +115,22 @@ export function tickCycleProblems(farm, env) {
   }
 }
 
-/** heat-handled (PHASE3.md §3.1): few birds panting, or every fan that turns is on and the pad runs (or is off over the limit). */
+/**
+ * heat-handled (PHASE3.md §3.1, the heat sign and the pad plate): never while the birds are chilled (mean felt
+ * comfort under -1.5 °C: too much air for their age). Then few birds panting (10 % or less), or every fan that
+ * turns is on with the pad running (or off over its humidity limit). Young birds (under 21 days: "as few tunnel
+ * fans as the heat allows") never by the pad: it is for big birds in the heat.
+ */
 export function heatHandled(farm, env) {
-  if ((farm.comfort.pantShare ?? 0) <= 0.1) return true;
-  const allFans = env.fansEffective === 6 - env.fansBroken.length;
-  return allFans && (env.padOn || env.houseRH > HEAT.padOffAboveRH);
+  const C = farm.comfort || {}, e = Number.isFinite(C.meanOver) ? C.meanOver : (C.e ?? 0), pant = C.pantShare ?? 0;
+  if (e < -1.5) return false;
+  const young = (farm.age ?? 21) < 21;
+  if (young && env.padOn) return false;
+  if (pant <= 0.1) return true;
+  const allFans = env.fansEffective >= 6 - (env.fansBroken || []).length;
+  return allFans && (young || env.padOn || env.houseRH > HEAT.padOffAboveRH);
 }
+const darkHoursOf = (farm, env) => (env.lightProgram?.darkHours ?? farm.light?.darkHours) ?? 0;
 export const padHumidOk = (farm, env) => (!env.padOn || env.houseRH <= HEAT.padOffAboveRH) && env.fansEffective >= 5;
 export const airClear = (farm) => farm.air.dustIndex <= 1 && farm.air.ammoniaPpm <= 15;
 
@@ -145,9 +155,13 @@ export function cycleSymptoms(farm, env, id, a, result) {
       if (isActive(farm, 'rainy-spell') && rh >= 80) findProblem(farm, env, 'rainy-spell', 'controller');
       for (const h of HEAT_IDS) if (isActive(farm, h) && pant > 0.2) findProblem(farm, env, h, 'controller');
       if (isActive(farm, 'humid-heat') && rh >= 85 && env.houseTemp >= 30) findProblem(farm, env, 'humid-heat', 'controller');
-      if (isFound(farm, 'sudden-deaths')) fixProblem(farm, env, 'sudden-deaths', 'controller');
+      // the sudden deaths are dealt with by a dark period in the light program (the light sign), not by reading
+      if (isFound(farm, 'sudden-deaths') && darkHoursOf(farm, env) >= 4) fixProblem(farm, env, 'sudden-deaths', 'controller');
       break;
     }
+    case 'light.program':
+      if (isFound(farm, 'sudden-deaths') && darkHoursOf(farm, env) >= 4) fixProblem(farm, env, 'sudden-deaths', 'light');
+      break;
     case 'fans.read': {
       for (const h of HEAT_IDS) if (isActive(farm, h) && pant > 0.2) findProblem(farm, env, h, 'fans');
       if (isActive(farm, 'humid-heat') && env.houseRH >= 85 && env.houseTemp >= 30) findProblem(farm, env, 'humid-heat', 'fans');
@@ -197,7 +211,9 @@ export function cycleSymptoms(farm, env, id, a, result) {
       break;
     case 'water.medicate': if (a.on) fixProblem(farm, env, 'coccidiosis', 'medicine'); break;
     case 'phone.vet':
-      if (stateOf(farm, 'gumboro') && (stateOf(farm, 'gumboro').phase === 'found' || stateOf(farm, 'gumboro').phase === 'active')) fixProblem(farm, env, 'gumboro', 'vet');
+      // the vet deals with what was reported: the Gumboro signs once found, or when the call names them
+      if (stateOf(farm, 'gumboro') && (stateOf(farm, 'gumboro').phase === 'found'
+        || (stateOf(farm, 'gumboro').phase === 'active' && /hunched|white/.test(String(a.reason ?? '').toLowerCase())))) fixProblem(farm, env, 'gumboro', 'vet');
       break;
     case 'swab.read': if (isActive(farm, 'swab-positive')) { findProblem(farm, env, 'swab-positive', 'lab'); secondPass(farm); } break;
     default:

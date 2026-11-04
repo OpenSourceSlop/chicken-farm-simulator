@@ -202,6 +202,10 @@ test('plan sums: the planning sign\'s reference plan', () => {
   assert(!planOutcome({ houses: 6, birdsPerHouse: 7000, cycleDays: 67, lossesPct: 4, saleKg: 2.8 }, 576).pass, '7,000 a house over density');
   assert(!planOutcome({ houses: 5, birdsPerHouse: 6000, cycleDays: 49, lossesPct: 0, saleKg: 2.8 }, 576).pass, '49 days at 0 % losses');
   assert(!planOutcome({ houses: 4, birdsPerHouse: 6500, cycleDays: 49, lossesPct: 0, saleKg: 2.8 }, 576).pass, '4 x 6,500 x 49 days at 0 %');
+  // the plant takes at most saleMaxPct of the contract: the most houses the sheet allows is no plan
+  assert(!planOutcome({ houses: 12, birdsPerHouse: 6000, cycleDays: 67, lossesPct: 4, saleKg: 2.8 }, 576).pass, '12 houses x 6,000 every 67 days: twice the contract');
+  assert(!planOutcome({ houses: 12, birdsPerHouse: 6000, cycleDays: 100, lossesPct: 0, saleKg: 2.8 }, 576).pass, '12 houses every 100 days: 34 % over');
+  assert(planOutcome({ houses: 7, birdsPerHouse: 5200, cycleDays: 67, lossesPct: 4, saleKg: 2.8 }, 576).pass, '7 x 5,200 every 67 days: 1.4 % over');
 });
 
 test('skills: Phase 2 milestones belong to the brooding week (PHASE3.md §9: no day7-weight at the day 14 weigh-in)', async () => {

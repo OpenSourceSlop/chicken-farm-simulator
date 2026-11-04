@@ -32,6 +32,7 @@ import { BROOD_BOUNDS, CLEANOUT, CYCLE, DRINKER_LINES_Z, FAN_COUNT, FLOOR_GRID, 
 import { EV, matchPayload } from './events.js';
 import { ALL_JOBS } from './content-jobs.js';
 import { feltNearTarget } from './farm-problems.js';
+import { heatHandled } from './farm-cycle-problems.js';
 
 const H = 1 / 24;
 /** The brooding week ends at 06:00 on day 8 at the latest (PHASE2.md §10). */
@@ -88,7 +89,7 @@ function areaNow(name, env) {
 }
 const areaSize = (a) => (a === 'house' ? NCELLS : BROOD_IDX.length);
 /** Sample sector: the brooding floor's six (Phase 2's numbers 0..5) or the house's eight (10..17). */
-function sectorOf(rule, x, z, env) {
+export function sectorOf(rule, x, z, env) {
   return areaNow(rule.sectorsOf || 'brood', env) === 'house' ? 10 + houseSector(x, z) : broodSector(x, z);
 }
 /** The cells a walk has seen of its area right now, and how many it needs. */
@@ -256,7 +257,7 @@ function cakedShare(farm, env) {
   return n ? c / n : 0;
 }
 const ammonia = (farm) => farm.air?.ammoniaPpm ?? farm.litter?.ammoniaPpm ?? 0;
-const brokenFans = (env) => (env.fansBroken || []).length;
+const LIGHT_DARK_MIN_H = 4; // the light sign: about 4-6 hours of darkness in one block from day 8
 
 function stateTest(test, st, { env, farm, props }) {
   const C = farm.clean || {};
@@ -281,13 +282,11 @@ function stateTest(test, st, { env, farm, props }) {
     case 'pans-finisher': return (farm.feed?.panType?.finisher ?? 0) >= 0.9;
     case 'caked-cleared': return cakedShare(farm, env) <= 0.02;
     case 'air-clear': return held(st, (farm.air?.dustIndex ?? 0) <= 1 && ammonia(farm) <= 15, env, 120);
-    case 'heat-handled': {
-      // done by doing what the heat sign and the pad plate say, even while the weather still makes
-      // some birds pant: every fan that turns is on and the pad runs (or is off over its humidity limit)
-      const allFans = env.fansEffective >= FAN_COUNT - brokenFans(env);
-      const padOk = !!env.padOn || env.houseRH > HEAT.padOffAboveRH;
-      return held(st, (farm.comfort?.pantShare ?? 0) <= 0.1 || (allFans && padOk), env, 30);
-    }
+    case 'heat-handled':
+      // done by doing what the heat sign and the pad plate say (farm-cycle-problems heatHandled: the rule the
+      // farm fixes the problem by): few birds panting and none chilled, or for big birds every fan and the pad
+      return held(st, heatHandled(farm, env), env, 30);
+    case 'dark-period': return ((env.lightProgram?.darkHours ?? farm.light?.darkHours) ?? 0) >= LIGHT_DARK_MIN_H;
     case 'pad-humid-ok': return held(st, (!env.padOn || env.houseRH <= HEAT.padOffAboveRH) && env.fansEffective >= 5, env, 30);
     case 'house-empty': return !!farm.harvest?.started && farm.flock.alive === 0;
     case 'litter-removed': return houseCover(farm) <= 0.05;
@@ -334,6 +333,7 @@ function stateSnapshot(test, { env, farm }) {
     case 'house-ready': case 'litter-removed': return { coverPct: Math.round(houseCover(farm) * 100) };
     case 'rh-under': case 'pad-humid-ok': return { houseRH: Math.round(env.houseRH), padOn: !!env.padOn, fans: env.fansEffective };
     case 'heat-handled': return { pantShare: +(farm.comfort?.pantShare ?? 0).toFixed(2), fans: env.fansEffective, padOn: !!env.padOn, houseC: +env.houseTemp.toFixed(1) };
+    case 'dark-period': return { darkHours: env.lightProgram?.darkHours ?? null, darkStart: env.lightProgram?.darkStart ?? null };
     case 'air-clear': return { dust: +(farm.air?.dustIndex ?? 0).toFixed(2), nh3: Math.round(ammonia(farm)) };
     case 'vaccine-drunk': return { hours: farm.health?.vaccine?.hours ?? null };
     case 'pans-grower': case 'pans-finisher': return { panType: { ...(farm.feed?.panType || {}) } };

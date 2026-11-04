@@ -12,6 +12,9 @@ export const HARVEST_MODEL = {
   noPanelsMin: 5,
   doa: { base: 0.0010, heat: 0.0004, bright: 0.0008, brightLux: 12, noPanels: 0.001, longW: 0.0005, longFromH: 12 },
   shrink: { per: 0.0025, from: 2, cap: 10, longPer: 0.003, longFrom: 12 }, gutFullBelowH: 6, netNoise: 0.002,
+  // feed still in the crops and guts (withdrawal under gutFullBelowH): the plant deducts this share of the
+  // weighed kg from the ticket (gut fill and soiled carcasses are not paid; model value, general practice)
+  gutDeduct: 0.03,
 };
 const W = (HOUSE_BOUNDS.xMax - HOUSE_BOUNDS.xMin) / HARVEST.sections;
 const at = (o) => o.day + o.hour / 24;
@@ -20,7 +23,7 @@ export function createHarvest() {
   return {
     catchAt: null, bookedAt: null, started: false, startedAt: null, endedAt: null, panels: false,
     sections: Array.from({ length: HARVEST.sections }, (_, i) => ({ i, x0: HOUSE_BOUNDS.xMin + i * W, x1: HOUSE_BOUNDS.xMin + (i + 1) * W, state: 'waiting', birds: 0 })),
-    trucks: Array.from({ length: HARVEST.trucks }, () => ({ crates: 0, birds: 0, liveKg: 0, netKg: 0, grossKg: 0, doa: 0, left: false })),
+    trucks: Array.from({ length: HARVEST.trucks }, () => ({ crates: 0, birds: 0, liveKg: 0, netKg: 0, grossKg: 0, gutKg: 0, doa: 0, left: false })),
     cond: { eSum: 0, n: 0, luxMax: 0, fansMin: null, minutes: 0 },
     shrink: null, withdrawalH: null, result: null,
   };
@@ -39,14 +42,16 @@ export function bookCatch(farm, env, a) {
   if (hv.started) return { booked: false, catchAt: now, reason: 'the crew is already catching' };
   if (t < from - 1e-9 || t > to + 1e-9) return { booked: false, catchAt: now, reason: `the crew catches between day ${HARVEST.bookFrom.day} ${HARVEST.bookFrom.hour}:00 and day ${HARVEST.bookTo.day} ${String(HARVEST.bookTo.hour).padStart(2, '0')}:00` };
   if (t < env.day + 1e-9) return { booked: false, catchAt: now, reason: 'that time has already passed' };
+  // the crew needs its notice (sign-catch: at least 3 days ahead); the catch stays where it was
+  if ((t - env.day) * 24 < HARVEST.bookAheadH - 1e-6) return { booked: false, catchAt: now, reason: `the crew needs ${Math.round(HARVEST.bookAheadH / 24)} days’ notice` };
   hv.catchAt = t; hv.bookedAt = env.day; farm.stats.catchBookedAt = env.day;
   return { booked: true, catchAt: t };
 }
 
-/** load.ticket { truck } -> { crates, birds, grossKg, tareKg, netKg, doa }. */
+/** load.ticket { truck } -> { crates, birds, grossKg, tareKg, gutKg, netKg, doa } (net = gross - empty truck - the plant's deduction). */
 export function ticket(farm, a) {
   const t = farm.harvest.trucks[Math.max(0, Math.min(HARVEST.trucks - 1, Math.round(a.truck ?? 0)))];
-  return { crates: t.crates, birds: t.birds, grossKg: Math.round(t.grossKg), tareKg: HARVEST.tareKg, netKg: Math.round(t.netKg), doa: t.doa };
+  return { crates: t.crates, birds: t.birds, grossKg: Math.round(t.grossKg), tareKg: HARVEST.tareKg, gutKg: Math.round(t.gutKg || 0), netKg: Math.round(t.netKg), doa: t.doa };
 }
 
 /** One step of the catch (cycle mode): the company's default time, the crew, the sections, the end. */
@@ -109,11 +114,14 @@ function endCatch(farm, env) {
   const doaShare = M.base + M.heat * Math.max(0, eCatch - hot) + M.bright * (c.luxMax > M.brightLux ? 1 : 0) + M.noPanels * (hv.panels ? 0 : 1)
     + M.longW * Math.max(0, hv.withdrawalH - M.longFromH);
   let doaLeft = Math.round(loaded * doaShare);
+  const gutFull = hv.withdrawalH < HARVEST_MODEL.gutFullBelowH;
   hv.trucks.forEach((t, i) => {
     const d = i === hv.trucks.length - 1 ? doaLeft : Math.min(doaLeft, Math.round(t.birds * doaShare));
     t.doa = d; doaLeft -= d;
-    t.netKg = t.liveKg * hv.shrink * (1 + (rng.next() * 2 - 1) * HARVEST_MODEL.netNoise);
-    t.grossKg = HARVEST.tareKg + t.netKg; t.left = true;
+    const weighed = t.liveKg * hv.shrink * (1 + (rng.next() * 2 - 1) * HARVEST_MODEL.netNoise);
+    t.gutKg = gutFull ? weighed * HARVEST_MODEL.gutDeduct : 0;
+    t.netKg = weighed - t.gutKg;   // what the plant pays for
+    t.grossKg = HARVEST.tareKg + weighed; t.left = true;
     farm.emit(EV.FARM_DELIVERY, { kind: 'catch', phase: 'leave', truck: i });
   });
   fl.alive = 0; fl.present = false; fl.lameOnFloor = 0; fl.deadOnFloor = 0;
@@ -133,7 +141,8 @@ function endCatch(farm, env) {
   const epef = fcr ? ((100 - mortalityPct) * (meanLiveG / 1000)) / (age * fcr) * 100 : null;
   hv.result = { sold: loaded - doa, loaded, liveKg: Math.round(netKg), meanLiveG: Math.round(meanLiveG), fcr: fcr ? +fcr.toFixed(3) : null,
     mortalityPct: +mortalityPct.toFixed(2), uniformityPct: w ? w.uniformityPct : null, uniformityDay: w ? w.day : null, epef: epef ? Math.round(epef) : null,
-    feedLeftKg: hv.feedLeftKg, withdrawalH: +hv.withdrawalH.toFixed(1), gutFull: hv.withdrawalH < HARVEST_MODEL.gutFullBelowH, doa, doaPct: loaded ? +((100 * doa) / loaded).toFixed(3) : 0,
+    feedLeftKg: hv.feedLeftKg, withdrawalH: +hv.withdrawalH.toFixed(1), gutFull, gutKg: Math.round(hv.trucks.reduce((a, t) => a + (t.gutKg || 0), 0)),
+    doa, doaPct: loaded ? +((100 * doa) / loaded).toFixed(3) : 0,
     ageAtCatch: +age.toFixed(3), targetG: Math.round(weightAt(age) * HARVEST.shrink), catchAt: hv.startedAt, fansMin: c.fansMin, luxMax: Math.round(c.luxMax) };
   farm.emit(EV.CATCH, { phase: 'end', i: null, birds: loaded });
 }

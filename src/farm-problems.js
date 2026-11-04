@@ -79,7 +79,7 @@ export function feltNearTarget(env, farm) {
 export function findProblem(farm, env, id, by, allowPending = false) {
   const st = stateOf(farm, id);
   if (!st || !(st.phase === 'active' || (allowPending && st.phase === 'pending'))) return false;
-  st.phase = 'found'; st.foundAt = env.day; st.foundBy = by;
+  st.phase = 'found'; st.foundAt = env.day; st.foundBy = by; st.coldAtFound = farm.flock?.deadByCause?.cold || 0;
   farm.emit(EV.FARM_PROBLEM, { id, phase: 'symptom', by });
   return true;
 }
@@ -87,8 +87,16 @@ export function findProblem(farm, env, id, by, allowPending = false) {
 export function fixProblem(farm, env, id, by) {
   const st = stateOf(farm, id);
   if (!st || st.phase === 'fixed' || st.phase === 'pending') return false;
+  if (st.phase === 'active' && by === 'weather') {
+    // the weather ended a problem the farmer never met: no symptom, so no problem job (he reads the flock);
+    // the day's row notes that it passed (records: 'passed')
+    st.phase = 'fixed'; st.fixedAt = env.day; st.fixedBy = 'weather'; st.unseen = true;
+    applyEffects(farm, env);
+    farm.emit(EV.FARM_PROBLEM, { id, phase: 'passed', by });
+    return true;
+  }
   if (st.phase === 'active') findProblem(farm, env, id, by);
-  st.phase = 'fixed'; st.fixedAt = env.day; st.fixedBy = by;
+  st.phase = 'fixed'; st.fixedAt = env.day; st.fixedBy = by; st.coldAtFix = farm.flock?.deadByCause?.cold || 0;
   applyEffects(farm, env);
   farm.emit(EV.FARM_PROBLEM, { id, phase: 'fixed', by });
   return true;

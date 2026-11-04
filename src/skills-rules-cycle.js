@@ -78,11 +78,14 @@ const darkDays = (lv, need) => (farm) => {
 };
 const deathsOf = (farm, cause) => ((farm.flock.deadByCause[cause] || 0) - (ls(farm)[cause] || 0));
 const sharePct = (farm, n) => (ls(farm).alive > 0 ? (100 * n) / ls(farm).alive : 0);
-const fixedByAir = (id, withinH, beforeT) => (farm) => {
+const fixedByAir = (id, withinH, beforeT, noChill = false) => (farm) => {
   const p = prob(farm, id);
   if (!p || p.foundAt == null || p.fixedAt == null) return null;
-  const ok = p.fixedBy === 'air' && (withinH == null || (p.fixedAt - p.foundAt) * 24 <= withinH + 1e-9) && (beforeT == null || p.fixedAt <= beforeT + 1e-9);
-  return { tier: ok ? 0 : null, detail: p.fixedBy === 'air' ? `fixed ${(Math.round((p.fixedAt - p.foundAt) * 240) / 10)} h after it was found` : 'it passed with the weather' };
+  // noChill: no bird died of cold between finding the heat and dealing with it (too much air for young birds)
+  const chilled = noChill ? Math.max(0, (p.coldAtFix ?? 0) - (p.coldAtFound ?? 0)) : 0;
+  const ok = p.fixedBy === 'air' && chilled === 0 && (withinH == null || (p.fixedAt - p.foundAt) * 24 <= withinH + 1e-9) && (beforeT == null || p.fixedAt <= beforeT + 1e-9);
+  const when = `fixed ${(Math.round((p.fixedAt - p.foundAt) * 240) / 10)} h after it was found`;
+  return { tier: ok ? 0 : null, detail: p.fixedBy === 'air' ? (chilled ? `${when}; ${chilled} ${chilled === 1 ? 'bird' : 'birds'} died of cold meanwhile` : when) : 'it passed with the weather' };
 };
 const sameDay = (id) => (farm) => {
   const p = prob(farm, id);
@@ -100,7 +103,7 @@ const RULES_B = {
   'catch-cool': (farm) => { const r = farm.harvest.result; if (!r) return null; return { tier: r.doaPct <= 0.2 + 1e-9 ? 0 : null, detail: `${pct1(r.doaPct)} dead on arrival` }; },
   // ---------------- Heat & Ventilation ----------------
   'warm-timer': (farm) => { const p = prob(farm, 'warm-afternoon'); return p ? { tier: p.phase === 'fixed' && p.fixedBy === 'air' ? 0 : null, detail: p.phase === 'fixed' ? `the warm afternoon passed (${p.fixedBy === 'air' ? 'after the timer change' : 'with the weather'})` : 'the warm afternoon was not dealt with' } : null; },
-  'w3-heat': fixedByAir('warm-afternoon3', 2), 'hot-first': fixedByAir('hot-afternoon', null, 25 + 18 / 24), 'dust-cleared': fixedByAir('dusty-air', 24), 'damp-cleared': fixedByAir('rainy-spell', 6),
+  'w3-heat': fixedByAir('warm-afternoon3', 2, null, true), 'hot-first': fixedByAir('hot-afternoon', null, 25 + 18 / 24), 'dust-cleared': fixedByAir('dusty-air', 24), 'damp-cleared': fixedByAir('rainy-spell', 6),
   'air-measured': (farm, records, ctx) => {
     const p = notes(records, 'air').filter((n) => n.day <= 23 && n.where);
     if ((ctx && ctx.day != null && ctx.day < 23) && p.length < 3) return null;

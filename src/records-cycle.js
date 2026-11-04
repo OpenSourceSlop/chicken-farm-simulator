@@ -2,7 +2,7 @@
 // the notebook compaction, on top of records.js / records-rows.js. Owner: package "sim". Pure logic; the run
 // package draws them (ui-records, ui-summary). Plain numbers only: nothing here is a verdict.
 //
-//   harvestPage(records, farm) -> null | { tickets: [{ truck, crates, birds, grossKg, tareKg, netKg, doa }], read: [truck],
+//   harvestPage(records, farm) -> null | { tickets: [{ truck, crates, birds, grossKg, tareKg, gutKg, netKg, doa }], read: [truck],
 //     sold, loaded, liveKg, meanLiveG, fcr, mortalityPct, deathsByLevel: [{ level, deaths, culls, doa, pct }], uniformityPct,
 //     uniformityDay, epef, epefFormula, feedLeftKg, withdrawalH, ageDays, notes: string[] }       (day 42; after the catch)
 //   cleanPage(records, farm) -> null | { litterOutAt, washedPct, dryPct, disinfectedPct, lines, pans, washbay, baits,
@@ -41,9 +41,9 @@ export function harvestPage(records, farm) {
   const hv = farm && farm.harvest, res = hv && hv.result;
   if (!res) return null;
   const read = records.notebook.filter((n) => n.kind === 'ticket').map((n) => n.value.truck);
-  const tickets = hv.trucks.map((t, truck) => ({ truck, crates: t.crates, birds: t.birds, grossKg: Math.round(t.grossKg), tareKg: HARVEST.tareKg, netKg: Math.round(t.netKg), doa: t.doa }));
+  const tickets = hv.trucks.map((t, truck) => ({ truck, crates: t.crates, birds: t.birds, grossKg: Math.round(t.grossKg), tareKg: HARVEST.tareKg, gutKg: Math.round(t.gutKg || 0), netKg: Math.round(t.netKg), doa: t.doa }));
   const notes = [];
-  if (res.gutFull) notes.push('The plant notes feed in the crops and guts of the birds');
+  if (res.gutFull) notes.push(`Feed in the crops and guts of the birds: the plant deducted ${Math.round(res.gutKg || 0).toLocaleString('en-US')} kg, not paid`);
   return { tickets, read: [...new Set(read)], sold: res.sold, loaded: res.loaded, liveKg: res.liveKg, meanLiveG: res.meanLiveG, fcr: res.fcr,
     mortalityPct: res.mortalityPct, deathsByLevel: deathsByLevel(records, farm), uniformityPct: res.uniformityPct, uniformityDay: res.uniformityDay,
     epef: res.epef, epefFormula: 'livability % × mean live weight kg ÷ (age days × FCR) × 100', feedLeftKg: res.feedLeftKg, withdrawalH: res.withdrawalH,

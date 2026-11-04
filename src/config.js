@@ -478,7 +478,9 @@ export const WEEK2 = {
     { id: 'lame-birds', day: 11, hour: 6 },
     { id: 'sudden-deaths', day: 13, hour: 4 },
   ],
-  target: { kind: 'weight', day: 14, minShare: 0.9 }, fail: { mortalityMaxPct: 1.0 },
+  // 95 % of the day-14 target: a week with no care (no light program, curtain, vaccine or line raising)
+  // weighs about 91 % and does not pass; the ideal is about 105 %, the curtain left down alone 96 %
+  target: { kind: 'weight', day: 14, minShare: 0.95 }, fail: { mortalityMaxPct: 1.0 },
 };
 export const WEEK3 = {
   id: 'week3', n: 4, title: 'Level 4 – Week 3', short: 'Week 3', starts: [15],
@@ -567,6 +569,7 @@ export const HEAT = { airSpeedAllFans: 2.5, padOffAboveRH: 90, feedersOffHours: 
 // house (the drinkers and feeders of house 1). sendBy: the plan goes out by this hour of the planning day.
 export const PLAN_CONTRACT = {
   salePerWeek: 3600, saleKg: 2.8, densityMaxKgM2: 32, lossesHintPct: 4, lossesMinPct: 4, restMinDays: 21, growDays: 42, cleanDays: 4,
+  saleMaxPct: 110, // the plant books 3,600 a week and takes at most 10 % more (general: a contract term on the letter)
   houseBirds: 6000, houseM2Drawings: 600,  // the company's drawings show the standard house, 50 x 12 m; house 1 measures 48 x 12
   houses: [1, 12], birdsPerHouse: [1000, 9000], cycleDays: [49, 100], sendBy: 16, replyAfterH: 1,
 };

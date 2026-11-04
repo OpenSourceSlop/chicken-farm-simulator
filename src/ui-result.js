@@ -95,7 +95,7 @@ function cardsOf(res, def) {
     const o = res.plan?.outcome, t = Object.fromEntries((o?.terms || []).map((x) => [x.key, x]));
     if (!o) return bigs(big('The plan', 'not sent', 'No plan went to the company.'));
     return bigs(
-      t.salePerWeek ? big('Birds for sale a week', int(t.salePerWeek.value), `contract ${int(t.salePerWeek.limit)} · the company counts ${num(o.lossesCountedPct)} % losses`) : null,
+      t.salePerWeek ? big('Birds for sale a week', int(t.salePerWeek.value), `contract ${int(t.salePerWeek.limit)}${t.salePerWeek.max != null ? `, at most ${int(t.salePerWeek.max)}` : ''} · the company counts ${num(o.lossesCountedPct)} % losses`) : null,
       t.density ? big('At catching', `${one(t.density.value)} kg/m²`, `the contract allows ${int(t.density.limit)}`) : null,
       t.rest ? big('Rest days', int(t.rest.value), `the contract asks for at least ${int(t.rest.limit)}`) : null,
       t.houseBirds ? big('Chicks a house', int(t.houseBirds.value), `the contract allows ${int(t.houseBirds.limit)}`) : null);

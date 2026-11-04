@@ -101,7 +101,7 @@ const chain = (name, fn) => test(name, () => {
 });
 let fullCycle = null; // the run of the third test, for the save sizes of the eighth
 
-chain('a scripted plan (two measures, the reference plan, the reply, signed) passes with 3,611 birds a week; a 49-day plan at 0 % losses does not', (R) => {
+chain('a scripted plan (two measures, the reference plan, the reply, signed) passes with 3,611 birds a week; a 49-day plan at 0 % losses and a 12-house plan do not', (R) => {
   R.run.startRun({ seed: 1 });
   assert(R.level.def.id === 'plan' && at(R, -2, 7) && R.farm.flock.alive === 0, `the planning day 07:00, no birds: ${where(R)}`);
   const r = scriptedPlan(R, IDEAL_PLAN);
@@ -114,6 +114,12 @@ chain('a scripted plan (two measures, the reference plan, the reply, signed) pas
   assert(!r2.pass && /3 days of rest; the contract asks for 21/.test(r2.failText), `49-day plan: pass ${r2.pass}: ${r2.failText}`);
   assert(!r2.run.next && r2.run.replays[0].id === 'plan', 'not passed: Replay the plan, no Continue');
   console.log(`     ${r2.failText}`);
+  // the most houses the sheet allows meets no contract: the plant takes at most 10 % over it
+  const R3 = makeRun();
+  R3.run.startRun({ seed: 1 });
+  const r3 = scriptedPlan(R3, { houses: 12, birdsPerHouse: 6000, cycleDays: 100, lossesPct: 0, saleKg: 2.8 });
+  assert(!r3.pass && /the company buys 3,600 a week and the plant takes at most 3,960: your plan gives 4,838/.test(r3.failText), `12-house plan: pass ${r3.pass}: ${r3.failText}`);
+  console.log(`     ${r3.failText}`);
 });
 
 chain('goto(7, 21, auto) passes the brooding week; Continue starts week 2 at day 8 06:00 with the same flock, start saved', (R) => {
@@ -225,6 +231,10 @@ chain('every level start blob is 250 KB or less; a Phase 2 save continues as a r
     assert(kb <= 250, `${def.id} day ${d}: ${kb.toFixed(1)} KB`);
   }
   console.log(`     level starts (KB): ${sizes.join(' · ')}`);
+  // the run key at the end of the rest (day 67): blob and run as the browser writes them (PHASE3.md §6.15)
+  const endKb = JSON.stringify({ run: C.run.state(), blob: C.level.saveBlob() }).length / 1024;
+  console.log(`     the run key at ${where(C)}: ${endKb.toFixed(0)} KB`);
+  assert(endKb <= 250, `run save at the end ${endKb.toFixed(1)} KB`);
   R.level.start({ seed: 1 });
   R.level.debug.goto(2, 10, { auto: true });
   assert(R.store.data && !R.level.inRun, 'Phase 2 saved its level (the lone brooding week)');
@@ -236,6 +246,34 @@ chain('every level start blob is 250 KB or less; a Phase 2 save continues as a r
   assert(R2.store.data === null, 'the Phase 2 save is replaced by the run key');
   R2.level.debug.goto(7, 21, { auto: true });
   assert(R2.level.result?.pass && R2.run.next() && R2.level.def.id === 'week2', 'and on into week 2');
+});
+
+chain('an unnoticed rainy spell opens no problem job; Next job with jobs open stops at the next 06:00 and says so', (R) => {
+  R.run.startLevel('week2', { from: 'standard' });
+  // no input: hour by hour through the rainy spell (days 9-10) to day 11 noon
+  while (R.env.day < 11.5) { R.level.debug.goto(R.env.dayNumber, ((R.env.day - Math.floor(R.env.day)) * 24) + 1); R.level.update(1); }
+  const p = R.farm.problems.find((x) => x.id === 'rainy-spell');
+  assert(p && p.phase === 'fixed' && p.foundAt == null && p.fixedBy === 'weather', `the rainy spell passed unseen: ${JSON.stringify(p)}`);
+  assert(!R.level.jobs.list().some((j) => j.id === 'p-damp'), `no p-damp job: ${R.level.jobs.list().filter((j) => j.def.kind === 'problem').map((j) => j.key).join(' ')}`);
+  // Next job twice with jobs open: the label names the day, and the skip stops at the next 06:00 at the latest
+  const open = R.level.jobs.open().length;
+  assert(open > 0, 'jobs are open at day 11 noon');
+  R.level.nextJob();
+  const label = R.level.nextLabel(), d0 = R.env.day;
+  R.level.nextJob();
+  assert(/Skip to \d\d:\d\d(, day \d+)? — \d+ jobs? open/.test(label) && R.env.day <= Math.floor(d0) + 1 + 0.25 + 1e-6 && R.env.day > d0, `label "${label}", skipped ${d0.toFixed(3)} -> ${R.env.day.toFixed(3)}`);
+  console.log(`     ${label}: ${where(R)}`);
+});
+
+chain('a standard start of a level the player had passed: the later levels and their saved starts of the old flock are gone', (R) => {
+  R.run.startRun({ seed: 1, at: 'level1' });
+  for (let i = 0; i < 3; i++) { assert(playLevel(R)?.pass, `level ${R.level.def.id} passes`); R.run.next(); }
+  R.level.debug.goto(30, 10, { auto: true });
+  assert(R.run.hasStart('weeks45', 22) && R.run.hasStart('weeks45', 29), 'weeks 4-5 has both starts');
+  R.run.startLevel('week3', { from: 'standard' });
+  const card = R.run.card().map((c) => `${c.id}:${c.state}`).join(' ');
+  assert(!R.run.hasStart('weeks45', 22) && !R.run.hasStart('weeks45', 29) && R.run.state().levels.weeks45 == null, `weeks 4-5 starts gone: ${card}`);
+  assert(R.run.state().levels.week2?.state === 'passed' && R.run.state().levels.level1?.attempts === 1, `the player's own entries kept: ${JSON.stringify(R.run.state().levels.level1)}`);
 });
 
 console.log(failed ? `${failed} failed` : `all passed${skipped ? ` (${skipped} skipped: run.stub / farm.cycleStub)` : ''}`);

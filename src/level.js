@@ -44,7 +44,7 @@
 //
 // JobInstance: { key, id, def, day, status: 'waiting'|'open'|'done'|'missed', opensAt, closesAt,
 //   doneAt, progress (0..1), result }  (times as env.day floats)
-import { FARM, LEVEL1, CYCLE, PLAN_LEVEL, WEEKS45, FINISH, CLEANOUT, HARVEST, PLACEMENT_DAY, levelById, levelOfDay, weightAt } from './config.js';
+import { FARM, LEVEL1, LEVELS, CYCLE, PLAN_LEVEL, WEEKS45, FINISH, CLEANOUT, HARVEST, PLACEMENT_DAY, levelById, levelOfDay, weightAt } from './config.js';
 import { EV } from './events.js';
 import { createJobEngine, LEVEL_END_DAY } from './job-engine.js';
 import { applyRound } from './farm-profiles.js';
@@ -120,6 +120,8 @@ export function createLevel(ctx, deps = {}) {
       if (p.detail) details.set(p.milestone, p.detail);
       if (level.mode === 'level' || level.mode === 'result') points.push({ branch: p.branch, milestone: p.milestone, points: p.points, detail: p.detail || '', text: ALL_MILESTONES.find((m) => m.id === p.milestone)?.text || p.milestone });
       saveProfile();
+      // the run save follows the profile soon, so a reload never resumes from before points the profile holds
+      if (inLevel() && !free) scheduleSave(0.5);
     });
     events.on(EV.ACTION, (p) => {
       if (!inLevel() || free) return;
@@ -249,7 +251,9 @@ export function createLevel(ctx, deps = {}) {
     const p = farm.plan, o = p?.outcome;
     if (!o) return { pass: false, plan: null, failText: 'no plan went to the company' };
     const words = {
-      salePerWeek: (t) => `the company counts ${two(o.lossesCountedPct).replace(/\.00$/, '')} % losses: your plan gives ${int(t.value)} birds for sale a week; the contract asks for ${int(t.limit)}`,
+      salePerWeek: (t) => (t.max != null && t.value > t.max
+        ? `the company buys ${int(t.limit)} a week and the plant takes at most ${int(t.max)}: your plan gives ${int(t.value)}`
+        : `the company counts ${two(o.lossesCountedPct).replace(/\.00$/, '')} % losses: your plan gives ${int(t.value)} birds for sale a week; the contract asks for ${int(t.limit)}`),
       density: (t) => `your plan gives ${two(t.value)} kg of live bird per m² at catching; the contract allows ${int(t.limit)}`,
       rest: (t) => `your plan leaves ${int(t.value)} days of rest; the contract asks for ${int(t.limit)}`,
       houseBirds: (t) => `your plan puts ${int(t.value)} chicks in a house; the contract allows ${int(t.limit)}`,
@@ -355,20 +359,35 @@ export function createLevel(ctx, deps = {}) {
     scheduleSave(0.5);
   }
   const reached = new Set();
-  function reachStart(day) {
+  function reachStart(day, { teleport = true } = {}) {
     if (!inLevel() || reached.has(`${def.id}@${day}`)) return;
     reached.add(`${def.id}@${day}`);
-    player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw);
+    // the morning after a skip starts at the gate; the running clock leaves the farmer where he is (PHASE3.md §2.3)
+    if (teleport) player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw);
     if (inRun && runApi) { try { runApi.startDay(day); } catch (err) { console.error('run start save failed', err); } }
+  }
+  /** Where a Next job skip lands. With jobs open (the confirmed second press) it stops at the earliest moment one
+   *  of them closes, or the next 06:00, whichever comes first, never at a level end weeks away. */
+  function skipTarget(open = engine.open()) {
+    const next = engine.nextOpening();
+    if (!open.length) return next;
+    const morning = Math.floor(env.day - 0.25 + 1e-9) + 1 + 0.25; // the next 06:00
+    let cap = morning;
+    for (const i of open) if (i.closesAt != null && i.closesAt > env.day + 1e-6 && i.closesAt < cap) cap = i.closesAt;
+    return Math.min(next, cap);
+  }
+  /** The skip in words: the day when it is not today, and the level's end when the skip ends the level. */
+  function skipText(t, openN = 0) {
+    const s = splitDay(t), when = s.day !== env.dayNumber ? `${hhmm(s.hour)}, day ${s.day}` : hhmm(s.hour);
+    const jobs = openN ? ` — ${openN} job${openN === 1 ? '' : 's'} open` : '';
+    return t >= engine.endAt() - 1e-7 ? `End ${def.short ?? 'the level'} at ${when}${jobs}` : `Skip to ${when}${jobs}`;
   }
   function nextLabel() {
     if (free) return 'No jobs (free run)';
     if (!inLevel()) return 'Next job';
     if (pending && performance.now() - pending.at < NEXT_CONFIRM_MS) return pending.label;
     if (engine.open().length) return 'Next job';
-    const t = engine.nextOpening();
-    const s = splitDay(t);
-    return s.day !== env.dayNumber ? `Skip to ${hhmm(s.hour)}, day ${s.day}` : `Skip to ${hhmm(s.hour)}`;
+    return skipText(skipTarget([]));
   }
 
   // ---------------- env for a fresh start (the prep day, or the planning day) ----------------
@@ -558,6 +577,10 @@ export function createLevel(ctx, deps = {}) {
       if (t > env.day + 1e-9) { const h = (t - env.day) * 24; env.skipHours(h); flock?.afterSkip?.(h); } // the night, with the farmer's settings
       def = next;
       farm.enterLevel(next);
+      // the notebook of the levels before the last one folds away (the rows stay whole; PHASE3.md §8.6): the run save
+      // stays under its 250 KB to the end of the rest
+      const prevDef = LEVELS[LEVELS.indexOf(next) - 1];
+      if (records?.compact && prevDef) records.compact(prevDef.startDay);
       startAt = env.day;
       reached.add(`${next.id}@${next.startDay}`);
       engine.start(next.startDay, next);
@@ -671,7 +694,7 @@ export function createLevel(ctx, deps = {}) {
       }
       clock();
       // a saved start inside the level (weeks 4-5: day 29 06:00) reached by the running clock
-      if (prevDay != null && !free) for (const s of innerStarts(prevDay, env.day)) reachStart(s.d);
+      if (prevDay != null && !free) for (const s of innerStarts(prevDay, env.day)) reachStart(s.d, { teleport: false });
       prevDay = env.day;
       tickAcc += dt;
       if (tickAcc >= 0.5) { tickAcc = 0; engine.tick(); checks(); }
@@ -692,18 +715,21 @@ export function createLevel(ctx, deps = {}) {
       const now = performance.now();
       if (open.length && !(pending && now - pending.at < NEXT_CONFIRM_MS)) {
         const c = engine.cycle();
-        const s = splitDay(engine.nextOpening());
-        pending = { at: now, label: `Skip to ${hhmm(s.hour)} — ${open.length} job${open.length === 1 ? '' : 's'} open` };
+        pending = { at: now, label: skipText(skipTarget(open), open.length) };
         ui?.jobCard?.refresh?.();
         return { pointed: c?.key ?? null };
       }
       pending = null;
-      const target = engine.nextOpening();
+      const target = skipTarget(open);
       const hrs = (target - env.day) * 24;
+      // a long jump (more than a day: the rest days) shows the busy card while the farm runs it
+      if (hrs > 24 && ui?.busy?.run) { ui.busy.run(skipText(target), () => skip(hrs)); return { skipped: hrs }; }
       skip(hrs);
       return { skipped: hrs };
     },
     nextLabel,
+    /** Today's hand weighings the level keeps (saved with the level: they survive a reload). */
+    weighsToday() { return weighs.filter((x) => (x.day ?? LEVEL1.endDay) === env.dayNumber); },
     jobs: {
       list: () => engine.list(),
       open: () => engine.open(),

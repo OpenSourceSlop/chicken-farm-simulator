@@ -26,6 +26,7 @@
 import { LEVEL1, EQUIP, flockAgeAt, PLAN_LEVEL } from './config.js';
 import { EV, UI_ACTION_IDS_CYCLE } from './events.js';
 import { createRng } from './farm-rng.js';
+import { roundDeep } from './round.js';
 import { createWater, updateAccess, drink, stepLines, recordMeter, waterPerKg } from './farm-water.js';
 import { createFeed, stepAugers, feedAccess, eat, meanPanFill } from './farm-feed.js';
 import { createLitter, stepLitter, serializeLitter, restoreLitter, cellIndex as litterCell, meanDepth } from './farm-litter.js';
@@ -308,7 +309,8 @@ function serializeFarm(farm, env) {
       lines: farm.water.lines.map((l) => ({ ...l, access: +l.access.toFixed(9), flowMlMin: +l.flowMlMin.toFixed(6) })) }),
     feed: clone(farm.feed), litter: serializeLitter(farm.litter),
     light: { ...farm.light }, vent: { ...farm.vent }, fansManual: env.fansManual,
-    problems: clone(farm.problems), stats: clone(farm.stats),
+    // the day stats rounded to 3 decimals (save size: 23.99999999999993 h is 24 h)
+    problems: clone(farm.problems), stats: { ...clone(farm.stats), ...(farm.stats.daily ? { daily: roundDeep(farm.stats.daily, 3) } : {}) },
   };
 }
 
