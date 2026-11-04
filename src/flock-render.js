@@ -22,18 +22,22 @@ export function createFlockRender(scene, camera, n, material, depth, count = () 
   const group = new THREE.Group();
   group.name = 'flock';
 
-  function makeMesh(lod) {
-    const geo = buildBirdGeometry(lod);
+  // Phase 5 (PHASE5.md §4.4): each mesh also holds a reduced geometry (near: the distant bird, far: lod 2) sharing the same
+  // instance attributes, so setDetail swaps the geometry only: the same material and program, nothing compiles
+  function makeMesh(lod, lodReduced) {
+    const geo = buildBirdGeometry(lod), alt = buildBirdGeometry(lodReduced);
     const attr = (name) => {
       const at = new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4);
       at.setUsage(THREE.DynamicDrawUsage);
       geo.setAttribute(name, at);
+      alt.setAttribute(name, at);
       return at;
     };
     const a = attr('aAnimA'), b = attr('aAnimB'), c = attr('aAnimC');
     const e = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
     e.setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('aComf', e);
+    alt.setAttribute('aComf', e);
     const mesh = new THREE.InstancedMesh(geo, material, n);
     mesh.name = lod === 0 ? 'flock-near' : 'flock-far';
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -46,9 +50,10 @@ export function createFlockRender(scene, camera, n, material, depth, count = () 
     mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.5, 0), 26);
     mesh.count = 0;
     group.add(mesh);
-    return { mesh, a, b, c, e };
+    return { mesh, a, b, c, e, geos: { full: geo, reduced: alt } };
   }
-  const near = makeMesh(0), far = makeMesh(1);
+  const near = makeMesh(0, 1), far = makeMesh(1, 2);
+  let detail = 'full';
 
   const frustum = new THREE.Frustum();
   const pm = new THREE.Matrix4();
@@ -125,5 +130,15 @@ export function createFlockRender(scene, camera, n, material, depth, count = () 
     pack,
     // false: draw every bird with the distant model and no culling (debugging)
     setCulling(v) { enabled = !!v; dirty = true; },
+    /** 'full' | 'reduced': the bird meshes' geometry (the instances, the material and the poses stay). */
+    setDetail(level) {
+      detail = level === 'reduced' ? 'reduced' : 'full';
+      for (const m of [near, far]) m.mesh.geometry = m.geos[detail];
+      dirty = true;
+      return detail;
+    },
+    get detail() { return detail; },
+    /** Every geometry the meshes can draw (the warm-up and tests). */
+    geometries: [near.geos.full, near.geos.reduced, far.geos.full, far.geos.reduced],
   };
 }

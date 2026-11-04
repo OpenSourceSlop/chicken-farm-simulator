@@ -61,20 +61,25 @@ function prim(geo) {
   return { pos, index };
 }
 
-// lod 0: close-up bird (~380 vertices). lod 1: distant bird (~110 vertices, no eyes or toes).
+// lod 0: close-up bird (309 triangles). lod 1: distant bird (113 triangles, no eyes or toes).
+// lod 2 (Phase 5, PHASE5.md §4.4, the reduced flock detail of a slow computer): 64 triangles, 43 % under lod 1: a
+// lower-segment body, head and wings (the wings still open in the heat), tapered legs, no wattle; the same parts and
+// pivots, so the same poses and colours.
 export function buildBirdGeometry(lod = 0) {
-  const hi = lod === 0;
+  const hi = lod === 0, lo = lod >= 2;
+  const sph = (a, b, c) => new THREE.SphereGeometry(1, ...(hi ? a : lo ? c : b));
   const base = {
-    body: prim(hi ? new THREE.SphereGeometry(1, 9, 6) : new THREE.SphereGeometry(1, 6, 4)),
-    neck: prim(hi ? new THREE.SphereGeometry(1, 5, 3) : new THREE.SphereGeometry(1, 4, 2)),
-    head: prim(hi ? new THREE.SphereGeometry(1, 7, 5) : new THREE.SphereGeometry(1, 5, 3)),
-    wing: prim(hi ? new THREE.SphereGeometry(1, 6, 3) : new THREE.SphereGeometry(1, 4, 2)),
+    body: prim(sph([9, 6], [6, 4], [5, 3])),
+    neck: prim(sph([5, 3], [4, 2], [3, 2])),
+    head: prim(sph([7, 5], [5, 3], [4, 2])),
+    wing: prim(sph([6, 3], [4, 2], [3, 2])),
     blob: prim(new THREE.SphereGeometry(1, 4, 2)),
     // open cones pointing +X (ConeGeometry points +Y; rotate -90° about Z); bases hide inside
-    cone: prim(new THREE.ConeGeometry(1, 1, 4, 1, true).rotateZ(-Math.PI / 2)),
+    cone: prim(new THREE.ConeGeometry(1, 1, lo ? 3 : 4, 1, true).rotateZ(-Math.PI / 2)),
     beak: prim(new THREE.ConeGeometry(1, 1, 3, 1, true).rotateX(Math.PI / 6).rotateZ(-Math.PI / 2)),
     spike: prim(new THREE.ConeGeometry(1, 1, 3, 1, true)),
-    leg: prim(new THREE.CylinderGeometry(1, 1, 1, 3, 1, true)),
+    // lod 2: a leg tapering to the foot (an open cone pointing down: half the triangles of the open prism)
+    leg: prim(lo ? new THREE.ConeGeometry(1.3, 1, 3, 1, true).rotateX(Math.PI) : new THREE.CylinderGeometry(1, 1, 1, 3, 1, true)),
     // flat triangular prism with one corner pointing +X: a three-toed foot
     foot: prim(new THREE.CylinderGeometry(1, 1, 1, 3).rotateY(Math.PI / 2)),
   };
@@ -150,7 +155,7 @@ export function buildBirdGeometry(lod = 0) {
   }
   if (hi) add(base.blob, PART.comb, T(0.37 + dc[0], 0.765 + dc[1], 0, 0.065, 0.028, 0.014), T(0.37, 0.765, 0, 0.065, 0.028, 0.014));
   // Wattles under the beak
-  for (const s of hi ? [-1, 1] : [0]) {
+  for (const s of hi ? [-1, 1] : lo ? [] : [0]) {
     add(base.blob, PART.wattle, T(0.36, 0.63, 0.018 * s, 0.024, 0.04, 0.012), T(0.43, 0.585, 0.018 * s, 0.026, 0.042, 0.012));
   }
 

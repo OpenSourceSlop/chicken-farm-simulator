@@ -70,6 +70,22 @@ export const SETTINGS_SCHEMA = {
   } },
 };
 
+/** The Graphics presets (PHASE5.md §4.1): the three hand settings each one sets. Changing one of the three by hand makes
+ *  `graphics.quality` read 'custom'; picking a preset sets the three (createSettings links them, so every settings object
+ *  behaves the same with or without the menu). */
+export const GRAPHICS_PRESETS = {
+  auto: { pixelRatio: 'auto', shadows: 'auto', flockDetail: 'auto' },
+  high: { pixelRatio: '1.5', shadows: 'high', flockDetail: 'full' },
+  medium: { pixelRatio: '1', shadows: 'low', flockDetail: 'full' },
+  low: { pixelRatio: '0.85', shadows: 'off', flockDetail: 'reduced' },
+};
+const PRESET_KEYS = ['pixelRatio', 'shadows', 'flockDetail'];
+/** The preset the three hand settings match now, or 'custom'. */
+export function presetOf(graphics) {
+  for (const [name, p] of Object.entries(GRAPHICS_PRESETS)) if (PRESET_KEYS.every((k) => graphics[k] === p[k])) return name;
+  return 'custom';
+}
+
 function defaultStorage() {
   try { return typeof window !== 'undefined' && window.localStorage ? window.localStorage : null; } catch { return null; }
 }
@@ -190,6 +206,15 @@ export function createSettings(opts = {}) {
       return () => { const i = subs.indexOf(s); if (i >= 0) subs.splice(i, 1); };
     },
   };
+  // the Graphics presets (settings package, PHASE5.md §4.1): a preset sets the three hand settings; one of them changed by
+  // hand away from the preset reads 'custom' (setMany puts all three before telling anyone, so a preset never reads custom)
+  api.subscribe((c) => {
+    const gr = values.graphics;
+    if (c.key === 'quality') { const p = GRAPHICS_PRESETS[c.value]; if (p) api.setMany(Object.fromEntries(PRESET_KEYS.map((k) => [`graphics.${k}`, p[k]]))); return; }
+    if (!PRESET_KEYS.includes(c.key) || gr.quality === 'custom') return;
+    const p = GRAPHICS_PRESETS[gr.quality];
+    if (p && PRESET_KEYS.some((k) => gr[k] !== p[k])) api.set('graphics.quality', 'custom');
+  }, 'graphics');
   // reduced motion follows the setting at once and on every change (motion.js; the CSS class on <html>)
   setMotionOverride(values.interface.reducedMotion);
   api.subscribe((c) => setMotionOverride(c.value), 'interface.reducedMotion');

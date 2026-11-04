@@ -10,6 +10,7 @@ import { buildFarmerModel } from './player-model.js';
 import { createFarmerAnimator } from './player-anim.js';
 import { createCameraRig, ZOOM_DEFAULT } from './player-camera.js';
 import { createInput } from './player-input.js';
+import { createCameraControls } from './player-controls.js';
 import { moveAndSlide } from './player-collide.js';
 import { findPath, freeSpot } from './player-path.js';
 import { createTargetMarker, createDust, createContactShadow } from './player-fx.js';
@@ -21,10 +22,8 @@ const RUN = 6.5;
 const ACCEL = 24; // m/s^2
 const DECEL = 30;
 const TURN_RATE = 13; // 1/s, body turn toward the movement direction
-const ORBIT_PER_PX = 0.0055; // rad per dragged pixel
-const KEY_TURN = 1.7; // rad/s with the arrow keys
-const KEY_ZOOM = 1.3; // zoom speed with + and - (log units per second)
-const WHEEL_ZOOM = 0.0015; // per wheel pixel (a notch of 100 = 16 %)
+// the camera's turn and zoom rates (ORBIT_PER_PX 0.0055 rad/px, KEY_TURN 1.7 rad/s, WHEEL_ZOOM 0.0015, KEY_ZOOM 1.3) and the
+// Camera settings that scale them: player-controls.js (Phase 5, PHASE5.md §4.5)
 const ARRIVE = 0.15; // click-to-walk stops this close to the target
 const WAYPOINT_REACH = 0.4;
 const ARRIVE_DECEL = 14; // m/s^2 used to ease into the target
@@ -43,7 +42,9 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
   scene.add(root);
   const anim = createFarmerAnimator(model);
   const cam = createCameraRig(camera);
-  const input = createInput(canvas);
+  // Phase 5: the move, turn and zoom keys from keys.js (rebindable), the camera rates from settings 'camera.*' (live)
+  const input = createInput(canvas, ctx.keys || null);
+  const camCtl = createCameraControls(ctx.settings || null);
   const marker = createTargetMarker(scene);
   const dust = createDust(scene);
   createContactShadow(root);
@@ -113,14 +114,14 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
 
     // Camera input
     const orbit = input.takeOrbit();
-    if (orbit) cam.rotate(-orbit * ORBIT_PER_PX);
+    if (orbit) cam.rotate(camCtl.orbit(orbit));
     const wheel = input.takeWheel();
-    if (wheel) cam.zoomBy(Math.exp(wheel * WHEEL_ZOOM));
+    if (wheel) cam.zoomBy(camCtl.wheel(wheel));
     if (input.enabled) {
       const ra = input.rotateAxis();
-      if (ra) cam.rotate(ra * KEY_TURN * dt);
+      if (ra) cam.rotate(camCtl.keyTurn(ra, dt));
       const za = input.zoomAxis();
-      if (za) cam.zoomBy(Math.exp(za * KEY_ZOOM * dt));
+      if (za) cam.zoomBy(camCtl.keyZoom(za, dt));
     }
 
     // Click to walk
@@ -260,6 +261,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
     update,
     dispose() {
       input.dispose();
+      camCtl.dispose();
       scene.remove(root, marker.group);
     },
   };
