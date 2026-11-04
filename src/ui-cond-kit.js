@@ -97,6 +97,7 @@ const CSS = `
 .cond-lamps { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; }
 .cond-lamp { display: inline-flex; align-items: center; gap: 7px; font: 600 12.5px/1.25 var(--font-display); letter-spacing: 0.03em; color: var(--key-ink); }
 .cond-lamp .led { flex: none; }
+.cond-sub-line { display: block; margin-top: 2px; }
 .cond-switch { display: inline-flex; align-items: stretch; gap: 0; border-radius: 8px; box-shadow: 0 0 0 2px var(--plate-edge); }
 .cond-switch .key { min-width: 96px; border-radius: 0; }
 .cond-switch .key:first-child { border-radius: 7px 0 0 7px; }

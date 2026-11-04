@@ -61,8 +61,8 @@ export function buildGenerator(api) {
   };
   const toMains = leverKey('mains', 'Mains'), toGen = leverKey('generator', 'Generator');
   // the mains' state lamp on the switch box (the grid's supply), beside what feeds the house
-  const mainsLamp = lamp('run'), swSub = h('span');
-  const sw = machineRow('Transfer switch', h('small', { class: 'cond-lamps' }, mainsLamp.el, swSub),
+  const mainsLamp = lamp('run'), swSub = h('span', { class: 'cond-sub-line' });
+  const sw = machineRow('Transfer switch', h('small', null, h('span', { class: 'cond-lamps' }, mainsLamp.el), swSub),
     h('span', { class: 'cond-switch-k' }, 'House on'), h('span', { class: 'cond-switch', role: 'group', 'aria-label': 'Transfer switch: house on' }, toMains, toGen));
   sw.led.classList.add('led--pad');
 
@@ -115,7 +115,7 @@ export function buildGenerator(api) {
     sw.led.classList.toggle('is-on', !!p.on);
     sw.setState(`House on the ${lv}: ${p.on ? 'the house has power' : 'no power to the house'}`);
     mainsLamp.set(!!p.mains, `Mains: ${p.mains ? 'on' : 'off'}`);
-    setText(swSub, lv === 'generator' ? (g.running ? '· the generator feeds the house' : '· the generator is not running') : p.mains ? '· the grid feeds the house' : '· the grid gives no power now');
+    setText(swSub, lv === 'generator' ? (g.running ? 'the generator feeds the house' : 'the generator is not running') : p.mains ? 'the grid feeds the house' : 'the grid gives no power now');
     test.led.classList.toggle('is-on', testKey.running);
     test.setState(testKey.running ? 'Test run: the engine is running' : g.testedDay != null ? `Last test run: day ${g.testedDay}` : 'No test run in this flock yet');
     setText(test.small, `${GENERATOR.testMin} minutes every week (generator plate)`);
