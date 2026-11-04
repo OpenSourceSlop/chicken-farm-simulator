@@ -96,11 +96,12 @@ export function createKeysTab({ ctx, onChange = () => {} }) {
   resetAll.addEventListener('click', () => { cancel(); keys.reset(); refresh(); status.textContent = 'Every key is back on its first key.'; onChange({ reset: true }); });
   const el = h('div', { class: 'set-keys' }, status, h('div', { class: 'set-keys-list' }, groups), h('div', { class: 'set-foot' }, resetAll));
   refresh();
-  keys.subscribe?.(() => { if (!waiting) refresh(); });
+  const offKeys = keys.subscribe?.(() => { if (!waiting) refresh(); }) || (() => {});
   return {
     el,
     refresh,
     cancel: () => cancel(waiting ? 'Not changed.' : null),
+    dispose() { cancel(); offKeys(); },
     get capturing() { return !!waiting; },
     resetButton: resetAll,
   };

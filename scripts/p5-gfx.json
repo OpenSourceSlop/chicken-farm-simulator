@@ -24,7 +24,7 @@
   {"eval": "__game.setState({ hour: 22 }), __game.advance(0.5), __v('the apron, day 30 22:00')"},
   {"eval": "__game.setState({ farmer: { x: -14, z: 20, yaw: 0 }, zoom: 45 }), __game.advance(0.5), __v('the yard at zoom 45, day 30 22:00')"},
   {"eval": "__game.cycleAt(41, 10), __game.setState({ farmer: { x: 0, z: 0.5, yaw: 0 }, cameraYaw: 0, zoom: 22 }), __game.advance(0.5), __v('inside, day 41')"},
-  {"eval": "__game.cycleAt(26, 15), __game.setCondition('rainy'), __game.farm.debug.set('weatherNow.rain', 0.85), __game.advance(2), __game.world.debug.rain.flash(), __game.advance(0.05), __game.setState({ farmer: { x: -14, z: 12, yaw: 0 }, zoom: 22 }), __v('the rainy storm, the yard (rain ' + __game.farm.weatherNow.rain.toFixed(2) + ')')"},
+  {"eval": "__game.startLevel({ seed: 1 }), __game.cycleAt(26, 15), __game.setCondition('rainy'), __game.advance(2), __game.world.debug.rain.flash(), __game.advance(0.05), __game.setState({ farmer: { x: -14, z: 12, yaw: 0 }, zoom: 22 }), __v('the rainy storm, the yard (rain ' + __game.farm.weatherNow.rain.toFixed(2) + ')')"},
   {"eval": "__game.setState({ farmer: { x: -6, z: 0.5, yaw: 0 } }), __game.advance(0.3), __v('the rainy storm, inside')"},
   {"eval": "__game.cycleAt(33, 15.2), __game.setCondition('rainy'), __game.advance(0.5), __game.farm.debug.power(false), __game.advance(4), __game.setState({ farmer: { x: -6, z: 0.5, yaw: 0 } }), __game.advance(0.3), __v('the power cut, inside (power ' + __game.farm.power.on + ')')"},
   {"eval": "__game.setState({ hour: 21.5, farmer: { x: -14, z: 12 } }), __game.advance(3), __v('the power cut at night, the yard')"},

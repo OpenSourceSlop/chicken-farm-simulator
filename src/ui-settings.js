@@ -58,13 +58,15 @@ export function settingControl(path, it, value, onChange) {
 
 // the frame-rate readout on the time bar (graphics.showFps): a small "NN fps"
 function createFpsReadout(ctx) {
-  let el = null, timer = null;
+  let el = null, timer = null, retry = null;
   const tick = () => { if (el) el.textContent = `${Math.round(ctx.perf?.fps || 0)} fps`; };
-  function set(on) {
+  function set(on, tries = 0) {
     if (typeof document === 'undefined') return;
+    clearTimeout(retry);
     if (on && !el) {
       const bar = document.querySelector('#hud .timebar');
-      if (!bar) return;
+      // the time bar is put on the page after the panels register (a stored "show" at boot waits for it)
+      if (!bar) { if (tries < 20) retry = setTimeout(() => set(!!ctx.settings?.get('graphics.showFps'), tries + 1), 250); return; }
       el = h('span', { class: 'set-fps', role: 'status', 'aria-label': 'Frame rate' }, '');
       bar.append(el);
       tick(); timer = setInterval(tick, 500);
@@ -152,6 +154,7 @@ export function registerSettingsPanel({ register, openPanel, closePanel, ctx, me
         drawGov();
       },
       onClose() { keysTab?.cancel(); },
+      dispose() { keysTab?.dispose(); },
       update(dt) { if ((govT -= dt) <= 0) { govT = 0.5; if (!secs[at]?.hidden && groups[at][0] === 'graphics') drawGov(); } },
       // the tabs move with the arrow keys (ui.js offers the open panel every key first: PHASE5.md §8.6)
       onKey(e) {
