@@ -12,6 +12,8 @@ seven levels on one flock from the plan to the rested house, all eleven skill br
 `PHASE3.md` and integrated on main: see **"Phase 3 (the full flock cycle) — as integrated"** at the end.
 **Phase 4** (simulation tuning against general broiler practice, the four harder replay conditions and the
 clarity leftovers) is specified in `PHASE4.md`; its contracts are in code (see **"Phase 4 — design"** at the end).
+The farmer's four requests during Phase 4 (the flock watch's early warnings, the slower clock and held jobs, the
+dead-bird bucket set down, the dead-bird pointer) are PHASE4.md §15; see **"The farmer's requests during Phase 4"**.
 Not in scope yet: sound, settings, save slots, farm overview map (Phase 5).
 
 ## Decisions already made (from the plan doc)
@@ -841,6 +843,38 @@ with (the no-verdict rule for the flock watch's warnings, the 4.5-minute day cei
   test-jobs cases (the hold, the grace, no hold in a skip, the soon cue, the clock speeds), test-contracts (every cause's sign
   is a board, G bound only by ui.js, the legend). Harness proofs (`node scripts/req-steps.mjs` → `scripts/req-watch.json`,
   `req-clock.json`, `req-bucket.json`, `req-deadmark.json`).
+- **Steps files changed by the slower clock**: `p2-level1` (the barrow's clock is `LEVEL1.clock.carry`, not 30),
+  `p3-panels-clean` / `p3-panels-heat` / `p3-panels-shots` (the fixed waits after the pans' wash and the pad check × 1.25 for
+  the panel clock 24), `p2-flock-events` (its sick bird is picked clear of the boards' reach: the new timing put one by a
+  wall board), `p3-cycle-steps.mjs` (waits for the job engine's tick after the vaccine is drunk). Captions: the closes-soon
+  cue shows only when no caption does, and it, the flock watch's warning and the look notes are replaced at once by the next
+  caption (`caption.show(…, { soft | ifFree | now })`), so a panel's result caption is never held back behind them
+  (`hotfix-steps`' background flow test). The bucket's captions show at once.
+- **Results on main** (960 × 600, seed 1, no console or page errors anywhere): `npm test` 356 ok (with test-watch 6);
+  `npm run perf` alone within every budget (the brooding week's 24 h skip 61 ms; a level 24 h skip with the watch 68 ms).
+  `req-watch` 11 PASS (the thermostat 4 °C under the row by real clicks; the cold warning 4.4 farm hours later, caption,
+  notebook line, red comfort row, deaths 0.03 % of the 2 % limit at 14:00; the thermostat back; right again), `req-clock`
+  12 (90 / ⅔ speed at the water supply / 24 with its panel; the chips and the cue; r-meter held past 12:00 with the panel
+  open, missed 21 farm minutes after its window once the panel closed; day 2's read at 12:05 done), `req-bucket` 17 (a dead
+  bird 0.30 m away and the chick 1.08 m: E took the chick; Shift+E the bird; the sign read with the bucket; a vent sample with
+  the bucket set it down 0.4 m from him with its caption; G, the chip at 6 m, E picked it up; the bin counted it),
+  `req-deadmark` 6 ("4 dead birds · 3 m" over the bird, "· 12 m" at the edge clear of the job pointer, the flock watch and the
+  job card; a marker for each bird within 15 m). `p3-cycle` 140 (brooding week 4.87 ×, week 2 492 g, week 3 985 g, weeks 4–5
+  2,318 g, harvest 2,881 g live, FCR 1.58, EPEF 426, 2.3 % lost), `p3-replay` 16, `p4-hot` 43, `p4-rainy` 17, `p4-bad` 16,
+  `p4-water` 15, `p4-clarity` 14, `p2-level1` 58 (4.87 ×, the last stack 31 game minutes after the truck), `p2-level1-find`
+  18, `hotfix-steps` 21, `p2-flock-events` 21, `p2-review2` 8, `p2-review2-ui` 13, `p3-panels-*` 15 / 7 / 12 / 12 / 12 / 12,
+  `p3-run-*` 9 / 4 / 8 / 16, `p3-scene-events` 14, `p3-scene-look` 9, `p3-design-stubs` 5, `p4-panels-*` 9 / 6 / 27,
+  `p4-run-*` 11 / 7 / 11, `p4-scene-events` 30, `p4-design-stubs` 10, `p5-sound` 44; the Phase 1 `tour`, `cold-hot`, `walk`,
+  `p2-hooks`, `phase1-jobs` (4 of 4 jobs), `systems-*`, the `p2-level-*` demos and the look and perf files without errors.
+- **Play time of the real-input days with the slower clock** (as Phase 3 counts it; the ceiling is now 6 minutes):
+  planning day 2.6 min (1.9 game h) · day 8 4.4 (10.0 h) · day 16 4.7 (12.7 h) · day 25 4.1 (12.7 h) · day 37 4.2 (13.0 h) ·
+  day 44 4.1 (9.9 h); the hot season's day 3 1.2, day 10 1.3, day 30 2.7 min. The same jobs take about the same real time
+  (walking, panels and inputs are real seconds); each walk now costs a quarter fewer farm minutes, so the windows have more
+  room, and the Next job skip covers the rest.
+- **Open**: the ideal meets a warning at a level's own problem events (named above), by design; a job held at its place
+  while the farmer stands there idle stays open (20 farm minutes at a time) until he leaves or skips; the watch's L1 growth
+  path is the ideal's of seed 1 (a model table, `REF_SHARE`).
+
 
 ## Sound (branch feature/sound, ahead of Phase 5)
 The farmer asked for quiet sounds now and then "to let you know it's working". All procedural Web Audio (no audio

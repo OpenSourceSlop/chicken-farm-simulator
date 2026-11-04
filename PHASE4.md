@@ -1416,3 +1416,19 @@ one instanced mesh, at most 64). `src/ui-deadmarks.js` owns the chips and the ma
 - test-jobs: the hold (a job held while its panel is open closes 20 farm minutes after; never in a skip), the closes-soon
   event, `dead-cleared` with a bucket on the floor. test-contracts: the watch's texts and the new legend keys
   verdict-free; G and Shift+E free of every other binding.
+
+### 15.7 Results on main (960 × 600, seed 1)
+- **Request 1**: test-watch — the ideal brooding week passes (4.87 ×) with one warning (day 3 16:00, intake: the blocked
+  filter's low flow); the thermostat 4 °C under the sign fails on deaths on day 4 at 20:00 and its first warning ("Chicks felt
+  cold for 4 of the last 8 hours …") came on day 0 at 12:00, **4.3 farm days before**; put back at that warning, the week passes
+  (4.71 ×, 1.62 %); week 2 `noCare` first warned on day 11, week 3 `cocciUntreated` on day 20 14:00 (it ends on day 21 20:00).
+  `req-watch.json` 11 PASS by real clicks at the controller (the warning 4.4 farm hours after the change, at 14:00 on day 0).
+- **Request 2**: `req-clock.json` 12 PASS; test-jobs (the hold, the grace, no hold in a skip, one cue). The real-input days
+  of `p3-cycle.json` (140 PASS): planning day 2.6 min · day 8 4.4 · day 16 4.7 · day 25 4.1 · day 37 4.2 · day 44 4.1 (all under
+  the 6-minute ceiling; day 16 was 4.4 at the old clock); the hot season's days 1.2 / 1.3 / 2.7 min.
+- **Request 3**: `req-bucket.json` 17 PASS (the E prompt on the chick with a dead bird 0.30 m away and the chick 1.08 m, the
+  Shift+E and G pills, the auto set-down caption, the bucket's chip and marker, E picks it up, the bin counts it).
+- **Request 4**: `req-deadmark.json` 6 PASS (the count and the nearest distance, the markers within 15 m, the chip clear of
+  the job pointer and the HUD cards).
+- Every earlier steps file and play-through passes (ARCHITECTURE.md lists the counts); `npm test` 356 ok; perf within budget.
+

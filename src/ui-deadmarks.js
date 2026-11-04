@@ -66,13 +66,20 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
     // the chip's size is measured when its text changes (no layout read every frame)
     if (text !== c.last || !c.w) { c.last = text; setText(c.text, text); c.el.hidden = false; c.w = c.el.offsetWidth || 120; c.h = c.el.offsetHeight || 28; }
     const hw = c.w / 2 + 4, hh = c.h / 2 + 4;
-    for (let pass = 0; pass < 3; pass++) {
+    // a tag over the bird moves sideways off a HUD card (it stays by its bird); an edge chip moves along the edge, always
+    // the same way once it has moved (down past a card in the top half, up past one in the bottom half), so two cards
+    // never bounce it back and forth
+    let dir = 0;
+    for (let pass = 0; pass < 4; pass++) {
+      let moved = false;
       for (const r of all) {
         if (!(px + hw > r.left && px - hw < r.right && py + hh > r.top && py - hh < r.bottom)) continue;
-        // a tag over the bird moves sideways off a HUD card (it stays by its bird); an edge chip moves along the edge
-        if (onScreen) px = (r.left + r.right) / 2 > W / 2 ? r.left - hw : r.right + hw;
-        else py = (r.top + r.bottom) / 2 < H / 2 ? r.bottom + hh : r.top - hh;
+        moved = true;
+        if (onScreen) { px = (r.left + r.right) / 2 > W / 2 ? r.left - hw : r.right + hw; continue; }
+        if (!dir) dir = (r.top + r.bottom) / 2 < H / 2 ? 1 : -1;
+        py = dir > 0 ? r.bottom + hh : r.top - hh;
       }
+      if (!moved) break;
     }
     px = Math.max(hw, Math.min(W - hw, px)); py = Math.max(hh, Math.min(H - hh, py));
     c.el.hidden = false;
