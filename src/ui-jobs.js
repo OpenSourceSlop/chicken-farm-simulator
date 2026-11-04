@@ -329,7 +329,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
   function nextLine(inst) {
     const c = cardCtx(), p = ctx.player?.position, out = [];
     if (inst.status === 'open' && jobPlaces(inst, c)) { const np = p && nextPlace(inst, c, { from: here(p) }); if (np) out.push(`Next: ${np.text}`); }
-    if (ctx.level?.hudHooks?.userPaused && waitsOnTime(inst, c)) out.push('The clock is paused: this job waits on farm time. Press ▶ (top left).');
+    if (ctx.level?.hudHooks?.userPaused && waitsOnTime(inst, c)) out.push('The clock is paused: this job waits on farm time. Press ▶ in the time bar (bottom left).');
     return out.join(' ');
   }
   let acc = 0;

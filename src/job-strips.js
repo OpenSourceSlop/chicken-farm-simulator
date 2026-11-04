@@ -265,7 +265,7 @@ export function thenRows(c, inst, panelId) {
 export function pausedRows(c, inst, rows) {
   if (!c.paused || inst.status !== 'open') return [];
   if (!rows.some((r) => r.k === 'time' || r.farm) && !waitsOnTime(inst, c)) return [];
-  return [{ k: 'time', text: 'The clock is paused: farm minutes do not pass. Press ▶ (Start the farm clock, top left); a key that needs farm time starts it too.', bar: null, paused: true }];
+  return [{ k: 'time', text: 'The clock is paused: farm minutes do not pass. Press ▶ in the time bar (bottom left, close this panel first) or use a key here that needs farm time: it starts the clock too.', bar: null, paused: true }];
 }
 /** Every row a strip shows: its own rows (or the rule's parts), the next place, the pause line. */
 export function stripRows(S, c, inst, panelId) {

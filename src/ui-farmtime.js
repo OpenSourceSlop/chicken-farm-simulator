@@ -18,7 +18,7 @@ export function resumeClock() { try { return !!hooks?.resume?.(); } catch { retu
 export function farmNotice(text, sec) { hooks?.notice?.(text, sec); }
 
 /** What the strip and the card say while the farmer has the clock paused (the HUD's ▶ button starts it). */
-export const pausedText = (what = 'This job waits on farm time') => `${what}: the clock is paused. Press ▶ (Start the farm clock, top left) and the farm minutes pass again.`;
+export const pausedText = (what = 'This job waits on farm time') => `${what}: the clock is paused. Press ▶ in the time bar (bottom left) and the farm minutes pass again.`;
 
 /** An action that waits on farm time starts: a paused clock runs again at normal speed. */
 export function needTime(text) {
@@ -49,7 +49,7 @@ export function farmTimeNote({ cls = '' } = {}) {
     hide() { NOTES.delete(note); base = ''; el.hidden = true; },
     tick() {
       if (!base || el.hidden) return;
-      setText(el, clockPaused() ? `Clock paused: ${base}, once the clock runs again. Press ▶ (top left).` : shown);
+      setText(el, clockPaused() ? `Clock paused: ${base}, once the clock runs again. Press ▶ in the time bar (bottom left).` : shown);
     },
   };
   return note;
