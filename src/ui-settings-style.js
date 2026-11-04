@@ -35,7 +35,7 @@ export const SETTINGS_CSS = `
 .set-keys-keys .kbd { height: 24px; min-width: 24px; font-size: 12px; }
 .set-keys-change { min-height: 28px; padding: 4px 10px; }
 .set-keys-row.is-waiting .set-keys-change { color: var(--accent); border-color: var(--accent); }
-.set-keys-fixed { color: var(--ink-faint); font: 600 11px/1.2 var(--font-display); letter-spacing: 0.04em; text-align: center; }
+.set-keys-fixed { color: var(--ink-faint); font: 600 12px/1.2 var(--font-display); letter-spacing: 0.04em; text-align: center; }
 .set-fps { min-width: 46px; padding: 0 4px 0 6px; color: var(--ink-dim); font: 600 12px/1 var(--font-display); letter-spacing: 0.03em; white-space: nowrap; text-align: right; }
 @media (max-width: 860px) {
   .set-row--range { grid-template-columns: minmax(0, 1fr) 120px 48px; }

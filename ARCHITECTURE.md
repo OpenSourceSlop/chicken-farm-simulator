@@ -15,7 +15,8 @@ clarity leftovers) is specified in `PHASE4.md`; its contracts are in code (see *
 The farmer's four requests during Phase 4 (the flock watch's early warnings, the slower clock and held jobs, the
 dead-bird bucket set down, the dead-bird pointer) are PHASE4.md §15; see **"The farmer's requests during Phase 4"**.
 **Phase 5** (polish: the sound for every situation, save slots and backups, the settings menu, the farm overview map,
-the final quality pass) is specified in `PHASE5.md`; its contracts are in code (see **"Phase 5 — design"** at the end).
+the final quality pass) is specified in `PHASE5.md` and integrated on main: see **"Phase 5 (polish) — as integrated"** at the
+end (the design round's contracts are **"Phase 5 — design"** before it).
 
 ## Decisions already made (from the plan doc)
 
@@ -207,9 +208,11 @@ at once (`env.settleHeaters()`), so the HUD, glow and radiant heat always agree.
 - At phone width (~400 px) nothing scrolls sideways; show a short note that the game needs a
   desktop with a keyboard and mouse.
 - Respect `prefers-reduced-motion` for UI animation.
-- Renderer (main.js): pixel ratio capped at 1.5 and re-read on resize; a frame-time governor steps
-  down to 1.0, then 0.85, then a 1024 PCF shadow map if the median frame is slower than ~50 fps
-  (off under automation); every shader program is compiled behind the boot card; the loop survives
+- Renderer (main.js, quality in gfx-quality.js since Phase 5): pixel ratio capped at 1.5 and re-read on resize; a
+  frame-time governor (Graphics: Automatic) steps down over 36 ms median frames to 1.0 on a high-DPI screen, the simple
+  1024 shadow (the same soft filter), under 20 fps the 0.85 render scale, then the reduced flock and shadows off (an empty
+  map no longer drawn), 3 s apart, only for parts left on auto, never linking a shader (off under automation); every
+  shader program is compiled behind the boot card; the loop survives
   a thrown frame and stops with a message after three in a row. `ctx.perf = { fps, pixelRatio,
   shadowMap }` feeds the test tools' frame-rate readout.
 - Performance target: 60 fps on a mid-range laptop with 1800 birds. Share geometries and
@@ -1048,3 +1051,71 @@ A critic's review found six things to fix before the packages branch; all are fi
   *Restore and play now* with storage blocked, *This farm only*, the backup built when its box opens and copied
   synchronously in the click); the map's resting house and its Farm view house click; the iron filter's watch case.
 
+
+## Phase 5 (polish) — as integrated
+`PHASE5.md` is the spec. The four packages were merged with `--no-ff` in the spec's order (**saves**, **settings**, **sound**,
+**experience**; no file touched by two packages, no conflict), then wired and played through together. With the settings
+untouched every clock speed, key, view, sound level and quality step is the Phase 4 game (the new keys O, P, 1, 4, J add to
+it); the Phase 1 sandbox, Phase 2's lone brooding week, Phase 3's cycle and Phase 4's conditions play as before.
+
+### What the player has now
+- **Sound** (`src/audio*.js`, ARCHITECTURE.md *Sound* still holds): every Phase 3–4 situation has a quiet bed or cue —
+  rain on the roof with eave drips after it, thunder one rumble per lightning flash 1.5–7.9 s after it (an exponential
+  40 s timer under reduced motion), storm gusts, the power cut's two-tone alarm (every 6 s for 2 minutes, then every 15 s,
+  never stopping while dark), the generator (starter, firing thrum, run-down, the transfer switch's clunk), the hot
+  season's day cicadas (10:00–16:00, waves, highest at 13:00), the catching night's crew murmur (formants, never words),
+  crate clacks and the idling truck, the wash bay's pressure washer, the sprayer and the scraper, the office's desk fan,
+  phone ring, dial tone and pen, the water condition's well pump. One shared noise source and one shared machine bed
+  (the nearest machine takes it): **209 audio nodes**, all made at start-up (ceiling 230). Per-minute caps, habituation
+  (−3 dB after 2 minutes beside the crew or the generator), layer sliders as value². **Sound captions** (`audio-captions.js`,
+  raised from the game's state, so also with the sound off): each key once per change, one caption every 8 s — except
+  the dark house's alarm, which never waits for that gap (integration). The speaker key is a one-click toggle (Shift+click:
+  Settings → Sound); U through `keys.matches(e, 'sound')`.
+- **Saves** (`saves.js`, `save-slots.js`, `save-codec.js`, `ui-saves.js`, `run.js` `exportSave` / `importSave`): the
+  autosave and three slots named by condition, level, day and time, with the saved date and size; Save here, Load and
+  Delete ask inside the panel (Esc answers the safe one); **Continue** resumes the newest readable save; **Back up** builds
+  the text when its box opens (*The whole run* or *This farm only*), in numbered parts of at most 9,000 characters, each
+  with its own Copy key (`clipboard.writeText` inside the click; refused → the part shows selected with *Press Ctrl+C*);
+  **Restore** reads the parts pasted in any order, offers the skill points and, with storage blocked, *Restore and play
+  now*. gz64 (CompressionStream) with json64 where it is missing; `migrate` reads formats 1 (Phase 2), 3 (Phase 3–4) and
+  5; a newer, damaged or partial save shows its message (`SAVE_MESSAGES`) and never breaks the game.
+- **Settings** (`settings.js`, `keys.js`, `gfx-quality.js`, `ui-settings*.js`, `player-controls.js`): six tabs — Sound,
+  Time (default speed, sign stops, ⅔ speed at a job, held jobs), Graphics (Automatic / High / Medium / Low / Custom, the
+  governor's steps in words, the fps readout), Camera (turn and zoom speed, invert), Interface (HUD size, the flock watch
+  shown / folded / hidden, captions, caption time, the legend, reduce motion), Keys (Change through `captureNextKey`, a
+  taken key swaps, fixed / reserved / Tab-Enter-Space refused in words, Reset all keys). Every change applies at once and
+  is kept in `chickenFarm.settings.v1`. The governor adds step 4 (reduced flock) and step 5 (shadows off) for parts left
+  on auto; no step and no preset links a shader (`renderInfo().linked` unchanged).
+- **The farm map** (`ui-map*.js`, `map-plan.js`; O, the map key on the time bar, the menu): Farm and House views in SVG
+  from the live farm (the house and its equipment, buildings, signs as numbered posts, the farmer's arrow, the open jobs'
+  numbered markers, dead birds, the set-down bucket, the flock's dots, no power / raining / the resting house in words),
+  labels laid out clear at 960 × 600 and 1280 × 800, hover and focus tags with the walk's length and time, click (or
+  Enter) walks him there by the route finder; a click on the house in the Farm view opens the House view.
+- **The quality pass** (experience): the game menu (Esc or the gear; what it opens comes back to it), the title card's
+  first-run line, four first-play pointer cards (the job card, a sign in view, the time bar, the flock watch) with Enter
+  and Esc through `claimKeys`, the guide *How to play* (`ui-guide.js` / `content-guide.js`: how the game works, the live
+  keys, a labelled HUD picture, *Show the introduction again*; no farming fact), the loading card's named steps and
+  error cards with *Reload the page*, the context-lost message by `level.saveNow()`'s answer, two text floors (11 px caps
+  and source lines, 12 px running text, 4.5 : 1), focus rings everywhere, the phone note, the Phase 4 leftovers (the
+  water supply row, the bad batch's day-0 24:00 fail line, the flock watch's whole warning, the hot season's appetite:
+  a general-practice line on the heat sign).
+
+### Wiring and contracts settled at the merge
+- **main.js**: `__game.ready` is set only after the warm-up and `level.boot()` (a steps file acting right after a reload
+  was overridden by boot(): rv-hud read 13/16 under load); `ctx.ui = ui` (createUI sets it too).
+- **package.json**: `npm test` adds `test-audio-hour`, `test-saves`, `test-settings`, `test-map`.
+- **test-contracts**: a Phase 5 merged-words case (sound captions, intro cards, map places, settings labels and the new
+  save messages verdict-free; the hot season's appetite line on `sign-heat`, general practice, *2–5 %*, on no other
+  board); test-audio: the dark house's alarm caption skips the 8 s gap and the next caption waits 8 s after it.
+- **Fixes found by the play-through** (`scripts/p5-play.json`): the map's walk swallowed every click for 380 ms of real
+  time (a menu click right after a map walk did nothing): now only clicks on the 3D view, on the input clock (`clock.js`);
+  the dark house's alarm caption was held back up to 8 s by a thunder caption; the five paused panels (menu, settings,
+  saves, guide, map) were translucent and the HUD cards showed through their text: now solid like the result and the
+  skill tree; the house door's jobs were named *Catching panels* in the map's side list (the nearest place): now *House
+  door*, and a place not on the farm now names no job; the chick table's *Use the chick sample table* prompt stood at the
+  door all cycle (seen on the catching night): now only on day 0, with its sample box; the legend's vestigial
+  `sound-help` class (p5-sound checks that no sound row is injected) is dropped — the U row comes from `keys.rows`.
+- **Decisions**: `camera.invertRotate` flips the drag only and `camera.invertZoom` the wheel only (the arrow and + / −
+  keys keep their names: *Turn the view left* turns left); the flock's 113-triangle bird is LOD 1 (the distant bird; LOD 0
+  is 309), reduced detail draws the 64-triangle bird far and the 113 near. Under automation the governor stays off and
+  the introduction never starts unless `ui.intro.allow(true)`.
