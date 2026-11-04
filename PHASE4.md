@@ -435,11 +435,15 @@ cycle 2.5–3.1 s in every condition, a 24 h skip 62–91 ms, `farm.step` 0.02�
 references of `scripts/tuning-refs*.mjs`. Sources: a guide name for the facts of PHASE2.md §6.1 / PHASE3.md §5.1, else
 general broiler practice for Ross / Cobb-type broilers in a Thai EVAP house (ranges, no page numbers). The integrator
 agrees every band move of §2.7 (each is a measured value of the tuned model the sign lines describe).
+**Final check (re-read on main after the review round):** the figures below are `npm run audit` now (the review round's
+rainy ideal, the normal cycle 2,887 g / EPEF 427). A verdict is **OK** only inside the reference; a value just outside it
+reads **Near** with the gap and why it is kept (FCR a little better than the reference at days 28–35 and the harvest,
+day 41's litter 1 point over the 30 % line, the harvest weighing's uniformity 2 points under 70 %).
 
 | # | Quantity | The game (Phase 4, by age) | Reference (source) | Verdict |
 | --- | --- | --- | --- | --- |
 | 1 | Body weight | 200 / 498 / 985 / 1,625 / 2,307 / 2,919 g on days 7 / 14 / 21 / 28 / 35 / 41 (1.03–1.057 × the table); day 7 4.87 × chick weight | the target table 190 / 480 / 950 / 1,550 / 2,200 / 2,850 g (general); day 7 4–5 × chick weight (Week 1 guide) | OK |
-| 2 | FCR (cumulative) | 0.87 / 1.12 / 1.26 / 1.36 / 1.45 / 1.54; harvest 1.585 (paid kg) | about 0.85–0.9 / 1.05–1.15 / 1.25–1.3 / 1.4 / 1.5–1.55; 1.6–1.75 at 42 days (general) | OK |
+| 2 | FCR (cumulative) | 0.87 / 1.12 / 1.26 / 1.36 / 1.45 / 1.54; harvest 1.583 (paid kg) | about 0.85–0.9 / 1.05–1.15 / 1.25–1.3 / 1.4 / 1.5–1.55; 1.6–1.75 at 42 days (general) | OK on days 7–21; **Near** on days 28 / 35 and the harvest: 0.04 / 0.05 / 0.02 under the reference (a little better than the general figures; the weights stay 3–6 % over the table, so the feed is not short; kept) |
 | 3 | Feed intake | 37 / 70 / 120 / 152 / 177 / 194 g a bird a day = 96–98 % of the feed sign's figure for the age | the feed sign's table (general) | OK |
 | 4 | Water : feed | 1.87 / 1.88 / 1.96 / 2.08 / 2.01 / 2.02 on the weigh rows; the hot day's row 1.99 well cooled, 2.10 with fans and no pads; the hot season's ideal 1.8–2.0 | about 1.8 while comfortable (drinker plate, general); 2–2.5 hot and panting, up to about 3 in a heat wave without cooling (general) | OK (follows the birds' heat, `waterPerKgP4`) |
 | 5 | Target temperature | 34 °C day 1 → 20 °C day 35, the brooder sign's row; a bad batch's row + 1 °C on days 0–3 | the ends (Week 1 guide / Broiler Ventilation); +1 °C for small chicks (general) | OK |
@@ -448,14 +452,14 @@ agrees every band move of §2.7 (each is a measured value of the tuned model the
 | 8 | Temperature + humidity | the pads off over 90 % house RH; felt + about 1 / 2 / 4 °C at 87 / 90 / 95 % | the plan's limit; general | OK |
 | 9 | Pad cooling | 0.69–0.82 of the rule; 3.8 °C at 30 °C 69 % (rainy) | about 1 °C per 5 % RH the air can still take up (Broiler Ventilation); most of it, never all (general) | OK |
 | 10 | Minimum ventilation | 0.155 → 3.65 m³/h a bird (42 g → 3 kg); 3.7 → 1.2 m³/h per kg | the vent sign's table (Broiler Ventilation; numbers general) | OK |
-| 11 | Litter moisture | 21.9 / 24.2 / 26.4 / 26.6 / 29.8 / 31.0 % on days 7–41; rainy day 21 about 33 %, the south strip 46 % with the flaps open | at or under 30 % (Broiler Ventilation) | OK (at the line on day 41 after the evening pads; no cake); the rainy season's wetter litter is its cost |
+| 11 | Litter moisture | 21.9 / 24.2 / 26.4 / 26.6 / 29.8 / 31.0 % on days 7–41; rainy day 21 about 33 %, the south strip 46 % with the flaps open | at or under 30 % (Broiler Ventilation) | OK on days 7–35; **Near** on day 41: 1 point over the line after the evening pads (no cake; the last day before the catch; kept); the rainy season's wetter litter is its cost (over the line, by design) |
 | 12 | Ammonia | at most 7.2 ppm (normal); rainy NH3 ≤ 18 ppm on the nights of week 3, `rainyNoStep` ≥ 25 | under 20–25 ppm, 5–15 in a well-run house (general) | OK |
 | 13 | Deaths by level | 0.63 / 0.25 / 0.44 / 0.57 / 0.39 %; cycle 2.27 %; DOA 0.10 % | 2–4 % to 42 days, week 1 0.5–1.2 %, DOA 0.1–0.3 % (general) | OK |
 | 14 | Dehydration at the catch | none (6 h without water before it counts, from day 21) | big birds do not die of thirst while the lines are up for the crew (general) | OK |
 | 15 | Cold of older birds | 16-day-olds under the pad and six fans: a few deaths and a huddle (`padWeek3` 1–15 cold deaths) | chilled birds huddle and eat less before they die (general) | OK |
-| 16 | Uniformity (±10 %) | 73 / 70 / 72 / 70 / 72 % on days 7–35, 68 % at the day-40 weighing; a bad batch 42–54 % on day 7 | 70–80 % as hatched with good care, lower at the end (general) | OK (low end) |
+| 16 | Uniformity (±10 %) | 73 / 70 / 76 / 70 / 72 % on days 7–35, 68 % at the day-40 weighing; a bad batch 42–54 % on day 7 | 70–80 % as hatched with good care, lower at the end (general) | OK on days 7–35 (low end); **Near** at the harvest weighing: 68 %, 2 points under 70 % (the reference expects lower at the end; the harvest-uniformity milestone's 70 % stays within reach of a careful flock; kept) |
 | 17 | Sudden death, legs | SDS 0.07 / 0.08 / 0.15 / 0.08 % by level with 4–6 h dark; leg culls 0.08–0.29 % | SDS 0.5–1.5 % without a dark period, much less with one; leg culls under 1 % (general) | OK |
-| 18 | Harvest | 2,883 g live, FCR 1.585, mortality 2.27 %, EPEF 426, withdrawal 10.9 h; hot 2,875 g / 428; rainy 2,868 g / 422; bad batch 2,884 g / 425; water 2,876 g | Thai EVAP at 42 days: 2.6–3.0 kg, FCR 1.6–1.75, mortality 2–4 %, EPEF 350–450, the pans empty 8–12 h before the catch (general) | OK |
+| 18 | Harvest | 2,887 g live, FCR 1.583, mortality 2.27 %, EPEF 427, withdrawal 10.9 h; hot 2,875 g / 428; rainy 2,891 g / 426 (the review round's rainy ideal); bad batch 2,884 g / 425; water 2,876 g | Thai EVAP at 42 days: 2.6–3.0 kg, FCR 1.6–1.75, mortality 2–4 %, EPEF 350–450, the pans empty 8–12 h before the catch (general) | OK, the FCR **Near** (0.02 under 1.6: row 2) |
 | 19 | The flock's own heat | a closed house of 5-week birds 28.8 °C at 05:00 on day 41 (minimum ventilation), the tunnel-air ideal 25.2 °C | about 5–6 W per kg of sensible heat at 2–3 kg (general) | OK |
 | 20 | Gas to day 21 | 207 kg (normal); the hot season's brooding week about 60 % of the normal's | the gas plate's 200–300 kg (general) | OK |
 | 21 | Day 37 evening | 3 fans 96 / 78 / 53 / 27 % panting at 19 / 20 / 21 / 22:00; 6 fans 37 % at 19:00, none by 21:00; 6 fans and the pads none (the ideal) | §2.4 | **Fixed**: the model (wind chill, ramp, flock heat) and the job (`night-comfort`: a quarter panting at most, or every fan and the pad while the outside is over 29.5 °C) with the heat sign's evening line |
@@ -536,7 +540,9 @@ The key targets of PHASE3.md §2.1 hold in every condition. Merged into the leve
 **a bad batch's brooding week** counts deaths and floor culls ≤ 2.5 % of the chicks placed, and the chicks culled on day 0
 (at the grading table, or on the floor before 24:00) apart **when the hatchery is told on day 0** (`phone.hatchery`):
 they are the hatchery's claim (`farm.flock.claimed`; the chick-grading plate and the chick sign say so). Without the call
-by 24:00 of day 0 they count as culls of the level. The day 7 ratio is against the measured chick weight as in Phase 2
+by 24:00 of day 0 they count as culls of the level. A day-0 record signed before the call fails the level only on what a
+call cannot claim; the rest is checked when the claim closes at 24:00 (level.js, the final check, §15.9), and the weak-batch
+job's window closes with the claim. The day 7 ratio is against the measured chick weight as in Phase 2
 (≥ 4.0 ×). Every other limit is unchanged. Each condition is **winnable by good play** (its ideal passes every level, §4)
 and **lost by poor play for a reason the records show** (each condition has at least one named mistake that fails a named
 level on a measured number, §4).
@@ -764,7 +770,7 @@ on the morning walk west).
 | 8 | The feeder strip does not state the finished outcome per line | Each line row: "Line 1 · rim 5 cm · flood windows open · auger … · pans 96 % full", then "finished when: rim about 5 cm (7 at most), flood windows open, pans 95 % full" (prep-feeders; r-feeders from day 4: "rim at the plate's figure ± 3 cm, auger on, feed in the pans") | run · job-strips.js | test-jobs: the rows hold "finished when" with the three figures |
 | 9 | `w3-change` / `w45-change` complete without the half-and-half day | Done all: state `blend-24h` (the augers drew 20–80 % new for at least 20 h of the change; `farm.stats.blendH` grower, new `blendFinH` finisher) and the pans 90 % new (`DONE_P4`, in code) | run · content-jobs-cycle.js, job-engine.js · sim · `farm.stats.blendFinH` | test-jobs (both feeds); test-cycle: the ideal's `blendFinH` ≥ 20 |
 | 10 | `p-blood` does not count the medicine course | Done all: the vet, the medicine on, state `medicine-course` (medicine in the water on 3 calendar days counting the first: `farm.health.medication.daysOn` ≥ 3); the strip and job card read "medicine day 2 of 3" | run · content-jobs-cycle.js, job-engine.js · sim · `medication.daysOn` | test-jobs; test-cycle: the ideal's p-blood done on day 21 |
-| 11 | ARCHITECTURE.md and ui-climate.js say the target temperature is only on the brooder sign | Corrected in this commit: the target is the brooder sign's row, shown as the sign's figure in the job strips, the job card readings, "Your week", the records' target column (unlock) and the summary's dashed line; never on the HUD or the LCD | integrator (done) | — |
+| 11 | ARCHITECTURE.md and ui-climate.js say the target temperature is only on the brooder sign | Corrected in this commit: the target is the brooder sign's row, shown as the sign's figure in the job strips, the job card readings, "Your week", the records' target column (unlock) and the summary's dashed line; never on the LCD. (Since the farmer's request 1, §15.1, the HUD's Flock watch card shows the level's line and limit beside the measured values and its warnings quote the brooder sign's row; ARCHITECTURE.md says so since the final check.) | integrator (done) | — |
 | 12 | The heat sign's "felt" left out the damp (the review: about 1 °C off under the pads, several degrees in a power cut) | The fan panel's *Birds feel* readout is the model's felt temperature (`farm.comfort.feltMean`: the house less the wind chill plus the damp); the heat sign says "felt: the fan panel's Birds feel reading" and prints the damp part (about 1 / 2 / 4 °C at 87 / 90 / 95 %, `SIGN_FIGURES` damp-felt-*) | panels · ui-cycle-fans.js (the readout); run · the sign text (in code) | `p4-panels-clarity.json`: the readout equals `farm.comfort.feltMean` to 0.1 °C at 87 % RH |
 
 ## 7. Skill milestones (`src/skills-cond.js MILESTONES_COND`, in code)
@@ -1281,6 +1287,7 @@ house (from the first tipped stack to the catch). Four rows, each with a calm do
 | Deaths | deaths and culls of the level as the level counts them, % of its limit; "on course for X %" | projected % at the level's end: under 75 % of the limit / 75–100 % / at or over the limit (or 80 % of it reached) |
 | Comfort | "Right", "Cold" or "Hot" with the hours of the last 8 farm hours and the felt °C | 0–1 / 2–3 / 4 or more of the last 8 hours cold or hot |
 | Intake | feed eaten and water drunk in the last 6 lit hours as % of what birds of this age and number take | both ≥ 88 % / 75–88 % / under 75 % |
+| Supply (the water condition only, §15.9) | the tank's level and its fall an hour; the well pump's bar and A beside the tank plate's 2.4 bar, 6 A; the meter's litres per 1,000 birds of the last 3 hours as % of the same hours yesterday | red: the last 2 hours' fall reaches the lines' 20 % within 8 farm hours, a worn pump (≤ 2.2 bar) with the tank falling 3 % an hour or more, or the tank under 30 %; amber: within 16 h, a worn or stopped pump, the tank under 50 %, the meter under 85 % of yesterday |
 
 **Projections (model, `src/flock-watch.js`).** The watch keeps one sample per farm hour (an env stepper, so skips and
 goto(auto) count): age, scale weight, alive, deaths and culls (the level's own count), deaths by cause, comfort
@@ -1496,7 +1503,7 @@ sign lines general):
   the farmer's figure, moves one way past the visible clock and gauge cards and turns its arrow to the bird; the
   bucket's marker draws over walls; the level speed tooltip says a farm hour takes 40 s.
 - **Not changed**: `b-warm` still counts on the first tick at row + 1 °C (a held three-day outcome would need a new held
-  rule and a re-cut of p4-bad); the hot season still costs the ideal flock work, not weight (a hot-night intake term would
+  rule and a re-cut of p4-bad; done at the final check, §15.9); the hot season still costs the ideal flock work, not weight (a hot-night intake term would
   move every hot band and COND_TARGETS; PHASE4.md §2.8 row 18 stands as an open tuning item).
 - **Results of the review round** (960 × 600, seed 1, no console or page errors anywhere): `npm test` 362 ok (test-watch 9,
   with the per-condition allow-list; new test-jobs, test-run and test-contracts cases); test-cond 30 of 30; `npm run perf`
@@ -1508,3 +1515,38 @@ sign lines general):
   now adds up in whole kilograms), `p5-sound` 44, `p2-level1` 58, `p3-replay` 16, `p3-cycle` 140 (brooding week 4.87 ×,
   week 2 492 g, week 3 985 g, weeks 4–5 2,318 g, harvest 2,882 g, FCR 1.58, EPEF 426; play time planning day 2.6 min, day 8
   4.4, day 16 4.6, day 25 4.1, day 37 4.1, day 44 4.1), the Phase 1 tour and `phase1-jobs` (4 of 4).
+
+### 15.9 The final check's fixes (on main)
+Each confirmed first (by real input or a node reproduction), then fixed; node regressions in `scripts/test-fixes.mjs` (in
+`npm test`, each case fails on the code before its fix).
+- **Job strips never stale** (`ui-jobstrip.js`): a panel opened again with no job for it kept the strip of its last opening
+  (the empty strip's html equalled the reset `last`, so the old figures stayed on screen). `onOpen` and `onClose` now clear
+  the strip (hidden, no html); a panel shows the strips of the jobs open now, or none.
+- **A bad batch's claim until 24:00** (`level.js claimOpenN / claimClosedCheck`, `content-jobs-cond.js`, `job-engine.js`
+  check `claim-open`): the day-0 record signed at 20:00 before the call failed the level although the farm keeps the claim
+  open until 24:00. Now the close of a day-0 record fails only on what a call cannot claim; the day-0 culls a call can still
+  claim are checked when the claim closes (an env stepper, inside skips too; `bad.wait` saved with the level). The
+  weak-batch job's window is the claim's (`window: [0, 24]`, `hardClose`: not held past 24:00; only a call while the claim
+  is open counts), and the sign, the job, its strip, the Phone page and the grading table say "before 24:00". Measured: signed
+  at 20:00, called at 22:00 → claimed, no fail; no call → the level ends at 24:00 of day 0 on its culls, the result naming
+  the call.
+- **The flock watch's water supply** (`flock-watch.js supplyRow`, `ui-watch.js`): with the pump left worn the tank fell from
+  95 % to 8 % on day 30's afternoon while the Intake row stayed green (hot birds drink more, so their water per kg of feed
+  looked high). A fifth row, **Supply**, where the farm models the water condition's tank: the tank and its fall, the pump's
+  gauges against the plate, the meter against yesterday (table in §15.1, model values `WATCH.supply*`). Its warning names what
+  (the tank and the rate, the hours to the lines' 20 %), the pump's reading, the meter, the likely cause (a worn pump, its
+  repair, the power) and where to look (the water tank plate; the tank's gauge and the well pump at the tank tower, the water
+  meter at the water supply). Measured (`waterPumpUnfixed`): the warning on day 30 at 12:00, 6.8 farm hours before the tank
+  was under 20 % (about 9 before it was at 8 %), the first of the level, the Intake row green; the ideal: amber on day 27
+  while the pump reads worn and is repaired, no supply warning in any condition's cycle (test-watch's allow-list unchanged).
+  Saved with the samples; the card's row and its compact dot are hidden where there is no tank.
+- **Smaller**: `b-warm` holds over its window: the farm counts the hours with the thermostat 0.5–1.5 °C over the day's row
+  from day 0 06:00 to day 3 06:00 (`farm.condX.warmH`, skips included; `brood-warmer-held`), done at 54 of the 72 (model), the
+  strip and the job card show the hours (p4-bad checks the count). §2.8's verdicts read **Near** where a value sits just
+  outside its reference (rows 2, 11, 16, 18) and carry the re-read figures; ARCHITECTURE.md no longer says the target is
+  never on the HUD (the flock watch shows the level's line and limit and quotes the brooder sign's row).
+- **Results of the final check's fixes** (960 × 600, seed 1, no console or page errors anywhere): `npm test` 368 ok
+  (test-fixes 6, the new test-jobs state case); `p4-hot` 43, `p4-rainy` 17, `p4-bad` 17 (the counted hours in the band),
+  `p4-water` 15, `p4-clarity` 14, `req-watch` 13, `req-clock` 13, `req-bucket` 18, `req-deadmark` 6, `rv-hud` 16 (the water
+  condition's card with its fifth row), `p2-level1` 58, `p3-cycle` 140 (harvest 2,882 g, FCR 1.584, EPEF 426; play time
+  planning day 2.6 min, day 8 4.4, day 16 4.6, day 25 4.1, day 37 4.1, day 44 4.1).

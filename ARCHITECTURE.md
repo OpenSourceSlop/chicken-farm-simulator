@@ -23,11 +23,13 @@ Not in scope yet: sound, settings, save slots, farm overview map (Phase 5).
   mouse to turn (right-drag) and zoom (wheel).
 - English text. Facts sit at the place on the farm where you use them (signs), never as quizzes.
 - **No "correct" / "wrong" messages anywhere.** The player reads the flock, gauges and records.
-  The HUD shows measured values only (clock, flock age, house/outside temperature, humidity).
+  The HUD's clock and gauges show measured values only (clock, flock age, house/outside temperature, humidity).
   The *target* temperature is the brooder sign's table. It appears as the sign's own figure wherever a job works
   toward it (the controller's job strips, *Sign / Yours*; the job card's readings; the result screen's "Your week"
-  sign column; the records' target column with the *recordsTargets* unlock; the cycle summary's dashed line) and in
-  the Phase 1 test tools — never as a verdict, and never on the HUD or the controller's LCD.
+  sign column; the records' target column with the *recordsTargets* unlock; the cycle summary's dashed line), in
+  the Phase 1 test tools, and on the HUD's **Flock watch** card (the farmer's request 1, PHASE4.md §15.1: each row's
+  measured value beside the level's line or limit, the comfort row's felt °C, and its warnings quote the brooder
+  sign's row) — never as a verdict, and never on the controller's LCD.
 - Farm layout: a typical Thai tunnel-ventilated (EVAP) broiler house: cooling pad at the west end,
   tunnel fans at the east end, nipple drinker lines, pan feeder lines, gas brooders.
 - A day passes in a few minutes of play; a "next job" / skip button jumps ahead.
@@ -808,7 +810,9 @@ with (the no-verdict rule for the flock watch's warnings, the 4.5-minute day cei
   its limit, projected from the last day's deaths alone), comfort (cold / hot hours of the last 8: half the birds 2 °C under
   their target under 14 days, the model's cold or heat deaths, half the flock panting), intake (the last 6 lit hours' feed
   and water against the feed standard and 1.8 L/kg, from 24 h after the first tip; the withdrawal, the heat-wave lift, a cut
-  and the vaccine's thirst left out); each green / amber / red (`WATCH_STATES` steady / watch / alert). A row turning red
+  and the vaccine's thirst left out), and, where the farm models the water condition's tank, supply (the tank and its fall,
+  the pump's gauges against the plate, the meter against yesterday; the final check); each green / amber / red
+  (`WATCH_STATES` steady / watch / alert). A row turning red
   raises one warning (`EV.WATCH`: a caption, a notebook line of kind `watch` that the day's record row lists, a paper cue;
   again only after 6 farm hours out of red and 12 since the last): what, the likely cause from the model (the comfort, the
   weakest growth factor, the last day's main cause of death, a bad batch's unclaimed culls) and where to look (`causeOf`: the
@@ -900,7 +904,24 @@ with (the no-verdict rule for the flock watch's warnings, the 4.5-minute day cei
   - Results: `npm test` 362 ok, test-cond 30, perf alone within budget; rv-hud 16, req-* 18 / 13 / 13 / 6, p4-hot 43, p4-rainy
     17, p4-bad 16, p4-water 15, p4-clarity 14, the p4 package files, p3-cycle 140 (EPEF 426, every real-input day under 4.6
     min of play), p3-replay 16, p2-level1 58, hotfix-steps 21, p5-sound 44, the Phase 1 tour and phase1-jobs, no errors.
-  - Left open: `b-warm` done on its first tick at row + 1 °C; the hot season costs the ideal no weight (PHASE4.md §2.8 row 18).
+  - Left open: the hot season costs the ideal no weight (PHASE4.md §2.8 row 18). (`b-warm` holds over its window since the
+    final check.)
+
+- **Final check fixes** (PHASE4.md §15.9; node regressions `scripts/test-fixes.mjs`, in `npm test`):
+  - `ui-jobstrip.js createJobStrip`: `onOpen` / `onClose` clear the strip, so a panel opened again shows the strips of the
+    jobs open now or none (it kept its last opening's html when no job was open for it).
+  - `level.js`: a bad batch's day-0 record closed before the hatchery call fails only on what a call cannot claim
+    (`claimOpenN`); the rest is checked by an env stepper when the claim closes at 24:00 (`claimClosedCheck`, `bad.wait`
+    saved). `p-weak-batch` `window: [0, 24]`, `hardClose` (holdJob never holds it), its call counted only with
+    `ACTION_CHECKS['claim-open']`; the texts say "before 24:00".
+  - `flock-watch.js`: the samples carry the tank (`tank: { L, bar, A, on, fix, power }`, from `farm-cond-water pumpGauges`);
+    `status().rows.supply` and the warning kind `supply` (checked first each hour); `ui-watch.js` a fifth row and compact dot,
+    hidden without it.
+  - `b-warm`: `ST('brood-warmer-held')` (STATE_TEST_IDS_P4) over `farm.condX.warmH`, the hours with the thermostat in the
+    band counted by `farm-cond-chicks stepChicks` from day 0 06:00 to day 3 06:00 (`CHICKS_P4.warmHoldH` 54).
+  - Results: `npm test` 368 ok; p4-hot 43, p4-rainy 17, p4-bad 17, p4-water 15, p4-clarity 14, req-watch 13, req-clock 13,
+    req-bucket 18, req-deadmark 6, rv-hud 16, p2-level1 58, p3-cycle 140 (EPEF 426, every real-input day under 4.7 min of
+    play), no console or page errors.
 
 
 ## Sound (branch feature/sound, ahead of Phase 5)
