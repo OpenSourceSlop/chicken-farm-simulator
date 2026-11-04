@@ -16,7 +16,9 @@ import { h, button, setText, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { createMarker } from './ui-marker.js';
 import { hhmm, splitDay } from './ui-format.js';
-import { heldText } from './job-strips.js';
+import { heldText, waitsOnTime } from './job-strips.js';
+// the steps hotfix: the next unfinished place of a job that spans several places (the card's Next line and the marker)
+import { jobPlaces, nextPlace } from './job-next.js';
 import { flowToday, nippleCmToday, rimCmNow, nippleInBand, rimInBand, ventNeed, luxOfDimmer, brooderRowC, LINES_UP_CM, PANS_UP_CM, NIPPLE_DAY0_CM } from './job-figures.js';
 
 const BOARD_SPOT = {
@@ -196,6 +198,8 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     }
     return best;
   }
+  const cardCtx = () => ({ env: ctx.env, farm: ctx.farm, props: ctx.props, flock: ctx.flock, engine: L.engine() });
+  const here = (p) => ({ x: p.x, z: p.z, inside: !!ctx.player?.isInside });
   function nearestOf(list, p) { let b = null, bd = Infinity; for (const s of list) { const d = Math.hypot(s.x - p.x, s.z - p.z); if (d < bd) { bd = d; b = s; } } return b; }
   function spotFor(inst, p) {
     if (factsTarget) return place(BOARD_SPOT[factsTarget]);
@@ -203,16 +207,16 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     const heater = () => ({ x: nearestHeater(p).x, z: nearestHeater(p).z, y: HEATER_HEIGHT + 1.0, gz: 0 });
     switch (d.id) {
       case 'prep-litter': if (carrying === 'barrow') { const c = uncoveredCell(p); return c ? ground(c, 1.6) : null; } break;
-      case 'prep-drinkers': { const left = ctx.farm.water.lines.findIndex((l) => l.heightCm < NIPPLE_DAY0_CM[0] || l.heightCm > NIPPLE_DAY0_CM[1]); return place(SPOTS2.drinkers[Math.max(0, left)]); }
-      case 'r-drinkers': { const seen = st.parts?.[0]?.seen || {}; const left = [0, 1, 2, 3].find((v) => !(String(v) in seen)); return place(SPOTS2.drinkers[left ?? 0]); }
-      case 'f-lines': case 'c-raise': case 'r-raise': { const left = ctx.farm.water.lines.findIndex((l) => (d.id === 'r-raise' ? !nippleInBand(l.heightCm, ctx.env) : l.heightCm < LINES_UP_CM)); return left >= 0 ? place(SPOTS2.drinkers[left]) : place(SPOTS2.feederBox); }
-      case 'c-brush': { const left = Object.entries(SPOTS3.brush).filter(([k]) => !ctx.farm.clean?.brushed?.[k]).map(([, v]) => v); return left.length ? ground(nearestOf(left, p), 1.6) : null; }
-      case 'd0-place': return carrying === 'boxes' ? heater() : place(SPOTS2.boxStacks);
-      case 'd7-weigh': if (carrying === 'frame') return heater(); break;
-      case 'r-dips': return place(st.met[0] ? SPOTS.houseDoor : FARM.footDipGate);
-      case 'r-feeders': return place(st.met[0] && !st.met[1] ? SPOTS2.silo : SPOTS2.feederBox);
-      case 'p-wet-patch': if (carrying !== 'sack') return place(SPOTS2.litterHeap); break;
       case 'w2-ready': if (carrying === 'barrow') { const c = uncoveredCell(p); return c ? ground(c, 1.6) : null; } break;
+      case 'w45-brooders': return place(SPOTS.controller); // the brooders go off and up at the controller (Temperature)
+      default: break;
+    }
+    // the steps hotfix: a job that spans several places points to its nearest unfinished place (the next regulator,
+    // the silo after the feeder box, a part of the floor not sampled yet, the bin with the bucket in hand)
+    const np = nextPlace(inst, cardCtx(), { from: here(p) });
+    if (np) return np.id.startsWith('floor:') ? ground(np.at, 1.6) : place(np.at);
+    switch (d.id) {
+      case 'd7-weigh': if (carrying === 'frame') return heater(); break;
       case 'c-litter': if (carrying === 'scraper') { const c = coveredCell(p); return c ? ground(c, 1.6) : null; } break;
       case 'w3-topup': case 'p-pad-patch': if (carrying === 'sack' || carrying === 'fork') return null; break;
       default: break;
@@ -272,13 +276,14 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
       let extra = null;
       if (isCur) {
         const where = h('p', { class: 'job-where' }, h('span', { html: ICONS.pin, 'aria-hidden': 'true' }), h('span', null, jobWhere(inst.id)));
+        const next = h('p', { class: 'job-next', hidden: true });
         const links = inst.def.signs.length ? h('p', { class: 'job-facts' }, h('span', { class: 'job-facts-k' }, 'Facts:'),
           inst.def.signs.map((id) => { const b = button({ class: `fact-link${factsTarget === id ? ' is-on' : ''}` }, boardTitle(id, day)); b.addEventListener('click', (e) => { e.stopPropagation(); factsTarget = factsTarget === id ? null : id; sig = ''; }); return b; })) : null;
         const bar = h('span', { class: 'job-bar' });
         const prog = hasBar(inst) ? h('div', { class: 'job-progress' }, bar) : null;
         const ptext = hasBar(inst) ? h('p', { class: 'job-ptext' }) : null;
-        extra = [where, links, prog, ptext];
-        items.set(inst.key, { bar, ptext, inst });
+        extra = [where, next, links, prog, ptext];
+        items.set(inst.key, { bar, ptext, inst, next });
       }
       const it = itemEl(inst, `${cls}${isCur ? ' is-current' : ''}${inst.def.pin ? ' is-pin' : ''}`, extra);
       it.mark.innerHTML = inst.def.kind === 'problem' ? ICONS.eye : inst.def.pin ? ICONS.pin : '';
@@ -320,6 +325,13 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     ctx.props?.highlight?.(cur ? cur.def.signs : []);
   }
 
+  /** The card's Next line: the nearest unfinished place of a multi-place job, and the pause while the job waits on farm time. */
+  function nextLine(inst) {
+    const c = cardCtx(), p = ctx.player?.position, out = [];
+    if (inst.status === 'open' && jobPlaces(inst, c)) { const np = p && nextPlace(inst, c, { from: here(p) }); if (np) out.push(`Next: ${np.text}`); }
+    if (ctx.level?.hudHooks?.userPaused && waitsOnTime(inst, c)) out.push('The clock is paused: this job waits on farm time. Press ▶ in the time bar (bottom left).');
+    return out.join(' ');
+  }
   let acc = 0;
   return {
     el: card,
@@ -333,9 +345,11 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
         const overflow = list.scrollHeight > list.clientHeight + 4 && list.scrollTop + list.clientHeight < list.scrollHeight - 4;
         if (more.hidden === overflow) { more.hidden = !overflow; listWrap.classList.toggle('has-more', overflow); }
       }
-      for (const { bar, ptext, inst } of items.values()) {
+      const slow = acc === 0.25;
+      for (const { bar, ptext, inst, next } of items.values()) {
         bar.style.transform = `scaleX(${Math.max(0, Math.min(1, inst.progress)).toFixed(3)})`;
         if (ptext) setText(ptext, progressText(inst, ctx));
+        if (slow && next) { setText(next, nextLine(inst)); next.hidden = !next.textContent; }
       }
       const p = ctx.player.position;
       marker.update(dt, current ? spotFor(current, p) : null, p, panelOpen);

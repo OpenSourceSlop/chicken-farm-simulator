@@ -13,6 +13,9 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
   const factories = new Map();
   const built = new Map();
   let current = null;
+  // the steps hotfix: a panel whose machine job still runs (a flow test, the filter, a wash) when it closes keeps
+  // its update running in the background until the job is done and recorded (panel.busy() says so)
+  const background = new Set();
 
   scrim.addEventListener('click', () => close());
 
@@ -23,6 +26,7 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
   // Forget every built panel (a mode change: sandbox and level panels share ids).
   function clearBuilt() {
     if (current) close(false);
+    background.clear();
     for (const p of built.values()) { p.dispose?.(); p.el.remove(); }
     built.clear();
   }
@@ -55,6 +59,7 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
     const { panel, returnFocus } = current;
     current = null;
     panel.onClose?.();
+    if (panel.busy?.()) background.add(panel);
     panel.el.hidden = true;
     scrim.hidden = true;
     player.inputEnabled = true;
@@ -91,7 +96,18 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
       return k;
     },
     get openPanel() { return current ? current.panel : null; },
-    update(dt) { current?.panel.update?.(dt, false); },
+    update(dt) {
+      current?.panel.update?.(dt, false);
+      for (const p of background) {
+        if (p === current?.panel) { background.delete(p); continue; }
+        p.update?.(dt, false);
+        if (!p.busy?.()) background.delete(p);
+      }
+    },
+    /** A mode change (title, result, sandbox): no machine job of the level runs on behind it. */
+    dropBackground() { background.clear(); },
+    /** Panels still finishing a machine job with their panel closed (tests). */
+    get backgroundCount() { return background.size; },
   };
 }
 

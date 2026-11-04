@@ -38,6 +38,7 @@ import { sectorOf } from './job-engine.js';
 import { BOARDS_CYCLE } from './content-signs-cycle.js';
 import { RUN_CARD } from './content.js';
 import { createBusyCard } from './ui-run.js';
+import { setFarmTimeHooks, tickFarmTimeNotes, clearFarmTimeNotes } from './ui-farmtime.js';
 import { buildSummaryPanel } from './ui-summary.js';
 // Phase 3 (PHASE3.md §13.8): the panels package registers its panels here
 import { registerCyclePanels } from './ui-cycle-panels.js';
@@ -218,7 +219,12 @@ export function createUI(ctx, deps) {
     letters: [],
     lettersRead: new Set(),
     replayLevel: (id, day) => replayLevel(id, day),
+    // the steps hotfix: an action that waits on farm time runs a paused clock again (level hudHooks.resume)
+    runClock: () => (mode === 'level' ? !!ctx.level?.hudHooks?.resume?.() : false),
+    clockPaused: () => mode === 'level' && !!ctx.level?.hudHooks?.userPaused,
+    notice: (text, sec) => caption.show(text, sec),
   };
+  setFarmTimeHooks({ resume: () => L.runClock(), paused: () => L.clockPaused(), notice: (t, s) => L.notice(t, s) });
   /** Back to a level of the run: its saved start, else a standard start behind the card (PHASE3.md §2.2). */
   function replayLevel(id, day) {
     const run = ctx.run, def = levelById(id);
@@ -454,6 +460,7 @@ export function createUI(ctx, deps) {
     const was = mode;
     mode = m;
     if ((was === 'sandbox') !== (m === 'sandbox')) panels.clearBuilt();
+    if (m !== 'level') panels.dropBackground();
     const lv = m !== 'sandbox';
     tr.hidden = lv; br.hidden = lv;
     trL.hidden = m !== 'level' && m !== 'result';
@@ -472,6 +479,7 @@ export function createUI(ctx, deps) {
   function newRun() {
     panels.close(false);
     panels.clearBuilt();
+    clearFarmTimeNotes();
     jobCard.reset(); caption.clear();
     L.letters.length = 0; L.lettersRead.clear();
     if (views.comfort) { views.comfort = false; flock?.setOverlay?.('comfort', false); }
@@ -497,6 +505,7 @@ export function createUI(ctx, deps) {
         if (mode === 'level') refreshNextBar(dt);
       }
       panels.update(dt);
+      tickFarmTimeNotes();
       floorLegend.hidden = !(mode === 'level' && props?.overlay?.floorTemp);
       comfortLegend.hidden = !(mode === 'level' && views.comfort);
       if (!comfortLegend.hidden) syncComfortSub();
@@ -510,6 +519,8 @@ export function createUI(ctx, deps) {
     openPanel,
     closePanel,
     get openPanelId() { return panels.openId; },
+    /** Panels finishing a machine job in the background (closed with a flow test running, …). */
+    get backgroundPanels() { return panels.backgroundCount; },
     /** 'sign' | 'paused' | 'panel' | null: the open panel's clock class (PHASE2.md §2). */
     get panelKind() { return title.open ? 'paused' : panels.openKind; },
     get taskIndex() { return tasks.index; },

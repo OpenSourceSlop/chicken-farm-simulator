@@ -73,7 +73,7 @@ export function buildPlanSheet(api) {
     h('div', { class: 'cyc-sheet-col' }, h('h3', null, 'House 1, measured'), tape, h('div', { class: 'equip-btns' }, takeTape, backTape)),
     h('div', { class: 'cyc-sheet-col' }, h('h3', null, 'Your sums'), rows(sums)),
     h('div', { class: 'cyc-sheet-col' }, h('h3', null, 'Your plan'), rows(dec)),
-    h('div', { class: 'cyc-sheet-col cyc-sheet-wide' }, calc, h('div', { class: 'equip-btns' }, sendBtn), sent));
+    h('div', { class: 'cyc-sheet-col cyc-sheet-wide' }, calc, h('div', { class: 'equip-btns' }, sendBtn), sent, shell.timeNote.el));
   shell.main.append(sheet);
   for (const x of [...sums, ...dec]) x.input.addEventListener('input', () => refresh());
 
@@ -87,6 +87,8 @@ export function buildPlanSheet(api) {
   sendBtn.addEventListener('click', () => {
     if (!complete() || !canSend()) { refresh(); return; }
     const own = Object.fromEntries(sums.map((x) => [x.f.key, value(x)]));
+    // the steps hotfix: the reply comes over farm time (about an hour): a paused clock runs again once the sheet closes
+    shell.needTime('the company’s reply comes to the desk about an hour after sending; the clock runs once you close the sheet');
     L.act('plan.send', { ...decisions(), sums: own });
     refresh();
   });

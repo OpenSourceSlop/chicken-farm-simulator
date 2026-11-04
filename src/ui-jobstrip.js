@@ -8,7 +8,7 @@
 //     ctx()    extra figures the panel knows (the drinker line it is, the timer setting not sent yet)
 //     label    section names for the pointer lines ({ temp: 'Temperature', ... })
 import { h } from './ui-dom.js';
-import { stripsAt, partRows } from './job-strips.js';
+import { stripsAt, stripRows } from './job-strips.js';
 import { STRIPS_CYCLE } from './job-strips-cycle.js';
 
 const CSS = `
@@ -30,6 +30,8 @@ const CSS = `
 .js-sign, .js-yours { padding: 2px 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.22); }
 .js-sign b, .js-yours b { display: block; font: 700 9.5px/1.3 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--key-sub); }
 .js-note .js-text, .js-time .js-text { color: var(--sign-yellow); }
+.js-step.is-next .js-text { font-weight: 600; }
+.js-time.is-paused .js-text { color: var(--key-ink); font-weight: 600; }
 .js-bar { grid-column: 2; height: 4px; margin-top: 3px; border-radius: 2px; background: rgba(0, 0, 0, 0.35); overflow: hidden; }
 .js-bar > span { display: block; height: 100%; background: var(--sign-yellow); transform-origin: left center; }
 .js-bar--scale { position: relative; height: 6px; overflow: visible; }
@@ -50,6 +52,9 @@ const CSS = `
 .equip-legend li + li { margin-top: 2px; }
 .equip-legend b { color: var(--key-ink); font-weight: 600; }
 .equip-note--time { color: var(--sign-yellow); }
+/* the steps hotfix: the panel's farm-time line ("Clock running: the test takes 1 farm minute") */
+.equip-note.farm-time { margin: 8px 0 0; padding: 6px 9px; border-radius: 4px; background: rgba(231, 182, 70, 0.12); color: var(--sign-yellow); font-weight: 600; }
+.equip-note.farm-time[hidden] { display: none; }
 .equip-note--time[hidden] { display: none; }
 .ctrl-timer-now { margin: 2px 0 6px; font: 600 13px/1.3 var(--font-display); color: var(--sign-yellow); }
 .ctrl-sub { display: block; margin-top: 2px; font-size: 12px; color: var(--key-sub); }
@@ -77,9 +82,9 @@ const bar = (b) => {
 };
 
 function rowHtml(r, n) {
-  if (r.k === 'step') return `<li class="js-step${r.done ? ' is-done' : ''}"><span class="js-mark" aria-hidden="true">${r.done ? '✓' : n}</span><span class="js-text">${r.done ? '<span class="sr-only">done: </span>' : ''}${esc(r.text)}</span>${bar(r.bar)}</li>`;
+  if (r.k === 'step') return `<li class="js-step${r.done ? ' is-done' : ''}${r.next ? ' is-next' : ''}"><span class="js-mark" aria-hidden="true">${r.done ? '✓' : n}</span><span class="js-text">${r.done ? '<span class="sr-only">done: </span>' : ''}${esc(r.text)}</span>${bar(r.bar)}</li>`;
   if (r.k === 'cmp') return `<li class="js-cmp"><span class="js-dot" aria-hidden="true"></span><span class="js-text"><span class="js-what">${esc(r.what)}</span><span class="js-sign"><b>Sign</b>${esc(r.sign)}</span><span class="js-yours"><b>Yours</b>${esc(r.yours)}</span></span>${bar(r.bar)}</li>`;
-  if (r.k === 'time') return `<li class="js-time"><span class="js-mark" aria-hidden="true">⏱</span><span class="js-text">${esc(r.text)}</span>${bar(r.bar)}</li>`;
+  if (r.k === 'time') return `<li class="js-time${r.paused ? ' is-paused' : ''}"><span class="js-mark" aria-hidden="true">⏱</span><span class="js-text">${esc(r.text)}</span>${bar(r.bar)}</li>`;
   if (r.k === 'note') return `<li class="js-note"><span class="js-mark" aria-hidden="true">i</span><span class="js-text">${esc(r.text)}</span></li>`;
   return `<li class="js-line"><span class="js-dot" aria-hidden="true"></span><span class="js-text">${esc(r.text)}</span></li>`;
 }
@@ -88,7 +93,10 @@ export function createJobStrip(L, panelId, { section = null, ctx = () => ({}), l
   injectStyle();
   const el = h('section', { class: 'jstrip', hidden: true, 'aria-label': 'The job done here' });
   let sticky = new Map(), last = '';
-  const base = () => ({ env: L.env, farm: L.farm, records: L.records, skills: L.skills, props: L.props, engine: L.engine(), minmax: L.minmax, weighings: L.weighings, ...ctx() });
+  // the steps hotfix: where the farmer stands (the next place's way) and the clock's pause
+  const from = () => { const p = L.player?.position; return p ? { x: p.x, z: p.z, inside: !!L.player.isInside } : null; };
+  const base = () => ({ env: L.env, farm: L.farm, records: L.records, skills: L.skills, props: L.props, flock: L.flock, engine: L.engine(), minmax: L.minmax, weighings: L.weighings,
+    from: from(), paused: !!L.clockPaused?.(), ...ctx() });
   function update() {
     const engine = L.engine();
     if (!engine || L.farm?.mode !== 'level') { if (!el.hidden) { el.hidden = true; last = ''; } return; }
@@ -101,7 +109,7 @@ export function createJobStrip(L, panelId, { section = null, ctx = () => ({}), l
     here.slice(0, 3).forEach((s, k) => {
       const done = s.inst.status === 'done';
       let rows;
-      try { rows = s.strip ? s.strip.rows({ ...c, inst: s.inst }, s.inst) : partRows(c, s.inst); } catch (err) { console.error('job strip', s.inst.key, err); rows = []; }
+      try { rows = stripRows(s.strip, c, s.inst, panelId); } catch (err) { console.error('job strip', s.inst.key, err); rows = []; }
       if (!rows.length) rows = [{ k: 'step', text: s.inst.def.title, done }];
       let n = 0;
       html += `<div class="js-job"${k ? ' style="margin-top: 8px"' : ''}><p class="js-head"><span class="js-k${done ? ' is-done' : ''}">${done ? 'Done' : 'Job here'}</span><span class="js-title">${esc(s.strip?.title || s.inst.def.title)}</span></p>

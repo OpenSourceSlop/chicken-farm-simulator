@@ -19,6 +19,7 @@ import { sourceLabel } from './content-signs.js';
 import { planPage, harvestPage, cleanPage, lettersPage } from './ui-letters.js';
 import { graphsPage } from './ui-summary.js';
 import { createJobStrip } from './ui-jobstrip.js';
+import { needTime } from './ui-farmtime.js';
 
 // What "Today" lists, in job order: [note kind(s), label]
 const TODAY_LINES = [
@@ -152,9 +153,10 @@ export function buildRecordsPanel(L) {
     const order = button({ class: 'btn btn--paper btn--ink' }, h('span', { html: ICONS.phone, 'aria-hidden': 'true' }), 'Order feed');
     order.addEventListener('click', () => {
       const r = L.act('feed.order', { kg, type }) || {};
+      const clock = needTime('the feed truck comes as farm time passes; the clock runs once you close the book (Next job skips ahead)').text;
       const label = FEED_TYPES.find((t) => t.id === type)?.label.toLowerCase() || type;
       const took = r.kg != null && r.kg !== kg ? ` The silo had room for ${int(r.kg)} kg.` : '';
-      say('order', r.arriveDay != null ? `Ordered ${int(r.kg ?? kg)} kg of ${label} at ${env.timeLabel}. The feed truck comes ${dayTime(r.arriveDay + (r.arriveHour ?? 9) / 24)}.${took}` : `Ordered ${int(kg)} kg of ${label} at ${env.timeLabel}.${took}`);
+      say('order', `${r.arriveDay != null ? `Ordered ${int(r.kg ?? kg)} kg of ${label} at ${env.timeLabel}. The feed truck comes ${dayTime(r.arriveDay + (r.arriveHour ?? 9) / 24)}.${took}` : `Ordered ${int(kg)} kg of ${label} at ${env.timeLabel}.${took}`} ${clock}`);
     });
     out.push(h('h3', { class: 'book-h' }, 'Feed mill'),
       h('p', { class: 'book-note book-note--fact' }, 'Two silos of 6,000 kg: starter and finisher go to silo 1, grower to silo 2. Ordered before 16:00, it comes the next morning at 09:00.',
@@ -164,7 +166,11 @@ export function buildRecordsPanel(L) {
     const report = button({ class: 'btn btn--paper btn--ink' }, h('span', { html: ICONS.phone, 'aria-hidden': 'true' }), 'Report the deaths to the company vet');
     report.addEventListener('click', () => { L.uiAct('phone.report', {}); say('report', `Reported to the company vet at ${env.timeLabel}.`); });
     const reasons = d >= 8 ? ['Blood in the droppings', 'Birds sitting hunched, white watery droppings', 'Birds that cannot walk well', 'Something else in the flock'] : [];
-    const vetBtns = reasons.map((why) => { const b = button({ class: 'btn btn--paper' }, why); b.addEventListener('click', () => { L.uiAct('phone.vet', { reason: why.toLowerCase() }); say('vet', `You told the vet: ${why.toLowerCase()}, at ${env.timeLabel}. The vet’s answer comes as a letter on the desk.`); }); return b; });
+    const vetBtns = reasons.map((why) => { const b = button({ class: 'btn btn--paper' }, why); b.addEventListener('click', () => {
+      L.uiAct('phone.vet', { reason: why.toLowerCase() });
+      // the steps hotfix: the letter comes over farm time: a paused clock runs again once the book closes
+      say('vet', `You told the vet: ${why.toLowerCase()}, at ${env.timeLabel}. The vet’s answer comes as a letter on the desk. ${needTime('the letter comes as farm time passes; the clock runs once you close the book').text}`);
+    }); return b; });
     out.push(h('h3', { class: 'book-h' }, 'Company vet'), h('div', { class: 'book-row' }, report), h('p', { class: 'book-note', 'aria-live': 'polite' }, phoneLines.report));
     if (vetBtns.length) out.push(h('p', { class: 'book-note' }, 'Call the vet about:'), h('div', { class: 'book-row' }, vetBtns), h('p', { class: 'book-note', 'aria-live': 'polite' }, phoneLines.vet));
     // the catching crew and the trucks (the last week)
@@ -176,7 +182,7 @@ export function buildRecordsPanel(L) {
       const book = button({ class: 'btn btn--paper btn--ink' }, h('span', { html: ICONS.phone, 'aria-hidden': 'true' }), 'Book the crew and the trucks');
       book.addEventListener('click', () => {
         const r = L.act('phone.bookCatch', { day: crewDay, hour: crewHour }) || {};
-        say('crew', r.booked ? `Booked at ${env.timeLabel}: the crew and two trucks come ${dayTime(r.catchAt)}.` : `The crew’s office: ${r.reason || 'no booking'}. The catch stays ${dayTime(r.catchAt ?? now)}.`);
+        say('crew', r.booked ? `Booked at ${env.timeLabel}: the crew and two trucks come ${dayTime(r.catchAt)}. ${needTime('the crew comes at the booked time as farm time passes (Next job skips ahead)').text}` : `The crew’s office: ${r.reason || 'no booking'}. The catch stays ${dayTime(r.catchAt ?? now)}.`);
       });
       out.push(h('h3', { class: 'book-h' }, 'Catching crew'), h('p', { class: 'book-note' }, `The catch now: ${dayTime(now)}${hv?.bookedAt != null ? ' (booked)' : ' (the company’s default)'}.`),
         h('div', { class: 'book-row' }, days, hours, book), h('p', { class: 'book-note', 'aria-live': 'polite' }, phoneLines.crew));
@@ -190,7 +196,7 @@ export function buildRecordsPanel(L) {
       const book = button({ class: 'btn btn--paper btn--ink' }, h('span', { html: ICONS.phone, 'aria-hidden': 'true' }), 'Book the next chicks');
       book.addEventListener('click', () => {
         const r = L.act('phone.bookChicks', { day: chickDay }) || {};
-        say('hatchery', r.booked ? `Booked at ${env.timeLabel}: the next chicks come on day ${r.bookedDay}.` : `The hatchery: ${r.reason || 'no booking'}.`);
+        say('hatchery', r.booked ? `Booked at ${env.timeLabel}: the next chicks come on day ${r.bookedDay}. ${needTime('the house rests until then as farm time passes (Next job skips ahead)').text}` : `The hatchery: ${r.reason || 'no booking'}.`);
       });
       out.push(h('h3', { class: 'book-h' }, 'Hatchery'), h('p', { class: 'book-note' }, c.bookedDay != null ? `The next chicks: day ${c.bookedDay}.` : 'No chicks booked yet.'),
         h('div', { class: 'book-row' }, days, book), h('p', { class: 'book-note', 'aria-live': 'polite' }, phoneLines.hatchery));

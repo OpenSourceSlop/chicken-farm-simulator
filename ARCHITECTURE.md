@@ -399,7 +399,7 @@ hour)` (`level.debug.freeRun`) and `config` (the config module: steps files read
   hold in a heated week-2 house (PHASE3.md §6.16). `minVentW3` heat deaths ≤ 0.07 % (one bird over 0.05).
 
 ### Tests and harness
-- `npm test` = test-contracts, test-sim (Phase 2 unchanged: ratio 4.873, FCR 0.840), test-jobs (28: with the job strips of 13 days and the outcome rules), test-level,
+- `npm test` = test-contracts, test-sim (Phase 2 unchanged: ratio 4.873, FCR 0.840), test-jobs (30: with the job strips of 13 days, the outcome rules and the steps hotfix's next places), test-level,
   **test-cycle** (climate, growth and plan checks; 23 profiles incl. the ideal: every level passes, harvest
   2,887 g live, FCR 1.58, mortality 2.35 %, EPEF 427; determinism; whole cycle 2.5 s; 24 h skip about 80 ms;
   level starts 8–140 KB, the day 41 blob 149 KB) and **test-run** (the chaining tests on the real sim: a
@@ -556,6 +556,43 @@ anywhere still holds (test-contracts and test-jobs check the words), and every n
   markers point to the next part or line not done. T, L, V and the chick in the hand show the sign's figure beside the value.
 - Not done: the sandbox tutorial's thermostat target (Phase 1's rule keeps the target on the brooder sign only); w3-change /
   w45-change still complete on the pans' feed (the strip shows the feed sign's 24 h half-and-half, the rule does not log it).
+
+### The steps hotfix (the farmer stuck on the day 0 drinker job)
+The farmer pressed *Flow test* with the HUD clock paused: the test waits one farm minute, so it never finished, and
+closing the panel stopped it ("test stopped"); the strip listed lines 1–4 "not tested this round" but never said to walk
+on to the next regulator. Fixed for every job:
+- **Farm time when paused** (`src/ui-farmtime.js`, level `hudHooks.resume()`): every panel action that waits on farm
+  time runs a paused clock again at normal speed (the open panel's own speed while it stays open) and the panel's note says
+  so: "Clock running: the test takes 1 farm minute (the pause is off …)"; while the farmer pauses again the note reads
+  "Clock paused: … once the clock runs again". `equipShell().needTime(text)` folds the plates and starts the note
+  (`shell.timeNote.el` sits under the key that started it). The actions: the flow test, the filter cleaning and the flush
+  valves (water supply), *Start auger* / *Open flood windows*, *Take the feed away* and *Wash the pans* (feeder box), the silo
+  slide valves, the main valve shut / opened on the vaccine, the medicine, the disinfectant flush (Clean-out tab), the pad
+  check / flush / float valve, the wash bay items, the curtain lift, the plan sheet's *Send*, the phone (order, vet, crew,
+  hatchery: the line under the button says the clock runs once the book closes), and at the controller and the fan panel any
+  setting while a job waits on a part that must hold (`heldWaitText`: the chicks near the target, few birds panting, the
+  floor drying). Weighing, the controller and fan panel reads and the bird checks run on real seconds and need no clock.
+- **A machine job finishes with its panel closed**: a panel with `busy()` keeps its update running in the panel host's
+  background set after it closes (`ui.backgroundPanels`), records the result and shows a caption ("Drinker line 1 flow test
+  done: 19.7 ml in one minute (recorded 08:17)"). A mode change drops the background set; a new run clears it.
+- **Every strip states every step** (`job-strips.js stripRows` = the job's rows + `thenRows` + `pausedRows`): the keys to
+  press when a reading is outside the sign's band ("its flow 24.3 ml/min is above 23: lower the pressure one step (−) and test
+  again", the vent timer's One second more / less, the dimmer, the dark hours, the thermostat, the feeder lines), how long the
+  farm time takes (`wait()` rows), the clock's pause, and for a job that spans several places the next one: "Then walk to the
+  line 2 regulator, about 3 m south along the west wall: a flow test there (1 farm minute)".
+- **The next place** (`src/job-next.js`, pure): `jobPlaces(inst, c)` lists the unfinished places of every multi-place job
+  (the four regulators of the drinker jobs, feeder box then silo, the two dips, fan panel / pad pump / a drinker line in the
+  heat wave, the catching panels and the controller, desk then Medicine tab, the vaccine's valve and walk, the tape's walls,
+  boxes and brooding area, the dead bird and the bin, heap then patch, caked patches and sacks, the floor not washed /
+  sprayed / seen yet, the bait stations, the brushes, the swab flags, the parts of the floor a sampling job has not done);
+  `nextPlace` picks the nearest from the farmer and words the way (`wayText`: compass and metres, through the house door,
+  round the west end to the silos). The job marker points there, the job card shows a *Next:* line, and `w45-brooders`
+  points to the controller where the brooders go up. The card's *where* lines name the places and the farm minutes.
+- **Tests**: test-jobs adds the flow job's next regulator, the out-of-band keys and the pause line, and a check that every
+  multi-place job of every level names its places; `scripts/hotfix-steps.json` (21 PASS at 960 × 600): day 0 08:16 with the
+  clock paused by the HUD button, walked to line 1, the strip names the line 2 regulator, *Flow test* runs the clock and
+  records, the out-of-band reading names its key, a test started and then closed finishes in the background with a caption,
+  the marker and the card lead to line 2, and r-drinkers completes on all four lines by walking and clicks.
 
 ### Open (Phase 4 and later)
 - **Day budget:** the `onDays` cuts of the review round are in (above); they are content for the farmer to confirm

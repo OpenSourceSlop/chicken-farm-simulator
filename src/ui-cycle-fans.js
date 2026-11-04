@@ -9,6 +9,7 @@ import { ICONS } from './ui-icons.js';
 import { key, lcdCell } from './ui-controller.js';
 import { equipShell, machineRow, toggleKey, stepper } from './ui-equipment.js';
 import { ROTOR, FAN_INDEXES, lineChart, historyOf, machineJob, progressBar, padCheckOf } from './ui-cycle-kit.js';
+import { heldWaitText } from './ui-farmtime.js';
 
 const READ_AFTER = 2; // real seconds open before the panel counts as read (as the controller)
 
@@ -35,7 +36,10 @@ export function buildFanPanel(api) {
   const fFans = h('span', { class: 'lcd-flag' }), fPad = h('span', { class: 'lcd-flag' }, 'PAD'), fStage = h('span', { class: 'lcd-flag' }, 'STAGES'), fRead = h('span', { class: 'lcd-read' });
   lcd.flags.append(fFans, ' ', fPad, ' ', fStage, ' ', fRead);
   // six switches: fans run 1..n (env.setFans), so switch k on runs fans 1..k, off stops k and the ones after
-  const setFans = (n) => { env.setFans(n); L.uiAct('vent.fans', { n: env.fansManual ?? env.fansOn }); refresh(); };
+  // the steps hotfix: a held job waiting on these settings (few birds panting for 30 farm minutes, the floor drying)
+  // runs a paused clock again; the note under the switches says what it waits for
+  const waits = () => { const t = heldWaitText(L.engine()); if (t) shell.needTime(t); };
+  const setFans = (n) => { env.setFans(n); L.uiAct('vent.fans', { n: env.fansManual ?? env.fansOn }); waits(); refresh(); };
   const fans = FAN_INDEXES.map((i) => {
     const sw = key(`Fan ${i + 1} switch`, `<span>${i + 1}</span>`, () => setFans(i < (env.fansManual ?? env.fansOn) ? i : i + 1));
     const led = h('span', { class: 'led led--run', 'aria-hidden': 'true' });
@@ -48,7 +52,7 @@ export function buildFanPanel(api) {
   const allOn = button({ class: 'key key--wide' }, 'All six');
   allOff.addEventListener('click', () => setFans(0));
   allOn.addEventListener('click', () => setFans(FAN_COUNT));
-  const pad = toggleKey('Stop the pad pump', 'Start the pad pump', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); refresh(); });
+  const pad = toggleKey('Stop the pad pump', 'Start the pad pump', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); waits(); refresh(); });
   const hint = h('span', { class: 'cyc-dim' });
   // stage table (unlock tunnelStages)
   const draft = { stages: [{ overC: 1, fans: 2 }, { overC: 2, fans: 4 }, { overC: 3, fans: 6 }], padOn: false, padOverC: 5 };
@@ -61,8 +65,8 @@ export function buildFanPanel(api) {
   const padIn = toggleKey('Run the pad by hand', 'Put the pad in the table', () => { draft.padOn = !draft.padOn; refresh(); });
   const setStages = button({ class: 'key key--wide key--apply' }, 'Set the stages');
   const stagesOff = button({ class: 'key key--wide' }, 'Stages off');
-  setStages.addEventListener('click', () => { L.act('vent.stages', { stages: draft.stages.map((s) => ({ ...s })), padOverC: draft.padOn ? draft.padOverC : null }); refresh(); });
-  stagesOff.addEventListener('click', () => { L.act('vent.stages', { stages: null, padOverC: null }); refresh(); });
+  setStages.addEventListener('click', () => { L.act('vent.stages', { stages: draft.stages.map((s) => ({ ...s })), padOverC: draft.padOn ? draft.padOverC : null }); waits(); refresh(); });
+  stagesOff.addEventListener('click', () => { L.act('vent.stages', { stages: null, padOverC: null }); waits(); refresh(); });
   const stages = h('div', { class: 'ctrl-timer cyc-stages', hidden: true },
     h('p', { class: 'ctrl-timer-k' }, 'Fan stages', h('small', null, ' · the house °C over the target sets the fans')),
     h('div', { class: 'cyc-stage' }, h('span'), h('span', { class: 'cyc-k' }, 'over the target'), h('span', { class: 'cyc-k' }, 'fans')),
@@ -71,7 +75,7 @@ export function buildFanPanel(api) {
     h('div', { class: 'ctrl-apply' }, stagesOff, setStages));
   const chart = h('div', { class: 'cyc-chart', hidden: true });
   shell.main.append(lcd.el, h('div', { class: 'fanbank' }, fans.map((f) => f.el)),
-    h('div', { class: 'cyc-controls' }, hint, allOff, allOn, pad.el), stages, chart);
+    h('div', { class: 'cyc-controls' }, hint, allOff, allOn, pad.el), shell.timeNote.el, stages, chart);
 
   let openFor = 0, readThis = false, lastRead = null;
   function readNow() {
@@ -155,7 +159,7 @@ export function buildPadPump(api) {
   const { env, farm } = L;
   const shell = equipShell({ cls: 'equip--pad', icon: ICONS.pad, title: 'Cooling pad pump', sub: 'West end · pump, distribution pipe, float valve', plates: ['pad-pump'], signLinks: ['sign-heat'], onClose: L.close });
   const lcd = climateLcd(env, [['Outside', '°C'], ['Humidity out', '%']], 'Pad pump display');
-  const pump = toggleKey('Stop the pump', 'Start the pump', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); refresh(); });
+  const pump = toggleKey('Stop the pump', 'Start the pump', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); const t = heldWaitText(L.engine()); if (t) shell.needTime(t); refresh(); });
   const pumpRow = machineRow('Pad pump', 'water over the pad while the tunnel fans run', pump.el);
   pumpRow.led.classList.add('led--pad');
   const pic = h('div', { class: 'cyc-pad' });
@@ -164,18 +168,22 @@ export function buildPadPump(api) {
   let check = null, last = [];
   const bar = progressBar();
   // each job takes farm time (a walk along the pad, a flush, the float valve): the plate folds first
+  // the steps hotfix: a paused clock runs again when one starts, and one still running finishes when the panel closes
+  let isOpen = false;
+  const done = (text) => { shell.timeNote.done(text); if (!isOpen) L.notice?.(`Pad pump: ${text}`, 5); };
   const job = (min, fn) => machineJob(env, min, () => { fn(); bar.set(0); refresh(); });
   const jobs = {
-    check: job(2, () => { check = { ...padCheckOf(L.act('pad.check', {})), at: env.timeLabel, day: env.dayNumber }; }),
-    flush: job(10, () => { L.act('pad.flush', {}); last.push(`Distribution pipe flushed ${env.timeLabel}.`); check = null; }),
-    float: job(3, () => { L.act('pad.fixFloat', {}); last.push(`Float valve freed ${env.timeLabel}.`); check = null; }),
+    check: job(2, () => { check = { ...padCheckOf(L.act('pad.check', {})), at: env.timeLabel, day: env.dayNumber }; done(`pad checked ${env.timeLabel}.`); }),
+    flush: job(10, () => { L.act('pad.flush', {}); last.push(`Distribution pipe flushed ${env.timeLabel}.`); check = null; done(`distribution pipe flushed ${env.timeLabel}.`); }),
+    float: job(3, () => { L.act('pad.fixFloat', {}); last.push(`Float valve freed ${env.timeLabel}.`); check = null; done(`float valve freed ${env.timeLabel}.`); }),
   };
-  const btn = (text, k) => { const b = button({ class: 'btn btn--machine' }, text); b.addEventListener('click', () => { if (Object.values(jobs).some((j) => j.running)) return; shell.foldPlates(); jobs[k].start(); refresh(); }); return b; };
+  const TAKES = { check: 'walking along the pad takes 2 farm minutes', flush: 'flushing the distribution pipe takes 10 farm minutes', float: 'freeing the float valve takes 3 farm minutes' };
+  const btn = (text, k) => { const b = button({ class: 'btn btn--machine' }, text); b.addEventListener('click', () => { if (Object.values(jobs).some((j) => j.running)) return; shell.needTime(TAKES[k]); jobs[k].start(); refresh(); }); return b; };
   const bCheck = btn('Check the pad: water on every section', 'check');
   bCheck.classList.add('btn--go');
   const bFlush = btn('Flush the distribution pipe', 'flush'), bFloat = btn('Free the float valve', 'float');
   shell.main.append(lcd.el, h('div', { class: 'ctrl-rows' }, pumpRow.el), h('div', { class: 'cyc-box', style: 'margin-top: 10px' }, pic, status, bar.el),
-    h('div', { class: 'equip-btns' }, bCheck, bFlush, bFloat), notes);
+    h('div', { class: 'equip-btns' }, bCheck, bFlush, bFloat), shell.timeNote.el, notes);
   function refresh() {
     lcd.set([fmt1(env.houseTemp), fmt0(env.houseRH), fmt1(env.outsideTemp), fmt0(env.outsideRH)]);
     pump.set(!!env.padOn); pumpRow.led.classList.toggle('is-on', !!env.padOn); pumpRow.setState(`Pump: ${env.padOn ? 'on, water over the pad' : 'off'}`);
@@ -194,8 +202,9 @@ export function buildPadPump(api) {
   let acc = 0;
   return {
     el: shell.el,
-    onOpen() { shell.refreshPlates(); },
-    onClose() { for (const j of Object.values(jobs)) j.cancel(); bar.set(0); },
+    onOpen() { isOpen = true; shell.refreshPlates(); },
+    busy: () => Object.values(jobs).some((j) => j.running),
+    onClose() { isOpen = false; },
     update(dt, force) {
       for (const j of Object.values(jobs)) if (j.running) bar.set(j.tick() || 0.001);
       acc -= dt;

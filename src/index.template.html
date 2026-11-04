@@ -212,6 +212,8 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 #hud.has-panel .hud-tr { visibility: hidden; } /* an open sign or controller never overlaps the jobs */
 .job-where { display: flex; gap: 6px; margin: 4px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-dim); }
 .job-where .icon { font-size: 14px; color: var(--accent); margin-top: 2px; }
+.job-next { margin: 4px 0 0 20px; font: 600 12.5px/1.4 var(--font-display); color: var(--accent); }
+.job-next[hidden] { display: none; }
 .job-progress { margin-top: 8px; height: 4px; border-radius: 2px; background: var(--panel-sunk); overflow: hidden; }
 .job-bar { display: block; height: 100%; background: var(--accent); transform-origin: left center; transform: scaleX(0); }
 .job.just-done .job-mark { animation: job-pop 0.6s ease-out; }

@@ -512,6 +512,9 @@ export function createLevel(ctx, deps = {}) {
       // the pause holds at once (not from the next frame): env.paused is set here too
       togglePause() { userPaused = !userPaused; if (level.mode === 'level' && userPaused) env.paused = true; },
       setFast(on) { fast = !!on; userPaused = false; },
+      /** A panel action that waits on farm time (a flow test, pans filling, a flush): a clock the farmer paused runs
+       *  again at normal speed (the open panel's own speed while it stays open). True if it was paused. */
+      resume() { if (!userPaused) return false; userPaused = false; fast = false; return true; },
       get fast() { return fast; },
       get userPaused() { return userPaused; },
       /** The HUD's day (PHASE3.md §2.3). */

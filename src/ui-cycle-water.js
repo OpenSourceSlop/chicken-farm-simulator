@@ -13,16 +13,20 @@ import { makeTabs, whenText, hoursText, mainShut } from './ui-cycle-kit.js';
 
 const FROM_DAY = 8;
 
-export function cycleWaterParts(L, { linesSec, foldPlates }) {
+export function cycleWaterParts(L, { linesSec, foldPlates, needTime = null }) {
   const { env, farm, skills } = L;
   const memo = { shut: false, flush: [false, false, false, false] };
   const tabs = makeTabs(['Lines', 'Vaccine', 'Medicine', 'Clean-out'], { secs: [linesSec] });
   tabs.bar.hidden = true;
   // ---------- main valve (Lines and Vaccine tabs show the same valve) ----------
   const foldAll = () => { foldPlates(); vacPlate.fold(); medPlate.fold(); };
+  // the steps hotfix: what waits on farm time runs a paused clock again, with the panel's note (ui-water.js)
+  const wait = (text) => { foldAll(); needTime?.(text); };
   const valveToggle = () => {
     const shut = !mainShut(farm);
-    if (shut) foldAll();
+    const vs = farm.health?.vaccine?.state;
+    if (shut) wait('with the main valve shut the lines run dry and the birds get thirsty: 1–2 farm hours (vaccine plate)');
+    else if (vs === 'mixed') wait('the birds drink the vaccine water from the header tank: about 2 farm hours (vaccine plate). Walk slowly through the house while they drink');
     L.act('water.main', { open: !shut });
     memo.shut = shut; memo.at = env.day;
     sync();
@@ -63,6 +67,7 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
   const medNow = () => !!farm.health.medication.on;
   const med = toggleKey('Stop the medicine', 'Start the medicine', () => {
     const on = !medNow();
+    if (on) wait('the medicine goes into the water while the birds drink, for the days the vet’s letter names (medicator plate)');
     L.act('water.medicate', { on });
     sync();
   });
@@ -78,7 +83,7 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
   const flushes = DRINKER_LINES_Z.map((z, i) => {
     const t = toggleKey('Close flush valve', 'Open flush valve', () => {
       const on = !(farm.water.lines[i].flushing || memo.flush[i]);
-      if (on) foldAll();
+      if (on) wait(`line ${i + 1} fills with the disinfectant over farm time with its flush valve open; the row says when it is through`);
       L.act('water.flush', { line: i, on });
       memo.flush[i] = on;
       sync();

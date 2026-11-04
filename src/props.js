@@ -372,6 +372,9 @@ export function buildProps(ctx, { house } = {}) {
     overlay: { floorTemp: false, moisture: false, lux: false, brooderZones: false },
     carrying: null,
     carryOpts: null,
+    /** The tape's hook while it is hooked at a wall ({ axis, end, name, x, z }), else null (the steps hotfix: the
+     *  measuring job points to the far wall). */
+    get tapeHook() { return tools.st.tape ? { ...tools.st.tape } : null; },
     startCarry(kind, opts = {}) {
       if (kind === 'bucket' && props.carrying === 'bucket') {
         const c = props.carryOpts; c.n += opts.n || 0;

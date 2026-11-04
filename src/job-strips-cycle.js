@@ -4,7 +4,7 @@ import { HARVEST, HEAT, CLEAN, PLAN_CONTRACT, flockAgeAt, feedStdGAt, weightAt }
 import { int, one, hhmm } from './ui-format.js';
 import { knownFlock, ventNeed, nippleCmToday, rimCmNow, nippleInBand, rimInBand, luxOfDimmer, fansWorking, timerAirM3h, brooderRowC,
   LINES_UP_CM, PANS_UP_CM, CATCH_DIMMER_MAX, CATCH_FANS_MIN, DARK_H, HEIGHT_BAND_CM } from './job-figures.js';
-import { step, cmp, line, note, time, pct, partRows, houseRow, birdsSeen, ventRows, lightAt, timerText, heldText } from './job-strips.js';
+import { step, cmp, line, note, time, wait, pct, partRows, houseRow, birdsSeen, ventRows, lightAt, timerText, heldText } from './job-strips.js';
 
 const cm = (v) => `${Math.round(v)} cm`;
 const list = (a) => a.map((v) => Math.round(v)).join(' · ');
@@ -12,18 +12,22 @@ const ageOf = (env) => Math.max(0, Math.floor(flockAgeAt(env.day)));
 const fanLine = (c) => `Fans turning ${c.env.fansEffective ?? 0} of ${fansWorking(c.env)} · pad pump ${c.env.padOn ? 'on' : 'off'} · humidity ${int(c.env.houseRH)} % (pad plate: the pads help up to about ${HEAT.padOffAboveRH} %)`;
 const heatAge = (c) => (ageOf(c.env) < 21 ? `Birds ${ageOf(c.env)} days: as few tunnel fans as the heat allows; the pads are for big birds (heat sign, fan plate).`
   : `Birds ${ageOf(c.env)} days: big birds in the heat want all six fans and the pads (heat sign).`);
-const heatRows = (c, inst) => [line(`${birdsSeen(c)} | heat sign: panting, wings out, lying along the walls = heat stress.`), line(heatAge(c)), line(fanLine(c)), ...partRows(c, inst)];
+const heatRows = (c, inst) => [line(`${birdsSeen(c)} | heat sign: panting, wings out, lying along the walls = heat stress.`), line(heatAge(c)), line(fanLine(c)),
+  step('Switch fans on at the fan switches 1–6 (as the line above says for their age; All six switches every fan on) and, for birds of 21 days and more, Start the pad pump. Then few birds may pant, and none huddle chilled, for 30 farm minutes with the clock running.', inst.status === 'done'),
+  ...partRows(c, inst)];
 const lastLook = (c) => (c.records?.notebook || []).filter((n) => n.kind === 'look' && n.day === c.env.dayNumber).pop();
 const darkRows = (c) => {
   const p = lightAt(c.env, c.farm);
-  return [cmp('Dark period', `light sign: ${DARK_H[0]}–${DARK_H[1]} h in one block`, `${hhmm(p.darkStart ?? 2)} for ${one(p.darkHours ?? 1)} h`),
-    cmp('Light at bird level', 'light sign: about 20 lux from week 2', `dimmer ${pct(p.dimmer)} ≈ ${int(luxOfDimmer(p.dimmer))} lux (L measures it)`)];
+  const dark = p.darkHours ?? 1, inBlock = dark >= DARK_H[0] - 1e-9 && dark <= DARK_H[1] + 1e-9;
+  return [cmp('Dark period', `light sign: ${DARK_H[0]}–${DARK_H[1]} h in one block`, `${hhmm(p.darkStart ?? 2)} for ${one(dark)} h`),
+    cmp('Light at bird level', 'light sign: about 20 lux from week 2', `dimmer ${pct(p.dimmer)} ≈ ${int(luxOfDimmer(p.dimmer))} lux (L measures it)`),
+    step(inBlock ? `Dark ${one(dark)} h in one block (light sign ${DARK_H[0]}–${DARK_H[1]} h)` : `Press Half an hour ${dark < DARK_H[0] ? 'more' : 'less'} on Dark hours until it shows ${DARK_H[0]}–${DARK_H[1]} h, then Set the program (a preset sets it too)`, inBlock)];
 };
 const raiseRows = (c, intro) => {
   const nip = nippleCmToday(c.env), rim = rimCmNow(c.env), W = c.farm.water.lines, F = c.farm.feed.lines;
   return [line(intro), step(`Drinker lines ${list(W.map((l) => l.heightCm))} cm | drinker plate: nipples about ${cm(nip)} today (±${HEIGHT_BAND_CM})`, W.every((l) => nippleInBand(l.heightCm, c.env))),
     step(`Feeder pans ${list(F.map((l) => l.heightCm))} cm | feeder plate: rim about ${cm(rim)} today (±${HEIGHT_BAND_CM})`, F.every((l) => rimInBand(l.heightCm, c.env))),
-    note('Shift + raises 5 cm a press on the winches.')];
+    note('Each drinker line has its own regulator at the west end (Winch + / −, Shift: 5 cm a press); the pans are on the feeder box (Pans: lower / raise).')];
 };
 /** A feed order the job needs: the silo of that feed, what the birds eat a day by the feed sign, the room. */
 function orderRows(c, inst, type, days) {
@@ -73,7 +77,10 @@ export const STRIPS_CYCLE = {
       const p = lightAt(c.env, c.farm), parts = c.engine.parts(inst);
       return [cmp('Lights', `catch and light signs: about 10 lux at bird height (dimmer ${Math.round(CATCH_DIMMER_MAX * 100)} % or less)`, `dimmer ${pct(p.dimmer)} ≈ ${int(luxOfDimmer(p.dimmer))} lux`),
         cmp('Tunnel fans running', `catch sign: at least ${CATCH_FANS_MIN}`, String(c.env.fansEffective ?? 0)),
-        step(`Catching panels: ${c.farm.harvest?.panels ? 'put up' : 'stacked by the door (E at them)'}`, parts[0]?.met), ...partRows(c, inst, { skip: [0] })];
+        step(`Catching panels: ${c.farm.harvest?.panels ? 'put up' : 'stacked inside by the door: E at them puts them up'}`, parts[0]?.met),
+        step((p.dimmer ?? 1) <= CATCH_DIMMER_MAX + 1e-9 ? `Dimmer ${pct(p.dimmer)}` : `Lights: press Dimmer down 10 % to ${Math.round(CATCH_DIMMER_MAX * 100)} % or less, then Set the program`, (p.dimmer ?? 1) <= CATCH_DIMMER_MAX + 1e-9),
+        step((c.env.fansEffective ?? 0) >= CATCH_FANS_MIN ? `${c.env.fansEffective} tunnel fans running` : `Ventilation: One tunnel fan more until ${CATCH_FANS_MIN} or more run (or the fan panel at the east end)`, (c.env.fansEffective ?? 0) >= CATCH_FANS_MIN),
+        ...partRows(c, inst, { skip: [0] })];
     } },
   'r-raise': { panels: { drinker: null, 'feeder-box': null }, title: 'Raise the lines for the birds’ size', rows: (c) => raiseRows(c, `Day ${c.env.dayNumber}: the birds stretch up a little to drink; the pan rims at their backs.`) },
   'c-raise': { panels: { drinker: null, 'feeder-box': null, controller: 'temp' }, title: 'Winch all the lines and brooders up',
@@ -82,9 +89,9 @@ export const STRIPS_CYCLE = {
       step(`Feeder pans ${list(c.farm.feed.lines.map((l) => l.heightCm))} cm | ${PANS_UP_CM} cm or more (the top is 45 cm)`, c.farm.feed.lines.every((l) => l.heightCm >= PANS_UP_CM)),
       step(`Brooders: ${c.env.broodersUp ? 'up' : 'down (controller, Temperature: Off and up)'}`, !!c.env.broodersUp)] },
   'f-lines': { panels: { drinker: null }, title: 'Lift the drinker lines as the catching starts',
-    rows: (c) => [line('Catch sign: lift the lines out of the way just before the crew starts; keep the water on until catching starts.'),
+    rows: (c) => [line('Catch sign: lift the lines out of the way just before the crew starts; keep the water on until catching starts. Each line has its own regulator at the west end.'),
       step(`Lines ${list(c.farm.water.lines.map((l) => l.heightCm))} cm | out of the way: ${LINES_UP_CM} cm or more (the top of the winch is 60 cm)`, c.farm.water.lines.every((l) => l.heightCm >= LINES_UP_CM)),
-      note('Shift + raises 5 cm a press.')] },
+      note('Winch +: 1 cm a press, Shift + 5 cm a press.')] },
   'r-vent-night': { panels: { controller: 'top', 'fan-panel': null }, title: 'Night ventilation',
     rows(c, inst) {
       const v = ventNeed(c.env, c.farm);
@@ -117,8 +124,8 @@ export const STRIPS_CYCLE = {
         line(`Pad: ${pad ? `checked ${hhmm(pad.hour)} today` : 'not checked today (pad pump outside the west end)'}.`), ...partRows(c, inst)];
     } },
   'w45-pad': { panels: { 'pad-pump': null },
-    rows: (c, inst) => [step(`Pump: ${c.env.padOn ? 'on: water runs over the pad' : 'off. The check needs water running over the pad (pad plate: run the pump only while the tunnel fans run)'}`, c.env.padOn),
-      step('Check the pad: water on every section', inst.st.met)] },
+    rows: (c, inst) => [step(`Pump: ${c.env.padOn ? 'on: water runs over the pad' : 'off. Press Start the pump first: the check needs water running over the pad (pad plate: run the pump only while the tunnel fans run)'}`, c.env.padOn),
+      step('Press Check the pad: water on every section', inst.st.met), wait('Walking along the pad takes 2 farm minutes; a paused clock starts again when you press it.')] },
   'p-heatwave': { panels: { 'fan-panel': null, 'pad-pump': null, drinker: null }, title: 'A heat wave is coming: get the house ready',
     rows: (c, inst) => [...partRows(c, inst), line('On the hot days lift the feeders 11:00–16:00 (feed sign), and run all the fans and the pad (heat sign).')] },
   'p-humid': { panels: { 'pad-pump': null, 'fan-panel': null },
@@ -131,11 +138,12 @@ export const STRIPS_CYCLE = {
         step(`Vaccine with skim milk stabiliser into the header tank: ${s === 'none' || s === 'thirst' ? 'not yet' : v.stabiliser ? 'mixed with stabiliser' : 'mixed without stabiliser'}`, s !== 'none' && s !== 'thirst' && v.stabiliser),
         step('Open the main valve: the birds drink', s === 'drinking' || s === 'drunk'),
         step(`Walk slowly through the house while they drink: ${pct(v.walked)} of the floor walked`, (v.walked ?? 0) >= 0.3),
-        step(`Header tank empty: ${s === 'drunk' ? `drunk in ${one(v.hours)} h` : s === 'drinking' ? `drinking ${h(v.startAt)} h so far` : 'not yet'} (plate: about 2 hours)`, s === 'drunk')];
+        step(`Header tank empty: ${s === 'drunk' ? `drunk in ${one(v.hours)} h` : s === 'drinking' ? `drinking ${h(v.startAt)} h so far` : 'not yet'} (plate: about 2 hours)`, s === 'drunk'),
+        ...(s === 'drunk' ? [] : [wait('The thirst and the drinking take farm hours: the clock must run (a paused clock starts again when you shut or open the valve). Next job skips ahead.')])];
     } },
   'c-lines': { panels: { 'water-supply': null },
     rows: (c, inst) => [step(`Disinfectant in the header tank: ${c.farm.clean?.disinfectant ? 'yes' : 'not yet'}`, c.farm.clean?.disinfectant || c.engine.parts(inst)[0]?.met),
-      step(`Lines flushed with it: ${(c.farm.clean?.lines || []).filter((x) => x >= 1).length} of 4`, (c.farm.clean?.lines || []).every((x) => x >= 1)), note('Each line takes farm time with its flush valve open: let the clock run.')] },
+      step(`Lines flushed with it: ${(c.farm.clean?.lines || []).filter((x) => x >= 1).length} of 4: Open flush valve on each line (Clean-out tab), close it when the row says it is through`, (c.farm.clean?.lines || []).every((x) => x >= 1)), wait('Each line takes farm time with its flush valve open: let the clock run.')] },
   'p-blood': { panels: { 'office-desk': null, 'water-supply': null },
     rows: (c, inst) => { const m = c.farm.health?.medication || {}; return [...partRows(c, inst), line(m.on ? `Medicator on since day ${Math.floor(m.from)} ${hhmm(((m.from ?? 0) % 1) * 24)}: the vet’s course, mixed fresh each day (medicator plate).` : 'The vet’s answer comes as a letter on the desk: it names the medicine and the days.')]; } },
   'p-hunched': { panels: { 'office-desk': null },
@@ -162,12 +170,13 @@ export const STRIPS_CYCLE = {
   'c-dry': { panels: { 'wash-bay': null, controller: 'top', 'fan-panel': null },
     rows: (c) => [line('Clean-out sign, step 4: disinfectant on a wet floor is too weak: let the house dry with the fans first.'),
       cmp('Floor wet', 'dry enough at 10 % or less', pct(c.farm.clean?.wetShare)), line(`Tunnel fans running ${c.env.fansEffective ?? 0}: more fans dry faster.`),
-      note('Drying takes hours of farm time: close the panel and use Next job.')] },
+      wait('Drying takes hours of farm time: close the panel and use Next job.')] },
   'c-spray': { panels: { 'wash-bay': null },
     rows: (c) => [line(`Disinfected ${pct(c.farm.clean?.sprayShare)} of the floor · floor still wet ${pct(c.farm.clean?.wetShare)} (clean-out sign step 4: spray on a dry floor).`),
       note('Spray in three passes along the house; a wet patch takes the disinfectant weakly: spray it again once it is dry.')] },
   'w3-topup': { panels: { 'litter-heap': null },
-    rows: (c, inst) => [line(`Caked patches on the floor in use: ${pct(c.farm.litter?.cakedShare)} of it (fork: E at a caked patch).`),
+    rows: (c, inst) => [line(`Caked patches on the floor in use: ${pct(c.farm.litter?.cakedShare)} of it. Take the fork here, walk onto a caked patch and press E to fork it over (to 2 % or less).`),
+      line('Then a sack of husk from here (Take a sack of husk) under a drinker line, E spreads it: four sacks, in two parts of the house.'),
       (() => { const L = inst.st.list || [], near = L.filter((x) => x.near).length, s = new Set(L.map((x) => x.s)).size; return step(`Sacks under the drinker lines: ${near} of 4, ${s} of 2 parts of the house`, near >= 4 && s >= 2); })()] },
   'w2-check': { panels: { 'bird-check': null }, rows: (c, inst) => [birdCount(inst, 10, 3), line('Watch each bird walk (gait 0–5). Legs sign: cull gait 4–5 the day you find them.')] },
   'w3-droppings': { panels: { 'bird-check': null }, rows: (c, inst) => [birdCount(inst, 5, 3), line('Droppings sign: normal = firm, brown with a white cap.')] },
@@ -178,6 +187,7 @@ function changeRows(c, inst, type) {
   const s = (f.silos || []).map((x, i) => `silo ${i + 1} ${x.type}: about ${int(x.kg)} kg, slide valve ${word(v[i])}`).join(' · ');
   return [line(`Feed sign: half from each silo for about 24 hours, then the new feed only.`), line(s),
     step(`Pans: ${type} ${pct(f.panType?.[type])} (of the feed in them)`, (f.panType?.[type] ?? 0) >= 0.9),
-    note('The pans change as the birds eat and the augers refill them: let the clock run.')];
+    step(`Slide valves at the silos (outside, north of the house): both Half for about 24 hours, then silo ${type === 'grower' ? 2 : 1} Open and silo ${type === 'grower' ? 1 : 2} Shut`, (f.panType?.[type] ?? 0) >= 0.9 || (v[type === 'grower' ? 1 : 0] ?? 0) > 0),
+    wait('The pans change as the birds eat and the augers refill them: about 24 farm hours. Let the clock run (Next job skips ahead).')];
 }
 export { CLEAN, timerAirM3h, brooderRowC, heldText, time, ventRows, timerText };

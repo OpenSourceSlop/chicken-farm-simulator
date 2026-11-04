@@ -10,19 +10,23 @@ import { h, button, setText } from './ui-dom.js';
 import { machineRow, toggleKey, readout } from './ui-equipment.js';
 import { int, one } from './ui-format.js';
 import { whenText, machineJob, progressBar, historyOf, knownBirds } from './ui-cycle-kit.js';
+import { farmTimeNote } from './ui-farmtime.js';
 
 const level = (L) => L.farm.mode === 'level';
 const TYPE_FILL = { starter: 'var(--sign-yellow)', grower: '#c98f3a', finisher: '#9c6a34' };
 const TYPE_NAME = Object.fromEntries(FEED_TYPES.map((t) => [t.id, t.label]));
 
 // ---------------- feeder box ----------------
-export function cycleFeederParts(L, { foldPlates }) {
+export function cycleFeederParts(L, { foldPlates, needTime = null, timeNote = null }) {
   const { env, farm } = L;
   const memo = { withdrawn: null };
   const withdrawnNow = () => !!farm.feed.withdrawn;
+  // the steps hotfix: what waits on farm time runs a paused clock again, with the box's note
+  const wait = (text) => { foldPlates(); needTime?.(text); };
   const wd = toggleKey('Give the feed back', 'Take the feed away', () => {
     const on = !withdrawnNow();
-    foldPlates();
+    if (on) wait('the lines stop and the birds empty the pans over the next farm hours (feed and catch signs: pans empty 8–12 h before the catch)');
+    else foldPlates();
     L.act('feed.withdraw', { on });
     memo.withdrawn = on; memo.at = env.day;
     sync();
@@ -33,10 +37,15 @@ export function cycleFeederParts(L, { foldPlates }) {
   const bar = progressBar();
   let busy = null;
   const washed = []; // when the farmer washed each line's pans here (the farm's clean.pans is the record)
+  let isOpen = false;
   const pans = FEEDER_LINES_Z.map((z, i) => {
-    const job = machineJob(env, 4, () => { L.act('feed.wash', { line: i }); washed[i] = env.timeLabel; busy = null; bar.set(0); sync(); });
+    const job = machineJob(env, 4, () => {
+      L.act('feed.wash', { line: i }); washed[i] = env.timeLabel; busy = null; bar.set(0); sync();
+      timeNote?.done(`Line ${i + 1} pans washed ${env.timeLabel}.`);
+      if (!isOpen) L.notice?.(`Line ${i + 1} pans washed ${env.timeLabel}.`, 5);
+    });
     const b = button({ class: 'key key--wide', 'aria-label': `Wash the pans of line ${i + 1}` }, 'Wash the pans');
-    b.addEventListener('click', () => { if (busy) return; foldPlates(); busy = job; job.start(); sync(); });
+    b.addEventListener('click', () => { if (busy) return; wait(`washing the pans of line ${i + 1} takes 4 farm minutes`); busy = job; job.start(); sync(); });
     const row = machineRow(`Line ${i + 1} pans`, '', b);
     row.led.classList.add('led--pad');
     return { b, job, row };
@@ -59,8 +68,11 @@ export function cycleFeederParts(L, { foldPlates }) {
   }
   return {
     els: [wdRow.el, wash],
+    busy: () => !!busy,
     update() { if (busy) bar.set(busy.tick() || 0.001); sync(); },
-    onClose() { if (busy) { busy.cancel(); busy = null; bar.set(0); } },
+    onOpen() { isOpen = true; },
+    // a wash still running finishes in the background (the feeder box's busy())
+    onClose() { isOpen = false; },
   };
 }
 
@@ -98,7 +110,11 @@ export function cycleSiloParts(L) {
   const valves = [0, 1].map((i) => {
     const opts = [[0, 'Shut'], [0.5, 'Half'], [1, 'Open']].map(([v, t]) => {
       const b = button({ class: 'key key--wide', 'aria-pressed': 'false', 'aria-label': `Silo ${i + 1} slide valve ${t.toLowerCase()}` }, t);
-      b.addEventListener('click', () => { L.act('feed.valve', { silo: i, open: v }); memo.valves[i] = v; sync(); });
+      b.addEventListener('click', () => {
+        // a feed change runs over farm time as the birds eat the pans down and the augers refill them (feed sign: about 24 h)
+        if (v > 0 && (valvesNow()[i] ?? 0) !== v) note.start('the pans change to the feed of this silo as the birds eat and the augers refill them: half and half for about 24 farm hours (feed sign)');
+        L.act('feed.valve', { silo: i, open: v }); memo.valves[i] = v; sync();
+      });
       return { v, b };
     });
     const row = machineRow(`Silo ${i + 1} slide valve`, '', ...opts.map((o) => o.b));
@@ -106,11 +122,12 @@ export function cycleSiloParts(L) {
     return { opts, row };
   });
   const where = h('p', { class: 'equip-note' }, `Feed ordered at the office phone goes in by type: ${FEED_TYPES.map((t) => `${t.label.toLowerCase()} → silo ${t.silo + 1}`).join(', ')}.`);
+  const note = farmTimeNote();
   const days = readout('Days of feed left');
   const daysBox = h('div', { class: 'equip-reads', hidden: true }, days.el);
   const el = h('div', { hidden: true },
     h('div', { class: 'silo-wrap' }, strip, h('div', { class: 'equip-reads equip-reads--col' }, reading.el, readBtn, legend)),
-    h('div', { class: 'ctrl-rows' }, valves.map((v) => v.row.el)), daysBox, where);
+    h('div', { class: 'ctrl-rows' }, valves.map((v) => v.row.el)), note.el, daysBox, where);
   function sync() {
     // the silos as the farm keeps them (their sum is feed.siloKg)
     const silos = farm.feed.silos;

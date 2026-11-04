@@ -16,13 +16,18 @@ import { EQUIP, LEVEL1, FAN_COUNT, MIN_VENT_PER_1000, flockAgeAt, feedStdGAt } f
 import { FEED } from './farm-feed.js';
 import { int, one, hhmm } from './ui-format.js';
 import { ventNeed, ventTableRows, timerAirM3h, knownFlock, nippleCmToday, rimCmNow, nippleInBand, rimInBand, flowToday, brooderRowC, luxOfDimmer,
-  fansWorking, VENT_BAND, NIPPLE_DAY0_CM, PANS_ON_LITTER_CM, HEIGHT_BAND_CM, FLOW_BAND } from './job-figures.js';
+  fansWorking, VENT_BAND, NIPPLE_DAY0_CM, PANS_ON_LITTER_CM, HEIGHT_BAND_CM, FLOW_BAND, CHICK_LUX } from './job-figures.js';
+// the steps hotfix: the next place of a job that spans several places, and the clock's pause
+import { jobPlaces, nextPlace, panelPlace, flowTodo } from './job-next.js';
+import { HELD_MIN } from './job-engine.js';
 
 export const step = (text, done = false) => ({ k: 'step', text, done: !!done });
 export const cmp = (what, sign, yours, bar = null) => ({ k: 'cmp', what, sign, yours, bar: bar == null ? null : Math.max(0, Math.min(1, bar)) });
 export const line = (text) => ({ k: 'line', text });
 export const note = (text) => ({ k: 'note', text });
 export const time = (text, bar) => ({ k: 'time', text, bar: Math.max(0, Math.min(1, bar ?? 0)) });
+/** How long something takes in farm time (the steps hotfix): a time row without a bar; a paused clock adds its line. */
+export const wait = (text) => ({ k: 'time', text, bar: null, farm: true });
 export const pct = (v) => `${Math.round((v ?? 0) * 100)} %`;
 const cm = (v) => `${Math.round(v)} cm`;
 const C1 = (v) => `${one(v)} °C`;
@@ -94,28 +99,51 @@ export function feederLine(l, i, env) {
   const auger = !l.running ? 'auger off' : l.turning ? 'auger turning' : l.noFeed ? 'auger stopped: no feed from the silo' : 'auger stopped by the control pan: pans full';
   return `Line ${i + 1} · rim ${cm(l.heightCm)} · flood windows ${l.flood ? 'open' : 'closed'} · ${auger} · pans ${pct(l.panFill)} full`;
 }
+/** What a feeder line still needs, in the box's own key words (the steps hotfix). */
+export function feederTodo(l, env, prep = false) {
+  const early = prep || env.dayNumber < 4, t = [], rim = rimCmNow(env);
+  if (!l.running) t.push('Start auger');
+  if (early && !l.flood) t.push('Open flood windows');
+  if (early && l.heightCm > PANS_ON_LITTER_CM) t.push('Pans: lower, to about 5 cm (Shift: 5 cm a press)');
+  else if (!early && !rimInBand(l.heightCm, env)) t.push(`Pans: ${l.heightCm > rim ? 'lower' : 'raise'}, to about ${cm(rim)}`);
+  return t.join(' · ');
+}
+/** The minimum ventilation setting beside the band, and the keys that move it there (prep-vent, r-minvent). */
+function ventTodo(c) {
+  const v = ventNeed(c.env, c.farm), d = c.ventDraft, unsent = d && timerText(d) !== timerText(c.env.ventTimer);
+  const air = unsent ? timerAirM3h(d) : v.air, share = v.need ? air / v.need : 0, what = unsent ? 'This setting' : 'The timer now';
+  if (share < VENT_BAND[0] - 1e-9) return step(`${what}: ${pct(share)} of the need, under 90 %. Press One second more (Shift: 10 s) until it gives 90–130 %, then Send this setting to the timer.`);
+  if (share > VENT_BAND[1] + 1e-9) return step(`${what}: ${pct(share)} of the need, over 130 %. Press One second less (Shift: 10 s) until it gives 90–130 %, then Send this setting to the timer.`);
+  return step(`${what}: ${pct(share)} of the need (90–130 %)${unsent ? ': press Send this setting to the timer' : ''}.`, !unsent);
+}
 export const STRIPS = {
   'prep-feeders': { panels: { 'feeder-box': null }, title: 'Fill the pans for tomorrow’s chicks',
     rows(c) {
-      const out = [line('Feeder lines plate: days 0–3 pans on the litter (rim about 5 cm) and flooded, so the feed is easy to reach.')];
-      c.farm.feed.lines.forEach((l, i) => { const r = step(feederLine(l, i, c.env), l.flood && l.panFill >= 0.95 && l.heightCm <= PANS_ON_LITTER_CM); r.bar = l.panFill; out.push(r); });
-      if (!c.farm.feed.lines.every((l) => l.panFill >= 0.95)) out.push(note('The auger fills the pans over farm time: about 25 farm minutes for flooded pans. Close the box and let the clock run (Next job works too).'));
+      const out = [line('Feeder lines plate: days 0–3 pans on the litter (rim about 5 cm) and flooded, so the feed is easy to reach. All three lines are on this box.')];
+      c.farm.feed.lines.forEach((l, i) => { const todo = feederTodo(l, c.env, true); const r = step(`${feederLine(l, i, c.env)}${todo ? `: ${todo}` : ''}`, l.flood && l.panFill >= 0.95 && l.heightCm <= PANS_ON_LITTER_CM); r.bar = l.panFill; out.push(r); });
+      if (!c.farm.feed.lines.every((l) => l.panFill >= 0.95)) out.push(wait('The auger fills the pans over farm time: about 25 farm minutes for flooded pans. Close the box and let the clock run (Next job works too).'));
       return out;
     } },
   'r-feeders': { panels: { 'feeder-box': null, silo: null }, title: 'Check the feeders and the silo level', rows: (c, inst) => feederCheckRows(c, inst, true) },
-  'r-feedmeter': { panels: { 'feeder-box': null }, title: 'Read the feed meter', rows: (c, inst) => [meterRow(c, inst.st)] },
+  'r-feedmeter': { panels: { 'feeder-box': null }, title: 'Read the feed meter', rows: (c, inst) => [meterRow(c, inst.st), step('Press Read the feed meter', inst.status === 'done')] },
   'prep-vent': { panels: { controller: 'vent' }, title: 'Set the minimum ventilation for tomorrow’s chicks',
-    rows: (c, inst) => [...ventRows(c, { example: true }), ...partRows(c, inst)] },
+    rows: (c, inst) => [...ventRows(c, { example: true }), ventTodo(c), ...partRows(c, inst)] },
   'r-minvent': { panels: { controller: 'vent' }, title: 'Step up the minimum ventilation for the birds’ weight',
-    rows: (c, inst) => [...ventRows(c, { purpose: false }), line('Vent sign: step the timer up every day or two as the birds gain weight.'), ...partRows(c, inst)] },
+    rows: (c, inst) => [...ventRows(c, { purpose: false }), line('Vent sign: step the timer up every day or two as the birds gain weight. The new setting must give more air than the one before.'), ventTodo(c), ...partRows(c, inst)] },
   'r-controller': { panels: { controller: 'top' }, title: 'Morning read: the controller beside the signs', rows: (c, inst) => readRows(c, inst, true) },
   'r-controller-pm': { panels: { controller: 'top' }, title: 'Afternoon read: the house beside the brooder sign', rows: (c, inst) => readRows(c, inst, false) },
   'prep-preheat': { panels: { controller: 'temp' }, title: 'Pre-heat for tomorrow’s chicks',
-    rows: (c) => [line('Brooder sign: floor 28–30 °C before the chicks arrive; house 34 °C on day 1.'),
-      cmp('Thermostat', 'brooder sign, day 0: 34 °C', C1(c.env.heaterSetpoint)), step(`Brooders: ${brooderState(c.env)}`, c.env.heatersOn),
-      line(`House now ${C1(c.env.houseTemp)}: it warms over the night. Measure the floor with T tomorrow from 06:00.`)] },
+    rows: (c) => {
+      const sp = c.env.heaterSetpoint, row = brooderRowC(0), near = Math.abs(sp - row) <= 1 + 1e-9;
+      return [line('Brooder sign: floor 28–30 °C before the chicks arrive; house 34 °C on day 1.'),
+        cmp('Thermostat', `brooder sign, day 0: ${row} °C`, C1(sp)),
+        step(near ? `Thermostat ${C1(sp)}: within 1 °C of the sign’s ${row} °C` : `Press ${sp < row ? 'Raise' : 'Lower'} the brooder thermostat (0.5 °C a press) to ${row - 1}–${row + 1} °C`, near),
+        step(`Brooders: ${brooderState(c.env)}`, c.env.heatersOn),
+        line(`House now ${C1(c.env.houseTemp)}: it warms over the night (the job itself is done once the thermostat is set and the brooders burn). Measure the floor with T tomorrow from 06:00.`)];
+    } },
   'prep-lights': { panels: { controller: 'lights' }, title: 'Light program for the chicks',
-    rows: (c, inst) => [...lightRows(c, { sign: 'light plate: 23 h', signLux: 'light plate: 30–40 lux (dimmer 50–67 %)' }), ...partRows(c, inst)] },
+    rows: (c, inst) => [...lightRows(c, { sign: 'light plate: 23 h', signLux: `light plate: ${CHICK_LUX[0]}–${CHICK_LUX[1]} lux (dimmer 50–67 %)` }),
+      step('Dark hours 1 h or less (Half an hour less / more), Dimmer 50–67 % (Dimmer down / up 10 %), then press Set the program.', inst.status === 'done'), ...partRows(c, inst)] },
   'p-warm': { panels: { controller: 'top' }, title: 'The house is above its target this afternoon',
     rows(c, inst) {
       const t = c.env.ventTimer, done = inst.status === 'done';
@@ -132,28 +160,42 @@ export const STRIPS = {
         line(birdsSeen(c)), ...partRows(c, inst)];
     } },
   'prep-drinkers': { panels: { drinker: null }, title: 'Lower the lines to chick height',
-    rows: (c) => [line('Drinker plate: day 0 nipple tip at chick eye level, about 10–12 cm above the litter.'),
-      ...c.farm.water.lines.map((l, i) => step(`Line ${i + 1}: ${cm(l.heightCm)}${i === c.line ? ' (this line)' : ''}`, l.heightCm >= NIPPLE_DAY0_CM[0] && l.heightCm <= NIPPLE_DAY0_CM[1])),
-      note('Shift + − winches 5 cm a press.')] },
+    rows: (c) => [line('Drinker plate: day 0 nipple tip at chick eye level, about 10–12 cm above the litter. Each of the four lines has its own regulator at the west end of the line (line 1 by the north wall, line 4 by the south wall).'),
+      ...c.farm.water.lines.map((l, i) => {
+        const ok = l.heightCm >= NIPPLE_DAY0_CM[0] && l.heightCm <= NIPPLE_DAY0_CM[1];
+        const todo = ok ? '' : l.heightCm > NIPPLE_DAY0_CM[1] ? ': winch it down (−)' : ': winch it up (+)';
+        return step(`Line ${i + 1}: ${cm(l.heightCm)}${i === c.line ? ' (this line)' : ''}${todo}`, ok);
+      }),
+      note('The winch moves 1 cm a press, Shift + − or + 5 cm a press. The job is done once all four lines are at 10–12 cm.')] },
   'r-drinkers': { panels: { drinker: null }, title: 'Check drinker flow and height',
     rows(c, inst) {
       const want = flowToday(c.env), nip = nippleCmToday(c.env);
-      return [cmp('Flow target today', `drinker plate: age + 20 = ${want} ml/min (±${FLOW_BAND})`, `nipples: plate about ${cm(nip)} today (±${HEIGHT_BAND_CM})`),
+      return [line('A flow test on all four lines this round, each at its own regulator at the west end of the line (line 1 by the north wall, line 4 by the south wall).'),
+        cmp('Flow target today', `drinker plate: age + 20 = ${want} ml/min (±${FLOW_BAND}: ${want - FLOW_BAND}–${want + FLOW_BAND})`, `nipples: plate about ${cm(nip)} today (±${HEIGHT_BAND_CM})`),
         ...c.farm.water.lines.map((l, i) => {
-          const f = l.lastFlow && l.lastFlow.at >= (inst.opensAt ?? 0) - 1e-7 ? l.lastFlow : null;
-          return step(`Line ${i + 1}${i === c.line ? ' (this line)' : ''}: ${f ? `${one(f.mlMin)} ml/min at ${hhmm((f.at % 1) * 24)}` : 'not tested this round'} · nipples ${cm(l.heightCm)}`,
-            f && Math.abs(f.mlMin - want) <= FLOW_BAND + 1e-9 && nippleInBand(l.heightCm, c.env));
+          const f = l.lastFlow && l.lastFlow.at >= (inst.opensAt ?? 0) - 1e-7 ? l.lastFlow : null, todo = flowTodo(l, inst, c.env);
+          const what = f ? `${one(f.mlMin)} ml/min at ${hhmm((f.at % 1) * 24)}` : 'not tested this round';
+          return step(`Line ${i + 1}${i === c.line ? ' (this line)' : ''}: ${what} · nipples ${cm(l.heightCm)}${f && todo ? `: ${todo}` : ''}`, !todo);
         }),
-        note('Pressure +: more flow per nipple (drinker plate). Test the line again after a change.')];
+        wait('Each test: press the blue Flow test key. A cup sits under a nipple for 1 farm minute (about 2 s with this panel open), then the reading is recorded. A paused clock starts again when you press it.'),
+        note('Pressure + gives more flow per nipple, − less (drinker plate). Test the line again after a change.')];
     } },
   'prep-flush': { panels: { 'water-supply': null }, title: 'Flush the water lines',
     rows: (c) => [line('Water lines sign: flush the lines about 12 hours before the chicks arrive.'),
-      ...c.farm.water.lines.map((l, i) => step(`Line ${i + 1}: ${l.flushClear >= 0.99 ? 'clear' : l.flushClear > 0.02 ? 'cloudy' : 'brown'} water in the tube · flush valve ${l.flushing ? 'open' : 'closed'}`, l.flushClear >= 0.99 && !l.flushing)),
-      note('Each line runs clear in about 10 farm minutes with its valve open: let the clock run, then close the valve.')] },
+      ...c.farm.water.lines.map((l, i) => {
+        const clear = l.flushClear >= 0.99, todo = clear ? (l.flushing ? ': press Close flush valve' : '') : l.flushing ? ': flushing, wait for clear water' : ': press Open flush valve';
+        return step(`Line ${i + 1}: ${clear ? 'clear' : l.flushClear > 0.02 ? 'cloudy' : 'brown'} water in the tube · flush valve ${l.flushing ? 'open' : 'closed'}${todo}`, clear && !l.flushing);
+      }),
+      line('All four flush valves are here at the water supply; the sight tubes are at the east end of the lines.'),
+      wait('Each line runs clear in about 10 farm minutes with its valve open: let the clock run, then close the valve. A paused clock starts again when you open a valve.')] },
   'prep-litter': { panels: { 'litter-heap': null }, title: 'Spread the rice husk litter',
     rows: (c) => [cmp('Depth', 'litter sign: 5–10 cm', `${cm(c.farm.litter.depthCm)} chosen`),
+      step(`Pick a depth of 5–10 cm here (now ${cm(c.farm.litter.depthCm)})`, (c.farm.litter.depthCm ?? 0) >= 5),
+      step(c.props?.carrying === 'barrow' ? 'Barrow in your hands' : 'Press Take the barrow', c.props?.carrying === 'barrow' || (c.farm.litter.cover ?? 0) >= 0.95),
       cmp('Brooding floor covered (west of the curtain)', '95 % or more', pct(c.farm.litter.cover), (c.farm.litter.cover ?? 0) / 0.95),
-      note('With the barrow the clock runs slower: push it over the brooding floor, wall to wall.')] },
+      step('Push it over the brooding floor, wall to wall, west of the curtain (the marker shows bare floor)', (c.farm.litter.cover ?? 0) >= 0.95),
+      step('Bring the barrow back here: Put the barrow back', (c.farm.litter.cover ?? 0) >= 0.95 && c.props?.carrying !== 'barrow'),
+      note('With the barrow the clock runs slower; the barrow spreads a strip about 2.4 m wide.')] },
 };
 
 // ---------------- rows several strips share ----------------
@@ -169,13 +211,16 @@ function feederCheckRows(c, inst, withSilo) {
   const parts = c.engine.parts(inst), rim = rimCmNow(c.env), out = [];
   out.push(line(c.env.dayNumber < 4 ? 'Feeder plate, days 0–3: pans on the litter (about 5 cm) and flooded, feed in every pan.'
     : `Feeder plate: pan rim at the height of the birds’ backs (about ${cm(rim)} today, ±${HEIGHT_BAND_CM}), feed in every pan.`));
-  c.farm.feed.lines.forEach((l, i) => { const r = step(feederLine(l, i, c.env), l.running && l.panFill >= FEED.accessFill && (c.env.dayNumber < 4 || rimInBand(l.heightCm, c.env))); r.bar = l.panFill; out.push(r); });
-  out.push(meterRow(c, inst.st), step('Read the feed meter (feeder box)', parts[0]?.met));
+  c.farm.feed.lines.forEach((l, i) => {
+    const todo = feederTodo(l, c.env), low = l.running && l.panFill < FEED.accessFill ? 'the pans fill over farm time while the auger turns' : '';
+    const r = step(`${feederLine(l, i, c.env)}${todo || low ? `: ${[todo, low].filter(Boolean).join(' · ')}` : ''}`, l.running && l.panFill >= FEED.accessFill && (c.env.dayNumber < 4 || rimInBand(l.heightCm, c.env))); r.bar = l.panFill; out.push(r);
+  });
+  out.push(meterRow(c, inst.st), step('Press Read the feed meter (feeder box)', parts[0]?.met));
   if (withSilo) {
     const birds = knownFlock(c.env, c.farm).birds, g = feedStdGAt(Math.max(0, flockAgeAt(c.env.day) + 0.5));
     const read = parts[1]?.st?.payload?.result;
     out.push(cmp('Silo gauge (outside, north of the house)', `silo plate: order below 2 days of feed (about ${int((2 * birds * g) / 1000)} kg today)`,
-      read ? `about ${int(read.kg)} kg` : 'not read yet today'), step('Read the silo gauge', parts[1]?.met));
+      read ? `about ${int(read.kg)} kg` : 'not read yet today'), step('Read the silo gauge: outside, at the silos north of the house (Read the gauge)', parts[1]?.met));
   }
   return out;
 }
@@ -193,6 +238,39 @@ function readRows(c, inst, all) {
   const read = c.engine.parts(inst)[0];
   out.push(step(read?.met ? `Read into your notebook${c.readAt ? ` at ${c.readAt}` : ''}` : 'Keep the controller open a moment: it reads into your notebook', read?.met));
   return out;
+}
+
+// ---------------- the steps hotfix: where to go next, and the clock's pause ----------------
+/** State tests whose outcome comes over farm time (the pans fill, the lines run clear, the birds drink, the floor dries). */
+const TIME_TESTS = new Set(['pans-flooded', 'lines-flushed', 'house-dry', 'vaccine-drunk', 'pans-grower', 'pans-finisher', 'lines-disinfected', 'rest-done', 'house-empty', ...Object.keys(HELD_MIN)]);
+/** The job waits on farm time now (a part that must hold, a state that grows with the clock, a machine at work). */
+export function waitsOnTime(inst, c) {
+  if (!inst || inst.status !== 'open') return false;
+  const r = inst.def.done;
+  if (r.type === 'state' && TIME_TESTS.has(r.test)) return true;
+  return (c.engine?.parts?.(inst) || []).some((p) => !p.met && p.test && TIME_TESTS.has(p.test));
+}
+/** The last step of a job that spans several places: "Then walk to the line 2 regulator, about 3 m south along the west
+ *  wall: a flow test there" (the panel's own place left out; "Next:" once this place is done). */
+export function thenRows(c, inst, panelId) {
+  if (inst.status !== 'open') return [];
+  const skip = panelPlace(panelId), all = jobPlaces(inst, c);
+  if (!all || !all.length) return [];
+  const np = nextPlace(inst, c, { from: c.from, skip });
+  if (!np) return [];
+  const here = !!skip && all.some((p) => p.id === skip);
+  return [{ ...step(`${here ? 'Then walk to' : 'Next: walk to'} ${np.name}, ${np.way}: ${np.todo}.`), next: true }];
+}
+/** The pause line when this job waits on farm time and the farmer has the clock paused. */
+export function pausedRows(c, inst, rows) {
+  if (!c.paused || inst.status !== 'open') return [];
+  if (!rows.some((r) => r.k === 'time' || r.farm) && !waitsOnTime(inst, c)) return [];
+  return [{ k: 'time', text: 'The clock is paused: farm minutes do not pass. Press ▶ in the time bar (bottom left, close this panel first) or use a key here that needs farm time: it starts the clock too.', bar: null, paused: true }];
+}
+/** Every row a strip shows: its own rows (or the rule's parts), the next place, the pause line. */
+export function stripRows(S, c, inst, panelId) {
+  const own = S ? S.rows({ ...c, inst }, inst) : partRows(c, inst);
+  return [...own, ...thenRows(c, inst, panelId), ...pausedRows(c, inst, own)];
 }
 
 /** Every strip to show at a panel: the open jobs whose strip (or spot) names it, the current job first. */

@@ -1,7 +1,9 @@
 // Level 1 water panels: the drinker line regulator (side view with ruler and a chick's head, winch,
 // pressure knob and sight tube, cup flow test) and the water supply (meter, filter gauges, filter
 // cleaning, four flush valves with sight tubes, the all-lines overview once unlocked).
-// Owner: package "level". Farm time a test needs runs on the panel clock; the plate folds first.
+// Owner: package "level". Farm time a test needs runs on the panel clock; the plate folds first. The steps
+// hotfix: starting a test (or the filter cleaning, or a flush valve) runs a paused clock again with a note in the
+// panel, and a test still running when the panel closes finishes in the background and is recorded (a caption).
 import { DRINKER_LINES_Z, EQUIP, flockAgeAt } from './config.js';
 import { h, button, setText, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
@@ -37,19 +39,21 @@ export function buildDrinkerPanel(L, line) {
   const testBtn = button({ class: 'btn btn--machine btn--go' }, h('span', { html: ICONS.timer, 'aria-hidden': 'true' }), 'Flow test: a cup under a nipple for one minute');
   const cup = h('div', { class: 'cup', 'aria-hidden': 'true' }, h('span', { class: 'cup-water' }));
   const bar = h('div', { class: 'job-progress' }, h('span', { class: 'job-bar' }));
-  let test = null; // { start, until }
+  let test = null, isOpen = false; // test: { start, until }
   testBtn.addEventListener('click', () => {
     if (test) return;
-    shell.foldPlates(); // a flow test takes one farm minute: the clock has to run
+    // a flow test takes one farm minute: the plate folds and a paused clock runs again (the note says so)
+    shell.needTime('the test takes 1 farm minute');
     test = { start: env.day, until: env.day + GAME_MIN };
     flow.set('…', 'water running into the cup');
+    testBtn.disabled = true;
   });
   shell.main.append(
     h('div', { class: 'drinker-grid' }, side,
       h('div', { class: 'ctrl-rows' },
         machineRow('Winch', 'Nipple tip above the litter · Shift: 5 cm a press', ...winch.els).el,
         machineRow('Pressure', 'Water column in the sight tube', ...press.els).el,
-        h('div', { class: 'flowtest' }, cup, h('div', null, flow.el, bar)), testBtn)),
+        h('div', { class: 'flowtest' }, cup, h('div', null, flow.el, bar)), testBtn, shell.timeNote.el)),
     heightText);
 
   function viewSvg() {
@@ -108,16 +112,22 @@ export function buildDrinkerPanel(L, line) {
   return {
     el: shell.el,
     stripCtx: () => ({ line }),
-    onClose() { if (test) { test = null; flow.set('—', 'test stopped'); } },
+    /** A test still running: the panel host keeps updating it after the panel closes, until it is recorded. */
+    busy: () => !!test,
+    onOpen() { isOpen = true; },
+    onClose() { isOpen = false; },
     update(dt, force) {
       if (test) {
         const t = Math.min(1, (env.day - test.start) / GAME_MIN);
         bar.firstChild.style.transform = `scaleX(${t.toFixed(3)})`;
         cup.firstChild.style.transform = `scaleY(${t.toFixed(3)})`;
         if (env.day >= test.until - 1e-9) {
-          test = null;
+          test = null; testBtn.disabled = false;
           const r = L.act('water.flowtest', { line });
           flow.set(`${one(r?.mlMin)} ml`, `in one minute, ${env.timeLabel}`);
+          const said = `Line ${line + 1}: ${one(r?.mlMin)} ml in one minute, recorded ${env.timeLabel}.`;
+          shell.timeNote.done(`Flow test done. ${said}`);
+          if (!isOpen) L.notice?.(`Drinker line ${line + 1} flow test done: ${one(r?.mlMin)} ml in one minute (recorded ${env.timeLabel}).`, 6);
         }
       }
       acc -= dt;
@@ -147,13 +157,14 @@ export function buildWaterSupplyPanel(L) {
   const clean = button({ class: 'btn btn--machine' }, 'Clean the filter');
   const cleanBar = h('div', { class: 'job-progress', hidden: true }, h('span', { class: 'job-bar' }));
   let cleaning = null;
-  clean.addEventListener('click', () => { if (cleaning) return; shell.foldPlates(); cleaning = { start: env.day }; cleanBar.hidden = false; setText(clean, 'Cleaning the filter…'); });
+  clean.addEventListener('click', () => { if (cleaning) return; shell.needTime('cleaning the filter takes 5 farm minutes'); cleaning = { start: env.day }; cleanBar.hidden = false; setText(clean, 'Cleaning the filter…'); });
   // flush valves
   const valves = DRINKER_LINES_Z.map((z, i) => {
     const tube = h('span', { class: 'tube', 'aria-hidden': 'true' }, h('span', { class: 'tube-water' }));
     const t = toggleKey('Close flush valve', 'Open flush valve', () => {
       const on = !farm.water.lines[i].flushing;
-      if (on) shell.foldPlates();
+      // an open valve runs the line clear over farm time (water lines sign: about 10 farm minutes a line)
+      if (on) shell.needTime(`line ${i + 1} runs clear in about 10 farm minutes with its valve open; close the valve once the tube shows clear water`);
       L.act('water.flush', { line: i, on }); refresh();
     });
     const row = machineRow(`Line ${i + 1}`, h('small', null, tube, h('span', { class: 'tube-text' })), t.el);
@@ -167,8 +178,9 @@ export function buildWaterSupplyPanel(L) {
       h('div', { class: 'supply-box' }, h('p', { class: 'supply-k' }, 'Main filter'), gauges, filt.el, h('div', { class: 'equip-btns' }, readFilter, clean), cleanBar)),
     h('p', { class: 'supply-k supply-k--rows' }, 'Flush valves · sight tube at the east end of each line'),
     h('div', { class: 'ctrl-rows supply-valves' }, valves.map((v) => v.row.el)), overview);
-  const cyc = cycleWaterParts(L, { linesSec, foldPlates: () => shell.foldPlates() });
-  shell.main.append(cyc.bar, linesSec, ...cyc.secs);
+  const cyc = cycleWaterParts(L, { linesSec, foldPlates: () => shell.foldPlates(), needTime: (t) => shell.needTime(t) });
+  shell.main.append(cyc.bar, shell.timeNote.el, linesSec, ...cyc.secs);
+  let isOpen = false;
 
   function drawGauges() {
     const g = (label, bar) => {
@@ -210,8 +222,10 @@ export function buildWaterSupplyPanel(L) {
   drawGauges();
   return {
     el: shell.el,
-    onOpen() { shell.refreshPlates(); cyc.onOpen(); },
-    onClose() { if (cleaning) { cleaning = null; cleanBar.hidden = true; setText(clean, 'Clean the filter'); } },
+    onOpen() { isOpen = true; shell.refreshPlates(); cyc.onOpen(); },
+    /** The filter cleaning finishes in the background when the panel closes (the panel host keeps updating it). */
+    busy: () => !!cleaning,
+    onClose() { isOpen = false; },
     update(dt, force) {
       if (cleaning) {
         const t = Math.min(1, (env.day - cleaning.start) / (5 * GAME_MIN));
@@ -220,6 +234,8 @@ export function buildWaterSupplyPanel(L) {
           cleaning = null; cleanBar.hidden = true; setText(clean, 'Clean the filter');
           L.act('water.clearFilter', {});
           filt.set('—', `filter cleaned ${env.timeLabel}`); shownBar = null; drawGauges();
+          shell.timeNote.done(`Filter cleaned ${env.timeLabel}.`);
+          if (!isOpen) L.notice?.(`Main filter cleaned ${env.timeLabel}.`, 5);
         }
       }
       acc -= dt;
