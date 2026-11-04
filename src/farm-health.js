@@ -24,7 +24,7 @@ export function createHealth() {
   return {
     vaccine: { state: 'none', thirstFrom: null, mixedAt: null, startAt: null, drunkAt: null, hours: null, stabiliser: false, coverage: null,
       tankL: 0, linesL: 0, thirstH: 0, accSum: 0, accN: 0, walked: 0 },
-    medication: { on: false, from: null, days: 0, onH: 0 },
+    medication: { on: false, from: null, days: 0, onH: 0 },   // Phase 4 adds daysOn / lastDay once medicine is on (stepHealth)
     disease: { gumboro: 0, cocci: 0 },
     gumboroAt: null, cocciAt: null, cocciTreatedAt: null, cocciPeak: 0, cocciSev0: 0,
     resp: 0,                       // respiratory risk 0..1 (share of birds with a rattle)
@@ -102,6 +102,8 @@ export function stepHealth(farm, env, hrs, age, drunkL) {
   R.disease = HEALTH.gumboro.ratePerH * gum + HEALTH.cocci.ratePerH * coc;
   const med = h.medication;
   if (med.on) med.onH += hrs;
+  // Phase 4 (PHASE4.md §6 item 10): the calendar days with medicine in the water, the first one counted
+  if (med.on && med.lastDay !== env.dayNumber) { med.daysOn = (med.daysOn || 0) + 1; med.lastDay = env.dayNumber; }
   if (h.cocciAt != null && h.cocciTreatedAt == null && med.on) { h.cocciPeak = coc; h.cocciTreatedAt = env.day; }
   // ---- the vaccine in the drinking water ----
   stepVaccine(farm, env, hrs, drunkL);

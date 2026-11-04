@@ -14,7 +14,11 @@ export function createProblems(level = LEVEL1) {
   return list;
 }
 
-const defOf = (farm, id) => (farm.level || LEVEL1).problems.find((p) => p.id === id) || null;
+// Phase 4: the level as the farm's condition plays it (a problem the condition drops has no def: it never starts)
+const defOf = (farm, id) => {
+  const lv = farm.level || LEVEL1, own = lv.problems.find((p) => p.id === id) || null;
+  return own && farm.condition && farm.levelFor ? farm.levelFor(lv).problems.find((p) => p.id === id) || null : own;
+};
 const stateOf = (farm, id) => farm.problems.find((p) => p.id === id) || null;
 export const isActive = (farm, id) => { const p = stateOf(farm, id); return !!p && p.phase === 'active'; };
 const isOn = (farm, id) => { const p = stateOf(farm, id); return !!p && (p.phase === 'active' || p.phase === 'found'); };
@@ -22,7 +26,7 @@ const isOn = (farm, id) => { const p = stateOf(farm, id); return !!p && (p.phase
 /** The env weather events of the level's problems (added at start and again after a restore). */
 export function installWeather(farm, env) {
   for (const p of (farm.level || LEVEL1).problems) {
-    if (!p.until) continue;
+    if (!p.until || !defOf(farm, p.id)) continue;
     const drop = p.outsideDrop != null ? p.outsideDrop : -(p.outsideRise || 0);
     env.addWeatherEvent({ id: p.id, fromDay: at(p.day, p.hour), toDay: at(p.until.day, p.until.hour), outsideDrop: drop, heatPerH: p.sunPerH || 0 });
   }

@@ -10,11 +10,13 @@
 import { LEVELS, LEVEL1, PLAN_LEVEL, levelById, weightAt, PLACEMENT_DAY, CYCLE, HARVEST, SKILL_BRANCHES } from './config.js';
 import { EV } from './events.js';
 import { makeWorld, schedule } from './farm-profiles-run.js';
-import { applyRound } from './farm-profiles.js';
+import { applyRound, profileOf } from './farm-profiles.js';
+import { COND_OF, COND_RANGE, broodStopsCond, p2ProfileFor } from './farm-profiles-cond.js';
 import { applyCycleRound, cycleStops, cycleProfileOf } from './farm-profiles-cycle.js';
 import { makeQuantile } from './farm-flock.js';
 import { BROOD_CELLS, meanMoistureOf } from './farm-litter.js';
 import { lastWeighing } from './farm-harvest.js';
+import { RAIN_CELLS } from './farm-cond-core.js';
 
 const ORDER = LEVELS.map((l) => l.id);
 const RANGE = {
@@ -24,8 +26,11 @@ const RANGE = {
   fansNoPad: ['weeks45', 'weeks45'], padInHumid: ['weeks45', 'weeks45'], fanUnfixed: ['weeks45', 'weeks45'], noWithdrawal: ['finish', 'finish'],
   longWithdrawal: ['finish', 'finish'], brightCatch: ['finish', 'finish'], wetDisinfect: ['cleanout', 'cleanout'], litterLeft: ['cleanout', 'cleanout'],
   shortRest: ['cleanout', 'cleanout'], noCare: ['week2', 'week2'], padWeek3: ['week3', 'week3'],
+  eveningFans3: ['weeks45', 'finish'], padYoung1: ['week3', 'week3'],
 };
-const CACHE = new Map();   // `${seed}:${levelId}` -> the ideal's state at that level's start (exact) and its trace so far
+const CACHE = new Map();   // `${seed}:${condition}:${levelId}` -> the ideal's state at that level's start (exact) and its trace so far
+// Phase 4: the ideal of each condition (its standard starts) by condition
+const IDEAL_OF = { hot: 'hot:ideal', rainy: 'rainy:ideal', badChicks: 'bad:ideal', water: 'water:ideal' };
 const r3 = (v) => (Number.isFinite(v) ? Math.round(v * 1000) / 1000 : v);
 const H = 1 / 24;
 
@@ -64,7 +69,7 @@ function snapshot(world, trace) {
 function restoreSnap(world, snap, trace) {
   const { env, farm, records, skills } = world;
   const s = structuredClone(snap);
-  farm.start(LEVEL1, { seed: farm.seed });
+  farm.start(LEVEL1, { seed: farm.seed, condition: s.farm.condition ?? null });
   Object.assign(env, s.env);
   for (const [k, v] of Object.entries(s.farm)) farm[k] = v;
   farm.flock.weightQuantile = makeQuantile(farm.flock);
@@ -76,7 +81,9 @@ function restoreSnap(world, snap, trace) {
 
 /** The farm's part of a save (what level.saveBlob carries from the sim: env values, farm, records, skills). */
 export const ENV_SAVE = ['day', 'hour', 'weather', 'houseTemp', 'slabTemp', 'houseRH', 'heaterSetpoint', 'heaterLevel', 'fansOn', 'fansManual', 'padOn', 'ventTimer',
-  'lightProgram', 'maxDay', 'curtainForced', 'cycleClimate', 'fansBroken', 'padWorking', 'fanStages', 'broodersUp'];
+  'lightProgram', 'maxDay', 'curtainForced', 'cycleClimate', 'fansBroken', 'padWorking', 'fanStages', 'broodersUp',
+  // Phase 4 (PHASE4.md §11.1; farm.restore rebuilds them from the farm's condition state too)
+  'powerOn', 'targetShiftC', 'targetShiftToDay', 'inletShare'];
 export function saveBlob(world) {
   const { env, farm, records, skills } = world;
   return JSON.parse(JSON.stringify({ env: Object.fromEntries(ENV_SAVE.map((k) => [k, env[k]])), farm: farm.serialize(), records: records.serialize(), skills: skills.serialize() }));
@@ -95,21 +102,26 @@ function hourRow(world) {
     dead: { ...fl.deadByCause }, culls: { ...(fl.cullsBy || {}) }, feedEatenKg: r3(fl.cumFeedKg), meanWeightG: r3(fl.meanWeightG),
     broodLitter: r3(meanMoistureOf(L, BROOD_CELLS) ?? 0), litterMean: r3(L.meanMoisturePct), droppings: cyc ? farm.cyc.droppings : fl.droppings,
     panType: { ...(farm.feed.panType || { starter: 1, grower: 0, finisher: 0 }) }, lameOnFloor: fl.lameOnFloor || 0,
+    // Phase 4 (the conditions' checks, scripts/test-cond.mjs)
+    e: r3(C.e ?? 0), eMean: r3(C.meanOver ?? 0), powerOn: !!env.powerOn, rain: farm.weatherNow ? farm.weatherNow.rain : 0, tankPct: farm.condition === 'water' ? r3(farm.waterTank.levelPct) : null,
+    strip: farm.condition === 'rainy' ? r3(meanMoistureOf(L, RAIN_CELLS) ?? 0) : null,
   };
 }
 
 /** Run a profile from a standard start of `from` through `to`. */
-export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = false, keepStarts = false } = {}) {
-  const P = cycleProfileOf(name === 'determinism' ? 'ideal' : name);
-  const [f0, t0] = RANGE[name] || ['plan', 'cleanout'];
+export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = false, keepStarts = false, condition = undefined } = {}) {
+  condition = condition !== undefined ? condition : COND_OF[name] ?? null;
+  const P = cycleProfileOf(name === 'determinism' ? 'ideal' : name, { condition });
+  const [f0, t0] = RANGE[name] || COND_RANGE[name] || ['plan', 'cleanout'];
   from = from ?? f0; to = to ?? t0;
   const world = makeWorld(), { env, events, farm, records, skills } = world;
-  const trace = { hourly: [], levels: {}, levelEnds: {}, points: {}, records, farm, env, skills, events };
-  const keep = P.name === 'ideal';
+  const trace = { hourly: [], levels: {}, levelEnds: {}, points: {}, records, farm, env, skills, events, condition };
+  const idealName = condition ? IDEAL_OF[condition] : 'ideal', keep = P.name === idealName || (P.name === 'ideal' && !condition);
+  const ck = (id) => `${seed}:${condition || ''}:${id}`;
   const i0 = ORDER.indexOf(from), i1 = ORDER.indexOf(to);
   if (i0 > 1) {
-    let snap = CACHE.get(`${seed}:${from}`);
-    if (!snap) { runCycle('ideal', { seed, from: 'plan', to: from, stopAtStart: true }); snap = CACHE.get(`${seed}:${from}`); }
+    let snap = CACHE.get(ck(from));
+    if (!snap) { runCycle(idealName, { seed, from: 'plan', to: from, stopAtStart: true, condition }); snap = CACHE.get(ck(from)); }
     if (!snap) throw new Error(`no standard start for ${from}`);
     restoreSnap(world, snap, trace);
   } else farm.seed = seed;
@@ -121,13 +133,13 @@ export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = fal
   });
   for (let i = Math.max(0, i0); i <= i1; i++) {
     const def = LEVELS[i];
-    prepare(world, def, seed, i === i0 && i0 > 1, trace, keep);
+    prepare(world, def, seed, i === i0 && i0 > 1, trace, keep, condition, ck);
     if (keepStarts) (trace.starts ||= {})[def.id] = saveBlob(world);
     if (stopAtStart && i === i1) break;
-    const res = def === PLAN_LEVEL ? playPlan(world, P) : def === LEVEL1 ? playBrooding(world, P) : playCycleLevel(world, def, P, trace);
+    const res = def.id === PLAN_LEVEL.id ? playPlan(world, P) : def.id === LEVEL1.id ? playBrooding(world, P) : playCycleLevel(world, def, P, trace);
     trace.levels[def.id] = res;
     trace.levelEnds[def.id] = JSON.parse(JSON.stringify({ health: farm.health, problems: farm.problems, levelStart: farm.stats.levelStart }));
-    events.emit(EV.RUN, { phase: 'level-end', level: def.id, pass: res.pass });
+    events.emit(EV.RUN, { phase: 'level-end', level: def.id, pass: res.pass, condition: farm.condition });
     if (!res.pass) break;
   }
   for (const b of SKILL_BRANCHES) trace.points[b.id] = skills.points(b.id);
@@ -135,21 +147,21 @@ export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = fal
 }
 
 /** The level's start: a fresh farm (plan, brooding week), or the night skipped to 06:00 and the level entered. */
-function prepare(world, def, seed, restored, trace, keep) {
+function prepare(world, def, seed, restored, trace, keep, condition = null, ck = (id) => `${seed}::${id}`) {
   const { env, farm, events, records } = world;
-  if (def === PLAN_LEVEL) { farm.start(PLAN_LEVEL, { seed }); }
-  else if (def === LEVEL1) { farm.start(LEVEL1, { seed }); }
+  if (def.id === PLAN_LEVEL.id) { farm.start(PLAN_LEVEL, { seed, condition }); }
+  else if (def.id === LEVEL1.id) { farm.start(LEVEL1, { seed, condition }); }
   else if (!restored) {
     const t = def.startDay + def.startHour * H;
     if (t > env.day + 1e-9) env.skipHours((t - env.day) * 24);
     farm.enterLevel(def);
     const prev = LEVELS[LEVELS.indexOf(def) - 1];
     if (records.compact && prev) records.compact(prev.startDay);
-    if (keep) CACHE.set(`${seed}:${def.id}`, snapshot(world, trace));
+    if (keep) CACHE.set(ck(def.id), snapshot(world, trace));
   }
-  events.emit(EV.RUN, { phase: 'level-start', level: def.id });
+  events.emit(EV.RUN, { phase: 'level-start', level: def.id, condition: farm.condition });
 }
-const cp = (world, def, name) => world.events.emit(EV.LEVEL, { phase: 'checkpoint', name, level: def.id, run: true, day: world.env.dayNumber });
+const cp = (world, def, name) => world.events.emit(EV.LEVEL, { phase: 'checkpoint', name, level: def.id, run: true, day: world.env.dayNumber, condition: world.farm.condition });
 function pickDead(world) {
   const { farm, events } = world, n = farm.flock.deadOnFloor;
   if (!(n > 0)) return;
@@ -185,25 +197,35 @@ function playPlan(world, P) {
 }
 
 // ---------------- Level 2: the brooding week (Phase 2's ideal, farm-profiles-run.js) ----------------
+// Phase 4: a condition's own rounds (farm-profiles-cond.js broodStopsCond) merged into the schedule, the truck at a bad
+// batch's hour (its rounds of the day moved with it), the level's fail rule as the condition plays it (a bad batch's
+// chicks graded out on day 0 counted apart once the hatchery was told: farm.flock.claimed)
 function playBrooding(world, P) {
   const { env, farm, records } = world, def = LEVEL1;
-  void P;
+  const P2 = { ...profileOf('ideal'), ...p2ProfileFor(P.condition ? P : null) };
+  const fail = farm.levelFor ? farm.levelFor(LEVEL1).fail : LEVEL1.fail;
   let failedAt = null;
-  for (const ev of schedule({ preheat: { day: -1, hour: 7 } })) {
+  const B = farm.condition ? broodStopsCond(farm.condition, farm.delivery) : { stops: [], truckHour: 8 }, dh = (B.truckHour - 8) / 24;
+  const moved = new Set(['truck', 'cp:placed', 'vent', 'cp:vent', 'crop', 'cp:crop']);
+  const sched = schedule({ preheat: { day: -1, hour: 7 } }).map((ev) => (dh && moved.has(ev.what) ? { ...ev, t: ev.t + dh } : ev))
+    .concat(B.stops.map((s, i) => ({ t: s.d + s.h * H, d: s.d, h: s.h, what: s.r, i: 1000 + i }))).sort((a, b) => a.t - b.t || a.i - b.i);
+  for (const ev of sched) {
     skipTo(env, ev.t);
     const [kind, arg] = ev.what.split(':');
     if (kind === 'cp') { cp(world, def, arg); continue; }
     if (kind === 'snap') continue;
-    if (kind === 'sign') { records.sign(ev.d); if (ev.d >= 0 && pctL1(farm) > LEVEL1.fail.mortalityMaxPct && failedAt == null) failedAt = ev.d; continue; }
-    applyRound(farm, env, ev.d, kind, 'ideal');
+    if (kind === 'sign') { records.sign(ev.d); if (ev.d >= 0 && pctL1(farm) > fail.mortalityMaxPct && failedAt == null) failedAt = ev.d; continue; }
+    applyRound(farm, env, ev.d, kind, P2);
     if (kind === 'am' || kind === 'pm') pickDead(world);
   }
   const w = farm.stats.weighed.map((x) => x.weightG), mean = w.reduce((a, b) => a + b, 0) / Math.max(1, w.length);
   const chick = farm.stats.chickWeightMeasuredG ?? farm.flock.chickWeightG, ratio = (w.length ? mean : farm.flock.meanWeightG) / chick;
-  return { pass: ratio >= LEVEL1.fail.weightRatioMin && pctL1(farm) <= LEVEL1.fail.mortalityMaxPct && failedAt == null, endDay: failedAt ?? 7,
-    ratio: +ratio.toFixed(3), weightG: +mean.toFixed(1), deathsPct: +pctL1(farm).toFixed(3) };
+  return { pass: ratio >= fail.weightRatioMin && pctL1(farm) <= fail.mortalityMaxPct && failedAt == null, endDay: failedAt ?? 7,
+    ratio: +ratio.toFixed(3), weightG: +mean.toFixed(1), deathsPct: +pctL1(farm).toFixed(3),
+    ...(farm.delivery ? { claimed: farm.flock.claimed || 0, gradedOut: farm.flock.gradedOut || 0, uniformityPct: +farm.flock.uniformityPct.toFixed(1) } : {}) };
 }
-const pctL1 = (farm) => (100 * (farm.flock.deadTotal + farm.flock.culls)) / Math.max(1, farm.flock.delivered);
+/** Deaths + culls of the brooding week, % of the chicks delivered; a bad batch's claimed chicks apart (PHASE4.md §3.4). */
+const pctL1 = (farm) => (100 * (farm.flock.deadTotal + farm.flock.culls - (farm.flock.claimed || 0))) / Math.max(1, farm.flock.delivered);
 
 // ---------------- Levels 3-7 ----------------
 function levelDeathsPct(farm) {
@@ -216,7 +238,7 @@ function playCycleLevel(world, def, P, trace) {
   const limit = def.fail && def.fail.mortalityMaxPct;
   let endDay = def.endDay, failed = false;
   const lastStopDay = def.id === 'cleanout' ? 60 : def.endDay;
-  for (const s of cycleStops(def.startDay, lastStopDay)) {
+  for (const s of cycleStops(def.startDay, lastStopDay, farm.condition)) {
     const t = s.d + s.h * H;
     if (t < env.day - 1e-9) continue;
     if (def.id === 'cleanout' && farm.clean.bookedDay != null && t >= farm.clean.bookedDay + 6 * H) break;

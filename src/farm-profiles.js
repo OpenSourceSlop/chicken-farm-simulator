@@ -20,6 +20,8 @@
 //   checkProfile(name, run, targets, { assert, inBand })
 //     Asserts targets[name] (scripts/test-sim.mjs PROFILE_TARGETS) against the run.
 import { LEVEL1, EQUIP, targetTempAt, nippleHeightCmAt, feederRimCmAt, minVentM3hPer1000, flowTargetAt } from './config.js';
+// Phase 4: the condition rounds of the brooding week (the hot season's pad, the storms' flaps, the water test, a bad batch)
+import { applyCondRound, condProfile } from './farm-profiles-cond.js';
 export { runProfile, checkProfile } from './farm-profiles-run.js';
 
 /** Profile names (keys of PROFILE_TARGETS in scripts/test-sim.mjs). */
@@ -80,8 +82,12 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
   const act = (id, args = {}) => { const result = farm.act(id, args); done.push({ id, args, result }); return result; };
   const t = (d, h) => d + h / 24;
   const preheatOn = env.day >= t(P.preheat.day, P.preheat.hour) - 1e-9;
+  // Phase 4: a bad batch (farm.delivery) brooded at the sign's row + 1 °C on days 0-3 (env.targetShiftC), graded at the
+  // truck, the hatchery called, trays on the prep day, the crops again at 48 h; P.followShift / grade / hatchery / trays /
+  // crop48 false leave them out (the named mistakes). No delivery: Phase 2's ideal exactly.
+  const D = farm.delivery, shift = D && P.followShift !== false && env.targetShiftC && day >= 0 && day <= env.targetShiftToDay ? env.targetShiftC : 0;
   // the brooder sign table: target by HUD day, to 0.5 °C (BROODER_ROWS_L1)
-  const setpoint = () => { if (preheatOn) env.setHeaterSetpoint(Math.round(targetTempAt(day) * 2) / 2 + P.setpointOffset); };
+  const setpoint = () => { if (preheatOn) env.setHeaterSetpoint(Math.round(targetTempAt(day) * 2) / 2 + P.setpointOffset + shift); };
   const lines = [0, 1, 2, 3];
 
   if (round === 'prep') {
@@ -94,6 +100,7 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
     act('feed.silo');
     act('light.program', P.light);
     if (P.timer === 'sign') act('vent.timer', signTimer(farm));
+    if (D && P.trays !== false) act('brood.trays', { on: true });
     return done;
   }
   if (round === 'eve') {
@@ -127,6 +134,7 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
     if (day === 0 && farm.flock.inBoxes > 0 && env.day >= t(0, LEVEL1.arrivalHour)) done.push(...applyRound(farm, env, day, 'truck', P));
     if (day === 1 && farm.stats.firstTipAt != null && env.day >= farm.stats.firstTipAt + 22 / 24 && env.day <= farm.stats.firstTipAt + 28 / 24) done.push(...applyRound(farm, env, day, 'crop', P));
     if (day === 7 && env.hour >= 8 && farm.stats.weighed.length < 50) done.push(...applyRound(farm, env, day, 'weigh', P));
+    if (D && day === 2 && P.crop48 !== false && env.hour >= 8 && env.hour < 12) for (let i = 0; i < 10; i++) act('sample.crop', { ...near(i * 2, 1.2, 0.8), index: 10 + i });
     return done;
   }
   if (round === 'truck') {
@@ -137,9 +145,13 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
     }
     for (let s = 0; s < LEVEL1.stacks && P.place !== false; s++) {
       if (s > 0) env.skipHours(7 / 60);
+      // a bad batch: the stack graded at the table before it goes in (the panel's 6 farm minutes)
+      if (D && P.grade !== false) { env.skipHours(6 / 60); act('chicks.grade', { stack: s }); }
       const [x, z] = TIP_SPOTS[s];
       act('chicks.tip', { stack: s, chicks: LEVEL1.chicksPlaced / LEVEL1.stacks, x, z });
     }
+    // a bad batch: the hatchery told the same day (the office phone, ui; the graded-out chicks are claimed)
+    if (D && P.hatchery !== false) act('phone.hatchery', { chickWeightG: farm.stats.chickWeightMeasuredG ?? null, weakPct: +((100 * (farm.flock.gradedOut || 0)) / Math.max(1, farm.flock.delivered)).toFixed(1) });
     return done;
   }
   if (round === 'vent') { for (let i = 0; i < 5; i++) act('sample.vent', { ...near(i, 1.2, 0.8), index: i }); return done; }
@@ -148,6 +160,8 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
   if (round === 'noon') { if (day === 6) warmAfternoon(act, env, P, true); return done; }
   if (round === 'late') { if (day === 6) { warmAfternoon(act, env, P, false); if (P.warm === 'timer') timer(act, P, day, farm); } return done; }
   if (round === 'leak24') { if (P.leak === '24h') fixLeak(act, farm); return done; }
+  // Phase 4: a condition's own rounds of the brooding week (farm-profiles-cond.js broodStopsCond)
+  if (farm.condition && !['pm', 'am', 'prep', 'eve', 'preheat'].includes(round)) { applyCondRound(farm, env, day, round, { ...condProfile(`${farm.condition}:ideal`, farm.condition), ...(P.cond || {}) }, act); return done; }
   if (round === 'pm') {
     act('litter.squeeze', { x: -16, z: 0.6 }); act('litter.squeeze', { x: -8, z: -1.95 }); act('litter.squeeze', { x: -4, z: 3.2 });
     if (day === 4 && P.leak === 'pm4' && farm.water.leak) { act('litter.squeeze', { x: farm.water.leak.x, z: farm.water.leak.z }); fixLeak(act, farm); }

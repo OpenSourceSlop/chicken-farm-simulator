@@ -57,7 +57,11 @@ function resetCycle(farm, { keepPlan = null } = {}) {
 /** The env settings the farm owns (the curtain, cycle climate, last day, brooders, fans, pad), from the farm. */
 function syncEnv(farm, env, { fresh = false } = {}) {
   const on = !!farm.cyc.on;
-  env.setCycleClimate(on);
+  // Phase 4: a condition may run the cycle climate from the prep day (the hot and rainy seasons, config conditionLevel);
+  // the tuned wind chill comes with the cycle model only (the brooding week keeps Phase 2's in every condition)
+  const def = farm.cycleLevel || farm.level;
+  env.setCycleClimate(on || !!(farm.condition && def && farm.levelFor && farm.levelFor(def).cycleClimate));
+  env.setWindChillP4(on);
   // the clean-out runs the clock to day 70; a fresh start goes back to 42 (entering a level never lowers it)
   if (farm.cycleLevel && farm.cycleLevel.id === 'cleanout') env.setMaxDay(CYCLE.lastDay); else if (fresh) env.setMaxDay(42);
   env.setBroodCurtain(!farm.house.curtainOpen);
@@ -81,10 +85,10 @@ export function installCycle(farm, env) {
   const start = farm.start, stop = farm.stop, restore = farm.restore, serialize = farm.serialize;
   farm.start = (level = LEVEL1, opts = {}) => {
     // the plan the farmer sent on the planning day goes on with the flock (PHASE3.md §2.2: the run keeps it too)
-    const keepPlan = opts.plan !== undefined ? opts.plan : farm.mode === 'level' && farm.cycleLevel === PLAN_LEVEL && level === LEVEL1 && farm.plan && farm.plan.sentAt != null ? farm.plan : null;
+    const keepPlan = opts.plan !== undefined ? opts.plan : farm.mode === 'level' && farm.cycleLevel && farm.cycleLevel.id === PLAN_LEVEL.id && level && level.id === LEVEL1.id && farm.plan && farm.plan.sentAt != null ? farm.plan : null;
     start(level, opts);
     resetCycle(farm, { keepPlan });
-    farm.cycleLevel = level === PLAN_LEVEL ? PLAN_LEVEL : null;
+    farm.cycleLevel = level && level.id === PLAN_LEVEL.id ? PLAN_LEVEL : null;
     farm.stats.gasKg = 0; farm.stats.daily = {}; farm.stats.feedAtStartKg = farm.feed.siloKg;
     farm.stats.levelStart = levelStartOf(farm, env, level.id);
     env.setFanStages(null);
@@ -94,7 +98,7 @@ export function installCycle(farm, env) {
   farm.stop = () => {
     stop();
     farm.cycleLevel = null; farm.cyc.on = false;
-    env.setBroodCurtain(null); env.setCycleClimate(false); env.setMaxDay(42); env.setBroodersUp(false); env.setFanStages(null); env.setFansBroken([]); env.padWorking = 1;
+    env.setBroodCurtain(null); env.setCycleClimate(false); env.setWindChillP4(false); env.setMaxDay(42); env.setBroodersUp(false); env.setFanStages(null); env.setFansBroken([]); env.padWorking = 1;
   };
   farm.serialize = () => {
     const d = serialize();
@@ -109,7 +113,7 @@ export function installCycle(farm, env) {
     resetCycle(farm, { keepPlan: c ? clone(c.plan) : null });
     if (farm.mode !== 'level') return;
     if (data.levelId === PLAN_LEVEL.id) farm.level = PLAN_LEVEL;
-    farm.cycleLevel = c && c.levelId ? levelById(c.levelId) : farm.level === PLAN_LEVEL ? PLAN_LEVEL : null;
+    farm.cycleLevel = c && c.levelId ? levelById(c.levelId) : farm.level && farm.level.id === PLAN_LEVEL.id ? PLAN_LEVEL : null;
     if (c) {
       Object.assign(farm.house, clone(c.house)); Object.assign(farm.health, clone(c.health)); Object.assign(farm.air, c.air);
       Object.assign(farm.harvest, clone(c.harvest)); farm.clean = restoreClean(c.clean); Object.assign(farm.cyc, clone(c.cyc));
@@ -131,7 +135,7 @@ export function installCycle(farm, env) {
   farm.enterLevel = (def) => {
     if (!def || farm.mode !== 'level') return false;
     if (farm.cycleLevel && farm.cycleLevel.id === def.id) return false;
-    if (def === LEVEL1 || def === PLAN_LEVEL) { farm.cycleLevel = def === PLAN_LEVEL ? PLAN_LEVEL : null; farm.cyc.on = false; syncEnv(farm, env); return true; }
+    if (def.id === LEVEL1.id || def.id === PLAN_LEVEL.id) { farm.cycleLevel = def.id === PLAN_LEVEL.id ? PLAN_LEVEL : null; farm.cyc.on = false; syncEnv(farm, env); return true; }
     farm.cycleLevel = def; farm.cyc.on = true;
     const fl = farm.flock;
     const first = !CYCLE_CAUSES.every((k) => fl.deadByCause[k] != null);

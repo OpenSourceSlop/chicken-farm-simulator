@@ -133,8 +133,9 @@ function endCatch(farm, env) {
   const feed = farm.feed, startKg = farm.stats.feedAtStartKg ?? 0;
   const usedKg = startKg + (feed.deliveredKg || 0) - hv.feedLeftKg;
   const fcr = netKg > 0 ? usedKg / netKg : null;
-  const base = fl.delivered || fl.placed || 1;
-  const mortalityPct = (100 * (fl.deadTotal + fl.culls + doa)) / base;
+  // Phase 4: a bad batch's chicks graded out on day 0 and claimed from the hatchery are neither placed nor lost (PHASE4.md §3.4)
+  const claimed = fl.claimed || 0, base = (fl.delivered || fl.placed || 1) - claimed;
+  const mortalityPct = (100 * (fl.deadTotal + fl.culls + doa - claimed)) / base;
   const w = lastWeighing(farm.stats.weighed);
   const meanLiveG = loaded ? (1000 * netKg) / loaded : 0;
   const age = hv.ageAtCatch;

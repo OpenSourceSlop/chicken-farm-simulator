@@ -16,6 +16,8 @@ import { EV } from './events.js';
 import { LEVEL1, MIN_DAY, targetTempAt, weightAt, nippleHeightCmAt, flowTargetAt, minVentM3hPer1000, EQUIP } from './config.js';
 import { buildRow, settingsNow } from './records-rows.js';
 import { harvestPage, cleanPage, cycleSummary, compact } from './records-cycle.js';
+// Phase 4: the conditions' notes, the row's condition, the timeline's outside readings and minutes without power
+import { installCondRecords, condNotes, condTimeline } from './records-cond.js';
 import { roundDeep } from './round.js';
 import { levelById, LEVELS } from './config.js';
 import { jobById as jobByIdP2 } from './content-jobs.js';
@@ -115,10 +117,10 @@ export function createRecords({ farm, env, events } = {}) {
     logJob(key, day, result) { jobLog.push({ key, day, result: result ?? null }); },
     get jobLog() { return jobLog; },
     /** Today's provisional row (what the office book would show if signed now). */
-    draft(day = today()) { return buildRow(day, ctx(), false); },
+    draft(day = today()) { return build(day, false); },
     /** Close and return the row of `day`. Emits EV.RECORD_CLOSED. */
     sign(day = today(), signed = true) {
-      const row = buildRow(day, ctx(), signed);
+      const row = build(day, signed);
       rows.set(day, row);
       if (state.closedThrough == null || day > state.closedThrough) state.closedThrough = day;
       events && events.emit(EV.RECORD_CLOSED, { day, row, signed });
@@ -130,7 +132,7 @@ export function createRecords({ farm, env, events } = {}) {
      *  level when its id is given; every row otherwise, as Phase 2). */
     timeline(levelId) {
       const L = levelId ? levelById(levelId) : null;
-      return records.rows().filter((r) => !L || (r.day >= L.startDay && r.day <= Math.min(L.endDay, LAST_ROW_DAY))).map(timelineOf);
+      return records.rows().filter((r) => !L || (r.day >= L.startDay && r.day <= Math.min(L.endDay, LAST_ROW_DAY))).map((r) => ({ ...timelineOf(r), ...condTimeline(r.day, farm) }));
     },
     /** Phase 3 (PHASE3.md §8.3-§8.6): the harvest page (day 42), the clean-out page, the cycle summary, compaction. */
     harvestPage() { return harvestPage(records, farm); },
@@ -162,6 +164,15 @@ export function createRecords({ farm, env, events } = {}) {
     },
   };
   const ctx = () => ({ notebook, extras, farm, env, rows });
+  // Phase 4 (PHASE4.md §3.3): every row carries the run's condition (the farm's; null = the normal season) and the
+  // condition's notes of the day (records-cond.js: plain facts)
+  const build = (day, signed) => {
+    const row = buildRow(day, ctx(), signed);
+    row.condition = farm ? farm.condition ?? null : null;
+    const cn = condNotes(day, ctx());
+    if (cn.length) row.notes.push(...cn);
+    return row;
+  };
 
   if (events) {
     events.on(EV.ACTION, (p) => {
@@ -246,6 +257,7 @@ export function createRecords({ farm, env, events } = {}) {
       if (row) { row.jobsMissed = e.jobsMissed; row.missed = [...e.missed]; }
     });
     events.on(EV.HOUSE_ENTER, (p) => { if (live() && p && p.dipped === false) ex(today()).lapses++; });
+    installCondRecords({ farm, env, events, ex, today, live });
   }
   // A day nobody signed closes by itself at 06:00 the next morning.
   if (env && env.addStepper) {

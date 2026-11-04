@@ -7,7 +7,8 @@
 //     uniformityDay, epef, epefFormula, feedLeftKg, withdrawalH, ageDays, notes: string[] }       (day 42; after the catch)
 //   cleanPage(records, farm) -> null | { litterOutAt, washedPct, dryPct, disinfectedPct, lines, pans, washbay, baits,
 //     brushed, swabsTaken, lab: { positive, of, day, places? } | null, labs, closedDay, bookedDay, restDays, pass }
-//   cycleSummary(records, farm, { plan, levels }) -> CycleSummary (PHASE3.md §8.5); records.cycleSummary({ plan, levels })
+//   cycleSummary(records, farm, { plan, levels, condition, compare }) -> CycleSummary (PHASE3.md §8.5; Phase 4: condition,
+//     compare: the last normal-season summary's numbers, levels' fromStandard as given); records.cycleSummary({ ... })
 //   compact(records, beforeDay) -> lines removed: notebook lines of days before beforeDay folded away (the rows
 //     stay whole); kept: what later rows and rules still read (tips, culls, dead birds counted, the box weighing,
 //     feed meter readings) and one look note a day (PHASE3.md §8.6)
@@ -64,8 +65,9 @@ export function cleanPage(records, farm) {
 /** The cycle summary (PHASE3.md §8.5). run = { plan: run.plan, levels: run.state().levels }. */
 export function cycleSummary(records, farm, run = {}) {
   const fl = (farm && farm.flock) || {}, res = farm && farm.harvest && farm.harvest.result, C = farm && farm.clean;
-  const placed = fl.delivered || fl.placed || 0;
-  const dead = (fl.deadTotal || 0) + (fl.culls || 0) + (res ? res.doa : 0);
+  // Phase 4: a bad batch's claimed chicks (the hatchery's) are neither placed nor lost
+  const placed = (fl.delivered || fl.placed || 0) - (fl.claimed || 0);
+  const dead = (fl.deadTotal || 0) + (fl.culls || 0) + (res ? res.doa : 0) - (fl.claimed || 0);
   const p = (run && run.plan) || (farm && farm.plan) || null, dec = p && p.decisions;
   const weighed = (farm && farm.stats && farm.stats.weighed) || [];
   const weights = [7, 14, 21, 28, 35, 40].map((day) => {
@@ -83,8 +85,18 @@ export function cycleSummary(records, farm, run = {}) {
     plan: dec ? { lossesPct: dec.lossesPct, saleKg: dec.saleKg, salePerWeek: p.sums ? p.sums.salePerWeek : null, cycleDays: dec.cycleDays, houses: dec.houses, birdsPerHouse: dec.birdsPerHouse } : null,
     actual: { lossesPct: placed ? r2((100 * dead) / placed) : null, saleKg: res ? r2(res.meanLiveG / 1000) : null, cycleDays },
     points: { ...(records.cyclePoints ? records.cyclePoints() : {}) },
+    // levels from a standard start carry fromStandard: true (the run's, PHASE4.md §3.1): kept as given
     levels: run && run.levels ? JSON.parse(JSON.stringify(run.levels)) : null,
+    // Phase 4 (PHASE4.md §3.3): the run's condition, and the farmer's last normal-season cycle beside it (plain numbers)
+    condition: run && run.condition !== undefined ? run.condition : (farm && farm.condition) ?? null,
+    compare: run && run.compare ? compareOf(run.compare) : null,
   };
+}
+/** The numbers of the last normal-season summary drawn beside a condition cycle's (no verdict). */
+function compareOf(c) {
+  const pick = (k) => (c[k] === undefined ? null : c[k]);
+  return { sold: pick('sold'), meanLiveG: pick('meanLiveG'), fcr: pick('fcr'), epef: pick('epef'), mortalityPct: pick('mortalityPct'),
+    deathsByLevel: Array.isArray(c.deathsByLevel) ? JSON.parse(JSON.stringify(c.deathsByLevel)) : null };
 }
 
 const KEEP = new Set(['tip', 'cull', 'dead', 'box', 'feed.meter', 'plan', 'measure', 'booking', 'ticket', 'swab', 'gas']);

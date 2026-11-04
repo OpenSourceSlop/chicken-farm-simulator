@@ -6,6 +6,7 @@ import { mixtureStats, mixtureQuantile } from './farm-rng.js';
 import { EV } from './events.js';
 import { feedAccess } from './farm-feed.js';
 import { GROUP_W } from './farm-comfort.js';
+import { TUNING } from './farm-tuning.js';
 
 // model constants
 export const FLOCK = {
@@ -64,40 +65,46 @@ export function createFlock() {
 const fpg = (age) => (age <= 14 ? FLOCK.fpg0 + FLOCK.fpgPerDay * Math.max(0, age) : feedPerGainAt(age));
 const cohortList = (fl) => [fl.cohorts.good, fl.cohorts.late, fl.cohorts.weak];
 
-/** The chick truck: 6,000 chicks in 6 stacks of 10 boxes (weak chicks spread over the stacks). */
+/** The chick truck: 6,000 chicks in 6 stacks of 10 boxes (weak chicks spread over the stacks). Phase 4: a bad batch's
+ *  delivery (farm.delivery, config CONDITIONS.badChicks: weight, spread, weak share, red hocks) instead of Phase 2's. */
 export function deliver(farm, env) {
-  const fl = farm.flock, rng = farm.rng, L = farm.level || LEVEL1;
+  const fl = farm.flock, rng = farm.rng, L = farm.level || LEVEL1, D = farm.delivery;
   fl.delivered = L.chicksPlaced; fl.inBoxes = L.chicksPlaced;
-  fl.chickWeightG = L.chickWeightG + (rng.next() * 2 - 1) * FLOCK.chickSdG;
+  fl.chickWeightG = (D ? D.chickWeightG : L.chickWeightG) + (rng.next() * 2 - 1) * (D ? D.chickWeightSdG : FLOCK.chickSdG);
   fl.meanWeightG = fl.chickWeightG;
-  const weak = Math.round(L.chicksPlaced * FLOCK.weakShare), per = L.chicksPlaced / L.stacks;
+  if (D) { const c = fl.cohorts; c.good.cv = D.cv; c.late.cv = D.cv; c.weak.cv = D.cv + (FLOCK.weakCv - FLOCK.cv); }
+  const weak = Math.round(L.chicksPlaced * (D ? D.weakShare : FLOCK.weakShare)), per = L.chicksPlaced / L.stacks;
   fl.stacks = Array.from({ length: L.stacks }, () => ({ chicks: per, weak: 0, dead: 0, acc: 0 }));
   for (let k = 0; k < weak; k++) fl.stacks[rng.int(L.stacks)].weak++;
-  fl.gradeBox = Array.from({ length: 10 }, () => gradeChick(fl, rng));
+  const G = D ? { weakP: D.weakShare * 7.5, redHocks: D.redHockShare, cv: D.cv } : null;
+  fl.gradeBox = Array.from({ length: 10 }, () => gradeChick(fl, rng, G));
   for (const c of CAUSES) fl.acc[c] = rng.next(); // seeded jitter: where each death counter starts
   farm.stats.truckAt = env.day;
 }
 
-function gradeChick(fl, rng) {
-  const weak = rng.next() < FLOCK.weakShare * 4; // a sample box the hatchery packed: a few more weak ones show
+function gradeChick(fl, rng, G = null) {
+  const weak = rng.next() < (G ? G.weakP : FLOCK.weakShare * 4); // a sample box the hatchery packed: a few more weak ones show
   const navel = weak ? (rng.next() < 0.6 ? (rng.next() < 0.5 ? 'open' : 'black button') : 'healed')
     : (rng.next() < 0.97 ? 'healed' : 'not fully closed');
   const reflexSec = +(weak ? (rng.next() < 0.7 ? rng.range(3.2, 6) : rng.range(1.5, 3)) : rng.range(0.8, 2.5)).toFixed(1);
-  const hocks = rng.next() < FLOCK.redHocks ? 'red' : 'clean';
-  const weightG = +(fl.chickWeightG * (weak ? FLOCK.weakWeight : 1) * (1 + FLOCK.cv * rng.normal())).toFixed(1);
+  const hocks = rng.next() < (G ? G.redHocks : FLOCK.redHocks) ? 'red' : 'clean';
+  const weightG = +(fl.chickWeightG * (weak ? FLOCK.weakWeight : 1) * (1 + (G ? G.cv : FLOCK.cv) * rng.normal())).toFixed(1);
   return { weak, navel, reflexSec, hocks, weightG, culled: false };
 }
 
 /** Box hazard per chick per hour after `h` hours in the boxes (share dying: 0.01 %/h for 3 h, then
  *  rising by 0.05 %/h each extra hour). */
-const boxRate = (h) => Math.max(FLOCK.boxHazard, FLOCK.boxHazardRise * (h - FLOCK.boxFreeH));
+const boxRate = (h, freeH = FLOCK.boxFreeH) => Math.max(FLOCK.boxHazard, FLOCK.boxHazardRise * (h - freeH));
+// Phase 4: a bad batch came 7 h on the road (the hazard rises from 1 h after the truck stops); the hot season's truck stood
+// in the heat (box time x 1.5): farm.delivery / farm.boxTimeK, undefined in a normal run
+const boxFree = (farm) => (farm.delivery ? 1 : FLOCK.boxFreeH);
 
 /** Chicks still in the boxes: the box hazard runs while they wait (also past the placing window,
  *  so chicks never taken out die there). They are counted dead at once and show at the tip. */
 export function stepBoxes(farm, env, hrs) {
   const fl = farm.flock, s = farm.stats;
   if (fl.inBoxes <= 0 || s.truckAt == null) return;
-  const r = boxRate((env.day - s.truckAt) * 24) * hrs;
+  const r = boxRate((env.day - s.truckAt) * 24 * (farm.boxTimeK ?? 1), boxFree(farm)) * hrs;
   for (const st of fl.stacks) {
     if (st.chicks <= 0) continue;
     st.acc = (st.acc || 0) + st.chicks * r;
@@ -123,7 +130,7 @@ export function tip(farm, env, { stack, chicks, x, z }) {
   const live = n, liveWeak = weak;
   const tFloor = env.floorTemp(x, z);
   const t = fl.tips;
-  t.floorDef += live * Math.max(0, FLOCK.late.floorRef - tFloor); t.boxH += live * h; t.n += live;
+  t.floorDef += live * Math.max(0, FLOCK.late.floorRef - tFloor); t.boxH += live * h * (farm.boxTimeK ?? 1); t.n += live;
   const sec = broodSector(x, z); if (!t.sectors.includes(sec)) t.sectors.push(sec);
   // live chicks into the cohorts (late share from the running estimate, settled over 24 h)
   const c = fl.cohorts, w0 = fl.chickWeightG;
@@ -169,7 +176,9 @@ export function lateEstimate(farm, env) {
   if (f.minutes <= 0) feedAccess(farm.feed, farm.age, env.dayNumber);
   const reach = f.minutes > 0 ? f.reachSum / f.minutes : farm.feed.reach;
   const litH = 24 - (env.lightProgram?.darkHours ?? 1);
-  const L = K.base + K.floor * (t.floorDef / n) + K.boxH * (t.boxH / n) + K.flood * (1 - flooded)
+  // Phase 4: a bad batch's late starters from its own base, less with feed trays and chick paper (farm.lateK)
+  const base = farm.lateK ? farm.lateK.base - farm.lateK.trays : K.base;
+  const L = base + K.floor * (t.floorDef / n) + K.boxH * (t.boxH / n) + K.flood * (1 - flooded)
     + K.water * (1 - A) + K.light * (litH < 20 ? 1 : 0) + K.sectors * (fl.inBoxes <= 0 && t.sectors.length < 3 ? 1 : 0)
     + K.coldH * f.coldH + K.feed * (1 - Math.min(1, reach));
   return Math.max(K.min, Math.min(K.max, L));
@@ -294,7 +303,7 @@ export function stepFlock(farm, env, hrs, C, io) {
     }
   }
   const k = wantKg > 0 ? gotKg / wantKg : 0;
-  const gainK = (1000 * k * gainC) / (fpg(age) * (X ? X.fx.fpgK : 1));
+  const gainK = ((1000 * k * gainC) / (fpg(age) * (X ? X.fx.fpgK : 1))) * (farm.gainK72 ?? 1);   // Phase 4: a bad batch starts slower
   if (c.good.n > 0) c.good.w += (wGood / c.good.n) * gainK;
   if (c.late.n > 0) c.late.w += (wLate / c.late.n) * gainK;
   if (c.weak.n > 0) c.weak.w += (wWeak / c.weak.n) * gainK;
@@ -309,7 +318,7 @@ export function stepFlock(farm, env, hrs, C, io) {
   // Phase 3: older birds' spread grows less from the same stress (model: Phase 2's terms x cvCycleK from Week 2)
   const dcv = (FLOCK.cvBase + (FLOCK.cvTemp * (1 - fT) + FLOCK.cvGroup * fTsd + FLOCK.cvWater * (1 - A)
     + FLOCK.cvFeed * (1 - Math.min(1, fF * (wantKg > 0 ? Math.min(1, k) : 1))) + FLOCK.cvCaked * (farm.litter.cakedShare || 0) + FLOCK.cvAir * (1 - fAir)) * (X ? FLOCK.cvCycleK : 1)
-    + (X ? X.fx.dcv : 0)) * (hrs / 24);
+    + (X ? X.fx.dcv : 0)) * (hrs / 24) * (X && age > 14 ? TUNING.cvGrowthAfter14 : 1);   // Phase 4: less spread after day 14
   c.good.cv += dcv; c.late.cv += dcv; c.weak.cv += dcv;
   if (FLOCK_DEBUG.on && X) {
     const D = FLOCK_DEBUG.acc[env.dayNumber] || (FLOCK_DEBUG.acc[env.dayNumber] = { temp: 0, group: 0, water: 0, feed: 0, caked: 0, air: 0, crowd: 0, f: 0, n: 0, fT: 0, fF: 0, fW: 0, fAir: 0, fL: 0, fx: 0, k: 0 });
@@ -339,13 +348,14 @@ export function stepFlock(farm, env, hrs, C, io) {
   // ---- deaths (expected per hour, fractional counters per cause) ----
   const alive = c.good.n + c.late.n + c.weak.n;
   const rates = RATES;
-  rates[0] = c.weak.n * weakRate(age);
+  rates[0] = c.weak.n * weakRate(age) * (farm.weakRateK ?? 1);   // Phase 4: a bad batch's weak chicks die more often
   // chicks that cannot reach feed (pans winched up, empty): they live on the yolk, then starve
   const hungry = fF < FLOCK.hungryBelow || (wantKg > 0 && k < FLOCK.hungryBelow);
   fl.hungryH = hungry ? (fl.hungryH || 0) + hrs : Math.max(0, (fl.hungryH || 0) - 2 * hrs);
   const starving = fl.hungryH > FLOCK.hungryAfterH ? alive * FLOCK.hungryRate * Math.min(1, (fl.hungryH - FLOCK.hungryAfterH) / FLOCK.hungryRampH) : 0;
   rates[1] = (age >= FLOCK.starveFrom && age < FLOCK.starveTo ? c.late.n * FLOCK.starveRate : 0) + starving;
-  rates[2] = alive * FLOCK.coldRate * coldSq;
+  // Phase 4: from day 14 the cold deaths of older birds (farm-tuning coldDeathRateP4 per cell, farm-house.js)
+  rates[2] = X && age >= TUNING.cold.fromAge ? alive * (C.coldDeathPerH || 0) : alive * FLOCK.coldRate * coldSq;
   // Phase 3: heat deaths per cell of the floor in use (farm-heat.heatDeathRate through farm-house.js)
   rates[3] = X ? alive * (C.heatDeathPerH || 0) : C.meanOver > FLOCK.heatFrom ? alive * FLOCK.heatRate * (C.meanOver - FLOCK.heatFrom) ** 2 : 0;
   rates[4] = A < FLOCK.dehydBelow ? alive * FLOCK.dehydRate * ((FLOCK.dehydBelow - A) / FLOCK.dehydBelow) * (X ? X.fx.dehydK : 1) : 0;
