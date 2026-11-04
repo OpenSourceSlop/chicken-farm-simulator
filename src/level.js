@@ -65,6 +65,10 @@ import { ALL_MILESTONES_P4 as ALL_MILESTONES } from './skills.js'; // Phase 2 + 
 import { hhmm, splitDay, two, int } from './ui-format.js';
 import { dayLabel } from './content.js';
 import { clock as stepClock } from './clock.js';
+// the farmer's requests during Phase 4 (PHASE4.md §15.2): a job held open while its panel shows it
+import { stripsAt } from './job-strips.js';
+import { STRIPS_CYCLE } from './job-strips-cycle.js';
+import { JOB_HOLD } from './config.js';
 
 const H = 1 / 24;
 const CARRY_KINDS = new Set(['boxes', 'barrow', 'sack', 'frame']);
@@ -213,7 +217,44 @@ export function createLevel(ctx, deps = {}) {
     else if (catching) env.timeScale = fast ? C.fast : C.work;
     else if (kind === 'panel') env.timeScale = C.panel;
     else if (CARRY_KINDS.has(props?.carrying) || placing) env.timeScale = C.carry;
+    // PHASE4.md §15.2: slower at an open job's place (the farmer's 4x stays 4x)
+    else if (!fast && C.atJob != null && ui?.jobCard?.atAnyJob?.()) env.timeScale = C.atJob;
     else env.timeScale = fast ? C.fast : C.work;
+  }
+
+  // ---------------- PHASE4.md §15.2: no job closes while the farmer is doing it ----------------
+  let noHold = 0;                   // > 0 while a skip or goto(auto) runs: nothing is held then
+  const SAMPLE_JOB = (inst) => inst.def.done?.id === 'sample.weigh' || inst.id === 'd0-vent' || inst.id === 'd1-crop' || inst.id === 'w2-check' || inst.id === 'w3-droppings'
+    || inst.def.spot === 'lame' || inst.def.spot === 'sick';
+  const toolOf = (r) => (!r ? null : r.tool || (r.of || []).map(toolOf).find(Boolean) || null);
+  /** The panels showing an open job's strip (the open one, the ones finishing a machine job in the background). */
+  function panelShows(pid, inst) {
+    if (!pid) return false;
+    try { return stripsAt(engine, pid, null, STRIPS_CYCLE).some((x) => x.inst === inst); } catch { return false; }
+  }
+  function holdJob(inst) {
+    if (noHold > 0 || level.mode !== 'level' || ended || free || !ui) return false;
+    if (panelShows(ui.openPanelId, inst)) return true;                              // (a) its panel is open
+    for (const id of ui.backgroundPanelIds?.() || []) if (panelShows(id, inst)) return true; // (d) a machine job of it runs on
+    if (ui.jobCard?.atJob?.(inst.key)) return true;                                 // (b) he stands at its place
+    const c = props?.carrying;                                                      // (c) its bird or tool in his hands
+    if (!c) return false;
+    if (c === 'chick' && SAMPLE_JOB(inst)) return true;
+    if (c === 'frame' && inst.def.done?.id === 'sample.weigh') return true;
+    if (c === 'barrow' && (inst.id === 'prep-litter' || inst.id === 'w2-ready')) return true;
+    if (c === 'boxes' && (inst.def.closeOn === 'placed' || inst.def.done?.test === 'all-placed')) return true;
+    return toolOf(inst.def.done) === c;
+  }
+  engine.setHold(holdJob);
+  const soonWarned = new Set();
+  /** Once per open job, when it is JOB_HOLD.warnMin farm minutes from its close: EV.JOB_SOON (the card's cue). */
+  function soonCues() {
+    const now = env.day, w = JOB_HOLD.warnMin / 1440;
+    for (const i of engine.open()) {
+      if (i.closesAt == null || soonWarned.has(i.key) || i.heldFrom != null) continue;
+      const left = i.closesAt - now;
+      if (left > 0 && left <= w + 1e-7 && i.closesAt < engine.endAt() - 1e-7) { soonWarned.add(i.key); events?.emit(EV.JOB_SOON, { id: i.id, key: i.key, closesAt: i.closesAt }); }
+    }
   }
 
   // ---------------- checkpoints, the end ----------------
@@ -416,7 +457,11 @@ export function createLevel(ctx, deps = {}) {
   }
   /** The last Next job skip an alarm stopped: { at, alarms } (the ui says why the clock stopped there). */
   let stoppedAt = null, pinStopAt = null;
-  function skip(hours, { stopOnAlarm = false } = {}) {
+  function skip(hours, opts = {}) {
+    noHold++;
+    try { skipRun(hours, opts); } finally { noHold--; }
+  }
+  function skipRun(hours, { stopOnAlarm = false } = {}) {
     if (hours <= 0) return;
     engine.tick(); // a state met just before the skip still counts (its window may close during it)
     const d0 = env.dayNumber, target = env.day + hours / 24;
@@ -487,7 +532,7 @@ export function createLevel(ctx, deps = {}) {
   /** Everything of one level (a new level, a replay, a resume). */
   function resetLevelState() {
     fired = new Set(); points = []; weighs = []; signedEnd = false; ended = null; pending = null; failAt = null;
-    startAt = null; reached.clear(); stoppedAt = null; bad = { gradedOut: 0, looked: 0, weak: 0, called: null };
+    startAt = null; reached.clear(); stoppedAt = null; bad = { gradedOut: 0, looked: 0, weak: 0, called: null }; soonWarned.clear();
     fast = false; userPaused = false; saveIn = null; lastSaveDay = null; tickAcc = 0;
   }
   function resetRun() {
@@ -597,6 +642,18 @@ export function createLevel(ctx, deps = {}) {
     /** null, or the sample the open job wants: 'vent' | 'crop' | 'weigh' | 'bird'. The flock's `chick`
      *  interact provider only answers while this is set. */
     sampling: null,
+    /**
+     * PHASE4.md §15.3 (d): the open job that needs birds in the hand (the sampling jobs, the grading at the chick table,
+     * a lame-bird job) or null. While it is set E never picks up a dead bird or the bucket (Shift+E does).
+     */
+    get chickJob() {
+      if (level.mode !== 'level' || ended) return null;
+      if (level.sampling) return level.sampling;
+      const o = engine.open();
+      if (o.some((i) => i.id === 'd0-grade' || i.id === 'p-weak-batch' || i.def.done?.id === 'chicks.grade')) return 'grade';
+      if (o.some((i) => i.def.spot === 'lame' || i.def.spot === 'sick')) return 'lame';
+      return null;
+    },
     get fast() { return fast; },
     get inRun() { return inRun; },
     get startAt() { return startAt; },
@@ -621,7 +678,10 @@ export function createLevel(ctx, deps = {}) {
         if (env.timeScale === 0) return 'Stopped';
         if (env.timeScale === C.fast) return '4×';
         if (env.timeScale === C.work) return '1×';
-        return `${env.timeScale / C.work}×`.replace('0.25×', '¼ speed');
+        // PHASE4.md §15.2: at a job ⅔ speed; a panel, carrying, the dark house ¼ speed
+        if (env.timeScale === C.atJob) return '⅔ speed';
+        if (env.timeScale === C.panel || env.timeScale === C.carry) return '¼ speed';
+        return `${Math.round((env.timeScale / C.work) * 100) / 100}×`;
       },
     },
     /** run.js: its side of saves and results (see the header). */
@@ -817,7 +877,7 @@ export function createLevel(ctx, deps = {}) {
       if (prevDay != null && !free) for (const s of innerStarts(prevDay, env.day)) reachStart(s.d, { teleport: false });
       prevDay = env.day;
       tickAcc += dt;
-      if (tickAcc >= 0.5) { tickAcc = 0; engine.tick(); checks(); }
+      if (tickAcc >= 0.5) { tickAcc = 0; engine.tick(); checks(); if (inLevel()) soonCues(); }
       if (env.dayNumber !== lastDay) { lastDay = env.dayNumber; emitLevel({ phase: 'day' }); }
       const list = engine.list();
       const open = (id) => list.some((i) => i.id === id && i.status === 'open');
@@ -918,6 +978,8 @@ export function createLevel(ctx, deps = {}) {
         if (level.mode !== 'level') level.start({ seed });
         const target = day + hour * H;
         if (target <= env.day + 1e-9) return false;
+        noHold++;   // PHASE4.md §15.2: the ideal farmer's rounds hold no job open
+        try {
         if (auto) {
           {
             for (const s of autoStops(target)) {
@@ -937,6 +999,7 @@ export function createLevel(ctx, deps = {}) {
         const to = is(def, LEVEL1) ? target : Math.min(target, engine.endAt());
         if (to > env.day + 1e-9) skip((to - env.day) * 24);
         return true;
+        } finally { noHold--; }
       },
       /**
        * A level-mode farm at (day, hour) for any day up to the clean-out, for the other packages' tools

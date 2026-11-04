@@ -108,6 +108,8 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
     dropBackground() { background.clear(); },
     /** Panels still finishing a machine job with their panel closed (tests). */
     get backgroundCount() { return background.size; },
+    /** PHASE4.md §15.2: the ids of the panels finishing a machine job in the background (their jobs are held open). */
+    backgroundIds() { const out = []; for (const [id, p] of built) if (background.has(p)) out.push(id); return out; },
   };
 }
 

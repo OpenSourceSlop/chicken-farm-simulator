@@ -6,7 +6,7 @@ import { createFarm } from '../src/farm.js';
 import { createEvents, EV } from '../src/events.js';
 import { createJobEngine, BROOD_CELLS, LEVEL_END_DAY, windowHours } from '../src/job-engine.js';
 import { JOBS } from '../src/content-jobs.js';
-import { BROOD_BOUNDS, HEATERS, LEVEL1, CYCLE, CLEAN, PLAN_LEVEL, WEEK2, WEEK3, WEEKS45, FINISH, CLEANOUT, HEAT_P4, levelOfDay } from '../src/config.js';
+import { BROOD_BOUNDS, HEATERS, LEVEL1, CYCLE, CLEAN, PLAN_LEVEL, WEEK2, WEEK3, WEEKS45, FINISH, CLEANOUT, HEAT_P4, levelOfDay, JOB_HOLD } from '../src/config.js';
 import { STATE_TEST_IDS_P4, JOBS_COND } from '../src/content-jobs-cond.js';
 import { nightComfortNow } from '../src/job-engine.js';
 import { flowToday, brooderRowC, VENT_BAND } from '../src/job-figures.js';
@@ -972,6 +972,74 @@ test('Phase 4 strips: the half-and-half, the medicine day, f-withdraw; every con
   const W = makeLevel({ startDay: 0, startHour: 9, condition: 'badChicks' });
   const bw = rowText(stripRows(STRIPS_COND['b-warm'], stripCtx(W), W.jobs.byKey('b-warm@0'), 'controller'));
   assert(/\+ 1\.0 °C = .*the sign’s row \+ 1 °C \(weak batch\)/.test(bw), `b-warm: ${bw}`);
+});
+
+// ---------------- the farmer's requests during Phase 4 (PHASE4.md §15.2) ----------------
+test('§15.2 engine: a held job does not close; its close moves 20 farm minutes on each time; without the hold it is missed', () => {
+  const L = makeLevel();
+  const key = 'prep-flush@-1', f = L.jobs.byKey(key);
+  near(f.closesAt, -1 + 26 * H, 'flush closes 02:00');
+  let holding = true;
+  const held = [];
+  L.events.on(EV.JOB_HELD, (p) => held.push(p));
+  L.jobs.setHold((inst) => holding && inst.key === key);
+  L.at(-1, 16.5);
+  L.at(0, 2.05);
+  assert(L.st(key) === 'open' && held.length === 1, `held past 02:00: ${L.st(key)}, ${held.length} held events`);
+  near(f.heldFrom, -1 + 26 * H, 'heldFrom = the window close');
+  near(f.closesAt, 0 + 2.05 * H + JOB_HOLD.graceMin / 1440, 'close now + 20 farm minutes');
+  L.at(0, 2.5);
+  assert(L.st(key) === 'open' && held.length >= 2, `still held at 02:30 (${held.length})`);
+  holding = false;
+  L.at(0, 2.6);
+  assert(L.st(key) === 'open', 'open in the grace after the hold ends');
+  L.at(0, 3.0);
+  assert(L.st(key) === 'missed', `missed 20 farm minutes after the hold ended: ${L.st(key)}`);
+  const other = L.jobs.list().filter((i) => i.key !== key && i.day === -1 && i.closesAt <= 2 * H + 1e-6);
+  assert(other.every((i) => i.status === 'missed' || i.status === 'done'), 'only the held job was kept open');
+  const ser = JSON.stringify(L.jobs.serialize());
+  assert(!/heldFrom/.test(ser) || /prep-flush/.test(ser), 'heldFrom saved only for open jobs');
+});
+
+test('§15.2 level: a job held while its panel is open, missed 20 farm minutes after it closes; a skip never holds; the slower clock at a job; the soon cue once', () => {
+  const L = makeLevelJs(null);
+  const C = LEVEL1.clock;
+  assert(C.work === 90 && C.fast === 360 && C.panel === 24 && C.carry === 24 && C.atJob === 60 && C.sign === 0, `the clock ${JSON.stringify(C)}`);
+  const soon = [];
+  L.events.on(EV.JOB_SOON, (p) => soon.push(p.key));
+  L.level.debug.goto(0, 1.55);  // the prep day's flush still open (16:00-02:00), nothing done
+  const key = 'prep-flush@-1';
+  assert(L.level.jobs.byKey(key)?.status === 'open', `flush open at 01:33: ${L.level.jobs.byKey(key)?.status}`);
+  const run = (sec) => { for (let t = 0; t < sec; t += 0.5) { L.env.update(0.5); L.level.update(0.5); } };
+  run(1);
+  assert(L.env.timeScale === C.work, `the work clock: ${L.env.timeScale}`);
+  assert(soon.filter((k) => k === key).length === 1, `the soon cue once 30 farm minutes before 02:00: ${soon.join(' ')}`);
+  run(2);
+  assert(soon.filter((k) => k === key).length === 1, 'the soon cue only once');
+  // at its place (the job card says so): the slower clock
+  L.ui.jobCard.atAnyJob = () => true; L.ui.jobCard.atJob = () => false;
+  run(0.6);
+  assert(L.env.timeScale === C.atJob, `at a job: ${L.env.timeScale}`);
+  L.ui.jobCard.atAnyJob = () => false;
+  // the water supply panel open (the flush's panel): held past 02:00
+  L.ui.openPanelId = 'water-supply'; L.ui.panelKind = 'panel';
+  while (L.env.day < 2 * H + 10 / 1440) run(0.5);
+  assert(L.env.timeScale === C.panel, `the panel clock: ${L.env.timeScale}`);
+  const inst = L.level.jobs.byKey(key);
+  assert(inst.status === 'open' && inst.heldFrom != null, `held open at ${L.env.timeLabel}: ${inst.status}`);
+  // the panel closed: missed 20 farm minutes later
+  L.ui.openPanelId = null; L.ui.panelKind = null;
+  const closeAt = inst.closesAt;
+  assert(closeAt - L.env.day <= JOB_HOLD.graceMin / 1440 + 1e-6, 'at most 20 farm minutes left');
+  while (L.env.day < closeAt + 2 / 1440) run(0.5);
+  assert(inst.status === 'missed', `missed after the grace: ${inst.status} at ${L.env.timeLabel}`);
+  // a Next job skip holds nothing: the panel open, a skip to the next close
+  const L2 = makeLevelJs(null);
+  L2.level.debug.goto(0, 1.9);
+  L2.ui.openPanelId = 'water-supply';
+  L2.level.nextJob(); L2.level.nextJob();
+  const i2 = L2.level.jobs.byKey(key);
+  assert(i2.status === 'missed' && i2.heldFrom == null, `the skip held nothing: ${i2.status}`);
 });
 
 let failed = 0;

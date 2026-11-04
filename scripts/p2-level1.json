@@ -81,7 +81,7 @@
   {"clickText": "8 cm"},
   {"clickText": "Take the barrow"},
   {"advance": 0.2},
-  {"expect": "__game.props.carrying === 'barrow' && __game.env.timeScale === 30", "label": "barrow in hand, clock at the carry speed"},
+  {"expect": "__game.props.carrying === 'barrow' && __game.env.timeScale === __game.config.LEVEL1.clock.carry", "label": "barrow in hand, clock at the carry speed"},
   {"walkTo": [-14, 4], "tol": 0.5},
   {"walkTo": [-23.2, 4.8], "tol": 0.5, "max": 30},
   {"walkTo": [23.2, 4.8], "tol": 0.5, "max": 40},

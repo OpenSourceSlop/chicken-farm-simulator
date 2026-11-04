@@ -35,7 +35,7 @@
 // must hold at completion, action `check`s such as an order that is enough); the panel shows the target
 // beside the live value (job-strips.js), never a verdict. The result is what was measured or set, written
 // to records.logJob(key, day, result). parts(inst) names each part for the card and the strip.
-import { BROOD_BOUNDS, CLEANOUT, CYCLE, DRINKER_LINES_Z, EQUIP, FAN_COUNT, FLOOR_GRID, HARVEST, HEAT, HEAT_P4, LEVEL1, ROUNDS, broodSector, houseSector, levelById, flockAgeAt, feedStdGAt, conditionLevel } from './config.js';
+import { BROOD_BOUNDS, CLEANOUT, CYCLE, DRINKER_LINES_Z, EQUIP, FAN_COUNT, FLOOR_GRID, HARVEST, HEAT, HEAT_P4, LEVEL1, ROUNDS, JOB_HOLD, broodSector, houseSector, levelById, flockAgeAt, feedStdGAt, conditionLevel } from './config.js';
 import { EV, matchPayload } from './events.js';
 import { ALL_JOBS } from './content-jobs.js';
 import { feltNearTarget } from './farm-problems.js';
@@ -522,6 +522,9 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
   let lastDay = null;
   let currentKey = null;
   let started = false;
+  // the farmer's request during Phase 4 (PHASE4.md §15.2): hold(inst) -> true while he is doing that job (its panel open,
+  // at its place, its bird or tool in his hands); the level sets it, node tests and goto(auto) run without one
+  let hold = null;
   const ctx = { env, farm, props, records, get def() { return def; } };
   const emit = (t, p) => events && events.emit(t, p);
   const order = jobs.map((j) => j.id);
@@ -620,6 +623,15 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
         if (inst.closesAt != null && now >= inst.closesAt - EPS) { inst.status = 'missed'; emit(EV.JOB_MISSED, { id: inst.id, key: inst.key }); continue; }
         if (now >= inst.opensAt - EPS && afterOk(inst)) { inst.status = 'open'; emit(EV.JOB_OPEN, { id: inst.id, key: inst.key }); }
       } else if (inst.status === 'open' && inst.closesAt != null && now >= inst.closesAt - EPS) {
+        // held: the close moves JOB_HOLD.graceMin farm minutes on (each time it comes), so he has that long after he stops
+        let held = false;
+        if (hold) { try { held = !!hold(inst); } catch (err) { console.error('job hold failed', err); } }
+        if (held) {
+          if (inst.heldFrom == null) inst.heldFrom = inst.closesAt;
+          inst.closesAt = now + JOB_HOLD.graceMin / 1440;
+          emit(EV.JOB_HELD, { id: inst.id, key: inst.key, closesAt: inst.closesAt, from: inst.heldFrom });
+          continue;
+        }
         inst.status = 'missed'; emit(EV.JOB_MISSED, { id: inst.id, key: inst.key });
       }
     }
@@ -739,6 +751,8 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
     get started() { return started; },
     /** The level def the engine runs (config LEVELS). */
     get level() { return def; },
+    /** PHASE4.md §15.2: fn(inst) -> true while the farmer is doing that job (null: never held). */
+    setHold(fn) { hold = typeof fn === 'function' ? fn : null; },
     /** Fresh instances for `day` (level start: its first day). `newDef` switches the level. */
     start(day, newDef) {
       reset(newDef);
@@ -844,6 +858,7 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
           // a closed job without rule state is a tuple [key, status, opensAt, closesAt, doneAt]
           if ((i.status === 'done' || i.status === 'missed') && i.def.done?.type !== 'count') return [i.key, i.status, t(i.opensAt), t(i.closesAt), t(i.doneAt)];
           const o = { key: i.key, status: i.status, opensAt: t(i.opensAt), closesAt: t(i.closesAt), doneAt: t(i.doneAt) };
+          if (i.heldFrom != null && i.status === 'open') o.heldFrom = t(i.heldFrom);
           // a closed job's result is in records.logJob already; open ones keep their rule state
           // (count jobs keep it closed too: the card shows their tallies)
           if (i.status !== 'done') o.progress = Math.round(i.progress * 1000) / 1000;

@@ -45,6 +45,11 @@ export const EV = {
   JOB_OPEN: 'job:open',             // { id, key }
   JOB_DONE: 'job:done',             // { id, key, result }
   JOB_MISSED: 'job:missed',         // { id, key }
+  // the farmer's requests during Phase 4 (PHASE4.md §15)
+  JOB_HELD: 'job:held',             // { id, key, closesAt, from } an open job held past its close while he does it
+  JOB_SOON: 'job:soon',             // { id, key, closesAt } an open job is 30 farm minutes from its close (once)
+  WATCH: 'watch:warning',           // { kind, state, text, cause, sign, place, day, hour } the flock watch's early warning
+  BUCKET: 'bucket',                 // { down: bool, x, z, n, auto } the dead-bird bucket set down / picked up
   LEVEL: 'level',                   // { phase: 'start'|'resume'|'day'|'checkpoint'|'end', day, name?, result?, level?, run? }
                                     //   checkpoint names: 'placed', 'vent', 'crop', 'weighin', 'level-end' (skills listen);
                                     //   Phase 3 adds 'plan', 'curtain', 'vaccine', 'heatwave', 'catch', 'harvest',

@@ -417,6 +417,11 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .ljobs .job.is-waiting { color: var(--ink-faint); }
 .ljobs .job.is-waiting .job-mark { border-color: var(--panel-edge); }
 .job-when { font: 600 11px/1 var(--font-display); letter-spacing: 0.04em; color: var(--ink-faint); white-space: nowrap; }
+/* PHASE4.md §15.2: an open job's close coming up, a held job (soft, never a verdict) */
+.job-soon { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(231, 182, 70, 0.55); color: var(--sign-yellow); font: 600 10.5px/1.4 var(--font-display); letter-spacing: 0.03em; white-space: nowrap; vertical-align: 1px; }
+.job-soon.is-held { border-color: rgba(108, 184, 240, 0.55); color: var(--cold); }
+.job-soon.is-cue { animation: job-soon-cue 1.6s ease-out 2; }
+@keyframes job-soon-cue { 0% { background: rgba(231, 182, 70, 0.45); } 100% { background: transparent; } }
 .ljobs-later { margin-top: 8px !important; padding-top: 6px; border-top: 1px solid var(--panel-edge); }
 .ljobs .job.is-missed { color: var(--ink-faint); }
 .ljobs .job.is-missed .job-title { text-decoration: line-through; text-decoration-color: var(--ink-faint); }

@@ -175,6 +175,11 @@ export const GUIDES = {
   general: 'general practice',
 };
 
+// A job is never missed while the farmer is doing it (PHASE4.md §15.2, model): an open job reaching its close while
+// its panel is open, he stands at its place, holds its bird or carries its tool closes graceMin farm minutes later
+// (again each time, so he has graceMin after he stops); the job card warns from warnMin farm minutes before a close.
+export const JOB_HOLD = { graceMin: 20, warnMin: 30, placeM: 2.5 };
+
 // Level 1: from the prep day to the day 7 weigh-in.
 export const LEVEL1 = {
   id: 'level1',
@@ -188,14 +193,16 @@ export const LEVEL1 = {
   boxes: 60, chicksPerBox: 100, stacks: 6, // boxes come in 6 stacks of 10; one carry = one stack
   chickWeightG: 41.5,                 // mean day-old weight of this delivery (model; seeded +-1 g)
   // Clock: game seconds per real second while the level runs (Phase 1 sandbox keeps TIME).
-  //   work   walking about (one farm hour = 30 s)
-  //   panel  an equipment or inspection panel is open (a 1-minute flow test takes 2 s)
+  // The farmer's request during Phase 4 (PHASE4.md §15.2): 25 % slower than Phase 2's 120 / 480 / 30 / 30.
+  //   work   walking about (one farm hour = 40 s)
+  //   atJob  standing at an open job's place (within 2.5 m of where its marker points; not at 4x)
+  //   panel  an equipment or inspection panel is open (a 1-minute flow test takes 2.5 s)
   //   carry  carrying chick boxes, the barrow or the catching frame, and from the truck stopping
   //          until the last stack is tipped (placing 6,000 chicks takes about 30-45 farm minutes)
   //   sign   a sign board or a plate is open: 0 = the clock stands still while you read
   //   fast   the 4x button on the time bar
   // The records book, notebook, skill tree and result screen also stop the clock.
-  clock: { work: 120, fast: 480, panel: 30, carry: 30, sign: 0 },
+  clock: { work: 90, fast: 360, panel: 24, carry: 24, sign: 0, atJob: 60 },
   // Job rounds (game hours). A job is open inside its window; when the window ends it is "missed".
   rounds: {
     am: { from: 6, to: 12, label: 'Morning round' },

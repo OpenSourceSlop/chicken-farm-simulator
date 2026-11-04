@@ -55,6 +55,7 @@ const isKeyE = (e, k) => e.code === 'KeyE' || k === 'e';
 const isKeyHelp = (e, k) => e.code === 'KeyH' || k === 'h' || k === '?' || (e.code === 'Slash' && e.shiftKey);
 const isCode = (e, k, code, letter) => e.code === code || (!e.code && k === letter);
 const P1_IDS = new Set(['sign-gate', 'controller', 'sign-brooder']); // what E reaches in the sandbox
+const clockText = (t) => { const m = Math.round((((t % 1) + 1) % 1) * 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 const inHouse = (p) => p.x > HOUSE_BOUNDS.xMin && p.x < HOUSE_BOUNDS.xMax && p.z > HOUSE_BOUNDS.zMin && p.z < HOUSE_BOUNDS.zMax;
 
 export function createUI(ctx, deps) {
@@ -282,6 +283,14 @@ export function createUI(ctx, deps) {
   events.on(EV.FARM_PROBLEM, (p) => { if (mode === 'level' && p && p.phase === 'symptom' && p.alarm) raiseAlarm(ALARM[p.id] || 'The controller’s alarm sounds.'); });
   events.on(EV.FARM_DELIVERY, (p) => { if (mode === 'level' && p.kind === 'feed' && p.phase === 'arrive') caption.show('The feed truck is filling the silos.'); });
   events.on(EV.SKILL_POINTS, (p) => { if (p.detail) details.set(p.milestone, p.detail); });
+  // PHASE4.md §15.2: the soft cue of a job 30 farm minutes from its close (the card's chip pulses; a quiet click sounds)
+  events.on(EV.JOB_SOON, (p) => {
+    if (mode !== 'level') return;
+    const inst = ctx.level?.engine?.byKey?.(p.key);
+    if (!inst) return;
+    const at = p.closesAt != null ? ` (${clockText(p.closesAt)})` : '';
+    caption.show(`${inst.def.title}: closes in ${Math.round((p.closesAt - env.day) * 1440)} farm minutes${at}.`, 5);
+  });
   // a bird in the hand: from day 8 the bird check (panels' bird-check), in week 1 Phase 2's chick in hand
   events.on(EV.BIRD_PICK, (p) => {
     if (mode !== 'level') return;
@@ -560,6 +569,7 @@ export function createUI(ctx, deps) {
     get openPanelId() { return panels.openId; },
     /** Panels finishing a machine job in the background (closed with a flow test running, …). */
     get backgroundPanels() { return panels.backgroundCount; },
+    backgroundPanelIds: () => panels.backgroundIds?.() || [],
     /** 'sign' | 'paused' | 'panel' | null: the open panel's clock class (PHASE2.md §2). */
     get panelKind() { return title.open ? 'paused' : panels.openKind; },
     get taskIndex() { return tasks.index; },

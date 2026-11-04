@@ -6,7 +6,7 @@
 // Phase 3 (PHASE3.md §3.2): headers for the planning day, the clean-out and the rest; the facts links read
 // the merged boards of the day; the cycle's spots (SPOTS3, the lame bird, the stopped fan, the next bait
 // station or swab place). Owner: package "run" (Phase 2: "level").
-import { CLEAN, DRINKER_LINES_Z, FARM, FLOOR_GRID, HEATERS, HEATER_HEIGHT, LEVEL1, ROUNDS, SPOTS, SPOTS2, SPOTS3, SPOTS4, CONDITIONS } from './config.js';
+import { CLEAN, DRINKER_LINES_Z, FARM, FLOOR_GRID, HEATERS, HEATER_HEIGHT, LEVEL1, ROUNDS, SPOTS, SPOTS2, SPOTS3, SPOTS4, CONDITIONS, JOB_HOLD, HOUSE_BOUNDS } from './config.js';
 import { BOARDS } from './content-signs.js';
 import { boardsForDay } from './content-signs-cycle.js';
 import { plateCondition } from './ui-boards.js'; // Phase 4: the run's condition for the merged boards
@@ -225,8 +225,8 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
   const cardCtx = () => ({ env: ctx.env, farm: ctx.farm, props: ctx.props, flock: ctx.flock, engine: L.engine() });
   const here = (p) => ({ x: p.x, z: p.z, inside: !!ctx.player?.isInside });
   function nearestOf(list, p) { let b = null, bd = Infinity; for (const s of list) { const d = Math.hypot(s.x - p.x, s.z - p.z); if (d < bd) { bd = d; b = s; } } return b; }
-  function spotFor(inst, p) {
-    if (factsTarget) return place(BOARD_SPOT[factsTarget]);
+  function spotFor(inst, p, own = false) {
+    if (factsTarget && !own) return place(BOARD_SPOT[factsTarget]);
     const d = inst.def, st = inst.st, carrying = ctx.props?.carrying;
     const heater = () => ({ x: nearestHeater(p).x, z: nearestHeater(p).z, y: HEATER_HEIGHT + 1.0, gz: 0 });
     switch (d.id) {
@@ -264,10 +264,12 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     }
   }
 
-  let sig = '', current = null, items = new Map();
+  let sig = '', current = null, items = new Map(), soonEls = new Map();
   function itemEl(inst, cls, extra) {
     const mark = h('span', { class: 'job-mark', 'aria-hidden': 'true' });
     const title = h('p', { class: 'job-title' }, inst.def.title);
+    // PHASE4.md §15.2: "closes in N farm minutes" from JOB_HOLD.warnMin before its close (filled by update)
+    if (inst.status === 'open') { const chip = h('span', { class: 'job-soon', hidden: true }); title.append(chip); soonEls.set(inst.key, { chip, inst }); }
     const body = h('div', { class: 'job-body' }, title, extra || null);
     const li = h('li', { class: `job ${cls}` }, mark, body);
     if (inst.status === 'open') {
@@ -293,7 +295,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     setText(count, `${done.length} done`);
     if (key === sig) return;
     sig = key;
-    items = new Map();
+    items = new Map(); soonEls = new Map();
     const sections = [];
     const add = (inst, cls = '') => {
       const isCur = cur && inst.key === cur.key;
@@ -356,9 +358,44 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     if (ctx.level?.hudHooks?.userPaused && waitsOnTime(inst, c)) out.push('The clock is paused: this job waits on farm time. Press ▶ in the time bar (bottom left).');
     return out.join(' ');
   }
+  // PHASE4.md §15.2: the open jobs whose place the farmer stands at (within JOB_HOLD.placeM of where the marker would
+  // point for that job, on the same side of the house wall), read by the level's clock and the job hold
+  let atKeys = new Set(), atAcc = 0;
+  const inHouseXZ = (x, z) => x > HOUSE_BOUNDS.xMin && x < HOUSE_BOUNDS.xMax && z > HOUSE_BOUNDS.zMin && z < HOUSE_BOUNDS.zMax;
+  function refreshAt() {
+    const eng = L.engine(), p = ctx.player?.position;
+    const keys = new Set();
+    if (eng && p && ctx.level?.mode === 'level') {
+      const inside = !!ctx.player.isInside;
+      for (const inst of eng.open()) {
+        let s = null;
+        try { s = spotFor(inst, p, true); } catch { s = null; }
+        if (!s || !Number.isFinite(s.x)) continue;
+        if (Math.hypot(s.x - p.x, s.z - p.z) <= JOB_HOLD.placeM && inHouseXZ(s.x, s.z) === inside) keys.add(inst.key);
+      }
+    }
+    atKeys = keys;
+  }
+  function soonText(inst) {
+    const now = ctx.env.day;
+    if (inst.closesAt == null || inst.status !== 'open') return '';
+    const left = (inst.closesAt - now) * 1440;
+    if (inst.heldFrom != null) return `held open while you work · ${Math.max(1, Math.round(left))} farm min after`;
+    if (left > JOB_HOLD.warnMin + 1e-6 || left <= 0) return '';
+    const m = Math.max(1, Math.round(left));
+    return `closes in ${m} farm minute${m === 1 ? '' : 's'}`;
+  }
+  ctx.events.on(EV.JOB_SOON, (p) => {
+    const chip = soonEls.get(p.key)?.chip;
+    if (chip && !chip.hidden) { chip.classList.remove('is-cue'); void chip.offsetWidth; chip.classList.add('is-cue'); }
+    else sig = ''; // the next render shows it; the pulse comes with the caption
+  });
   let acc = 0;
   return {
     el: card,
+    /** PHASE4.md §15.2: the farmer stands at this open job's place. */
+    atJob: (key) => atKeys.has(key),
+    atAnyJob: () => atKeys.size > 0,
     get factsTarget() { return factsTarget; },
     reset() { factsTarget = null; sig = ''; dot.hidden = true; },
     refresh() { sig = ''; render(); },
@@ -370,6 +407,8 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
         if (more.hidden === overflow) { more.hidden = !overflow; listWrap.classList.toggle('has-more', overflow); }
       }
       const slow = acc === 0.25;
+      if ((atAcc -= dt) <= 0) { atAcc = 0.25; refreshAt(); }
+      if (slow) for (const { chip, inst } of soonEls.values()) { const t = soonText(inst); if (chip.textContent !== t) setText(chip, t); chip.hidden = !t; chip.classList.toggle('is-held', inst.heldFrom != null); }
       for (const { bar, ptext, inst, next } of items.values()) {
         bar.style.transform = `scaleX(${Math.max(0, Math.min(1, inst.progress)).toFixed(3)})`;
         if (ptext) setText(ptext, progressText(inst, ctx));
