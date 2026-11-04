@@ -64,6 +64,11 @@ export const ICONS = {
   truck: wrap('<path d="M2.5 6.5h11v10h-11zM13.5 10h4l3.5 3.5v3h-7.5"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'),
   up: wrap('<path d="M6 14.5l6-6 6 6"/>', ' stroke-width="2.4"'),
   down: wrap('<path d="M6 9.5l6 6 6-6"/>', ' stroke-width="2.4"'),
+  // Phase 5 (PHASE5.md §4-§6): the farm map, the settings gear, the saves, the guide
+  map: wrap('<path d="M3.5 6.5l5-2.5 7 2.5 5-2.5v13.5l-5 2.5-7-2.5-5 2.5z"/><path d="M8.5 4v13.5M15.5 6.5V20"/>'),
+  gear: wrap('<circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4L18 18M6 18l1.6-1.6M16.4 7.6L18 6"/><circle cx="12" cy="12" r="6.3"/>'),
+  save: wrap('<path d="M5 3.5h11.5L20.5 7.5v13H5z"/><path d="M8 3.5v5h7v-5M8 20.5v-6h9v6"/>'),
+  help: wrap('<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.7M12 16.8h.01"/>'),
 };
 
 export const weatherIcon = (w) => (w === 'rainy' ? ICONS.rain : w === 'hot' ? ICONS.hot : ICONS.sun);

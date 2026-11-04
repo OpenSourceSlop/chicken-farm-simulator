@@ -1,4 +1,4 @@
-# Chicken Farm — architecture (Phases 1 to 4)
+# Chicken Farm — architecture (Phases 1 to 5)
 
 A browser game that teaches broiler farming by running a farm through a flock cycle.
 **Phase 1** was the look-and-feel test: one chicken house, the farm around it, a walking farmer and
@@ -14,7 +14,8 @@ seven levels on one flock from the plan to the rested house, all eleven skill br
 clarity leftovers) is specified in `PHASE4.md`; its contracts are in code (see **"Phase 4 — design"** at the end).
 The farmer's four requests during Phase 4 (the flock watch's early warnings, the slower clock and held jobs, the
 dead-bird bucket set down, the dead-bird pointer) are PHASE4.md §15; see **"The farmer's requests during Phase 4"**.
-Not in scope yet: sound, settings, save slots, farm overview map (Phase 5).
+**Phase 5** (polish: the sound for every situation, save slots and backups, the settings menu, the farm overview map,
+the final quality pass) is specified in `PHASE5.md`; its contracts are in code (see **"Phase 5 — design"** at the end).
 
 ## Decisions already made (from the plan doc)
 
@@ -973,3 +974,37 @@ files: the artifact CSP blocks media), in `src/audio*.js`; the hooks elsewhere a
   skip; `scripts/test-audio.mjs` (with `fake-audio.mjs`) the rules, the timer fans (< 1 dB through the cycles), the pad's
   share, the chirp rate and habituation, the pans, every one-shot ending inside its voice's held time, and no node made
   after start-up.
+
+
+## Phase 5 — design (contracts in code; PHASE5.md §8)
+`PHASE5.md` is the spec (the sound §2, saves §3, settings §4, the map §5, the quality pass §6, the contracts §8, the four
+packages `sound`, `saves`, `settings`, `experience` §10). In code now, every default being the Phase 4 game:
+- **config.js** (Phase 5 section): `BUILD`, `SAVE_SLOTS` (3 slots `chickenFarm.slot.v5.<n>`, format 5, `known` formats 1 / 3 /
+  5, `maxSlotChars`), `SETTINGS_STORE` (`chickenFarm.settings.v1`, the Phase 4 sound key), `GFX` (the governor's timings, the
+  shadow sizes, the budget: 110 draw calls, 650 K triangles, 66 programs), `MAP` (the farm and house views, stand points).
+- **events.js**: `EV.SETTINGS`, `EV.SAVE`, `EV.SOUND_CAPTION`, `EV.MENU`.
+- **settings.js** (the store: `SETTINGS_SCHEMA` of sound, time, graphics, camera, interface, keys, intro; `createSettings`,
+  `coerce`, `defaults`, `soundView`), **motion.js** (`reducedMotion()` = the system or *Reduce motion: Always*; the
+  `reduce-motion` class on `<html>`; ui-dom.js and world-cond.js re-export it), **keys.js** (`KEY_ACTIONS` = the Phase 1–4
+  keys plus Tab (map) and Esc (menu); `createKeys(settings)`: `matches`, `labels`, `rows`, `rebind` with swap, `reset`),
+  **gfx-quality.js** (Phase 1's frame-time governor moved out of main.js unchanged; manual pixel ratio, shadows and flock
+  detail; `debug.feed`), **boot-screen.js** (the loading card's steps and `BOOT_ERRORS`).
+- **UI hubs**: `ui-menu.js` (the game menu panel `menu`, kind 'paused', `add` / `open` / `entries`); `ui-title.js`
+  `addAction` / `refresh`; `ui-panels.js` `busyIds()`; ui.js wires Esc → the menu in a level (not within 600 ms of a panel
+  closing: `ESC_GUARD_MS`), Tab from the canvas → the map, the map and gear keys on the time bar, the settings / guide /
+  saves / map panels, the intro, sound captions shown while `interface.soundCaptions`, and `ui.menu`, `ui.title`, `ui.map`,
+  `ui.intro`, `openSettings`, `openGuide`, `openSaves`, `busyPanels`; Continue goes through `ctx.saves`.
+- **Working stubs**: `ui-settings.js` (one control per setting from the schema), `ui-guide.js` + `content-guide.js` (the
+  guide's sections with the live keys), `saves.js` (Continue on the autosave; slot calls answer `not-built`),
+  `save-slots.js` (`metaOf`, `slotName`, `makeEnvelope`, `checkEnvelope`, `mergeProfiles` complete; `migrate` v3 / v5;
+  `createSlotStore` stub), `save-codec.js` (`crc32`, `SaveError`, `SAVE_MESSAGES`, the backup text; json64 only),
+  `ui-saves.js`, `ui-map.js` + `map-plan.js` (44 places, `standOf`, `projector`; an SVG farm and a list that walks him there),
+  `ui-intro.js` (`INTRO_CARDS`; shows none).
+- **main.js**: the settings and keys first, `ctx.world`, the quality object, `ctx.saves` after the run, the audio on
+  `soundView(settings)`, the staged loading card (`await bootScreen.step(…)`), `webglcontextlost`; `__game.settings`,
+  `keys`, `quality`, `saves`, `perf`, `renderInfo()`.
+- **Tests**: test-contracts' Phase 5 cases (the store, the keys, the codec and slot names, the guide's words and the map's
+  places, the governor's order); `scripts/p5-design-stubs.json` (15 PASS at the design run: the hooks, the defaults, the
+  budget, Esc → the menu, the settings stored in both keys, the Esc guard, Tab → the map, a walk to the silos, the saves
+  panel, the guide, the title keys). Measured at the design run (SwiftShader, 960 × 600): 66–93 draw calls, 312–553 K
+  triangles, 66 programs; a whole run's save 857 KB raw, 157 KB gzip; `flock.update` 1.8–2.6 ms median.

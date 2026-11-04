@@ -866,3 +866,49 @@ export const SIGN_FIGURES = [
   { id: 'pad-draw', board: 'water-tank', text: 'on a hot afternoon the pads draw about 700–1,200 L an hour', model: 'padDrawHotLh', band: [700, 1200] },
   { id: 'birds-draw', board: 'water-tank', text: 'the birds drink about 100–150 L an hour', model: 'birdsDrawHotLh', band: [90, 170] },
 ];
+
+
+// ================================================================================================
+// Phase 5 (polish: sound, save slots, the settings menu, the farm overview map, the final quality pass; PHASE5.md).
+// Shared constants: every package reads these, nobody edits them without the integrator. Phase 5 adds no farming
+// figure to any sign except the hot season's appetite line (general practice, PHASE5.md §6.8.4, checked by test-cond).
+// ================================================================================================
+
+/** The build that wrote a save (shown on a slot and in a backup; a save of a newer format is refused, PHASE5.md §3.6). */
+export const BUILD = { phase: 5, id: 'phase5' };
+
+// Save slots and backups (PHASE5.md §3). The autosave stays RUN_SAVE (its keys are never renamed: a republish of the page
+// keeps every Phase 3-4 autosave); a slot is one localStorage key holding a whole run (the run key and every level start)
+// under the versioned envelope `format` / `version`. textMarker opens a backup's payload line ("CF5.gz64.<crc>.<base64>").
+// maxSlotChars: a slot that would store more than this is refused with the "full" message (the JSON fallback of a whole
+// cycle is about 0.9 M characters, gzip + base64 about 0.21 M).
+export const SAVE_SLOTS = {
+  count: 3, keyPrefix: 'chickenFarm.slot.v5.', format: 'chicken-farm-save', version: 5, textMarker: 'CF5',
+  maxSlotChars: 1600000, wrap: 76,
+  // the formats a slot, a backup or the live keys may hold, oldest first (PHASE5.md §3.6): migrations go up this list
+  known: [{ v: 1, what: 'Phase 2 brooding-week save (chickenFarm.level1.v1)' }, { v: 3, what: 'Phase 3-4 run save (chickenFarm.run.v3)' }, { v: 5, what: 'Phase 5 save envelope' }],
+};
+
+// Settings (PHASE5.md §4): one key for every group (settings.js; the old sound key 'chicken-farm.sound' is read once and
+// kept in step for the Phase 4 steps files), and the first-play pointers' memory (ui-intro.js).
+export const SETTINGS_STORE = { key: 'chickenFarm.settings.v1', legacySoundKey: 'chicken-farm.sound', version: 1 };
+
+// Graphics (PHASE5.md §4.4, §6.5): the frame-time governor (gfx-quality.js) and the budgets the harness checks at the named
+// views of scripts/p5-gfx.json (measured on main at the design run, SwiftShader 960 x 600, pixel ratio 1: 66-93 draw calls,
+// 312-553 K triangles, 66 shader programs after the warm-up).
+export const GFX = {
+  maxPixelRatio: 1.5,
+  governor: { windowSec: 2, holdSec: 3, firstHoldSec: 4, slowSec: 0.036, verySlowSec: 0.05 },
+  shadowHigh: 2048, shadowLow: 1024,
+  budget: { calls: 110, triangles: 650000, programs: 66 },
+};
+
+// The farm overview map (PHASE5.md §5): the area it draws (the fence plus the farm road out of the gate), the house view's
+// area, and where a click walks (a place's stand point: boards on the north wall from z = standZ inside; anything else at
+// the nearest free spot within standR of its spot).
+export const MAP = {
+  farm: { xMin: -58, xMax: 58, zMin: -38, zMax: 45 },
+  house: { xMin: -25.5, xMax: 25.5, zMin: -7.5, zMax: 7.5 },
+  standZ: -4.6, standR: 2.5,
+  minLabelPx: 12,
+};

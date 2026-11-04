@@ -379,7 +379,8 @@ test('§15.3 keys: G and Shift+E in the help legend, verdict-free; G bound only 
   assert(g && /bucket/i.test(g.what) && se && /dead bird/i.test(se.what), 'G and Shift+E in the legend');
   for (const k of LEVEL_HELP_KEYS) assert(!VERDICT.test(k.what), `verdict word in the legend: ${k.what}`);
   const files = readdirSync(new URL('../src/', import.meta.url)).filter((f) => f.endsWith('.js'));
-  const binders = files.filter((f) => /KeyG/.test(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')));
+  // Phase 5: the key table (keys.js) names every default; only the level ui acts on G
+  const binders = files.filter((f) => /KeyG/.test(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')) && f !== 'keys.js');
   assert(binders.length === 1 && binders[0] === 'ui.js', `KeyG bound in ${binders.join(', ')}`);
 });
 
@@ -403,6 +404,115 @@ test('review round: the strips\' limits are the plates\' figures: the pans on th
   const { BOARD_P4_ITEMS } = await import('../src/content-signs-cond.js');
   const plate = BOARD_P4_ITEMS['feeder-box'].add.map((x) => x.text).join(' ');
   assert(plate.includes(`${PANS_ON_LITTER_CM} cm at most`) && /give or take 3 cm/.test(plate), `feeder plate: ${plate}`);
+});
+
+// ---------------- Phase 5 contracts (PHASE5.md §8) ----------------
+const memStorage = (init = {}) => { const m = new Map(Object.entries(init)); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), get map() { return m; } }; };
+const throwing = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } };
+
+test('phase 5 settings: defaults from the schema, clamped values, storage round trip, blocked storage, the Phase 4 sound key', async () => {
+  const { createSettings, soundView, SETTINGS_SCHEMA, defaults } = await import('../src/settings.js');
+  const st = memStorage();
+  const a = createSettings({ storage: st });
+  const d = defaults();
+  for (const [g, G] of Object.entries(SETTINGS_SCHEMA)) for (const k of Object.keys(G.items)) assert(JSON.stringify(a.get(`${g}.${k}`)) === JSON.stringify(d[g][k]), `default ${g}.${k}`);
+  assert(a.get('sound.volume') === 0.7 && a.get('time.defaultSpeed') === '1x' && a.get('graphics.quality') === 'auto' && a.get('interface.hudScale') === '1', 'the defaults keep Phase 4 as it is');
+  assert(a.set('camera.rotateSpeed', 9) === 2 && a.set('interface.hudScale', '7') === '1' && a.set('sound.muted', 'true') === true, 'values are clamped and validated');
+  const seen = []; const off = a.subscribe((c) => seen.push(c.path), 'sound');
+  a.setMany({ 'sound.volume': 0.4, 'camera.zoomSpeed': 1.5 }); off(); a.set('sound.volume', 0.5);
+  assert(seen.join() === 'sound.volume', `the sound filter: ${seen}`);
+  const b = createSettings({ storage: st });
+  assert(b.get('sound.volume') === 0.5 && b.get('camera.zoomSpeed') === 1.5 && b.get('camera.rotateSpeed') === 2, 'the values come back from storage');
+  assert(JSON.parse(st.getItem('chicken-farm.sound')).volume === 0.5, 'the Phase 4 sound key kept in step');
+  const c = createSettings({ storage: throwing });
+  c.set('sound.volume', 0.2);
+  assert(c.get('sound.volume') === 0.2 && c.available === false, 'blocked storage: the session keeps its values, nothing throws');
+  const legacy = createSettings({ storage: memStorage({ 'chicken-farm.sound': JSON.stringify({ volume: 0.3, muted: true }) }) });
+  assert(legacy.get('sound.volume') === 0.3 && legacy.get('sound.muted') === true, 'the Phase 4 sound store carries over once');
+  b.set('sound.muted', false);
+  const sv = soundView(b);
+  assert(Math.abs(sv.gain() - 0.25) < 1e-9 && sv.toggleMute().muted === true && sv.gain() === 0, 'the sound view: gain and mute as audio-settings.js');
+  const bad = createSettings({ storage: memStorage({ 'chickenFarm.settings.v1': '{not json' }) });
+  assert(bad.get('sound.volume') === 0.7, 'unreadable settings: the defaults');
+});
+
+test('phase 5 keys: the defaults are the Phase 1-4 keys; rebinding swaps; Esc and Shift+E are fixed', async () => {
+  const { createKeys, KEY_ACTIONS } = await import('../src/keys.js');
+  const { createSettings } = await import('../src/settings.js');
+  const s = createSettings({ storage: memStorage() }), k = createKeys(s);
+  const want = { use: 'E', bucket: 'G', squeeze: 'Q', probe: 'T', lux: 'L', air: 'V', notebook: 'N', skills: 'K', floorView: 'F', comfortView: 'C', moistureView: 'M', help: 'H', sound: 'U', map: 'Tab', menu: 'Esc', forward: 'W' };
+  for (const [id, l] of Object.entries(want)) assert(k.label(id) === l, `${id} on ${k.label(id)}`);
+  for (const r of LEVEL_HELP_KEYS) for (const key of r.keys) if (/^[A-Z]$/.test(key)) assert(KEY_ACTIONS.some((a) => a.codes.includes(`Key${key}`)), `legend key ${key} in the table`);
+  const ev = (code, o = {}) => ({ code, key: code.replace('Key', '').toLowerCase(), shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...o });
+  assert(k.matches(ev('KeyQ'), 'squeeze') && !k.matches(ev('KeyQ', { ctrlKey: true }), 'squeeze'), 'Q squeezes, Ctrl+Q does not');
+  assert(k.matches(ev('KeyE', { shiftKey: true }), 'useDead') && !k.matches(ev('KeyE'), 'useDead'), 'Shift+E is its own action');
+  const r = k.rebind('squeeze', 'KeyG');
+  assert(r.ok && r.swapped === 'bucket' && k.label('squeeze') === 'G' && k.label('bucket') === 'Q', `a taken key swaps: ${JSON.stringify(r)}`);
+  assert(createKeys(s).label('squeeze') === 'G', 'the binding is stored');
+  assert(!k.rebind('menu', 'KeyP').ok && !k.rebind('squeeze', 'Escape').ok, 'Esc is fixed and reserved');
+  k.reset();
+  assert(k.label('squeeze') === 'Q' && k.label('bucket') === 'G', 'reset');
+  const codes = KEY_ACTIONS.filter((a) => !a.follows).flatMap((a) => a.codes);
+  assert(new Set(codes).size === codes.length, 'no default key twice');
+  for (const a of KEY_ACTIONS) assert(!VERDICT.test(a.what), `verdict word: ${a.what}`);
+});
+
+test('phase 5 save codec and slot names: round trip, crc, the error codes; names from condition, level, day and time', async () => {
+  const { encodePayload, decodePayload, composeText, parseText, crc32, hex8, SAVE_MESSAGES } = await import('../src/save-codec.js');
+  const { metaOf, slotName, migrate, checkEnvelope, makeEnvelope } = await import('../src/save-slots.js');
+  assert(hex8(crc32('123456789')) === 'cbf43926', 'crc32 (IEEE)');
+  const obj = { run: { levelId: 'weeks45' }, blob: { level: { levelId: 'weeks45' }, env: { day: 30 + 14.33 / 24, hour: 14.33 }, farm: { cond: { condition: 'hot' } } } };
+  const text = composeText({ meta: { name: 'x', savedAt: 0 }, ...(await encodePayload(obj)) });
+  assert(JSON.stringify(await decodePayload(parseText(text))) === JSON.stringify(obj), 'a backup reads back as it was');
+  const code = async (t) => { try { await decodePayload(parseText(t)); return 'ok'; } catch (e) { return e.code; } };
+  assert(await code('hello') === 'not-a-save' && await code(text.slice(0, -30)) === 'incomplete' && await code(text.replace('CF5', 'CF6')) === 'newer', 'not a save, cut short, newer');
+  for (const m of Object.values(SAVE_MESSAGES)) assert(!VERDICT.test(m), `verdict word: ${m}`);
+  const m = metaOf(obj);
+  assert(m.name === 'Hot season · Level 5 – Weeks 4 and 5 · Day 30, 14:20', `name: ${m.name}`);
+  assert(slotName(metaOf({ blob: { level: { levelId: 'plan' }, env: { day: -2 + 7 / 24, hour: 7 }, farm: {} } })) === 'Normal season · Level 1 – Plan the farm · Planning day, 07:00', 'the planning day');
+  const env = migrate({ version: 3, savedAt: 5, run: obj.run, blob: obj.blob });
+  assert(env.format === 'chicken-farm-save' && env.v === 5 && env.meta.name === m.name && checkEnvelope(env) === null, 'a v3 run save in the envelope, named, resumable');
+  assert(checkEnvelope(makeEnvelope({ run: obj.run, blob: { level: obj.blob.level, env: obj.blob.env } })) === 'invalid', 'a blob without its farm is not resumed');
+  assert(checkEnvelope(makeEnvelope({ run: obj.run, blob: { ...obj.blob, level: { levelId: 'week9' } } })) === 'invalid', 'an unknown level is not resumed');
+});
+
+test('phase 5 guide, menu, map plan and motion: neutral words, no farming figures, every place resolvable', async () => {
+  const { GUIDE } = await import('../src/content-guide.js');
+  for (const sec of GUIDE.sections) for (const t of [sec.head, ...sec.text]) {
+    assert(!VERDICT.test(t), `guide verdict word: ${t}`);
+    assert(!/°C|L\/kg|m\/s|lux|ppm|\bp\.\s*\d/.test(t), `the guide holds no farming figure (signs do): ${t}`);
+  }
+  const { MAP_PLACES, standOf, projector } = await import('../src/map-plan.js');
+  const { MAP } = await import('../src/config.js');
+  const ids = MAP_PLACES.map((p) => p.id);
+  assert(new Set(ids).size === ids.length && ids.length >= 40, `places: ${ids.length}, unique`);
+  for (const p of MAP_PLACES) { const s = standOf(p); assert(Number.isFinite(s.x) && Number.isFinite(s.z) && p.name, `place ${p.id}`); }
+  assert(standOf(MAP_PLACES.find((p) => p.id === 'controller')).z === MAP.standZ, 'a north-wall board: stand in front of it');
+  const P = projector(MAP.farm, { x: 0, y: 0, w: 960, h: 600 }), q = P.toPx(-40, 38), w = P.toWorld(q.x, q.y);
+  assert(Math.abs(w.x + 40) < 1e-9 && Math.abs(w.z - 38) < 1e-9, 'projection round trip');
+  const { reducedMotion, setMotionOverride } = await import('../src/motion.js');
+  setMotionOverride('on'); assert(reducedMotion() === true, 'reduce motion: always'); setMotionOverride('system');
+});
+
+test('phase 5 graphics quality: the governor steps down in Phase 1\'s order; manual settings pin', async () => {
+  const { createQuality } = await import('../src/gfx-quality.js');
+  const { createSettings } = await import('../src/settings.js');
+  const mk = () => ({ shadowMap: { enabled: true, type: 2 }, ratio: 1, getPixelRatio() { return this.ratio; } });
+  const sun = { shadow: { mapSize: { x: 2048, y: 2048, set(a, b) { this.x = a; this.y = b; } }, map: null } };
+  const THREE = { PCFSoftShadowMap: 2, PCFShadowMap: 1 };
+  const scene = { traverse() {} };
+  const r = mk(), s = createSettings({ storage: memStorage() });
+  const q = createQuality({ THREE, renderer: r, scene, world: { sun }, settings: s, onResize: () => { r.ratio = q.pixelRatio(); } });
+  let st = q.debug.feed(0.06, 80);
+  assert(st.shadows === 'low' && sun.shadow.mapSize.x === 1024, `first step: the simple shadow (${JSON.stringify(st)})`);
+  st = q.debug.feed(0.06, 80);
+  assert(st.ratioCap === 0.85, `then the 0.85 render scale (${JSON.stringify(st)})`);
+  s.set('graphics.shadows', 'off');
+  assert(r.shadowMap.enabled === false && q.state().shadows === 'off', 'shadows off by hand');
+  s.set('graphics.pixelRatio', '1.25');
+  assert(q.state().ratioCap === 1.25, 'a pixel ratio by hand');
+  s.set('graphics.shadows', 'auto');
+  assert(r.shadowMap.enabled === true && q.state().shadows === 'high', 'back to automatic: the soft shadow again');
 });
 
 let failed = 0;

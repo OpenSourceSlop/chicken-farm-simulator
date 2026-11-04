@@ -1,0 +1,38 @@
+// How to play (PHASE5.md §6.2): the player guide inside the game. It says how the GAME works (controls, the day, jobs,
+// signs, records, levels, saving); every farming fact stays on the signs and plates at the place it is used, so this
+// page holds none, and no word of it is a verdict (scripts/test-contracts.mjs checks it). Owner after the design round:
+// package "settings" (the guide's words and order); `controls: true` sections show the live key bindings (keys.js).
+export const GUIDE = {
+  title: 'How to play',
+  intro: 'You run house 1 of a broiler farm: 6,000 chicks from the plan to the clean, rested house. Days pass in a few minutes; the farm’s numbers tell you how the flock is doing.',
+  sections: [
+    { id: 'controls', head: 'Getting around', controls: true,
+      text: ['Walk with W A S D or click the ground (a quick second click runs there). Turn the view with the arrow keys or a right-drag, zoom with the wheel.',
+        'E uses what is in front of you: a sign, a machine’s panel, a bird, a box. Esc closes a panel; with none open it opens the menu. Tab opens the farm map.'] },
+    { id: 'day', head: 'Your day',
+      text: ['The job card (top right) lists today’s jobs in the order of the day’s rounds. The job at the top is the one to do now: the orange marker on the farm shows its place, and the card says which sign holds its facts.',
+        'A job’s strip at the top of its panel shows its steps and the figures it works toward. A job closes when its window passes; while you are working at it, it is held open.',
+        'Next job skips the clock to the next job. With jobs still open it asks first and stops when one of them closes.'] },
+    { id: 'signs', head: 'Signs and plates',
+      text: ['Facts sit on signs where you use them: the brooder sign by the controller, the water sign by the drinker lines, the plates on each machine. Under each fact a small line names its source: one of the guides, or general broiler practice.',
+        'Read a sign, then look at the flock and the gauges and set the house.'] },
+    { id: 'flock', head: 'Reading the flock',
+      text: ['Stand still in the house and you see and hear the flock: where the birds sit, how they move, what the droppings look like, what you hear. The notebook (N) keeps what you saw and every reading you took.',
+        'The flock watch (top left) measures the birds every farm hour: weight, deaths, comfort, intake, and the water supply where it matters, each beside the level’s line. It turns amber, then red, and writes a warning that says what, the likely cause and where to look.',
+        'Views from the skill tree show more on the floor: floor temperature (F), the birds’ comfort (C), litter moisture (M).'] },
+    { id: 'records', head: 'Records',
+      text: ['The records book on the office desk holds a row for every day: body weight against the target, feed and water, deaths by cause, the litter, the house. Sign the day’s record in the evening.',
+        'The result of a level is its key measurement: the day-7 chick weight, a week’s weight, the harvest, the swabs after the clean-out.'] },
+    { id: 'levels', head: 'Levels',
+      text: ['Seven levels follow one flock: plan the farm, the brooding week, week 2, week 3, weeks 4 and 5, finishing and harvest, clean-out and rest. Each level ends with its key target; when the target is missed the level is replayed from its start (or the level before it, when that is where the trouble began).',
+        'After the first full cycle you can raise harder flocks: the hot season, the rainy season, a bad batch of chicks, a water problem.'] },
+    { id: 'skills', head: 'Skill tree',
+      text: ['Points come from what happens on your farm when a job is done well in play. Each level of a branch unlocks a tool or a view (K opens the tree).'] },
+    { id: 'time', head: 'Time',
+      text: ['Pause, 1× and 4× sit on the time bar (bottom left). The clock slows while you read signs, work at a panel, carry something or stand at a job’s place, and stops while a book or this guide is open.'] },
+    { id: 'saving', head: 'Saving',
+      text: ['The game saves by itself as you play and keeps the start of every level for a replay. The menu’s Save or load keeps up to three farms in slots, loads them, and backs one up as text you can paste back later (in this browser or another).'] },
+    { id: 'settings', head: 'Sound and settings',
+      text: ['U turns the sound on or off. Settings (the gear on the time bar, or the menu) hold the volume, the clock, the graphics, the camera, the HUD size, sound captions and the keys.'] },
+  ],
+};

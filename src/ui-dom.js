@@ -49,8 +49,8 @@ export function setAttr(el, name, value) {
 let uid = 0;
 export const uniqueId = (prefix) => `${prefix}-${++uid}`;
 
-const motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-export const reducedMotion = () => !!(motionQuery && motionQuery.matches);
+// Phase 5: one answer for the whole game (motion.js: the system setting or the settings menu's "Reduce motion")
+export { reducedMotion } from './motion.js';
 
 // localStorage can throw (private mode, blocked site data); never let that break the game.
 export const store = {

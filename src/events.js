@@ -62,6 +62,13 @@ export const EV = {
   // Phase 4 (PHASE4.md §10.2)
   POWER: 'power',                   // { on, source: 'mains'|'generator'|null, mains } the house's power changed (farm: a cut,
                                     //   the generator taking the load, the mains back); the scene darkens the house, the ui shows the alarm
+  // Phase 5 (PHASE5.md §8.2)
+  SETTINGS: 'settings',             // { group, key, value, prev } one setting changed (settings.js; after it is stored)
+  SAVE: 'save',                     // { kind: 'slot'|'load'|'delete'|'restore'|'backup'|'error'|'auto-failed', slot?, ok, message? }
+                                    //   (saves.js; the ui shows `message` in the saves panel or as a HUD note)
+  SOUND_CAPTION: 'sound:caption',   // { key, text, x?, z? } a meaningful sound started (audio-captions.js; emitted while muted
+                                    //   too; ui shows "[text]" when settings interface.soundCaptions is on)
+  MENU: 'menu',                     // { open: bool, from: 'esc'|'gear'|'title'|'hook' } the game menu opened / closed (ui-menu.js)
 };
 
 /**

@@ -22,6 +22,12 @@ import { createLevel } from './level.js';
 // Phase 3 (PHASE3.md): the run of seven levels on one flock
 import { createRun } from './run.js';
 import { createAudio } from './audio.js'; // Phase 5: the sound layer (src/audio*.js)
+// Phase 5 (PHASE5.md §8): settings, key bindings, graphics quality, the loading card, saves
+import { createSettings, soundView } from './settings.js';
+import { createKeys } from './keys.js';
+import { createQuality } from './gfx-quality.js';
+import { createBootScreen } from './boot-screen.js';
+import { createSaves } from './saves.js';
 
 function webglAvailable() {
   try {
@@ -34,30 +40,22 @@ function webglAvailable() {
   }
 }
 
-// Highest pixel ratio we render at: 1.5 keeps 4K panels and 150 % Windows scaling sharp enough
-// without paying for 4x the pixels.
-const MAX_PIXEL_RATIO = 1.5;
+// The loading card and its messages (boot-screen.js; the highest pixel ratio is config GFX.maxPixelRatio, 1.5: it keeps
+// 4K panels and 150 % Windows scaling sharp enough without paying for 4x the pixels)
+const bootScreen = createBootScreen();
 
-function showBootError(message) {
-  const boot = document.getElementById('boot');
-  if (boot) {
-    boot.hidden = false;
-    boot.classList.add('boot--error');
-    boot.textContent = message;
-  }
-}
-
-function start(saved = {}) {
+async function start(saved = {}) {
   const canvas = document.getElementById('game');
-  if (!webglAvailable()) {
-    showBootError('This game needs WebGL. Open it in a recent desktop browser such as Chrome, Edge, Firefox or Safari.');
-    return;
-  }
+  if (!webglAvailable()) { bootScreen.error('webgl'); return; }
+
+  // Phase 5: the settings first (the sound, the graphics, reduced motion and the keys read them from the start)
+  const settings = createSettings();
+  const keys = createKeys(settings);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  // quality.ratioCap drops if the frame-time governor finds the GPU too slow (see frame())
-  const quality = { ratioCap: MAX_PIXEL_RATIO, step: 0 };
-  const pixelRatio = () => Math.min(window.devicePixelRatio || 1, quality.ratioCap);
+  // the pixel ratio and the sun's shadow: gfx-quality.js (the settings' graphics group, or the frame-time governor)
+  let quality = null;
+  const pixelRatio = () => (quality ? quality.pixelRatio() : Math.min(window.devicePixelRatio || 1, config.GFX.maxPixelRatio));
   renderer.setPixelRatio(pixelRatio());
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -70,7 +68,7 @@ function start(saved = {}) {
 
   // perf: read by the Phase 1 test tools (frame rate the approver can report)
   const perf = { fps: 0, pixelRatio: renderer.getPixelRatio(), shadowMap: 2048 };
-  const ctx = { THREE, renderer, scene, camera, canvas, config, perf };
+  const ctx = { THREE, renderer, scene, camera, canvas, config, perf, settings, keys };
 
   const env = createSim();
   ctx.env = env;
@@ -79,6 +77,7 @@ function start(saved = {}) {
   // Phase 2 core, created before any 3D module so they can all read ctx.events and ctx.farm.
   const events = createEvents();
   ctx.events = events;
+  settings.attachEvents?.(events);
   const farm = createFarm(env, { events });
   ctx.farm = farm;
   env.addStepper(farm.step);         // the farm integrates with every climate step, skips included
@@ -88,7 +87,9 @@ function start(saved = {}) {
   ctx.records = records;
   ctx.skills = skills;
 
+  await bootScreen.step('Building the farm');
   const world = buildWorld(ctx);
+  ctx.world = world;                 // Phase 5: the sound reads its weather (rain, lightning flashes)
   const house = buildHouse(ctx);
   // ctx.interact: every module registers what E can reach; Phase 1 boards are its first entries.
   const interact = createInteract([...world.interactables, ...house.interactables]);
@@ -102,8 +103,11 @@ function start(saved = {}) {
   ctx.colliders = colliders;
   const player = createPlayer(ctx, { colliders });
   ctx.player = player;
+  await bootScreen.step('Bringing in the flock');
   const flock = createFlock(ctx, { house });
   ctx.flock = flock;
+  quality = createQuality({ THREE, renderer, scene, world, perf, settings, flock, onResize: () => resize() });
+  ctx.quality = quality;
   const interactables = interact.list;
   const deps = { farm, records, skills, save, player, flock, props, interact, events };
   const ui = createUI(ctx, { ...deps, house, world, interactables });
@@ -111,7 +115,10 @@ function start(saved = {}) {
   ctx.level = level;
   const run = createRun({ level, save, events, farm, env, records });
   ctx.run = run;
-  const audio = createAudio(ctx, { player, flock, events, farm, ui }); // starts on the first key press or click
+  const saves = createSaves({ run, level, save, events, settings, ui }); // Phase 5: slots, Continue, backups (PHASE5.md §3)
+  ctx.saves = saves;
+  // starts on the first key press or click; its volume and mute live in the settings' sound group (PHASE5.md §2.6)
+  const audio = createAudio(ctx, { player, flock, events, farm, ui, world, settings: soundView(settings) });
   ctx.audio = audio;
 
   if (saved.player) player.teleport(saved.player.x, saved.player.z, saved.player.yaw);
@@ -146,38 +153,7 @@ function start(saved = {}) {
     audio.update(dt);
   }
 
-  // Frame-time governor: if the median frame over 2 s is slower than about 28 fps, step quality
-  // down: high-DPI screens to 1.0 pixel ratio first, then a cheaper sun shadow, and only below
-  // about 20 fps a 0.85 render scale (which softens the picture). A browser capped at 30 fps
-  // (battery saver) never triggers it. It only steps down, waits 3 s between steps, and is off
-  // under automation (the screenshot harness renders in software).
-  const governor = { on: !navigator.webdriver, times: new Float32Array(120), n: 0, acc: 0, hold: 4 };
-  function govern(rawDt) {
-    perf.fps += (1 / Math.max(rawDt, 1e-3) - perf.fps) * 0.05;
-    if (!governor.on || document.hidden) return;
-    if ((governor.hold -= rawDt) > 0) return;
-    governor.times[governor.n++ % governor.times.length] = rawDt;
-    if ((governor.acc += rawDt) < 2) return;
-    const k = Math.min(governor.n, governor.times.length);
-    const sorted = Array.from(governor.times.subarray(0, k)).sort((a, b) => a - b);
-    governor.acc = 0; governor.n = 0;
-    const median = sorted[k >> 1];
-    if (median <= 0.036) return;
-    governor.hold = 3;
-    const ratio = renderer.getPixelRatio();
-    if (ratio > 1.01) quality.ratioCap = 1;
-    else if (world.sun && world.sun.shadow.mapSize.x > 1024) {
-      renderer.shadowMap.type = THREE.PCFShadowMap;
-      world.sun.shadow.mapSize.set(1024, 1024);
-      world.sun.shadow.map?.dispose();
-      world.sun.shadow.map = null;
-      perf.shadowMap = 1024;
-      scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
-    } else if (ratio > 0.86 && median > 0.05) quality.ratioCap = 0.85;
-    else { governor.on = false; return; }
-    quality.step++;
-    resize();
-  }
+  // the frame-time governor lives in gfx-quality.js (quality.frame below; Phase 1's steps, off under automation)
 
   const clock = new THREE.Clock();
   let frames = 0;
@@ -192,12 +168,12 @@ function start(saved = {}) {
       renderer.render(scene, camera);
       frames++;
       failures = 0;
-      govern(raw);
+      quality.frame(raw);
     } catch (err) {
       console.error(err);
       if (++failures >= 3) {
         running = false;
-        showBootError(`The farm stopped: ${err && err.message ? err.message : err}. Reload the page to start again.`);
+        bootScreen.error('stopped', err && err.message ? err.message : String(err));
       }
     }
   }
@@ -214,6 +190,16 @@ function start(saved = {}) {
     run,
     condScene,                    // Phase 4: the conditions' scene (rain, the power cut, the machines; its debug hooks)
     audio,                        // Phase 5: settings, state(), debug.measure(opts) (audio-measure.js)
+    // Phase 5 (PHASE5.md §9.2): the settings store, the key bindings, the graphics quality, the saves; renderInfo() for the
+    // graphics budgets (draw calls, triangles, programs of one rendered frame)
+    settings, keys, quality, saves,
+    get perf() { return perf; },
+    renderInfo() {
+      player.update(0); renderer.render(scene, camera);
+      const i = renderer.info;
+      return { calls: i.render.calls, triangles: i.render.triangles, programs: i.programs ? i.programs.length : null, geometries: i.memory.geometries, textures: i.memory.textures,
+        pixelRatio: renderer.getPixelRatio(), shadows: renderer.shadowMap.enabled ? perf.shadowMap : 0 };
+    },
     startRun(opts = {}) { return run.startRun(opts); },
     startLevel(opts = {}) { return opts.level && opts.level !== 'level1' ? run.startLevel(opts.level, opts) : level.start(opts); },
     cycleAt(day, hour = 6) { return level.debug.freeRun(day, hour); },
@@ -329,22 +315,30 @@ function start(saved = {}) {
       flock.update(0, env, player.position);
     }
   }
+  await bootScreen.step('Warming up the graphics');
   warmUp();
   // Title card / sandbox (level.js). A hot reload of a running level resumes it instead
   // (level.resume loads the skill profile first, so the skill tree carries over).
   if (!(saved.levelSave && level.resume(saved.levelSave))) level.boot();
 
-  const boot = document.getElementById('boot');
-  if (boot) boot.hidden = true;
+  // Phase 5 (PHASE5.md §6.3): the graphics card reset (a driver update, a sleeping laptop): save now and say so
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    try { level.saveNow?.(); } catch (err) { console.error('save on context loss failed', err); }
+    running = false;
+    bootScreen.error('context-lost');
+  });
+
+  bootScreen.hide();
   requestAnimationFrame(frame);
 }
 
-function safeStart(saved) {
+async function safeStart(saved) {
   try {
-    start(saved);
+    await start(saved);
   } catch (err) {
     console.error(err);
-    showBootError(`The farm failed to load: ${err && err.message ? err.message : err}`);
+    bootScreen.error('load', err && err.message ? err.message : String(err));
   }
 }
 

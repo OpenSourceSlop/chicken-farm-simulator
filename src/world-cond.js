@@ -28,5 +28,5 @@ export function problemOn(farm, id) {
   const p = farm.problems.find((q) => q.id === id);
   return !!p && (p.phase === 'active' || p.phase === 'found');
 }
-const motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-export const reducedMotion = () => !!(motionQuery && motionQuery.matches);
+// Phase 5: the system setting or the settings menu's "Reduce motion" (motion.js)
+export { reducedMotion } from './motion.js';

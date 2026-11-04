@@ -110,6 +110,8 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
     get backgroundCount() { return background.size; },
     /** PHASE4.md §15.2: the ids of the panels finishing a machine job in the background (their jobs are held open). */
     backgroundIds() { const out = []; for (const [id, p] of built) if (background.has(p)) out.push(id); return out; },
+    /** Phase 5 (PHASE5.md §2.1): the panels whose machine job runs now, open or in the background (the wash bay's washer). */
+    busyIds() { const out = []; for (const [id, p] of built) { try { if ((p === current?.panel || background.has(p)) && p.busy?.()) out.push(id); } catch { /* a panel */ } } return out; },
   };
 }
 

@@ -49,6 +49,15 @@ import { registerCondPanels } from './ui-cond-panels.js'; // Phase 4 (package "p
 import { withJobStrip } from './ui-jobstrip.js';
 import { boardsForDay } from './content-signs-cycle.js';
 import { sourceLabel } from './content-signs.js';
+// Phase 5 (PHASE5.md §8): the game menu (experience), the settings menu and the guide (settings), the saves panel (saves),
+// the farm map and the first-play introduction (experience); each registers its own panel and menu / title entries
+import { createGameMenu } from './ui-menu.js';
+import { registerSettingsPanel } from './ui-settings.js';
+import { registerGuidePanel } from './ui-guide.js';
+import { registerSavesPanel } from './ui-saves.js';
+import { createMap } from './ui-map.js';
+import { createIntro } from './ui-intro.js';
+import { clock as stepClock } from './clock.js';
 
 const MOVE_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
 const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift']);
@@ -396,13 +405,14 @@ export function createUI(ctx, deps) {
   const title = createTitle(root, {
     onStart: () => (ctx.run ? ctx.run.startRun({ seed: 1 }) : ctx.level?.start({ seed: 1 })),
     onStartBrooding: () => (ctx.run ? ctx.run.startRun({ seed: 1, at: 'level1' }) : ctx.level?.start({ seed: 1 })),
-    onContinue: () => (ctx.run ? ctx.run.continueSave() : ctx.level?.continueSave()),
+    // Phase 5 (PHASE5.md §3.4): Continue resumes the newest readable save (the autosave or a slot), through ctx.saves
+    onContinue: () => (ctx.saves ? ctx.saves.continueLatest() : ctx.run ? ctx.run.continueSave() : ctx.level?.continueSave()),
     onSandbox: () => ctx.level?.toSandbox(),
     onSkills: () => openPanel('skilltree'),
     onReplay: (id, day) => replayLevel(id, day),
     onStandard: (id, cond) => standardLevel(id, cond),
     onStartCondition: (id) => startCondition(id),
-    saveInfo: () => (ctx.run ? ctx.run.info() : deps.save?.info?.() ?? null),
+    saveInfo: () => (ctx.saves ? ctx.saves.latestInfo() : ctx.run ? ctx.run.info() : deps.save?.info?.() ?? null),
     saveAvailable: () => (ctx.run ? !!ctx.run.available : !!deps.save?.available),
     run: () => ctx.run ?? null,
   });
@@ -423,6 +433,39 @@ export function createUI(ctx, deps) {
     if (panels.openId) { panelNotice(`Flock watch: ${p.text}`); queuedWatch = p.text; } else caption.show(p.text, 9, { soft: true });
   });
   const togglePanel = (id) => { if (panels.openId === id) closePanel(); else openPanel(id); };
+
+  // ---- Phase 5 (PHASE5.md §4-§6): the game menu, settings, the guide, the saves, the farm map, the introduction ----
+  const reg = (id, build, opts) => panels.register(id, build, opts);
+  const menu = createGameMenu({ register: reg, openPanel, closePanel, events, mode: () => mode });
+  const p5 = { register: reg, openPanel, closePanel, ctx, menu, title };
+  let settingsUI = null, guideUI = null, map = null;
+  try { settingsUI = registerSettingsPanel(p5); } catch (err) { console.error('settings panel failed to register', err); }
+  try { guideUI = registerGuidePanel(p5); } catch (err) { console.error('guide panel failed to register', err); }
+  try { registerSavesPanel(p5); } catch (err) { console.error('saves panel failed to register', err); }
+  try { map = createMap(ctx, { register: reg, openPanel, closePanel }); } catch (err) { console.error('map failed', err); }
+  const intro = createIntro(ctx, { root });
+  menu.add({ id: 'resume', label: 'Back to the farm', icon: 'play', hint: 'Esc', order: 0, onSelect: () => {} });
+  menu.add({ id: 'map', label: 'Farm map', icon: 'map', hint: 'Tab', order: 20, onSelect: () => map?.open() });
+  menu.add({ id: 'title', label: 'Back to the title card', icon: 'outside', order: 90, visible: (m) => m === 'level' || m === 'result', onSelect: () => ctx.level?.toTitle() });
+  // the time bar: the farm map and the settings gear (the speaker key of audio-ui.js mounts after them)
+  const mapBtn = button({ class: 'btn btn--icon', title: 'Farm map (Tab)', 'aria-label': 'Open the farm map (Tab)' });
+  mapBtn.innerHTML = ICONS.map;
+  mapBtn.addEventListener('click', () => map?.open());
+  const gearBtn = button({ class: 'btn btn--icon', title: 'Menu and settings (Esc)', 'aria-label': 'Open the menu: saves, settings and how to play (Esc)' });
+  gearBtn.innerHTML = ICONS.gear;
+  gearBtn.addEventListener('click', () => menu.open('gear'));
+  hud.timebar.append(mapBtn, gearBtn);
+  // Esc with no panel open opens the menu in a level, but never on the press that closed a panel or the legend, nor within
+  // ESC_GUARD_MS of a panel closing (an earlier steps file's Escape after a panel that closed itself stays harmless)
+  const ESC_GUARD_MS = 600;
+  let lastPanelClose = -1e9;
+  events.on(EV.PANEL_CLOSE, () => { lastPanelClose = stepClock.now(); });
+  // sound captions (PHASE5.md §2.5): "[Alarm in the house]" while settings interface.soundCaptions is on
+  events.on(EV.SOUND_CAPTION, (p) => {
+    let on = false;
+    try { on = !!ctx.settings?.get('interface.soundCaptions'); } catch { on = false; }
+    if (on && p?.text && mode !== 'title') caption.show(`[${p.text}]`, 3.5, { ifFree: true });
+  });
 
   // ---- E, Q, T ----
   const accept = (it) => !!it.use || panels.has(it.id);
@@ -550,6 +593,10 @@ export function createUI(ctx, deps) {
       (mode === 'sandbox' ? help : lhelp).toggle();
     } else if (k === 'escape' && (mode === 'sandbox' ? help : lhelp).visible) {
       (mode === 'sandbox' ? help : lhelp).hide();
+    } else if (k === 'escape' && mode === 'level' && !e.repeat && stepClock.now() - lastPanelClose > ESC_GUARD_MS) {
+      e.preventDefault(); menu.open('esc');
+    } else if (e.code === 'Tab' && !e.shiftKey && !e.repeat && (mode === 'level' || mode === 'sandbox') && (e.target === canvas || e.target === document.body || e.target === document.documentElement)) {
+      e.preventDefault(); map?.open();
     } else if (mode === 'level' && !e.repeat) {
       if (isCode(e, k, 'KeyQ', 'q')) { e.preventDefault(); squeeze(); }
       else if (isCode(e, k, 'KeyT', 't')) { e.preventDefault(); probe(); }
@@ -639,6 +686,7 @@ export function createUI(ctx, deps) {
       if (!comfortLegend.hidden) syncComfortSub();
       moistureLegend.hidden = !(mode === 'level' && props?.overlay?.moisture);
       caption.update(dt);
+      intro.update(dt);
       floatRead.update(dt);
       // the alarm banner: while the house is dark, and a while after an alarm symptom
       const dark = mode === 'level' && farm?.power && farm.power.on === false;
@@ -659,7 +707,7 @@ export function createUI(ctx, deps) {
     get backgroundPanels() { return panels.backgroundCount; },
     backgroundPanelIds: () => panels.backgroundIds?.() || [],
     /** 'sign' | 'paused' | 'panel' | null: the open panel's clock class (PHASE2.md §2). */
-    get panelKind() { return title.open ? 'paused' : panels.openKind; },
+    get panelKind() { return title.open || intro.active ? 'paused' : panels.openKind; },
     get taskIndex() { return tasks.index; },
     get mode() { return mode; },
     setMode,
@@ -671,6 +719,16 @@ export function createUI(ctx, deps) {
     toggleView,
     replayLevel,
     caption: (msg, s) => caption.show(msg, s),
+    // Phase 5 (PHASE5.md §8.6): the hubs other packages add to, and the screens they open
+    menu,
+    title,
+    map,
+    intro,
+    openSettings: (tab) => (settingsUI ? settingsUI.open(tab) : false),
+    openGuide: (section) => (guideUI ? guideUI.open(section) : false),
+    openSaves: () => openPanel('saves'),
+    /** The panels whose machine job runs now (open or in the background): the sound of the wash bay's washer. */
+    busyPanels: () => panels.busyIds?.() || [],
     /** PHASE4.md §15.3: the keys of the prompt's extra pills now ('Shift+E', 'G'), for the harness. */
     get promptAlts() { return prompt.alts; },
     get promptId() { return prompt.id; },
