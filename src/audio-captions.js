@@ -7,6 +7,7 @@
 //
 //   const caps = createCaptions({ emit(p), now() })   now: real seconds (performance.now / 1000 in the game)
 //   caps.update(G)      G: { powerOff, rain, genRun, genNear, catching, washer, inside, flock (flockKey()), day }
+//   caps.power(off)     EV.POWER: the alarm's caption the moment the house goes dark (not on the next frame)
 //   caps.raise(key, { x, z, at })   an event key (thunder, the truck, the phone, the generator starting or stopping); at: a
 //                       real time to raise it (a rumble heard after its flash)
 //   caps.list()         the captions raised, with their real time [{ key, text, t }]
@@ -115,6 +116,11 @@ export function createCaptions({ emit, now = () => Date.now() / 1000, gap = CAPT
       if (f && (f !== was.flock || !was.inside)) push(f);
       was.flock = f; was.inside = !!G.inside;
       flush(G);
+    },
+    /** the house's power changed (EV.POWER, at once: no frame needed): a dark house raises the alarm's caption now */
+    power(off) {
+      if (off && !was.powerOff) { was.powerOff = true; darkAt = now(); darkLate = false; push('alarm'); flush(null); }
+      else if (!off) { was.powerOff = false; darkAt = -1; }
     },
     /** an event key for the generator's start, so 'running' does not follow it at once */
     genStarted() { genStartAt = now(); },

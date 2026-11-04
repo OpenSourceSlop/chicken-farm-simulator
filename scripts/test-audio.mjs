@@ -521,6 +521,14 @@ function phase5Tests() {
     for (let i = 0; i < 5; i++) audio.update(0.05);
     assert(!audio.state().started && audio.state().muted, 'no sound, no context');
     assert(seen.some((p) => p.key === 'alarm' && p.text === 'Alarm in the house') && audio.captions()[0].key === 'alarm', `captions ${JSON.stringify(seen)}`);
+    // EV.POWER raises it at once, before any frame (a slow frame on a software renderer must not delay it)
+    farm.power.on = true; for (let i = 0; i < 5; i++) audio.update(0.05);
+    const n = seen.length;
+    await new Promise((r) => setTimeout(r, CAPTION_GAP * 1000 + 100));
+    farm.power.on = false; events.emit(EV.POWER, { on: false, source: null, mains: false });
+    assert(seen.length === n + 1 && seen[n].key === 'alarm', `the cut's caption with no frame between: ${JSON.stringify(seen.slice(n))}`);
+    for (let i = 0; i < 5; i++) audio.update(0.05);
+    assert(seen.length === n + 1, 'the next frames do not raise it twice');
   });
 
   test('p5: the node count stays at most 230 and unchanged after ten minutes of fake play through every situation', () => {

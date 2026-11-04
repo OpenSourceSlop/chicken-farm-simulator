@@ -206,6 +206,11 @@ export function createAudio(ctx, deps = {}) {
       cue('truck');
       caps.raise(p.phase === 'arrive' ? 'truckIn' : 'truckOut');
     });
+    events.on(EV.POWER, (p) => { // the dark house's alarm caption at once (a slow frame must not delay it)
+      if (farm?.mode !== 'level' || !p) return;
+      G.powerOff = p.on === false;
+      caps.power(p.on === false);
+    });
     events.on(EV.LETTER, () => { // the office phone rings when a letter comes, heard within 30 m of the desk
       if (!ringHeard(player.position)) return;
       cue('ring', PLACES.desk.x, PLACES.desk.z);
