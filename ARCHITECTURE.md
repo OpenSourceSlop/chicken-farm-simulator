@@ -394,7 +394,7 @@ hour)` (`level.debug.freeRun`) and `config` (the config module: steps files read
   hold in a heated week-2 house (PHASE3.md §6.16). `minVentW3` heat deaths ≤ 0.07 % (one bird over 0.05).
 
 ### Tests and harness
-- `npm test` = test-contracts, test-sim (Phase 2 unchanged: ratio 4.873, FCR 0.840), test-jobs (26), test-level,
+- `npm test` = test-contracts, test-sim (Phase 2 unchanged: ratio 4.873, FCR 0.840), test-jobs (28: with the job strips of 13 days and the outcome rules), test-level,
   **test-cycle** (climate, growth and plan checks; 23 profiles incl. the ideal: every level passes, harvest
   2,887 g live, FCR 1.58, mortality 2.35 %, EPEF 427; determinism; whole cycle 2.5 s; 24 h skip about 80 ms;
   level starts 8–140 KB, the day 41 blob 149 KB) and **test-run** (the chaining tests on the real sim: a
