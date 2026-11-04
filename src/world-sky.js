@@ -157,17 +157,46 @@ export function createSky(ctx) {
   }
   setShadowHalf(35);
 
-  function update(dt, env, view) {
+  // Phase 4 (PHASE4.md §8.1, §8.6): rain greys and dims the sky, the fog closes in and the sun weakens; a
+  // lightning flash lifts the whole sky for a moment; the hot season's midday sun is harder. wx = { rain 0..1,
+  // flash 0..1, hot 0|1 }; all zero (the sandbox, a normal run) leaves every key exactly as Phase 1's.
+  function weather(wx, hour) {
+    const r = wx.rain || 0, f = wx.flash || 0, hot = wx.hot || 0;
+    if (r > 0) {
+      for (const c of [k.zen, k.hor, k.hs]) { const l = 0.3 * c.r + 0.59 * c.g + 0.11 * c.b; c.lerp(grey.setRGB(l * 0.95, l, l * 1.06), 0.82 * r).multiplyScalar(1 - 0.38 * r); }
+      k.hg.lerp(grey.setRGB(0.05, 0.06, 0.05), 0.5 * r);
+      k.sc.lerp(grey.setRGB(0.7, 0.74, 0.8), 0.7 * r);
+      k.si *= 1 - 0.9 * r;
+      k.hi *= 1 + 0.08 * r;               // flat, shadowless storm light
+      scene.fog.near += (22 - scene.fog.near) * r;
+      scene.fog.far += (170 - scene.fog.far) * r;
+    }
+    if (hot > 0) {
+      const mid = smoothstep(9.5, 11.5, hour) * (1 - smoothstep(15.5, 17.0, hour));
+      k.si *= 1 + 0.14 * mid; k.hi *= 1 - 0.1 * mid;
+      k.sc.lerp(grey.setRGB(1, 0.99, 0.93), 0.5 * mid);
+      k.hor.lerp(grey.setRGB(0.86, 0.84, 0.76), 0.35 * mid);   // a pale, hazy horizon
+    }
+    if (f > 0) {
+      for (const c of [k.zen, k.hor, k.hs]) c.lerp(grey.setRGB(0.82, 0.84, 1.0), 0.75 * f);
+      k.hi += 2.4 * f;
+    }
+  }
+  const grey = new THREE.Color();
+  const calm = { rain: 0, flash: 0, hot: 0 };
+
+  function update(dt, env, view, wx = calm) {
     const hour = env.hour;
     sampleKeys(hour);
     sampleFog(hour);
+    if (wx.rain > 0 || wx.flash > 0 || wx.hot > 0) weather(wx, hour);
     sunDirAt(hour, sunDir);
     moonDirAt(hour, moonDir);
 
     // Sun strength fades out near the horizon; the moon takes over after dusk
     const sunI = k.si * smoothstep(-0.03, 0.14, sunDir.y);
     const night = 1 - smoothstep(-0.12, 0.04, sunDir.y);
-    const moonI = 0.85 * smoothstep(0.0, 0.3, moonDir.y) * night;
+    const moonI = 0.85 * smoothstep(0.0, 0.3, moonDir.y) * night * (1 - 0.8 * (wx.rain || 0));
     state.night = night;
     const useSun = sunI >= moonI;
     lightDir.copy(useSun ? sunDir : moonDir);
@@ -190,11 +219,11 @@ export function createSky(ctx) {
     uniforms.uBottom.value.copy(k.hor).multiplyScalar(0.8);
     uniforms.uSunDir.value.copy(sunDir);
     uniforms.uSunColor.value.copy(k.sc).lerp(warm, 1 - smoothstep(0.0, 0.5, sunDir.y));
-    uniforms.uSunVis.value = smoothstep(-0.06, 0.02, sunDir.y);
+    uniforms.uSunVis.value = smoothstep(-0.06, 0.02, sunDir.y) * (1 - 0.9 * (wx.rain || 0));
     uniforms.uGlow.value = 0.6 + 1.6 * (1 - smoothstep(0.05, 0.45, sunDir.y));
     uniforms.uMoonDir.value.copy(moonDir);
-    uniforms.uMoonVis.value = night * smoothstep(-0.05, 0.08, moonDir.y);
-    starMat.opacity = night * 0.95;
+    uniforms.uMoonVis.value = night * smoothstep(-0.05, 0.08, moonDir.y) * (1 - (wx.rain || 0));
+    starMat.opacity = night * 0.95 * (1 - (wx.rain || 0));
     stars.visible = starMat.opacity > 0.01;
     scene.fog.color.copy(k.hor);
     scene.background.copy(k.hor);

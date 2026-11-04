@@ -37,7 +37,7 @@
 //   serialize() / restore(d)  what the save needs that the farm model does not hold
 import * as THREE from 'three';
 import { EV } from './events.js';
-import { SPOTS2, HEATERS, DRINKER_LINES_Z, BROOD_BOUNDS, LEVEL1, FLOOR_GRID } from './config.js';
+import { SPOTS2, SPOTS4, HEATERS, DRINKER_LINES_Z, BROOD_BOUNDS, LEVEL1, FLOOR_GRID } from './config.js';
 import { Batch, makePropMaterials, createBoxPool } from './props-kit.js';
 import { withOcclusionFade } from './world-util.js';
 import { buildFloorStates } from './props-floor.js';
@@ -113,6 +113,10 @@ export function buildProps(ctx, { house } = {}) {
   const reg = (it) => ctx.interact && ctx.interact.add(it);
   const lv = () => st.level;
   for (const it of boards.interactables) reg({ ...it, enabled: lv });
+  // Phase 4: the power cut board by the generator, read in the rainy season only (the ui opens the sign panel
+  // registered under 'sign-power', content-signs-cond.js BOARDS_COND)
+  reg({ id: 'sign-power', label: SPOTS4.signPower.label, x: SPOTS4.signPower.x, z: SPOTS4.signPower.z, radius: 2.0, inside: false, verb: 'Read the',
+    enabled: () => st.level && ctx.farm?.condition === 'rainy' });
   const panel = (id, spot, radius, extra = {}) => reg({ id, label: spot.label, x: spot.x, z: spot.z, radius, inside: spot.inside, enabled: lv, ...extra });
   panel('feeder-box', SPOTS2.feederBox, 2.0, { verb: 'Use the' });
   panel('water-supply', SPOTS2.waterSupply, 1.8, { verb: 'Use the' });
@@ -305,7 +309,7 @@ export function buildProps(ctx, { house } = {}) {
     triggers.update(dt, true);
     if (house && house.lineHeights) for (let i = 0; i < 4; i++) lineY[i] = house.lineHeights[i];
     equip.update(dt, f, env, lineY);
-    boards.update(dt);
+    boards.update(dt, f, env);
     // Phase 3
     const roll = house?.debug?.brooders?.curtainRoll ?? 0;
     equip3.update(dt, f, env, { moving: Math.abs(roll - (st.roll ?? roll)) > 1e-4 });

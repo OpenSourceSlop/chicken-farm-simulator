@@ -5,9 +5,10 @@
 // boards and equipment plates the current job links to (props.highlight). Owner: package "props".
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { SPOTS, SPOTS2, SPOTS3, HOUSE_BOUNDS } from './config.js';
+import { SPOTS, SPOTS2, SPOTS3, SPOTS4, HOUSE_BOUNDS, PHASE4 } from './config.js';
 import { BOARDS, sourceLabel } from './content-signs.js';
-import { BOARDS_CYCLE } from './content-signs-cycle.js';
+import { BOARDS_CYCLE, boardsForDay } from './content-signs-cycle.js';
+import { BOARDS_COND } from './content-signs-cond.js';
 import { pictogram3 } from './props-pictos.js';
 import { Batch, canvasTexture, roundRect, FONT, instancedParts } from './props-kit.js';
 
@@ -20,7 +21,9 @@ const OUT_TILT = 0.3;                    // outdoor boards lean back toward the 
 const HEAD = { 'sign-water': '#2f6fb5', 'sign-vent': '#3d7f6f', 'sign-litter': '#a8742c', 'sign-chicks': '#c4471d', 'sign-health': '#8c3b5a',
   // Phase 3 boards (BOARDS_CYCLE)
   'sign-plan': '#4a5f8c', 'sign-light': '#b08a1c', 'sign-curtain': '#3d7f6f', 'sign-legs': '#8c5a3b', 'sign-air': '#4f7f9a',
-  'sign-droppings': '#7a5a36', 'sign-heat': '#c4471d', 'sign-feed': '#a8742c', 'sign-catch': '#2f6fb5', 'sign-clean': '#2f7a6a' };
+  'sign-droppings': '#7a5a36', 'sign-heat': '#c4471d', 'sign-feed': '#a8742c', 'sign-catch': '#2f6fb5', 'sign-clean': '#2f7a6a',
+  // Phase 4 (content-signs-cond.js BOARDS_COND): the rainy season's power cut board by the generator
+  'sign-power': '#8a2f2a' };
 
 /** Board ids and where they hang. inside: true = north wall, false = outside the south wall. */
 export const BOARD_SPOTS = [
@@ -39,6 +42,8 @@ export const BOARD_SPOTS3 = [
   { id: 'sign-plan', ...SPOTS3.signPlan }, { id: 'sign-feed', ...SPOTS3.signFeed }, { id: 'sign-catch', ...SPOTS3.signCatch },
   { id: 'sign-clean', ...SPOTS3.signClean },
 ];
+/** Phase 4 (content-signs-cond.js BOARDS_COND): the power cut board beside the generator, rainy season only. */
+export const BOARD_SPOTS4 = [{ id: 'sign-power', ...SPOTS4.signPower }];
 
 // A short line for the 3D board: the first sentence, or the part before a colon when that part
 // says enough on its own. The full text is on the E panel.
@@ -116,7 +121,9 @@ function pictogram(g, id, x, y, w, h) {
   g.restore();
 }
 
-function paintBoard(g, id, ox, oy, B = BOARDS[id]) {
+/** Paint one board face at (ox, oy) of the atlas; returns what it shows (the harness reads the face text). */
+export function paintBoard(g, id, ox, oy, B = BOARDS[id]) {
+  const shownText = [];
   g.save();
   g.translate(ox, oy);
   const w = PX_W, h = PX_H;
@@ -156,10 +163,13 @@ function paintBoard(g, id, ox, oy, B = BOARDS[id]) {
     g.fillText(`Source: ${sourceLabel(it.source)}`, left + 22, y + 8);
     y += 34;
     shown++;
+    shownText.push(lines.join(' '));
   }
   g.fillStyle = '#5b6a62'; g.font = `600 22px ${FONT}`; g.textAlign = 'right';
-  g.fillText(shown < B.items.length ? `${B.items.length - shown} more facts: stand here and press E` : 'Stand here and press E to read', w - 44, h - 44);
+  const foot = shown < B.items.length ? `${B.items.length - shown} more facts: stand here and press E` : 'Stand here and press E to read';
+  g.fillText(foot, w - 44, h - 44);
   g.restore();
+  return { title: B.title, lines: shownText, foot, total: B.items.length };
 }
 
 function tabTexture() {
@@ -171,17 +181,19 @@ function tabTexture() {
 }
 
 // One atlas (2 columns of 1024 x 710 boards, as many rows as needed) and one merged mesh per board set.
-function boardFaces(stat, spots, data, name) {
-  const rows = Math.ceil(spots.length / 2), AH = rows * (PX_H + 2);
-  const atlas = canvasTexture(2048, AH, (g) => {
-    spots.forEach((s, i) => paintBoard(g, s.id, (i % 2) * PX_W, Math.floor(i / 2) * (PX_H + 2), data[s.id]));
-  });
+// Phase 4: repaint(data) paints the atlas again from another set of boards (boardsForDay); `painted` keeps what
+// each face shows. `cols` 2 (Phase 2 / 3 sets) or 1 (the one Phase 4 board).
+function boardFaces(stat, spots, data, name, cols = 2) {
+  const rows = Math.ceil(spots.length / cols), AH = rows * (PX_H + 2);
+  const painted = {};
+  const paintAll = (g, d) => spots.forEach((s, i) => { painted[s.id] = paintBoard(g, s.id, (i % cols) * PX_W, Math.floor(i / cols) * (PX_H + 2), d[s.id]); });
+  const atlas = canvasTexture(PX_W * cols, AH, (g) => paintAll(g, data));
   const geos = [];
   const tabSpots = new Map();
   spots.forEach((s, i) => {
     const pg = new THREE.PlaneGeometry(BOARD_W, BOARD_H);
-    const u0 = (i % 2) * 0.5, u1 = u0 + 0.5;
-    const vTop = 1 - (Math.floor(i / 2) * (PX_H + 2)) / AH, vBot = vTop - PX_H / AH;
+    const u0 = (i % cols) / cols, u1 = u0 + 1 / cols;
+    const vTop = 1 - (Math.floor(i / cols) * (PX_H + 2)) / AH, vBot = vTop - PX_H / AH;
     const uv = pg.attributes.uv;
     for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) ? u1 : u0, uv.getY(k) ? vTop : vBot);
     const M = new THREE.Matrix4();
@@ -213,8 +225,17 @@ function boardFaces(stat, spots, data, name) {
   const faces = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ map: atlas }));
   faces.name = name;
   faces.receiveShadow = true;
-  return { faces, tabSpots };
+  function repaint(d) {
+    const g = atlas.image.getContext('2d');
+    g.clearRect(0, 0, atlas.image.width, atlas.image.height);
+    paintAll(g, d);
+    atlas.needsUpdate = true;
+  }
+  return { faces, tabSpots, painted, repaint, ids: spots.map((s) => s.id) };
 }
+
+// What a set of faces shows of a board set (title, kicker, every line and its source): a repaint only when it changed.
+const signature = (ids, d) => JSON.stringify(ids.map((id) => { const b = d[id]; return b ? [b.title, b.kicker || '', b.items.map((x) => [x.text, x.source])] : null; }));
 
 /**
  * @returns {{ group, interactables, tabs: { set(ids) }, tabSpots: Map, frames: Batch }}
@@ -226,7 +247,15 @@ export function buildBoards(stat) {
   // Phase 3: the ten new boards in their own atlas (hidden with the props in the sandbox)
   const p3 = boardFaces(stat, BOARD_SPOTS3, BOARDS_CYCLE, 'props-board-faces-3');
   group.add(p2.faces, p3.faces);
-  const tabSpots = new Map([...p2.tabSpots, ...p3.tabSpots]);
+  // Phase 4: the rainy season's power cut board by the generator (its own posts, shown only in that run)
+  const frame4 = new Batch();
+  const p4 = boardFaces(frame4, BOARD_SPOTS4, BOARDS_COND, 'props-board-faces-4', 1);
+  const power = new THREE.Group();
+  power.name = 'props-board-power';
+  power.add(p4.faces, frame4.mesh(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), { cast: true, receive: true }));
+  power.visible = false;
+  group.add(power);
+  const tabSpots = new Map([...p2.tabSpots, ...p3.tabSpots, ...p4.tabSpots]);
 
   // Phase 1 boards and the equipment plates get tabs too (their 3D objects are elsewhere)
   tabSpots.set('sign-brooder', { x: SPOTS.signBrooder.x + 0.42, y: 1.97, z: FACE_Z + 0.06, ry: 0, rx: 0 });
@@ -248,15 +277,43 @@ export function buildBoards(stat) {
     id: s.id, label: s.label, x: s.x, z: s.z, radius: 2.0, inside: s.inside, verb: 'Read the',
   }));
 
+  // Phase 4 (PHASE4.md §8.9): the faces follow the one merge, boardsForDay(day, farm.condition): repainted when the
+  // condition, config.PHASE4.tunedSigns or the day's lines change (every level start lands here too). A normal run
+  // with the switch off paints Phase 3's boards (BOARDS / BOARDS_CYCLE), so its faces are byte-for-byte as before.
+  const sets = [{ f: p2, base: BOARDS }, { f: p3, base: BOARDS_CYCLE }];
+  for (const st of sets) st.sig = signature(st.f.ids, st.base);
+  let key = '', powerSig = '', repaints = 0;
+  function follow(farm, env) {
+    const level = !!(farm && farm.mode === 'level');
+    const cond = level && farm.condition ? farm.condition : null, tuned = !!PHASE4.tunedSigns;
+    const day = env ? env.dayNumber ?? 0 : 0;
+    const k = `${cond}|${tuned}|${day}`;
+    power.visible = cond === 'rainy';
+    if (k === key) return;
+    key = k;
+    const merged = cond || tuned ? boardsForDay(day, cond) : null;
+    for (const st of sets) {
+      const d = merged || st.base, sig = signature(st.f.ids, d);
+      if (sig !== st.sig) { st.sig = sig; st.f.repaint(d); repaints++; }
+    }
+    if (cond === 'rainy' && merged && merged['sign-power']) {
+      const sig = signature(p4.ids, merged);
+      if (sig !== powerSig) { powerSig = sig; p4.repaint(merged); repaints++; }
+    }
+  }
+
   return {
     group,
     interactables,
     tabSpots,
+    /** Phase 4: what each 3D face shows now ({ title, lines, foot, total } by board id) and the repaint count. */
+    faces: { get painted() { return { ...p2.painted, ...p3.painted, ...p4.painted }; }, get repaints() { return repaints; }, power },
     /** Show the facts tab on these ids (unknown ids are ignored). */
     setTabs(ids) {
       shown = ids.filter((id) => tabSpots.has(id)).slice(0, MAX_TABS);
     },
-    update(dt) {
+    update(dt, farm, env) {
+      follow(farm, env);
       pulse += dt;
       const bob = 0.012 * Math.sin(pulse * 3.2);
       for (let i = 0; i < MAX_TABS; i++) {

@@ -6,6 +6,7 @@ import { COLORS, PAD, HOUSE_BOUNDS } from './config.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTexture, rng, smooth } from './house-kit.js';
 import { T, H } from './house-shell.js';
+import { powerOff } from './world-cond.js';
 
 const { xMin, zMin, zMax } = HOUSE_BOUNDS;
 const PAD_T = 0.15;
@@ -131,7 +132,9 @@ export function buildPad(kit) {
     get wet() { return wet; },
     overflow: over,
     update(dt, env) {
-      wet = smooth(wet, env.padOn ? 1 : 0, env.padOn ? 0.8 : 0.25, dt);
+      // Phase 4: in a power cut the pump stops: the water sheet stops at once, the pad drains and lightens
+      const dark = powerOff(kit.farm, env), running = env.padOn && !dark;
+      wet = smooth(wet, running ? 1 : 0, running ? 0.8 : 0.25, dt);
       // Phase 3, level only: the share of the pad with water on it (env.padWorking): the sections the
       // farm's pad.check calls dry are the first ones from the north side
       const level = kit.farm && kit.farm.mode === 'level';
@@ -141,7 +144,7 @@ export function buildPad(kit) {
       // the colour stays the dry one: the shader darkens the wet sections (wetness x 0.75, as Phase 1's
       // colour lerp; the small emissive floor follows the same factor)
       padU.uWet.value = wet;
-      sheen.visible = wet > 0.02 && dryN < PAD_SECTIONS;
+      sheen.visible = !dark && wet > 0.02 && dryN < PAD_SECTIONS;
       gutterWater.visible = wet > 0.3 || (level && !!kit.farm.house?.padFloatStuck);
       if (sheen.visible) {
         flow = (flow + dt * 0.22) % 1;

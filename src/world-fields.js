@@ -5,6 +5,9 @@ import { COLORS } from './config.js';
 import { GeoBuilder, rng, fbm, rectDist, unitBox, unitCone } from './world-util.js';
 import { F, CORRIDOR, PUBLIC_ROAD_Z, PADDY_Y, LOW_Y, GROVES, POND, terrainHeight } from './world-layout.js';
 import { treeGeometry } from './world-trees.js';
+import { WATER_BASE } from './world-season.js';
+
+const DRY_SEED = new THREE.Color(0xb9a97a); // Phase 4: the hot season's seedling plots, dry and pale
 
 const EXCLUDE = [
   { x0: F.xMin - 5.4, x1: F.xMax + 5.4, z0: F.zMin - 5.4, z1: F.zMax + 5.4 },
@@ -114,11 +117,12 @@ function buildPaddies(group, mats) {
   buildPond(water, rice);
   const waterMat = new THREE.MeshPhongMaterial({ color: 0x9cc4d4, specular: 0x4c565c, shininess: 160 });
   const seedMat = new THREE.MeshPhongMaterial({ map: seedlingTexture(), specular: 0x3c4448, shininess: 140 });
-  group.add(rice.mesh(mats.flat, { cast: false, receive: false, name: 'paddy-rice' }));
+  const riceMesh = rice.mesh(mats.flat, { cast: false, receive: false, name: 'paddy-rice' });
+  group.add(riceMesh);
   group.add(water.mesh(waterMat, { cast: false, receive: false, name: 'paddy-water' }));
   group.add(seed.mesh(seedMat, { cast: false, receive: false, name: 'paddy-seedlings' }));
   group.add(bunds.mesh(mats.flat, { cast: false, receive: false, name: 'paddy-bunds' }));
-  return { plots, waterMat, seedMat };
+  return { plots, waterMat, seedMat, riceMesh };
 }
 
 // Farm reservoir pond: water surface, lotus pads and flowers, reeds along the bank
@@ -291,19 +295,23 @@ function buildHills(group) {
 export function buildFields(ctx, mats) {
   const group = new THREE.Group();
   group.name = 'fields';
-  const { plots, waterMat, seedMat } = buildPaddies(group, mats);
+  const { plots, waterMat, seedMat, riceMesh } = buildPaddies(group, mats);
   buildTreeline(group, mats, plots);
   const hillMat = buildHills(group);
   const base = { water: new THREE.Color(0x4a8c98), seed: new THREE.Color(0xffffff), hill: new THREE.Color(0x5f7f6a) };
   const tmp = new THREE.Color();
   return {
     group,
-    // Water mirrors the sky colour; hills fade into the haze.
-    update(sky) {
+    riceMesh,          // Phase 4 (world-season.js): the rice plots' colours by season
+    // Water mirrors the sky colour; hills fade into the haze. Phase 4: `season` 'hot' = low, muddy water and pale,
+    // dry seedling plots; 'rainy' = full, darker water (null: Phase 1-3 exactly).
+    update(sky, season = null) {
       const light = 0.35 + 0.65 * sky.state.dayLight;
       tmp.copy(sky.horizon).lerp(sky.zenith, 0.35);
-      waterMat.color.copy(base.water).lerp(tmp, 0.38).multiplyScalar(0.5 + 0.5 * light);
+      const wb = season && WATER_BASE[season] ? WATER_BASE[season] : base.water;
+      waterMat.color.copy(wb).lerp(tmp, season === 'hot' ? 0.14 : 0.38).multiplyScalar(0.5 + 0.5 * light);
       seedMat.color.copy(base.seed).lerp(tmp, 0.3).multiplyScalar(0.45 + 0.55 * light);
+      if (season === 'hot') seedMat.color.lerp(DRY_SEED, 0.55);
       hillMat.color.copy(sky.horizon).lerp(base.hill, 0.42 * light + 0.15).multiplyScalar(0.85 + 0.1 * light);
     },
   };

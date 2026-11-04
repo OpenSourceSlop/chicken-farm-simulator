@@ -116,7 +116,8 @@ function office(flat, metal, glass, colliders, signTex, group) {
   colliders.push({ type: 'circle', x: x0 - 0.65, z: z0 + 0.6, r: 0.45 });
 }
 
-function generatorShed(flat, metal, colliders) {
+// set: the generator set's own builder (Phase 4: it shakes a little while it runs; same material, same look)
+function generatorShed(flat, metal, colliders, set = flat) {
   const G = FARM.generator, x0 = G.x - G.w / 2, x1 = G.x + G.w / 2, z0 = G.z - G.d / 2, z1 = G.z + G.d / 2;
   flat.boxMM(x0 - 0.2, x1 + 0.2, 0, 0.15, z0 - 0.2, z1 + 0.2, COLORS.concrete);
   // block walls on three sides, open to the south
@@ -131,10 +132,10 @@ function generatorShed(flat, metal, colliders) {
   metal.add(new THREE.BoxGeometry(1, 1, 1), 0xb7bfc5, { x: G.x, y: 2.8, z: G.z, sx: x1 - x0 + over * 2, sy: 0.06, sz: Math.hypot(len, rise), rx: Math.atan2(rise, len) * 1, order: 'XYZ' });
   // generator set: base frame, engine housing, radiator, control box, exhaust through the roof
   flat.boxMM(G.x - 1.3, G.x + 1.3, 0.15, 0.3, G.z - 0.5, G.z + 0.5, 0x3a3e42);
-  flat.boxMM(G.x - 1.2, G.x + 1.2, 0.3, 1.45, G.z - 0.48, G.z + 0.48, 0xd9a520, { jitter: 0.03 });
-  flat.boxMM(G.x + 1.2, G.x + 1.24, 0.45, 1.3, G.z - 0.4, G.z + 0.4, 0x2b2f33);
-  for (let i = 0; i < 6; i++) flat.boxMM(G.x - 0.8 + i * 0.25, G.x - 0.7 + i * 0.25, 0.6, 1.2, G.z + 0.48, G.z + 0.5, 0xa9821a);
-  flat.boxMM(G.x - 1.05, G.x - 0.55, 1.45, 1.75, G.z - 0.3, G.z + 0.1, 0x3a3e42);
+  set.boxMM(G.x - 1.2, G.x + 1.2, 0.3, 1.45, G.z - 0.48, G.z + 0.48, 0xd9a520, { jitter: 0.03 });
+  set.boxMM(G.x + 1.2, G.x + 1.24, 0.45, 1.3, G.z - 0.4, G.z + 0.4, 0x2b2f33);
+  for (let i = 0; i < 6; i++) set.boxMM(G.x - 0.8 + i * 0.25, G.x - 0.7 + i * 0.25, 0.6, 1.2, G.z + 0.48, G.z + 0.5, 0xa9821a);
+  set.boxMM(G.x - 1.05, G.x - 0.55, 1.45, 1.75, G.z - 0.3, G.z + 0.1, 0x3a3e42);
   metal.pipe(G.x - 0.2, 1.45, G.z - 0.2, G.x - 0.2, 3.4, G.z - 0.2, 0.06, 0x55595c, 6);
   metal.add(unitCone(6), 0x55595c, { x: G.x - 0.2, y: 3.5, z: G.z - 0.2, sx: 0.14, sy: 0.15, sz: 0.14 });
   // fuel drum and a hazard sign
@@ -195,9 +196,15 @@ function waterTower(flat, metal, colliders) {
 }
 
 export function buildBuildings(group, mats, colliders, signTex) {
-  const flat = new GeoBuilder(), metal = new GeoBuilder(), glass = new GeoBuilder();
+  const flat = new GeoBuilder(), metal = new GeoBuilder(), glass = new GeoBuilder(), set = new GeoBuilder();
   office(flat, metal, glass, colliders, signTex, group);
-  generatorShed(flat, metal, colliders);
+  generatorShed(flat, metal, colliders, set);
+  // the generator set in its own mesh about its own base, so the Phase 4 scene can shake it while it runs
+  const G = FARM.generator, setMesh = set.mesh(mats.flatFade, { name: 'generator-set' });
+  setMesh.geometry.translate(-G.x, -0.3, -G.z);
+  setMesh.position.set(G.x, 0.3, G.z);
+  setMesh.matrixAutoUpdate = true;
+  group.add(setMesh);
   waterTower(flat, metal, colliders);
   group.add(flat.mesh(mats.flatFade, { name: 'buildings' }));
   group.add(metal.mesh(mats.metalFade, { name: 'buildings-metal' }));

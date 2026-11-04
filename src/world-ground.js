@@ -241,13 +241,17 @@ function buildTufts() {
 export function buildGround(ctx, mats) {
   const group = new THREE.Group();
   group.name = 'ground';
-  const terrain = buildTerrain().mesh(mats.flat, { cast: false, receive: true, name: 'terrain' });
+  // the ground's own copy of the flat material (the same shader program): Phase 4's wet look darkens it alone
+  const groundMat = mats.flat.clone();
+  const terrain = buildTerrain().mesh(groundMat, { cast: false, receive: true, name: 'terrain' });
   group.add(terrain);
   const roads = new GeoBuilder();
   buildRoad(roads);
   buildDoorPath(roads);
   buildPublicRoad(roads);
-  group.add(roads.mesh(mats.flat, { cast: false, receive: true, name: 'roads' }));
-  group.add(buildTufts());
+  group.add(roads.mesh(groundMat, { cast: false, receive: true, name: 'roads' }));
+  const tufts = buildTufts();
+  group.add(tufts);
+  group.userData = { terrain, tufts, groundMat }; // Phase 4 (world-season.js): the season's colours, the wet look
   return group;
 }
