@@ -6,8 +6,11 @@
 // acceptance tests (scripts/test-tuning.mjs, scripts/test-cycle.mjs) hold.
 import { runCycle } from '../src/farm-profiles-cycle.js';
 import { weightAt, feedStdGAt, targetTempAt, minVentM3hPer1000, PLACEMENT_DAY } from '../src/config.js';
-import { heatState, hotFrom, deathFrom } from '../src/farm-heat.js';
-import { makeEnv } from './cycle-refs.mjs';
+// Phase 4 (the sim package's re-run, PHASE4.md §2.7): the env checks with the tuned responses (farm-tuning.js; the env's
+// own wind chill switched to the Phase 4 one, as the farm runs it from Week 2) and the check flock's Phase 4 loads
+import { heatStateP4 as heatState, hotFromP4 as hotFrom, deathFromP4 as deathFrom } from '../src/farm-tuning.js';
+import { makeEnvP4 } from './tuning-refs.mjs';
+const makeEnv = (o) => { const W = makeEnvP4(o); W.env.setWindChillP4(true); return W; };
 
 const json = process.argv.includes('--json');
 const r1 = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10) / 10);
@@ -72,6 +75,7 @@ out.day37Evening = ['ideal3', 'ideal6', 'ideal6pad'].map((plan) => {
     const fans = day37eve ? (plan === 'ideal3' ? 3 : 6) : Math.max(0, Math.min(6, Math.ceil((env.outsideTemp - env.targetTemp - 1) / 1.2)));
     env.setFans(fans); env.setPad(day37eve ? plan === 'ideal6pad' : fans >= 6 && env.outsideTemp - env.targetTemp >= 12);
     env.skipHours(0.25);
+    { const s0 = heatState(env, { age: env.day - PLACEMENT_DAY, weightG: W.w() }); W.last.eMean = s0.eMean; }
     if (day37eve && Math.abs(env.hour - Math.round(env.hour)) < 1e-6) {
       const s = heatState(env, { age: a, weightG: w });
       rowsOut.push({ hour: Math.round(env.hour), out: r1(env.outsideTemp), outRh: r1(env.outsideRH), house: r1(env.houseTemp), rh: r1(env.houseRH), chill: r2(env.windChill), felt: r1(s.feltMean), e: r1(s.eMean), pant: r2(s.pantShare), deathPctH: r3(s.deathPerH * 100) });
