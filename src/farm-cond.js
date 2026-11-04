@@ -68,7 +68,7 @@ export function installConditions(farm, env) {
     farm.condition = opts.condition !== undefined ? (CONDITIONS[opts.condition] ? opts.condition : null) : opts.keepClock ? farm.condition : null;
     farm._lvCache = null;
     start(level, opts);
-    Object.assign(farm, fresh()); farm.condX = freshX(); farm.flock.claimed = 0; farm.flock.gradedOut = 0; farm.house.flapsClosed = false;
+    Object.assign(farm, fresh()); farm.condX = freshX(); farm.flock.claimed = 0; farm.house.flapsClosed = false;   // flock.gradedOut: once graded
     setPowerEnv(farm, env, true);
     installCondition(farm, env, { enter: true });
   };
@@ -95,7 +95,7 @@ export function installConditions(farm, env) {
     Object.assign(farm, fresh()); farm.condX = freshX();
     if (c) {
       Object.assign(farm.power, c.power); Object.assign(farm.generator, c.generator); Object.assign(farm.waterTank, c.waterTank); Object.assign(farm.brood, c.brood);
-      farm.house.flapsClosed = !!c.flapsClosed; farm.flock.claimed = c.claimed || 0; farm.flock.gradedOut = c.gradedOut || 0;
+      farm.house.flapsClosed = !!c.flapsClosed; farm.flock.claimed = c.claimed || 0; if (c.gradedOut) farm.flock.gradedOut = c.gradedOut;
       if (c.x) farm.condX = { ...freshX(), ...JSON.parse(JSON.stringify(c.x)) };
     }
     setPowerEnv(farm, env, false);
