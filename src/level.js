@@ -658,6 +658,8 @@ export function createLevel(ctx, deps = {}) {
       ui?.newRun?.();
       // Phase 4: the condition goes on the farm here and only here (null = the normal season, PHASE4.md §3.1)
       farm.start(d, { seed, condition: cond });
+      // the planning day of a condition run in the condition's weather (the farm keeps the plan level's own; PHASE4.md §1.2)
+      if (cond && is(d, PLAN_LEVEL)) { const w = conditionLevel(d, cond).weather; if (w && env.weather !== w) { env.setWeather(w); env.houseTemp = env.outsideTemp + 1; } }
       startAt = env.day;
       reached.add(`${d.id}@${d.startDay}`);
       engine.start(d.startDay, d);

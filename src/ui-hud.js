@@ -96,7 +96,8 @@ export function createHud(parent, env) {
     else if (env.dayNumber !== lastDay) { lastDay = env.dayNumber; setText(day, level && lastDay < 0 ? 'Prep day' : `Day ${fmt0(lastDay)}`); }
     const ct = level?.conditionText ? level.conditionText() : '';
     if (cond.hidden === !!ct) cond.hidden = !ct;
-    if (ct) { setText(cond, ct); setAttr(clock, 'aria-label', `Farm clock: ${day.textContent} · ${ct}`); }
+    if (ct) setText(cond, ct);
+    setAttr(clock, 'aria-label', ct ? `Farm clock: ${day.textContent} · ${ct}` : 'Farm clock');
     setText(time, env.timeLabel);
     if (!gauges) return;
     if (env.isNight !== lastNight) {
