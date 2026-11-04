@@ -716,6 +716,40 @@ before (test-sim byte-identical); the tuned model runs from Week 2 in every run 
   960 × 600). `p3-cycle.json`'s day-37 night round sets every fan and the pads at the fan panel at 18:00 (the evening rule),
   day 16's night two fans.
 
+- **Results on main** (960 × 600, seed 1, every run without console or page errors): `npm test` 346 ok;
+  `test-cond.mjs` (full) 30 ok; `npm run perf` alone: every budget (each condition's whole cycle 2.8–3.6 s, its weeks 4–5
+  24 h skip 55–77 ms). `p3-cycle.json` 140 PASS (plan 3,611 a week · brooding week 4.87 × · week 2 492 g, 0.25 % · week 3
+  984 g, 0.44 % · weeks 4–5 2,317 g, 0.61 % · harvest 2,884 g live, FCR 1.58, EPEF 426, 2.32 % lost · 21 rest days; day 37's
+  evening: every fan and the pads at 18:00, none panting at 18:31); `p3-replay.json` 16; `p4-hot.json` 43 (day 3: the house
+  33.0 °C under the pad and one fan in 38 °C air, the chicks 32.1 °C felt against their 33.2 °C row; day 10: the young birds
+  at 30.3 °C felt, none panting; the heat wave, the flush (the lines 32.4 °C before), the evening; the summary "Hot
+  season": 5,862 sold, 2,873 g, FCR 1.58, EPEF 427, 2.30 %); `p4-rainy.json` 17 (the cut at 15:10 stops the skip; the
+  power back on the generator 11.0 farm minutes after it, walking from the fan panel; the next skip stops at the mains'
+  return, back on the mains 18:14; the day's record "Power cut 15:10–18:10; generator on at 15:23; mains back 18:10,
+  generator stopped 18:14", "Rain in at the south inlets; storm flaps closed 14:28"; weeks 4–5 2,305 g, 0.71 %);
+  `p4-bad.json` 16 (35.9 g chicks, four stacks graded, 166 claimed, 5.22 × the measured weight, deaths and culls 1.35 %);
+  `p4-water.json` 15 (2.09 bar, 6.4 A on day 27, repaired by real clicks, the tank never under 90 %; weeks 4–5 2,278 g);
+  `p4-clarity.json` 14. Package and earlier files: `p4-run-conditions` 11, `p4-run-power` 7, `p4-run-ui` 11,
+  `p4-panels-cond` 27, `p4-panels-clarity` 6, `p4-panels-additions` 9, `p4-scene-events` 30, `p4-design-stubs` 10,
+  `p3-design-stubs` 5, `p3-scene-events` 14, `p3-panels-heat / harvest / week2 / clean / plan` 12 / 7 / 12 / 15 / 12,
+  `p3-run-title / chain / replay / ui` 8 / 9 / 4 / 16, `hotfix-steps` 21, `p2-level1` 58 (4.87 ×), `p2-level1-find` 18,
+  `p5-sound` 44; the Phase 1 `tour`, `phase1-jobs`, `cold-hot`, `p2-hooks` and `p4-scene-look` (shots reviewed) without errors.
+- **Play time of the real-input days** (as Phase 3 counts it): planning day 2.6 min · day 8 4.3 · day 16 4.4 · day 25
+  3.9 · day 37 4.1 · day 44 4.0 (p3-cycle); the hot season's day 3 1.1, day 10 1.1, day 30 2.5 min (p4-hot; each only the
+  condition's jobs of that day by real input).
+
+### Open (Phase 5 and later)
+- **Young birds' panting** (PHASE4.md §2.8 row 6): the first birds pant about 1.5–2 °C under general practice at 2–3 weeks;
+  kept (the week-3 warm afternoon's problem, its job and three env references rest on it); open question 14.1.
+- **The hot season played well costs work, not birds**: its ideal ends as the normal season does (EPEF 427 against 426);
+  its named mistakes fail their levels (no brooding air, Phase 3's young-bird plan, no pads, three fans at night).
+- **p4-bad.json tips the stacks by script** after the grading (p2-level1.json carries them by real input).
+- **Scene** (the package's notes): the storm flaps and the rust on line 4 are subtle at the default zoom; the tank's own
+  strip is above the follow camera (the float board at the tower's foot is the readable gauge); lightning timing is in
+  real seconds; rain streaks outside the house footprint still cross the cut-away view at its edges.
+- **Panels**: the generator and water-tank panels scroll vertically at 960 × 600 (never sideways).
+- The rainy season keeps week 2's rainy spell (damp air in its own weather); the hot season drops it.
+
 ### The design round's contracts (still the shape of the code)
 The contracts of the design round (in code before the packages; all of them hold as merged, the stubs replaced):
 - **Tuning contract**: `src/farm-tuning.js` (wind chill by age, speed and air temperature; a 4 °C panting ramp; heat and

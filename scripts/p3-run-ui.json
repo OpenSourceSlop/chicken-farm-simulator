@@ -17,7 +17,7 @@
   {"shot": "p3-ui-02-book-week2"},
   {"clickText": "Plan", "in": ".book"},
   {"advance": 0.2},
-  {"expect": "(() => { const t = document.querySelector('.book-page:not([hidden])').textContent; return /3,600 birds for sale every week/.test(t) && /3,611 birds for sale a week \\(contract 3,600\\)/.test(t) && /21 rest days \\(at least 21\\)/.test(t) && 'plan page: the contract, the sheet and the reply lines'; })()", "label": "Plan tab: the contract's terms and the reply's term lines"},
+  {"expect": "(() => { const t = document.querySelector('.book-page:not([hidden])').textContent; return /3,600 birds for sale every week/.test(t) && /3,611 birds for sale a week \\(contract 3,600(, at most 3,960)?\\)/.test(t) && /21 rest days \\(at least 21\\)/.test(t) && 'plan page: the contract, the sheet and the reply lines'; })()", "label": "Plan tab: the contract's terms and the reply's term lines"},
   {"shot": "p3-ui-03-book-plan"},
   {"clickText": "Letters", "in": ".book"},
   {"advance": 0.2},
