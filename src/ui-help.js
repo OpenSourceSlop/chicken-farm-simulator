@@ -8,10 +8,20 @@ import { ICONS } from './ui-icons.js';
 const HELP_SEEN_KEY = 'chicken-farm.help-dismissed';
 
 /**
- * The legend's rows from keys.js (PHASE5.md §4.3): `keys.rows(mode)` with the walk, turn, zoom, clock and floor-view keys
- * each on one row, so the level's list stays ten rows high in two columns. Every label is the key as bound now.
- * Returns [{ ids, keys: [label], what }] (ids: the keys.js actions of the row).
+ * The legend's rows from keys.js (PHASE5.md §4.3): `keys.rows(mode)` with the walk, turn, zoom and clock keys each on one
+ * row, so the level's list stays low in two columns (the floor, comfort and moisture views keep a row each: their names
+ * are what the farmer looks for). Every label is the key as bound now. Returns [{ ids, keys: [label], what }] (ids: the
+ * keys.js actions of the row).
  */
+/** The legend's own short words per action (one line each in a column of the two-column card; keys.js keeps the full
+ *  words for the Keys tab and the guide). */
+const SHORT = {
+  use: 'Use, pick up, read a sign', useDead: 'Pick up a dead bird in a chick job', bucket: 'Set the dead-bird bucket down',
+  squeeze: 'Squeeze a handful of litter', probe: 'Floor thermometer at your feet', lux: 'Light meter at bird height',
+  air: 'Air meter at bird height', notebook: 'Notebook: your readings', skills: 'Skill tree', floorView: 'Floor temperature view',
+  comfortView: 'Comfort view of the flock', moistureView: 'Litter moisture view', map: 'Farm map', nextJob: 'Next job',
+  help: 'Show or hide this legend', sound: 'Sound on or off', menu: 'Close a panel, or the game menu', run: 'Run (hold)',
+};
 export function legendRows(keys, mode = 'level') {
   if (!keys?.rows) return null;
   const rows = keys.rows(mode === 'sandbox' ? 'sandbox' : 'level');
@@ -21,10 +31,9 @@ export function legendRows(keys, mode = 'level') {
   const uniq = (a) => [...new Set(a.filter(Boolean))];
   const GROUPS = [
     { ids: ['forward', 'left', 'back', 'right'], keys: () => uniq(['forward', 'left', 'back', 'right'].map(main)), what: 'Walk, or click the ground' },
-    { ids: ['turnLeft', 'turnRight'], keys: () => uniq([main('turnLeft'), main('turnRight')]), what: 'Turn the view, or right-drag' },
+    { ids: ['turnLeft', 'turnRight'], keys: () => uniq([main('turnLeft'), main('turnRight')]), what: 'Turn, or right-drag' },
     { ids: ['zoomIn', 'zoomOut'], keys: () => uniq(['Wheel', main('zoomIn'), main('zoomOut')]), what: 'Zoom in and out' },
-    { ids: ['pause', 'speed1', 'speed4'], keys: () => uniq([main('pause'), main('speed1'), main('speed4')]), what: 'Pause the farm clock; 1× or 4× speed' },
-    { ids: ['floorView', 'comfortView', 'moistureView'], keys: () => uniq([main('floorView'), main('comfortView'), main('moistureView')]), what: 'Floor temperature, comfort and litter moisture views (once unlocked)' },
+    { ids: ['pause', 'speed1', 'speed4'], keys: () => uniq([main('pause'), main('speed1'), main('speed4')]), what: 'Pause the clock; 1× or 4×' },
   ];
   const out = [], done = new Set();
   for (const r of rows) {
@@ -37,7 +46,7 @@ export function legendRows(keys, mode = 'level') {
       continue;
     }
     done.add(r.id);
-    out.push({ ids: [r.id], keys: r.id === 'useDead' ? ['Shift', main('use')] : L(r.id).length ? L(r.id) : r.keys, what: r.what });
+    out.push({ ids: [r.id], keys: r.id === 'useDead' ? ['Shift', main('use')] : L(r.id).length ? L(r.id) : r.keys, what: SHORT[r.id] || r.what });
   }
   return out;
 }
