@@ -1050,6 +1050,9 @@ html.reduce-motion .boot-bar::before { animation: none; width: 100%; opacity: 0.
 .menu, .settings, .saves, .guide, .map { width: min(var(--p5-w, 560px), calc(100% - 2 * var(--gutter))); }
 .settings { --p5-w: 640px; } .guide { --p5-w: 720px; } .map { --p5-w: 1100px; }
 .menu-case, .settings-case, .saves-case, .guide-case, .map-case { padding: 20px 22px 18px; }
+/* Phase 5 integration (the cross-panel look): the five paused panels are solid like the result and the skill tree, so
+   the HUD cards and the farm do not show through behind their text */
+.menu-case, .settings-case, .saves-case, .guide-case, .map-case { background-color: var(--panel-solid); }
 .menu-head h2, .settings-head h2, .saves-head h2, .guide-head h2, .map-head h2 { margin: 0 0 4px; font: 600 20px/1.2 var(--font-display); color: var(--ink); }
 .menu-head p, .settings-head p, .saves-head p, .guide-head p, .map-head p { margin: 0 0 12px; color: var(--ink-dim); font-size: 14px; line-height: 1.45; }
 .settings-head, .saves-head, .guide-head, .map-head { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; padding-right: 92px; }

@@ -505,6 +505,20 @@ function phase5Tests() {
     assert(fl.join() === 'peeping,panting', `the flock on entering and on a change: ${fl}`);
   });
 
+  test('p5 integration: the dark house\'s alarm never waits for the 8 s gap (thunder 2 s before the cut); the next caption waits 8 s after it', () => {
+    let t = 50;
+    const got = [], caps = createCaptions({ emit: (p) => got.push([t, p.key]), now: () => t });
+    const G = { powerOff: false, rain: 1, inside: false };
+    const tick = (sec, o = {}) => { Object.assign(G, o); for (let i = 0; i < sec * 10; i++) { caps.update(G); t += 0.1; } };
+    tick(1); caps.raise('thunderNear'); tick(2);
+    caps.power(true);
+    const a = got.find((g) => g[1] === 'alarm');
+    assert(a && a[0] - 53 < 1 && got.length >= 2, `the alarm at once after a caption: ${JSON.stringify(got)}`);
+    tick(12);
+    const nx = got.find((g) => g[0] > a[0]);
+    assert(nx && nx[0] - a[0] >= CAPTION_GAP - 1e-6, `the next caption (the thunder still waiting) 8 s after the alarm: ${JSON.stringify(got)}`);
+  });
+
   test('p5: captions come from the game, not the audio graph: raised with the sound off and no AudioContext', async () => {
     const { createAudio } = await import('../src/audio.js');
     const store = new Map(), storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };

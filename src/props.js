@@ -145,7 +145,9 @@ export function buildProps(ctx, { house } = {}) {
   SPOTS2.drinkers.forEach((d, i) => panel(`drinker-${i}`, d, 1.3, { verb: 'Set' }));
   panel('silo', SPOTS2.silo, 2.2, { verb: 'Read the' });
   panel('office-desk', SPOTS2.officeDesk, 2.2, { verb: 'Use the' });
-  panel('chick-table', SPOTS2.chickTable, 1.8, { verb: 'Use the', enabled: () => st.level && st.delivered });
+  // the chick table's panel while its sample box stands (day 0: placement, the grading, a bad batch's claim): no prompt at
+  // the door on later days (Phase 5 integration: the catching night showed "Use the chick sample table" there)
+  panel('chick-table', SPOTS2.chickTable, 1.8, { verb: 'Use the', enabled: () => st.level && st.delivered && (ctx.env?.dayNumber ?? 0) <= 0 });
   panel('bird-scale', SPOTS2.birdScale, 1.8, { verb: 'Use the' });
   panel('litter-heap', SPOTS2.litterHeap, 2.4, { verb: 'Use the' });
   boxes.stacks.forEach((s) => reg({

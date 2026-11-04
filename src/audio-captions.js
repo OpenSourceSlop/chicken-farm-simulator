@@ -64,7 +64,7 @@ export function createCaptions({ emit, now = () => Date.now() / 1000, gap = CAPT
     if (!CAPTION_WORDS[key]) return false;
     const t = now(), at = Number.isFinite(o.at) ? o.at : t;
     if (queue.some((q) => q.key === key)) return false; // once per change: the same key is not queued twice
-    queue.push({ key, x: o.x, z: o.z, at, q: at });
+    queue.push({ key, x: o.x, z: o.z, at, q: at, urgent: !!o.urgent });
     if (queue.length > 8) queue.shift();
     return true;
   }
@@ -74,7 +74,9 @@ export function createCaptions({ emit, now = () => Date.now() / 1000, gap = CAPT
       const c = queue[i], hold = HOLDS[c.key];
       if (t - c.at > (hold ? STATE_STALE : STALE) || (hold && G && !hold(G))) queue.splice(i, 1); // over, or its state ended
     }
-    if (t - lastAt < gap) return;
+    // the dark house's alarm never waits for the gap (Phase 5 integration: a thunder caption just before the cut held it
+    // back up to 8 s); every other caption keeps one in 8 s, and the next one waits 8 s after the alarm
+    if (t - lastAt < gap && !queue.some((c) => c.urgent && c.at <= t)) return;
     let best = -1;
     for (let i = 0; i < queue.length; i++) {
       const c = queue[i];
@@ -95,7 +97,7 @@ export function createCaptions({ emit, now = () => Date.now() / 1000, gap = CAPT
     update(G) {
       const t = now();
       // the power cut: the alarm when the house goes dark, and again when its gap grows (after 2 minutes)
-      if (G.powerOff && !was.powerOff) { darkAt = t; darkLate = false; push('alarm'); }
+      if (G.powerOff && !was.powerOff) { darkAt = t; darkLate = false; push('alarm', { urgent: true }); }
       if (G.powerOff && !darkLate && darkAt >= 0 && t - darkAt >= ALARM.lateAfter) { darkLate = true; push('alarm'); }
       if (!G.powerOff) darkAt = -1;
       was.powerOff = !!G.powerOff;
@@ -119,7 +121,7 @@ export function createCaptions({ emit, now = () => Date.now() / 1000, gap = CAPT
     },
     /** the house's power changed (EV.POWER, at once: no frame needed): a dark house raises the alarm's caption now */
     power(off) {
-      if (off && !was.powerOff) { was.powerOff = true; darkAt = now(); darkLate = false; push('alarm'); flush(null); }
+      if (off && !was.powerOff) { was.powerOff = true; darkAt = now(); darkLate = false; push('alarm', { urgent: true }); flush(null); }
       else if (!off) { was.powerOff = false; darkAt = -1; }
     },
     /** an event key for the generator's start, so 'running' does not follow it at once */

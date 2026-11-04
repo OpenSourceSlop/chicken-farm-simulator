@@ -11,11 +11,12 @@
 import { h, button, uniqueId, injectStyle } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
-import { MAP, FARM, HOUSE_BOUNDS, LEVEL1 } from './config.js';
+import { MAP, FARM, HOUSE_BOUNDS, LEVEL1, SPOTS } from './config.js';
 import { MAP_PLACES, projector, standOf, layoutLabels, labelWidth, mapBoxSize, groupOf, PLACE_GROUPS, SIGN_NUMBERS, walkWords, routeLength } from './map-plan.js';
 import { drawView, drawPlaces, S } from './ui-map-draw.js';
 import { drawLabels, drawWord, drawMarkers, drawFarmer } from './ui-map-marks.js';
 import { findPath, freeSpot } from './player-path.js';
+import { clock as inputClock } from './clock.js';
 import { MAP_CSS } from './ui-map-style.js';
 
 export const MAP_ID = 'map';
@@ -57,8 +58,10 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
   const walkText = (x, z) => walkWords(routeTo(x, z)?.len ?? null, { work: LEVEL1.clock.work });
   // ---- walking: the whole chain closes, then he walks by the route finder (a double click or Shift runs) ----
   let swallowUntil = 0, swallowAt = null;
+  // only a click on the 3D view (the canvas) is swallowed, on the input clock (clock.js: the harness's steps move it), so
+  // a key of the HUD or a panel pressed right after the walk still works (Phase 5 integration)
   function swallow(e) {
-    if (performance.now() > swallowUntil) return;
+    if (inputClock.now() > swallowUntil || !(e.target && e.target.tagName === 'CANVAS')) return;
     // the second click of a double click lands on the 3D view once the map is shut: it runs instead of walking elsewhere
     e.stopImmediatePropagation(); e.preventDefault();
     if ((e.type === 'dblclick' || e.type === 'pointerdown') && swallowAt) { player?.walkTo?.(swallowAt.x, swallowAt.z, true); swallowAt = null; }
@@ -67,7 +70,7 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
   function walkPoint(x, z, run = false) {
     closePanel({ all: true });
     player?.walkTo?.(x, z, !!run);
-    swallowUntil = performance.now() + 380; swallowAt = run ? null : { x, z };
+    swallowUntil = inputClock.now() + 380; swallowAt = run ? null : { x, z };
     return true;
   }
   function walkPlace(p, run = false) {
@@ -174,9 +177,12 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
     last = { view, box, scale: P.scale };
   }
   function nearestName(x, z) {
+    // the house door's own jobs (the boot dip) are named by the door, not by a machine inside it; a place not on the
+    // farm now (the catching panels before day 41) names no job (Phase 5 integration)
+    if (Math.hypot(SPOTS.houseDoor.x - x, SPOTS.houseDoor.z - z) < 1) return SPOTS.houseDoor.label;
     let best = null, bd = 3;
     for (const p of MAP_PLACES) {
-      if (p.id === 'house') continue;
+      if (p.id === 'house' || !present(p)) continue;
       const d = p.rect && x >= p.rect.x0 && x <= p.rect.x1 && z >= p.rect.z0 && z <= p.rect.z1 ? 0 : Math.hypot(p.at.x - x, p.at.z - z);
       if (d < bd) { bd = d; best = p; }
     }

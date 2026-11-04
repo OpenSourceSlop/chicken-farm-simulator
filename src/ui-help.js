@@ -72,10 +72,10 @@ export function createHelp(arg = HELP_KEYS, seenKey0 = HELP_SEEN_KEY) {
     count = rows.length;
     list.replaceChildren();
     for (const row of rows) {
-      // the sound key's row keeps the class the sound package looks for, so its own legend row is not added twice
-      const snd = row.ids?.includes('sound') ? ' sound-help' : '';
+      // every row comes from keys.rows (the sound key's U row too: the sound package no longer injects one; its row is
+      // data-legend="sound")
       const ks = row.keys.map((k) => h('kbd', { class: 'kbd' }, k));
-      list.append(h('dt', { class: snd.trim() || null, 'data-legend': row.ids?.join(' ') || null }, ks), h('dd', { class: snd.trim() || null }, row.what));
+      list.append(h('dt', { 'data-legend': row.ids?.join(' ') || null }, ks), h('dd', null, row.what));
     }
     card?.classList.toggle('help--wide', count > 12);
     if (toggleBtn) {
