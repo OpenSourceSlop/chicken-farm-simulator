@@ -99,7 +99,7 @@ export const STRIPS = {
     rows(c) {
       const out = [line('Feeder lines plate: days 0–3 pans on the litter (rim about 5 cm) and flooded, so the feed is easy to reach.')];
       c.farm.feed.lines.forEach((l, i) => { const r = step(feederLine(l, i, c.env), l.flood && l.panFill >= 0.95 && l.heightCm <= PANS_ON_LITTER_CM); r.bar = l.panFill; out.push(r); });
-      out.push(note('The auger fills the pans over farm time: about 25 farm minutes for flooded pans. Close the box and let the clock run (Next job works too).'));
+      if (!c.farm.feed.lines.every((l) => l.panFill >= 0.95)) out.push(note('The auger fills the pans over farm time: about 25 farm minutes for flooded pans. Close the box and let the clock run (Next job works too).'));
       return out;
     } },
   'r-feeders': { panels: { 'feeder-box': null, silo: null }, title: 'Check the feeders and the silo level', rows: (c, inst) => feederCheckRows(c, inst, true) },
@@ -180,8 +180,10 @@ function feederCheckRows(c, inst, withSilo) {
   return out;
 }
 function readRows(c, inst, all) {
-  const mm = c.minmax?.() || {}, out = [houseRow(c)];
-  if (mm.min != null) out.push(line(`Min ${C1(mm.min)} / max ${C1(mm.max)} since your last read.`));
+  // once read, the min / max he read (the controller's memory restarts at the read)
+  const read0 = c.engine.parts(inst)[0], got = read0?.met ? read0.st?.payload : null;
+  const mm = got && got.minC != null ? { min: got.minC, max: got.maxC } : c.minmax?.() || {}, out = [houseRow(c)];
+  if (mm.min != null) out.push(line(`Min ${C1(mm.min)} / max ${C1(mm.max)} since the read before${got ? ' (what you read)' : ''}.`));
   if (all) {
     const v = ventNeed(c.env, c.farm), p = lightAt(c.env, c.farm), wk2 = c.env.dayNumber >= 8;
     out.push(cmp('Timer air', `vent sign table for about ${int(v.birds)} birds of about ${int(v.weightG)} g: about ${int(v.need)} m³/h`, `${int(v.air)} m³/h`),

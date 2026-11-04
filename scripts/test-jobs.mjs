@@ -608,6 +608,15 @@ test('outcome rules: prep-vent in the band only, r-minvent a real step up, the f
   assert(m.status === 'open', 'a step up past 130 % of the need');
   M.farm.act('vent.timer', { fans: 1, onSec: on(0.8), cycleSec: 300 }); M.farm.act('vent.timer', { fans: 1, onSec: on(1.1), cycleSec: 300 }); M.jobs.tick();
   assert(m.status === 'done', `a step up into the band: ${m.status}`);
+  // an order in the brooding week (Phase 2's single silo figure): 2,000 kg on top of 300 kg is 3 days and more
+  const O = makeLevel({ startDay: 4, startHour: 7 });
+  O.farm.flock.placed = 6000; O.farm.flock.alive = 5980; O.farm.feed.siloKg = 300;
+  O.events.emit(EV.FARM_PROBLEM, { id: 'low-silo', phase: 'symptom' });
+  const o = O.jobs.list().find((i) => i.id === 'p-order-feed');
+  O.farm.act('feed.order', { kg: 200 }); O.jobs.tick();
+  assert(o && o.status === 'open', `200 kg on 300 kg is under 3 days of feed: ${o?.status}`);
+  O.farm.act('feed.order', { kg: 2000 }); O.jobs.tick();
+  assert(o.status === 'done', `2,000 kg: ${o.status}`);
   const N = makeCycle(WEEK3, { day: 16, hour: 18.2 });
   const night = N.jobs.byKey('r-vent-night@16');
   N.farm.comfort.meanOver = 0.5; N.farm.comfort.hotFrom = 2.8;

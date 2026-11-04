@@ -130,7 +130,7 @@ export function buildPlanSheet(api) {
     else {
       // sending is final: the lines of his own sums still blank are named before he sends
       const blank = sums.filter((x) => value(x) == null).map((x) => x.f.label.toLowerCase());
-      setText(sent, complete() ? `Sending is final: the company answers about ${hhmm(C.sendBy - 3)}–${hhmm(C.sendBy + C.replyAfterH)} (an hour after you send) and takes plans until ${hhmm(C.sendBy)}.${blank.length ? ` Your sums still blank: ${blank.join(', ')}.` : ''}`
+      setText(sent, complete() ? `Sending is final: the company’s reply comes to the desk about ${C.replyAfterH === 1 ? 'an hour' : `${C.replyAfterH} hours`} after you send; it takes plans until ${hhmm(C.sendBy)}.${blank.length ? ` Your sums still blank: ${blank.join(', ')}.` : ''}`
         : 'Fill in your plan: houses, chicks per house, days per flock, losses and sale weight.');
     }
   }

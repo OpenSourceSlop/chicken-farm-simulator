@@ -26,8 +26,11 @@
 //
 // Instance: { key: 'r-meter@3', id, def, day, status: 'waiting'|'open'|'done'|'missed', opensAt,
 //   closesAt, doneAt, progress (0..1), result, st (rule state, JSON) }   times as env.day floats.
-// Only events while an instance is open count. Completion never looks at the value: the result
-// is what was measured or set, written to records.logJob(key, day, result).
+// Only events while an instance is open count. The clarity round (the farmer's request): a job completes
+// when its outcome is reached (state tests on the figures of job-figures.js, `live` parts of all/any that
+// must hold at completion, action `check`s such as an order that is enough); the panel shows the target
+// beside the live value (job-strips.js), never a verdict. The result is what was measured or set, written
+// to records.logJob(key, day, result). parts(inst) names each part for the card and the strip.
 import { BROOD_BOUNDS, CLEANOUT, CYCLE, DRINKER_LINES_Z, EQUIP, FAN_COUNT, FLOOR_GRID, HARVEST, HEAT, LEVEL1, ROUNDS, broodSector, houseSector, levelById, flockAgeAt, feedStdGAt } from './config.js';
 import { EV, matchPayload } from './events.js';
 import { ALL_JOBS } from './content-jobs.js';
@@ -443,7 +446,8 @@ const ACTION_CHECKS = {
   'order-days': (p, { env, farm }) => {
     const f = farm.feed, birds = knownAliveOf(farm.flock) || LEVEL1.chicksPlaced, age = Math.max(0, flockAgeAt(env.day));
     const need = Math.min((3 * birds * feedStdGAt(age + 1.5)) / 1000, EQUIP.siloCapacityKg - 50);
-    if (f.silos) { const i = p.result?.silo ?? (p.type === 'grower' ? 1 : 0); return f.silos[i].kg + kgOf((f.pending || []).filter((o) => o.silo === i)) >= need; }
+    // the cycle's two silos from Week 2 (farm.cyc.on); the brooding week keeps Phase 2's single figure and order
+    if (farm.cyc?.on && f.silos) { const i = p.result?.silo ?? (p.type === 'grower' ? 1 : 0); return f.silos[i].kg + kgOf((f.pending || []).filter((o) => o.silo === i)) >= need; }
     return (f.siloKg || 0) + (f.order?.kg || 0) >= need;
   },
   /** The last order: feed to the withdrawal (about 11 h before the catch) and less than about 1.2 t left then (feed sign). */
@@ -451,7 +455,7 @@ const ACTION_CHECKS = {
     const f = farm.feed, birds = knownAliveOf(farm.flock), age = Math.max(0, flockAgeAt(env.day));
     const catchAt = farm.harvest?.catchAt ?? HARVEST.catchDefault.day + HARVEST.catchDefault.hour * H;
     const days = Math.max(0, catchAt - 11 * H - env.day), eat = (birds * feedStdGAt(age + days / 2) * days) / 1000;
-    const left = (f.silos ? f.silos[0].kg + f.silos[1].kg : f.siloKg || 0) + kgOf(f.pending) - eat;
+    const left = (farm.cyc?.on && f.silos ? f.silos[0].kg + f.silos[1].kg + kgOf(f.pending) : (f.siloKg || 0) + (f.order?.kg || 0)) - eat;
     return left >= -100 && left <= Math.max(1200, left - (p.result?.kg ?? 0) + 1);
   },
 };

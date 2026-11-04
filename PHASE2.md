@@ -203,7 +203,11 @@ on every tick. **Only events while the instance is open count.**
 `progress` (0..1) drives the job's bar (coverage, count, each, chicks placed, cover).
 
 ### 3.3 Quality is judged silently
-Completion never looks at the value. Each job's **result** is what was measured or set while it was
+**Changed in the clarity round (the farmer's request after playing Level 1; ARCHITECTURE.md "The clarity
+round"):** a job now completes when its *outcome* is reached, and the panel where it is done shows its
+steps, the sign's target beside the live value and the farm time it needs (the job strip). A shown target
+and progress toward it is not a verdict: no "correct" / "wrong" words anywhere still holds. The text below
+is the original rule, kept for the record: Completion never looks at the value. Each job's **result** is what was measured or set while it was
 done (e.g. `r-drinkers`: the four flows and heights; `prep-flush`: the time the last line ran clear;
 `d0-grade`: the farmer's own sheet). The engine writes it with `records.logJob(key, day, result)`.
 The simulation already felt every setting (§6); the record shows the numbers; skills read farm
@@ -229,7 +233,9 @@ links, bar); done jobs collapse to a count; missed ones are struck through. Foot
 ## 4. Every job in the slice
 
 Columns: **Where** · **Action** · **Done when** · **Sim** (what the model does) · **Facts** (§5 ids).
-Exact rules are in `src/content-jobs.js`.
+Exact rules are in `src/content-jobs.js`; since the clarity round several "Done when" columns read the
+outcome (prep-vent: the timer 90–130 % of the table; prep-drinkers: 10–12 cm; pans-flooded: on the litter;
+prep-lights: 23 h and 30–40 lux; r-drinkers: flows near age + 20; r-feeders: the pans): see ARCHITECTURE.md.
 
 ### 4.1 Prep day (day −1, 07:00–24:00)
 
