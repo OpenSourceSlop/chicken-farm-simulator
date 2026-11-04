@@ -199,7 +199,7 @@ export function morning({ day, whole, controller = [], inside = [], raise = fals
   ];
 }
 /** The afternoon round (13:00): dips, walk, controller, squeezes, dead birds, the extra jobs, bin. */
-export function afternoon({ day, whole, controller = [], inside = [], raise = false, east = null }) {
+export function afternoon({ day, whole, controller = [], inside = [], raise = false, east = null, squeezed = false }) {
   // the afternoon controller read is a job to day 14 (r-controller-pm); from day 15 the fan panel has it
   const ctl = day <= 14 || controller.length ? [...controllerRead(), ...controller, ...esc()] : [];
   // from day 15 the round starts at the fan panel (east end): `east` = its steps, then the walk back west
@@ -207,7 +207,7 @@ export function afternoon({ day, whole, controller = [], inside = [], raise = fa
   if (east) {
     return [
       ...outToHouse(), ...east, W(20, 0, 0.6), ...(inside.length ? inside : [W(-8, 0, 0.6, 60)]), adv(2.8), ...ctl,
-      ...(inside.length // the bird checks end at the west end: the squeezes from there
+      ...(squeezed ? [] : inside.length // the bird checks end at the west end: the squeezes from there
         ? [W(-20, -1.95, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3), W(-4, 0.8, 0.5), press('q'), adv(0.3)]
         : [W(-4, 0.8, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3), W(-20, -1.95, 0.5), press('q'), adv(0.3)]),
       ...deadPick(6),
@@ -304,7 +304,12 @@ SEGMENTS.week3 = () => [
   // 16-day-old birds: six fans, no pad (the heat sign: young birds as few tunnel fans as the heat allows; with the pad too they chill);
   // the droppings of five birds on the walk back west from the fan panel
   ...afternoon({ day: 16, whole: true, east: [...atFans([shot('p3c-14-fans-day16'), ...fansAll(false)], 'day 16 afternoon: the fan panel'), job('r-fans-pm@16', 'the fans and the house read in the afternoon heat')],
-    inside: [...birdChecks(5, 'Look at the vent and droppings', 'droppings', [[18, 2.2], [6, -2], [-6, 2.2], [-12, -2], [-18, 2.2]]),
+    // the birds and the squeezes in one walk west
+    squeezed: true,
+    inside: [...birdChecks(3, 'Look at the vent and droppings', 'droppings', [[18, 2.2], [6, -2], [-6, 2.2]]),
+      W(-4, 0.8, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3),
+      ...birdChecks(2, 'Look at the vent and droppings', 'droppings-b', [[-12, -2], [-18, 2.2]]),
+      W(-20, -1.95, 0.5), press('q'), adv(0.3),
       job('w3-droppings@16', 'droppings checked on five birds from three parts of the house')] }),
   exp(`'panting share ' + __game.farm.comfort.pantShare.toFixed(2) + ' at ' + __t() + ', fans ' + __game.env.fansOn + ', pad ' + __game.env.padOn`, 'six fans in the warm afternoon'),
   job('p-heat3@16', 'Birds panting in the afternoon: handled at the fan panel'),
