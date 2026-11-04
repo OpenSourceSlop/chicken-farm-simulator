@@ -20,6 +20,13 @@ working stubs for every new screen (`src/ui-settings.js`, `src/ui-guide.js` + `s
 checked by `scripts/test-contracts.mjs` (Phase 5 cases) and `scripts/p5-design-stubs.json`. §10 splits the work into
 four packages with disjoint files — **sound**, **saves**, **settings**, **experience** — each section standing alone.
 
+**Review round** (after the design critic; marked *review round* where it changed the text): the backup reader counts the
+payload and reads parts (§3.5, in code); the hot season's appetite keys on the house air, measured (§6.8.4); keys reach a
+panel, a rebind or the intro before ui.js closes anything (§8.6, in code); the map is on **O** and Tab stays the focus key,
+with keys for pause, 1×, 4× and Next job (§4.3, §5.3, in code); the panel host has a return path (§8.6, in code); the steps
+files drive frozen DOM hooks (§8.10) and each package styles its own screens (§8.11, in code); plus the smaller fixes
+listed in ARCHITECTURE.md's *Phase 5 design — the review round*.
+
 ## 0. Rules that hold everywhere (approved design, do not break)
 
 - **No lessons, no quizzes, no hidden-answer scoring.** Facts sit on signs at the place they are used; the job list walks
@@ -93,7 +100,7 @@ it replaces a slot that holds a farm); *Load* puts a slot's farm in play (asking
 the autosave holds); *Delete* asks inside the panel (*Delete Slot 2 (Week 2 · Day 12, 08:40)? This cannot be undone.*).
 *Back up* opens a box under the row with the backup ready: *The whole run* (every level start, for every Replay: about
 210,000 characters at the end of a cycle) or *This farm only* (the farm as it is now, no level starts: about a quarter
-of that); a long backup comes in numbered **parts** of at most 9,000 characters each (*Part 2 of 24*), each with its own
+of that); a long backup comes in numbered **parts** of at most 9,000 characters each (*Part 2 of 25*), each with its own
 *Copy* key, so each fits one chat message or note. *Copy* puts the text on the clipboard inside the click — where the
 browser refuses, the text shows selected in a box with *Press Ctrl+C (⌘C) to copy*. *Restore* takes the pasted parts, in
 any order, into a slot. A slot that cannot be read says so on its row and offers only *Delete*. **Continue** on the title card always resumes the newest
@@ -292,13 +299,14 @@ Week 2, day 12, 08:40*. With no readable save the key is hidden, as now.
   design round's reader). Fewer characters than the marker says → `incomplete`; the crc decides the rest.
 - **Parts**: a backup longer than `SAVE_SLOTS.partChars` (**9,000** characters, in code: a LINE message or a note holds
   about 10,000) comes as numbered parts (`composeParts`, in code): each part has the header line *CHICKEN FARM SAVE · format 5
-  · part 2 of 24 (paste all 24 parts, in any order)*, the name line, the marker `CF5.<enc>.<crc>.<chars>.p2of24.` and its
+  · part 2 of 25 (paste all 25 parts, in any order)*, the name line, the marker `CF5.<enc>.<crc>.<chars>.p2of25.` and its
   slice of the payload, at most 9,000 characters in all. Restore accepts every part pasted together, **in any order**, or
-  the whole text; a part missing → `missing-parts` (the panel names which: *parts 3, 5 of 24*), parts of two different
-  backups → `mixed`. The whole run at day 67 is about 24 parts, the farm alone about 6.
+  the whole text; a part missing → `missing-parts` (the panel names which: *parts 3, 5 of 25*), parts of two different
+  backups → `mixed`. The whole run at day 67 (about 214,000 characters) is 25 parts of at most 8,850 characters, the farm alone (about
+  50,000) 6 parts (`composeParts`, measured).
 - **Back up** (any slot or the autosave) opens the backup box under the row and **builds the text then** (the async gzip
   runs when the box opens, with *Preparing the backup…*), shows the two choices (*The whole run* / *This farm only*), the
-  length in plain words (*About 214,000 characters: 24 parts of up to 9,000 characters each*) and one *Copy part k* key
+  length in plain words (*About 214,000 characters: 25 parts of up to 9,000 characters each*) and one *Copy part k* key
   per part (or one *Copy* key). Each Copy key calls `navigator.clipboard.writeText(text)` **synchronously inside its
   click** with the text already built (Safari refuses a write after an `await`); when that is missing or rejects (the
   artifact viewer's iframe may not allow clipboard writes) the part's text shows in a read-only `<textarea>`, focused and
@@ -333,7 +341,7 @@ keeps every earlier one.
 | --- | --- | --- |
 | `not-a-save` | a paste with no `CF<n>.` marker and no JSON save | *This text is not a Chicken Farm save. Copy the whole backup, from its first line to END.* |
 | `incomplete` | the crc does not match, or fewer payload characters than the marker says | *Part of the save is missing. Copy the whole backup again, from its first line to END, and paste all of it.* |
-| `missing-parts` | a backup in parts with a part not pasted (the panel adds which: *parts 3, 5 of 24*) | *Some parts of this backup are missing. A backup in parts says “part 2 of 6” on its first line: paste every part, in any order, into the box.* |
+| `missing-parts` | a backup in parts with a part not pasted (the panel adds which: *parts 3, 5 of 25*) | *Some parts of this backup are missing. A backup in parts says “part 2 of 6” on its first line: paste every part, in any order, into the box.* |
 | `mixed` | markers of two different backups in one paste | *These parts come from different backups. Paste the parts of one backup only.* |
 | `damaged` | the bytes decode but do not unpack or parse | *This save is damaged and cannot be read.* |
 | `newer` | format above 5 | *This save was made by a newer version of the game. Reload the page to get the newest version, then try again.* |
@@ -734,40 +742,47 @@ report; PHASE5.md §6.8 and §9 get the measured numbers at integration; the in-
 Shared, integrator-owned and **frozen** for the packages: `src/config.js` (the Phase 5 section after the fourth banner),
 `src/events.js`, `src/motion.js`, `src/main.js` (wiring, `__game` hooks), `src/interact.js`, `src/clock.js`, `build.mjs`,
 `scripts/shoot.mjs`, `scripts/test-contracts.mjs`, `scripts/test-perf.mjs`, every earlier steps file and
-`scripts/p5-design-stubs.json`. A file a package owns keeps its **contract** (the exported names, signatures and shapes
+`scripts/p5-design-stubs.json` (review round: it drives only the frozen DOM hooks of §8.10 and the hooks of §9.2, so the
+packages can rebuild every screen under it; a package whose work changes one of its expectations says so in its report
+and the integrator edits the file). A file a package owns keeps its **contract** (the exported names, signatures and shapes
 below) frozen: the package may add to it, never change it. Need a change in a frozen file? Put it in your report.
 
 ### 8.1 What is in code now
 | File | Owner after the design round | What it is now |
 | --- | --- | --- |
-| `src/config.js` (Phase 5) | integrator | `BUILD`, `SAVE_SLOTS` (count 3, keys, format 5, `known`, `maxSlotChars`), `SETTINGS_STORE`, `GFX` (governor, shadows, budget), `MAP` (views, stand points) |
+| `src/config.js` (Phase 5) | integrator | `BUILD`, `SAVE_SLOTS` (count 3, keys, format 5, `known`, `maxSlotChars`, `partChars` 9,000), `SETTINGS_STORE`, `GFX` (governor, shadows 2048 / 1024 / 256, budget), `MAP` (views, stand points) |
 | `src/events.js` | integrator | `EV.SETTINGS`, `EV.SAVE`, `EV.SOUND_CAPTION`, `EV.MENU` (§8.2) |
 | `src/motion.js` | integrator | `reducedMotion()` (the system or the setting), `setMotionOverride`, the `reduce-motion` class; `ui-dom.js` and `world-cond.js` re-export it |
 | `src/settings.js` | settings | the store (complete): `SETTINGS_SCHEMA`, `createSettings`, `coerce`, `defaults`, `soundView` |
-| `src/keys.js` | settings | the key table and matching (complete; the packages move their checks onto it) |
-| `src/gfx-quality.js` | settings | Phase 1's governor moved out of main.js (unchanged under auto), manual pixel ratio / shadows / flock detail, `debug.feed` |
+| `src/keys.js` | settings | the key table and matching (complete; review round: map O, pause P, speed1 1, speed4 4, nextJob J; main key and alternates; `UI_CODES`, `REBIND_WORDS`; Shift rules first in `actionOf`) |
+| `src/gfx-quality.js` | settings | Phase 1's governor moved out of main.js (unchanged under auto but for step 2's filter, §4.4), manual pixel ratio / shadows (no shader link: §4.4, in code) / flock detail, `debug.feed` |
+| `src/flock.js` | settings | `positions()` added (review round, for the map) |
 | `src/ui-settings.js` | settings | a working stub: one generic control per setting, tabs, *Reset this tab*; the Keys tab read-only |
-| `src/ui-guide.js`, `src/content-guide.js` | settings | a working stub: the guide's sections with the live keys |
-| `src/saves.js` | saves | a stub: Continue / the Continue line on Phase 4's autosave; slot calls answer `not-built` |
-| `src/save-slots.js` | saves | `metaOf`, `slotName`, `makeEnvelope`, `checkEnvelope`, `mergeProfiles` (complete); `migrate` (v3 and v5 only), `createSlotStore` (stub) |
-| `src/save-codec.js` | saves | `crc32`, `SaveError`, `SAVE_MESSAGES`, `composeText`, `parseText` (complete); `encodePayload` / `decodePayload` json64 only (gz64 to add) |
+| `src/ui-guide.js`, `src/content-guide.js` | settings | a working stub: the guide's sections with the live keys; `fillGuide` and the `{key:…}` / `{time:…}` tokens (complete) |
+| `src/saves.js` | saves | a stub: Continue / the Continue line on Phase 4's autosave, `continueAuto`; slot calls answer `not-built` |
+| `src/save-slots.js` | saves | `metaOf`, `slotName`, `makeEnvelope`, `checkEnvelope`, `mergeProfiles` (complete); `migrate` (v1 with `levelId 'level1'`, v3, v5), `createSlotStore` (stub) |
+| `src/save-codec.js` | saves | `crc32`, `SaveError`, `SAVE_MESSAGES` (+ `missing-parts`, `mixed`), `composeText`, `composeParts`, `partRanges`, `parseText` (complete, review round: the marker carries the length, the reader counts, parts in any order; checked by 300 random whole-run-sized backups in test-contracts); `encodePayload` / `decodePayload` json64 only (gz64 to add) |
 | `src/ui-saves.js` | saves | a stub panel: the autosave row with Continue, three slot rows with disabled keys; the menu and title entries |
-| `src/ui-menu.js` | experience | the game menu: `createGameMenu`, `add`, `open`, `entries` (complete; look to polish) |
+| `src/ui-menu.js` | experience | the game menu: `createGameMenu`, `add`, `open`, `entries` (complete; look to polish); entries get `via` (§8.6); the arrows through `onKey`; the focus back on the entry picked |
 | `src/ui-map.js`, `src/map-plan.js` | experience | a working stub: an SVG farm (fence, road, buildings, labels, the farmer's arrow) and every place as a key that walks him there; `MAP_PLACES`, `standOf`, `projector` |
-| `src/ui-intro.js` | experience | `INTRO_CARDS`; a stub that never shows a card |
-| `src/boot-screen.js` | experience | `BOOT_ERRORS`, `createBootScreen` (`step`, `error`, `hide`) used by main.js |
-| `src/ui-title.js` | experience | `addAction`, `refresh` added |
-| `src/ui-panels.js` | experience | `busyIds()` added |
-| `src/ui.js` | experience | the hubs wired: the menu (Esc with its guard, the gear key), the map (Tab from the canvas, the map key), the settings / guide / saves panels registered, the intro, sound captions shown, `ui.menu`, `ui.title`, `ui.map`, `ui.intro`, `openSettings`, `openGuide`, `openSaves`, `busyPanels`; Continue through `ctx.saves` |
-| `src/ui-icons.js` | experience | `map`, `gear`, `save`, `help` icons |
-| `src/index.template.html` | experience | the `reduce-motion` class rule; the design-round look of the new panels |
-| `src/main.js` | integrator | settings and keys first; `ctx.world`; quality; saves after the run; audio on `soundView(settings)`; the staged loading card; `webglcontextlost`; `__game.settings / keys / quality / saves / perf / renderInfo()` |
-| `scripts/test-contracts.mjs` | integrator | Phase 5 cases: settings, keys, codec and names, guide / map plan / motion, the governor |
-| `scripts/p5-design-stubs.json` | integrator | the stubs in the browser (§9.3) |
+| `src/ui-intro.js` | experience | `INTRO_CARDS` (their words with `{key:…}` tokens); a stub that never shows a card |
+| `src/boot-screen.js` | experience | `BOOT_ERRORS` (+ `slow`; `context-lost` by the save's answer), `createBootScreen` (`step`, `error`, `hide`) used by main.js |
+| `src/ui-title.js` | experience | `addAction`, `refresh`, `note(text)` added |
+| `src/ui-panels.js` | experience | `busyIds()`; review round: `open(id, { returnTo })`, `register(…, { parent: true })`, `closeAll()`, `parentIds`, the panel's `onKey` (§8.6) |
+| `src/ui-hud.js` | experience | review round: a time-bar key is blurred after a pointer click; `buttons` { pause, speed1, speed4 } for the time keys |
+| `src/ui-dom.js` | experience | review round: `injectStyle(id, css)` (§8.11) |
+| `src/ui.js` | experience | the hubs wired: the menu (Esc with its guard, the gear key), the map (O and the map key), the time keys (P, 1, 4, J), the key hooks (`captureNextKey`, `claimKeys`, the panel's `onKey`), the return path (`openPanel(id, via)`, `closePanel({ all })`, the result and summary as parents), the settings / guide / saves panels registered, the intro, sound captions and EV.SAVE messages shown, `ui.menu`, `ui.title`, `ui.map`, `ui.intro`, `openSettings`, `openGuide`, `openSaves`, `busyPanels`, `parentPanels`; Continue through `ctx.saves` |
+| `src/ui-icons.js` | experience | `map`, `gear`, `save`, `help` icons (a package needing another icon defines it in its own file, §8.11) |
+| `src/index.template.html` | experience | the `reduce-motion` class rule; the shared frame of the new panels (the settings, saves and guide rules moved into their modules); the boot timer's *still loading* line; `.title-note` |
+| `src/main.js` | integrator | settings and keys first; `ctx.world`; quality; saves after the run; audio on `soundView(settings)`; the staged loading card and `window.__bootStarted`; `webglcontextlost` with `saveNow`'s answer; the `gl.linkProgram` counter; `__game.settings / keys / quality / saves / perf / renderInfo()` |
+| `scripts/test-contracts.mjs` | integrator | Phase 5 cases: settings, keys (+ the review round's rebind rules), codec (+ 300 random backups, parts, END planted) and names, migrate v1, guide (`fillGuide`) / map plan / motion, the governor (+ shadows without a link) |
+| `scripts/p5-design-stubs.json` | integrator | the stubs in the browser on the frozen hooks (§8.10, §9.3) |
 
 ### 8.2 Events (`EV`, events.js)
 - `EV.SETTINGS` `{ group, key, value, prev }` — settings.js after every stored change (main.js attaches the bus).
-- `EV.SAVE` `{ kind: 'slot'|'load'|'delete'|'restore'|'backup'|'error'|'auto-failed', slot, ok, message? }` — saves.js.
+- `EV.SAVE` `{ kind: 'slot'|'load'|'delete'|'restore'|'backup'|'error'|'auto-failed', slot, ok, message? }` — saves.js;
+  ui.js shows `message` (in code): `auto-failed` always, any other `ok: false` when the saves panel is not open (a caption,
+  or the open panel's notice).
 - `EV.SOUND_CAPTION` `{ key, text, x?, z? }` — the sound package (audio-captions.js), raised while muted too; ui.js shows
   `[text]` when `interface.soundCaptions` (in code).
 - `EV.MENU` `{ open, from: 'esc'|'gear'|'title'|'hook' }` — ui-menu.js.
@@ -782,44 +797,74 @@ setMany(patch), reset(g?), attachEvents(ev), subscribe(fn, filter?) }`; `soundVi
 Phase 4 behaviour, a label, a type) and must add its test-contracts default check in its report for the integrator.
 
 ### 8.4 The keys (keys.js)
-`KEY_ACTIONS` `[{ id, group, codes, what, fixed?, shift?, follows?, extra?, alsoKeys? }]`; `createKeys(settings)` →
-`{ actions, codes(id), matches(e, id), actionOf(e, ids?), label(id), labels(id), rows(mode), rebind(id, code), reset(id?),
-subscribe(fn) }`; `codeLabel(code)`; `RESERVED_CODES`. Bindings live in `settings 'keys.bindings'`.
+`KEY_ACTIONS` `[{ id, group, codes, what, fixed?, shift?, follows?, extra?, alsoKeys? }]` (`codes[0]` the main key, the
+rest its alternates); `createKeys(settings)` → `{ actions, codes(id), matches(e, id), actionOf(e, ids?), label(id),
+labels(id), rows(mode), rebind(id, code) → { ok, swapped?, reason? }, reset(id?), subscribe(fn) }`; `codeLabel(code)`;
+`RESERVED_CODES`, `UI_CODES` (Tab, Enter, Numpad Enter, Space), `REBIND_WORDS` (the Keys tab's words per `reason`:
+`fixed`, `reserved`, `ui`, `unknown`). Bindings live in `settings 'keys.bindings'` (`{ id: main code }`).
 
 ### 8.5 Graphics quality (gfx-quality.js)
 `createQuality({ THREE, renderer, scene, world, perf, settings, flock, onResize })` → `{ pixelRatio(), frame(rawDt),
 apply(), restart(), state(), debug.feed(dt, n) }`; `state()` = `{ auto: { ratio, shadows, flock }, ratioCap, shadows,
 flockDetail, step, governing, fps }`. It calls `flock.setDetail?.('full' | 'reduced')` (the settings package adds it to
-flock.js). `__game.renderInfo()` → `{ calls, triangles, programs, geometries, textures, pixelRatio, shadows }`.
+flock.js). `__game.renderInfo()` → `{ calls, triangles, programs, geometries, textures, pixelRatio, shadows, linked }`
+(`linked`: every shader program linked since start, main.js's `gl.linkProgram` counter). No quality change may set
+`renderer.shadowMap.enabled`, `renderer.shadowMap.type` or a light's `castShadow` (all in three 0.160's program key).
 
 ### 8.6 The UI hubs (ui.js, ui-menu.js, ui-title.js, ui-panels.js)
 - Panels: every new screen is a panel of the host (`register(id, build, { kind: 'paused' })`): ids **`menu`**,
   **`settings`**, **`guide`**, **`saves`**, **`map`**. The registration functions (`registerSettingsPanel`,
   `registerGuidePanel`, `registerSavesPanel`, `createMap`) take `{ register, openPanel, closePanel, ctx, menu, title }`
   and are called by ui.js in try/catch (in code).
-- `menu.add({ id, label, icon?, hint?, order, onSelect(), visible?(mode) })` — entries in code: resume 0, map 20, saves 30,
-  settings 40, guide 60, title 90.
-- `title.addAction({ id, label, icon?, order, onClick(), visible?() })`, `title.refresh()` — in code: saves 10, settings 20,
+- **The return path** (review round, in code, frozen): `openPanel(id, { returnTo })` with `returnTo` the open panel's id
+  keeps that panel as the **parent**: closing the child (Esc, its close key, E, the scrim, `closePanel()`) opens the
+  parent again with the focus on the key that opened the child; parents stack (menu → settings → …). A panel registered
+  with `{ parent: true }` is the parent of whatever opens over it: **`result` and `summary`** (ui.js, in code), so the
+  result's *Skill tree*, *See the cycle summary* and the new *Save or load* key come back to the result with its Replay and
+  Next level keys. `closePanel({ all: true })` (= the host's `closeAll()`) and every `close(false)` (a mode change, a new
+  run) close the whole chain; a place picked on the map uses it, as does *Back to the farm*. `ui.parentPanels` lists the
+  waiting parents (tests). Opening a panel without `returnTo` over a non-parent replaces it (as before).
+- `menu.add({ id, label, icon?, hint?, order, onSelect(via), visible?(mode) })` — `hint` an action id of keys.js (the
+  menu shows its live key) or plain words; `via` = `{ returnTo: 'menu' }`, passed on by an entry that opens a panel
+  (`openPanel(id, via)`, `settingsUI.open(tab, via)`, `map.open(via)`); the menu closes itself after `onSelect` when it is
+  still the open panel. Entries in code: resume 0, map 20, saves 30, settings 40, guide 60, title 90.
+- `title.addAction({ id, label, icon?, order, onClick(), visible?() })`, `title.refresh()`, `title.note(text | null)` (a
+  status line under the title's keys: a load that failed, an unreadable autosave) — in code: saves 10, settings 20,
   guide 30.
-- `ui.openSettings(tab?)`, `ui.openGuide(section?)`, `ui.openSaves()`, `ui.map.open()`, `ui.menu.open(from)`, `ui.intro`,
-  `ui.busyPanels()` (panel ids whose `busy()` is true, open or in the background).
+- `ui.openSettings(tab?, via?)`, `ui.openGuide(section?, via?)`, `ui.openSaves(via?)`, `ui.map.open(via?)`,
+  `ui.menu.open(from)`, `ui.intro`, `ui.busyPanels()` (panel ids whose `busy()` is true, open or in the background),
+  `ui.parentPanels`.
+- **Keys before everything** (review round, in code, frozen): ui.js's window capture listener runs first and, in order,
+  (1) gives the key to **`ui.captureNextKey(fn)`** when one is armed (the next keydown only, any key — W, E, the arrows,
+  Esc, Tab — with `preventDefault` and `stopImmediatePropagation`; it returns a cancel function): the Keys tab's *Change*;
+  (2) offers it to every **`ui.claimKeys(fn)`** claim, newest first (fn returns `true` to use it; the claim returns its
+  release): the intro while a card shows (Enter and Esc on the card, never the menu behind it); (3) with a panel open,
+  offers it to the panel's **`onKey(e)`** (a built panel's own method; `true` = used, nothing else sees it): a saves
+  question's Esc (its safe answer, the panel stays), the menu's up and down arrows (in code), a settings slider's arrows;
+  (4) then the Phase 1–4 handling (Esc and E close the panel; typed WASD never walks the farmer; the farm's keys).
 - The time bar holds, in order: pause · 1× · 4× · Next job · ? · **map** · **gear** · the speaker (audio-ui.js mounts last).
+  A pointer click on any of its keys leaves no focus there (ui-hud.js, in code).
 - **Esc** in a level with nothing open opens the menu, except within 600 ms (the input clock, `clock.js`) of a panel
-  closing (`ESC_GUARD_MS`, in code): an earlier steps file's Escape after a panel that closed itself stays harmless. **Tab**
-  opens the map only from the canvas (or the page body) in a level or the sandbox.
+  closing (`ESC_GUARD_MS`, in code): an earlier steps file's Escape after a panel that closed itself stays harmless.
+  **O** (keys.js `map`) opens the map and **P / 1 / 4 / J** press pause, 1×, 4× and Next job, in a level or the sandbox,
+  with no panel open and the focus outside a text box (in code). **Tab is never a game key**: it moves the focus.
 
 ### 8.7 Saves (saves.js, save-slots.js, save-codec.js, run.js)
 `createSaves({ run, level, save, events, settings, ui })` → `{ available, list(), latest(), latestInfo(), continueLatest(),
-saveSlot(n), loadSlot(n), deleteSlot(n), exportText(n|'auto'), importText(text, n), message(code) }` (async where §3 says;
-results `{ ok, code?, message?, meta? }`). The saves package adds to **run.js**: `exportSave()` → `{ run, blob, starts }`
-(the run key's lean blob and every start the run knows, memory or storage) and `importSave(envelope)` → writes the run key
-and the starts (memory and storage) and resumes (`continueSave`), true / false; and to **level.js** (through experience,
+continueAuto(), saveSlot(n), loadSlot(n), deleteSlot(n), exportText(n|'auto', { farmOnly? }) → { ok, text, parts: [text],
+chars, meta }, importText(text, n | 'play'), message(code) }` (async where §3 says; results `{ ok, code?, message?, meta?
+}`; `list()`'s autosave entry carries `error` when its key exists but does not read). The saves package adds to **run.js**:
+`exportSave()` → `{ run, blob, starts }` (the run key's lean blob and every start the run knows, memory or storage) and
+`importSave(envelope, { memoryOnly? })` → clears the live starts of the run in play from `plan` on (memory and storage),
+writes the envelope's starts and its run key with `savedAt` now, and resumes (`continueSave`; `run: null` as the Phase 2
+branch), true / false (§3.3); and to **level.js** (through experience,
 §8.9) `saveNow()` exposed. ui.js's Continue calls `ctx.saves.continueLatest()` and the Continue line `ctx.saves.latestInfo()`
 (in code).
 
 ### 8.8 Boot screen and motion
 `createBootScreen()` → `{ shown, step(text) (a promise: resolves after two frames), error(kind, detail), hide() }`;
-`BOOT_ERRORS` keys `webgl`, `library`, `load`, `stopped`, `context-lost`. `reducedMotion()`, `setMotionOverride('system' |
+`BOOT_ERRORS` keys `webgl`, `library`, `load`, `stopped`, `context-lost` (a function of `{ saved }`), `slow` (in code:
+the template's 20 s line while `window.__bootStarted`). `reducedMotion()`, `setMotionOverride('system' |
 'on')` (motion.js; settings.js calls it on load and on every change of `interface.reducedMotion`).
 
 ### 8.9 One owner, one signature (the hand-over points)
@@ -838,28 +883,71 @@ and the starts (memory and storage) and resumes (`continueSave`), true / false; 
 | flock detail | settings (flock.js `setDetail`) | settings (gfx-quality.js) | `flock.setDetail('full' | 'reduced')` |
 | the job places on the map | experience (ui-jobs.js `spots()`) | experience (ui-map.js) | `jobCard.spots()` → `[{ key, n, title, x, z, inside, current }]` |
 | dead birds on the map | flock-dead.js (exists) | experience | `flock.dead.near(x, z, r)` → positions (r 200: every bird) |
+| the flock's spread on the map | settings (flock.js `positions`, in code) | experience (ui-map.js) | `flock.positions()` → `{ n, x, z, size, morph }` (read-only typed arrays) |
+| the house resting | farm (exists) | experience (ui-map.js) | `farm.house.closed` → inside places unreachable |
+| the flock meshes' triangles | settings (flock.js `meshes`, exists) | settings (p5-gfx) | `flock.meshes` → index count × `mesh.count` |
+| the result's Save or load key | experience (ui-result.js) | saves (the panel) | `ctx.ui.openSaves()` over the result (a parent) |
 | the route on the map | player-path.js (settings owns the file; the function is frozen) | experience | `findPath(ax, az, bx, bz, r, colliders, bounds)`, `freeSpot(x, z, r, colliders, bounds)`; `player.walkTo(x, z, run)` |
 | the run's whole save | saves (run.js) | saves (saves.js) | `run.exportSave()`, `run.importSave(envelope)` |
 | the level saving now | experience (level.js `saveNow`) | saves, main.js | `level.saveNow()` → true / false |
-| the save hooks in the title | saves (saves.js, in code) | experience (ui.js, ui-title.js) | `saves.latestInfo()`, `saves.continueLatest()` |
+| the save hooks in the title | saves (saves.js, in code) | experience (ui.js, ui-title.js) | `saves.latestInfo()`, `saves.continueLatest()`, `saves.continueAuto()`; `title.note(text)` for the saves' title messages |
+| the rebind capture | experience (ui.js `captureNextKey`, in code) | settings (ui-settings.js Keys tab) | `ctx.ui.captureNextKey(fn)` → cancel |
+| the intro's keys | experience (ui.js `claimKeys`, in code) | experience (ui-intro.js) | `ctx.ui.claimKeys(fn)` → release |
+| a panel's own keys | each panel (`onKey(e)` on its built object) | experience (ui.js, in code) | `panel.onKey(e)` → true when used |
+| the autosave failing | saves (saves.js) | experience (ui.js shows, in code) | `EV.SAVE { kind: 'auto-failed', message }` |
 | the hot appetite sign line | saves (content-signs-cond.js) | test-contracts (integrator) | the line on `sign-heat` in the hot season, `source: 'general'` |
+
+### 8.10 Frozen DOM hooks (review round)
+The steps files of every package and `p5-design-stubs.json` drive the screens only through these attributes (and the §9.2
+hooks), never through a class, a text or a position, so each owner can rebuild its screens freely. Each owner keeps them on
+its rebuilt screens:
+
+| Hook | On | Owner | Value |
+| --- | --- | --- | --- |
+| `data-menu="<entry id>"` | each game-menu entry's `<button>` | experience (ui-menu.js, in code) | `resume`, `map`, `saves`, `settings`, `guide`, `title` |
+| `data-title-action="<id>"` | each title action's `<button>` | experience (ui-title.js, in code) | `saves`, `settings`, `guide` (others may join: tests check *includes*) |
+| `data-tab="<group>"` | each settings tab (`role="tab"`) | settings (in code) | `sound`, `time`, `graphics`, `camera`, `interface`, `keys` |
+| `data-group="<group>"` | each settings tab's panel (`role="tabpanel"`) | settings (in code) | as above |
+| `data-setting="<group>.<key>"` | one setting's row; its **one** native control inside (`input[type=range]`, `input[type=checkbox]` or `select`) | settings (in code) | the control's `value` is the **stored** value (a volume of 40 % is `value="0.4"`; a choice its stored string); an `input` / `change` event applies it |
+| `data-key-action="<action id>"`, `data-key-change` | a Keys-tab row, and its *Change* `<button>` | settings | `KEY_ACTIONS` ids |
+| `data-guide="<section id>"` | each guide section | settings (in code) | `GUIDE.sections` ids; `controls` holds the live key list |
+| `data-slot="auto" \| "1" \| "2" \| "3"` | each saves row | saves (in code) | — |
+| `data-save-key="continue \| save \| load \| delete \| backup \| restore"` | each row's keys | saves | — |
+| `data-answer="yes \| no"` | the in-panel question's two answers | saves | `no` is the safe one (Esc) |
+| `data-copy-part="<k>"`, `data-restore-box` | the backup box's Copy keys, the restore `<textarea>` | saves | — |
+| `data-place="<place id>"` | each place's `<button>` in the map's side list (`data-place-shape` on its SVG shape) | experience (in code) | `MAP_PLACES` ids |
+| `data-map-view="farm \| house"` | the map's two view tabs | experience | — |
+| `.menu`, `.settings`, `.saves`, `.guide`, `.map` | each panel's root `<section>` (dialogShell's class) | each owner (in code) | — |
+
+### 8.11 Styles and icons (review round)
+Every package styles its own screens from its own module: `injectStyle(id, css)` (ui-dom.js, in code) adds one `<style
+id>` to `<head>` once. Settings: `#settings-style` from ui-settings.js (`.set-*`: the six tabs' content, the Keys rows with
+*Change*, the governor line, the fps readout) and `#guide-style` from ui-guide.js (`.guide-*`, the HUD picture); saves:
+`#saves-style` from ui-saves.js (`.saves-*`: rows, questions, the backup and restore boxes, messages); sound:
+`#sound-ui-style` (exists, audio-ui.js: the speaker toggle's states). The design round's rules for these screens moved into
+those modules (in code). Class names carry the package's prefix and no rule styles another package's classes.
+index.template.html (experience) keeps the shared look: the variables, cards, buttons (`.btn*`), the panel frame
+(`.panel`, `.panel-close`, the five panels' `-case` / `-head` frame), `.kbd`, `.label`, `.src`, `.cyc-tabs`, the focus
+ring. An icon a package needs is an SVG string in its own file, not an addition to ui-icons.js.
 
 ## 9. Save format changes, test hooks and harness scenarios
 
 ### 9.1 Save format
 - **Unchanged**: the autosave keys (`RUN_SAVE` v3, the level starts), the Phase 2 level save, the skill profile; every
   blob field. A Phase 3 or Phase 4 save loads unchanged (test-saves plays one of each from fixtures it writes).
-- **New**: the slot keys `chickenFarm.slot.v5.<1..3>` holding the stored envelope (§3.2); the backup text (`CF5.<enc>.<crc>.`,
-  §3.5); the settings key `chickenFarm.settings.v1` (§4.1). `level.serialize()` adds nothing; `run.exportSave()` /
+- **New**: the slot keys `chickenFarm.slot.v5.<1..3>` holding the stored envelope (§3.2); the backup text (the marker
+  `CF5.<enc>.<crc>.<chars>.` with the payload's length, `p<k>of<n>.` on a part, §3.5); the settings key `chickenFarm.settings.v1` (§4.1). `level.serialize()` adds nothing; `run.exportSave()` /
   `importSave()` read and write the existing keys only.
 - **The budget**: a gz64 slot of a whole cycle ≤ 300 KB (measured 210 KB at the design round), json64 ≤ 1.2 MB; the run key
   at day 67 stays ≤ 250 KB (test-run, unchanged).
 
 ### 9.2 `window.__game` hooks
 Phase 1–4 hooks, plus (in code): `settings` (the store), `keys`, `quality` (`state()`, `debug.feed`), `saves`, `perf`
-(`fps`, `pixelRatio`, `shadowMap`), `renderInfo()` (one rendered frame's `renderer.info`); through `__game.ui`: `menu`
-(`open`, `entries`), `title` (`addAction`, `refresh`), `map` (`open`, `places()`, `walkTo(id)`), `intro`, `openSettings(tab)`,
-`openGuide(section)`, `openSaves()`, `busyPanels()`. Packages add: sound — `audio.captions()` (the captions raised, with their
+(`fps`, `pixelRatio`, `shadowMap`), `renderInfo()` (one rendered frame's `renderer.info`, and `linked`: the shader programs
+linked since start); `flock.positions()`; through `__game.ui`: `menu` (`open`, `entries`), `title` (`addAction`,
+`refresh`, `note`), `map` (`open`, `places()`, `walkTo(id)`), `intro`, `openSettings(tab, via)`, `openGuide(section, via)`,
+`openSaves(via)`, `busyPanels()`, `parentPanels`, `captureNextKey(fn)`, `claimKeys(fn)`, `openPanel(id, { returnTo })`,
+`closePanel({ all })`. Packages add: sound — `audio.captions()` (the captions raised, with their
 real time) and `audio.debug.hour(script)` (the long-session counter on the live engine); saves — `saves.debug.slotChars(n)`,
 `saves.debug.corrupt(n)` (writes a damaged slot for the steps files); settings — `quality.debug.feed`, `keys.rebind`;
 experience — `ui.map.state()` (`{ view, places: [{ id, x, y, w, h, label }], markers, dead, bucket, birds, farmer: { x, y, deg } }`
@@ -876,6 +964,21 @@ automation, in code as a stub), `level.saveNow()`.
   panel's four rows; the guide's live keys; the title card's three new keys. Earlier files re-run on the design wiring at
   960 × 600, all without console or page errors: `rv-hud.json` 16 PASS, `p4-design-stubs.json` 10, `hotfix-steps.json` 21,
   `req-clock.json` 13, `phase1-jobs.json` (4 of 4 jobs), the `p2-hooks` scenario.
+- **The review round's run** (after the critic's fixes, in code): `npm run build`; `npm test` — 373 ok (test-contracts' Phase
+  5 cases now also round-trip 300 random 50–250 K backups with END planted and parts shuffled, the Phase 2 migration, the
+  review round's rebind rules, `fillGuide`, and shadows without a recompile); `node scripts/shoot.mjs --scenario cold-hot
+  --size 960x600 --out /tmp/phase5-design2` — no console or page errors; `p5-design-stubs.json` (rewritten on the §8.10
+  hooks) — **20 PASS, 0 FAIL**: the hooks; the defaults (the map on O); the sandbox budget (66 calls, 312 K triangles, 66
+  programs); **the four shadow settings link no shader** (66 linked before and after); Phase 2's prep day; Esc → the menu;
+  the menu's arrows through its `onKey`; `[data-menu="settings"]` → Settings with the menu as its parent; the volume
+  through `[data-setting="sound.volume"]`; **Esc in Settings → the menu again, on Settings**; Esc → the farm; the Esc
+  guard; **`captureNextKey` takes W** (the farmer does not walk); **O → the map** (44 places); **Tab moves the focus and
+  the map stays**; `[data-place="silos"]` → he walks to the silo gauge; `[data-slot]` auto, 1, 2, 3; `[data-guide=
+  "controls"]` with the live keys (*O opens the farm map*); `[data-title-action]` saves, settings, guide. Earlier files on
+  the review-round wiring at 960 × 600, all without console or page errors: `p4-design-stubs.json` 10 PASS, `rv-hud.json`
+  16, `hotfix-steps.json` 21, `req-clock.json` 13 (its one *Plate* click not found, as on main), `phase1-jobs.json` (4 of 4
+  jobs), the `p2-hooks` scenario, `p2-level-end.json` (the result as a parent: the skill tree's close shows the result
+  again, its Replay as before), `p3-design-stubs.json` (5 PASS).
 - **Every earlier file keeps passing on every branch** (each package runs those its files touch, the integrator all of
   them at the merge): the Phase 1 `tour`, `cold-hot`, `walk`, `p2-hooks` scenarios and `phase1-jobs.json`, `systems-*.json`;
   `p2-level1.json` (58), `p2-level1-find.json` (18), `hotfix-steps.json` (21), `p2-flock-events.json`, `p2-review2*.json`;
@@ -891,9 +994,11 @@ automation, in code as a stub), `level.saveNow()`.
   time settings) (experience). Each new node test goes into `npm test` at the merge (the integrator edits package.json).
 - **Integrator play-through at the merge** (generated on the helpers of `p3-cycle-steps.mjs`, file `scripts/p5-play.json`):
   the title on a first run → Start a new flock → the intro's three cards by real clicks → the planning day's gate sign and
-  sign by E → the map (Tab) to the office → Save in slot 1 from the menu → `goto(7, 21, auto)` → the brooding week's result →
-  Save in slot 2 → Back up slot 1 (the select fallback) → clear storage, reload → Restore into slot 1 by pasting →
-  Continue (the newest: slot 1's planning day) → Settings: Keys Q → B, B squeezes on day 0 (after a goto) → HUD Large, the
+  sign by E → the map (O) to the office → Save in slot 1 from the menu (Esc in the saves panel shows the menu again) → `goto(7, 21, auto)` → the brooding week's result →
+  Save in slot 2 from the result's *Save or load* key (closing it shows the result again) → Back up slot 1, the whole run
+  in parts (the select fallback) → clear storage, reload → Restore into slot 1 by pasting the parts in reverse order →
+  Continue (the newest: slot 1's planning day) → Settings: Keys Q → B through *Change* (and W → I and back: the capture
+  takes W), B squeezes on day 0 (after a goto) → HUD Large, the
   watch folded → reduced motion on → the map's House view with the flock dots → the hot season day 30 at 13:00 (a standard
   start) with sound captions on and the sound off → the power cut of the rainy day 33 with *[Alarm in the house]* → no
   console or page errors; a real-input day of play under 6 minutes (the Phase 4 ceiling) with the menu and the map used.
@@ -914,10 +1019,14 @@ package: `src/config.js`, `src/events.js`, `src/motion.js`, `src/main.js`, `src/
 renders WebGL in software (about 1–2 fps): keep harness runs short (`--size 960x600`, `settle` / `advance`, `__game` hooks;
 `__game.cycleAt(day, hour)` reaches any day, `__game.setCondition(id)` any condition, `__game.farm.debug.power(false)` a cut)
 and prefer node tests for logic. What every package must know in one paragraph: **every default setting is the Phase 4
-game**; settings are read with `ctx.settings.get(path)` and followed with `subscribe` (never cached at start only); keys
-with `ctx.keys.matches(e, id)`; every new screen is a host panel of kind 'paused' registered by its own function; nothing
-calls `alert`, `confirm`, `prompt`, `window.open` or downloads a file; every text is plain English with no verdict word and
-no farming fact outside a sign.
+game** (the new keys O, P, 1, 4, J add to it; no Phase 1–4 key changed); settings are read with `ctx.settings.get(path)`
+and followed with `subscribe` (never cached at start only); keys with `ctx.keys.matches(e, id)`; a screen that needs a key
+before ui.js closes the panel gives its built panel an `onKey(e)` (true = used), a rebind uses `ctx.ui.captureNextKey`,
+a card over the farm `ctx.ui.claimKeys` (§8.6); every new screen is a host panel of kind 'paused' registered by its own
+function, and a panel opened from the menu or over the result passes `via` / comes back to its parent (§8.6); each
+package styles its own screens with `injectStyle` under its own class prefix and keeps the frozen DOM hooks of §8.10;
+nothing calls `alert`, `confirm`, `prompt`, `window.open` or downloads a file; every text is plain English with no verdict
+word and no farming fact outside a sign.
 
 ### 10.1 `sound` — the sound for every situation, an hour of quiet variety, captions, the controls in the settings (branch `phase5/sound`)
 **Owns:** `src/audio.js`, `src/audio-engine.js`, `src/audio-beds.js`, `src/audio-voices.js`, `src/audio-sched.js`,
@@ -929,11 +1038,14 @@ no farming fact outside a sign.
 `ui.busyPanels()`; `farm.generator.running`, `farm.power`, `farm.harvest` (`started`, `endedAt`), `farm.condition`,
 `farm.waterTank`, `props.carrying`, `env`; `EV.CATCH`, `EV.LETTER`, `EV.ACTION` (`gen.*`, `phone.*`, `feed.order`, `clean.*`),
 `EV.FARM_DELIVERY`, `EV.POWER`. Raises `EV.SOUND_CAPTION { key, text }` (also while muted). The speaker key calls
-`ctx.ui.openSettings('sound')` for its settings. The U key through `ctx.keys.matches(e, 'sound')`.
-**Builds:** the beds and cues of §2.1 (thunder, drips, storm gusts, the alarm's growing gap, the generator bed and its
+`ctx.ui.openSettings('sound')` for its settings. The U key through `ctx.keys.matches(e, 'sound')`. The speaker toggle's
+looks in `#sound-ui-style` (audio-ui.js, exists), never in index.template.html.
+**Builds:** the beds and cues of §2.1 (thunder — flash-driven, one rumble per flash, an exponential 40 s timer with a 20 s
+floor under reduced motion —, drips at 0.2–0.6 a second, storm gusts, the alarm's growing gap, the generator bed and its
 start / stop / clunk, the hot season's day cicadas, the catching crew's murmur, crates and the idling truck, the pressure
 washer, sprayer and scraper, the office's desk fan, phone ring, dial and pen, the well pump), all built at start-up (≤ 230
-nodes, none after); the caps and habituation of §2.2; `audio-captions.js` (§2.3: the keys and words, once per change, ≤ 1
+nodes, none after: 177 today; one shared noise source for the new noise bands and one machine bed shared by the generator,
+the washer, the well pump and the truck, §2.1, for about 205 in all); the caps and habituation of §2.2; `audio-captions.js` (§2.3: the keys and words, once per change, ≤ 1
 every 8 s, from the game state so it runs muted); the layer gains of §2.6; the speaker key as a one-click toggle with its
 state in icon and label, its settings in the Sound tab (the `#sound-pop` card removed; the legend rows come from keys.js);
 `audio.captions()` and `audio.debug.hour(script)` hooks; p5-sound.json moved onto the Settings menu (its Phase 4 checks kept).
@@ -945,13 +1057,18 @@ state in icon and label, its settings in the Sound tab (the `#sound-pop` card re
   its end; the washer bed only while `busyPanels()` has `wash-bay` or he carries the washer inside; the desk fan only within
   6 m of the desk 06:00–19:00; the layer gains equal value² (0.5 → 0.25) and a slider at 0 schedules no event of its layer;
   captions: each key once per change, at most one in any 8 s, raised with the sound muted; the node count ≤ 230 and
-  unchanged after 10 minutes of fake play.
+  unchanged after 10 minutes of fake play; the shared machine bed: the generator, the washer, the well pump and the truck
+  never two at once, the nearer one taking it.
 - `node scripts/test-audio-hour.mjs` (added to npm test at the merge) — the scripted hour of §2.2: every cap of §2.2 holds
-  in every real minute; every Poisson source's gaps have a CV ≥ 0.6; no variant twice in a row; no node created; the
-  summed loudest layers in every second ≤ −16 dBFS.
+  in every real minute (drips ≤ 40, thunder ≤ 3); every Poisson source's gaps have a CV ≥ 0.6 (thunder is flash-driven:
+  its delays after each flash 1.5–7.9 s instead; its reduced-motion timer is Poisson and checked); no variant twice in a
+  row; no node created; the summed loudest layers in every second ≤ −16 dBFS.
 - `node scripts/shoot.mjs --steps scripts/p5-sound.json --size 960x600` — ≥ 44 PASS, 0 FAIL (the speaker toggles the
-  sound; Settings → Sound's volume 40 % sets `audio.settings.volume` 0.4, stored in `chickenFarm.settings.v1` and
-  `chicken-farm.sound`; every Phase 4 level and rule check as before).
+  sound; the volume through `__game.ui.openSettings('sound')` and `__game.settings.set('sound.volume', 0.4)`, and once
+  through the frozen hook `[data-setting="sound.volume"] input` with `value = '0.4'` and an `input` event (§8.10: the
+  slider holds the stored 0..1 value, its output shows *40*), sets `audio.settings.volume` 0.4, stored in
+  `chickenFarm.settings.v1` and `chicken-farm.sound`; no step depends on the settings panel's classes or texts, which the
+  settings package rebuilds in parallel; every Phase 4 level and rule check as before).
 - `--steps scripts/p5-sound-scenes.json` — every band of §2.4 PASS (storm RMS −30..−37, peak ≤ −18; thunder inside peak ≤
   −24; generator 4 m −34..−39, inside −42..−48; catching −32..−38; wash bay −33..−38; office −42..−48; hot noon −34..−39;
   everything ≤ −16; the alarm caption within 1 s with the sound off).
@@ -961,21 +1078,30 @@ state in icon and label, its settings in the Sound tab (the `#sound-pop` card re
 ### 10.2 `saves` — slots, Continue, backups, migrations, messages; the model's two leftovers (branch `phase5/saves`)
 **Owns:** `src/saves.js`, `src/save-slots.js`, `src/save-codec.js`, `src/ui-saves.js`, `src/save.js`, `src/run.js`; for the
 Phase 4 leftovers §6.8.1 and §6.8.4: `src/flock-watch.js`, `src/farm.js` and every `src/farm-*.js` (the appetite term sits in
-`farm-tuning.js` / `farm-flock.js`; the profiles in `farm-profiles*.js`), `src/content-signs-cond.js` (the appetite line
+`farm-tuning.js` / `farm-cycle-step.js`; the profiles in `farm-profiles*.js`), `src/content-signs-cond.js` (the appetite line
 only); scripts `test-watch.mjs`, `test-cond.mjs`, `test-cycle.mjs`, `cycle-refs.mjs`, `test-run.mjs`, `test-tuning.mjs` and
 `tuning-refs*.mjs` (code; a band change goes in the report), `tuning-audit.mjs`, new `test-saves.mjs`, new `p5-saves.json`,
 new `p5-saves-migrate.json`.
 **Contract:** §3 entirely, §6.8.1, §6.8.4, §8.7, §8.9 (`run.exportSave` / `importSave`; reads `level.saveNow()` once the
 experience package exposes it — until then `run.saveRun` through the level's autosave is enough; `saves.latestInfo` /
-`continueLatest` keep their shapes, ui.js calls them). The saves panel registers itself (`registerSavesPanel`, kind
-'paused'), its menu entry (order 30) and title action (order 10), as in code. Every message is `SAVE_MESSAGES`' (add codes
-there, never change a text's meaning).
+`continueLatest` / `continueAuto` keep their shapes, ui.js calls them). The saves panel registers itself
+(`registerSavesPanel`, kind 'paused'), its menu entry (order 30, `via` passed on) and title action (order 10), as in code;
+its built panel's `onKey(e)` answers Esc in a question (§8.6); its styles in `#saves-style` (in code, §8.11); the DOM
+hooks of §8.10 (`data-slot`, `data-save-key`, `data-answer`, `data-copy-part`, `data-restore-box`). Every message is
+`SAVE_MESSAGES`' (add codes there, never change a text's meaning). **`composeText`, `composeParts`, `partRanges` and
+`parseText` are complete in code** (review round: the reader counts the payload, parts in any order); the package may
+change them only with test-contracts' 300-backup case still passing.
 **Builds:** gz64 in `encodePayload` / `decodePayload` (CompressionStream; json64 where it is missing); `migrate` for v1
-(the Phase 2 level save), v3 and v5, raw-JSON pastes; `createSlotStore` (read / write / remove / list over the slot keys,
+(the Phase 2 level save: in code), v3 and v5, raw-JSON pastes; `createSlotStore` (read / write / remove / list over the slot keys,
 the quota and blocked rules, `maxSlotChars`); `saves.js` complete (list, latest, Continue, save / load / delete, export /
-import, EV.SAVE, the autosave-failed caption through EV.SAVE); `run.exportSave()` / `run.importSave(envelope)`; the panel
-of §3.9 (rows, the in-panel questions, the backup box with the clipboard write inside the click and the select fallback, the
-restore box, the messages, the size and date, keyboard and focus); the title card's Continue line from `latestInfo`
+import, EV.SAVE, the autosave-failed message through EV.SAVE — ui.js shows it, in code — the autosave row's error code);
+`run.exportSave()` / `run.importSave(envelope, { memoryOnly })` with §3.3's four steps (clear the live starts, write the
+envelope's, stamp `savedAt`, resume; `run: null` as the Phase 2 branch); the panel of §3.9 (rows, the in-panel questions
+with Esc through `onKey`, the backup box built when it opens — *The whole run* / *This farm only*, the length in words,
+one *Copy* key per part copying synchronously inside its click, the select fallback —, the restore box taking parts in any
+order, *Restore and play now* when storage is blocked, the messages, the size and date, keyboard and focus); the result
+screen's way in is `ui.openSaves()` over the result (a parent: closing the panel shows the result again; experience adds
+the result's key); the title card's Continue line from `latestInfo`
 (*Continue — Slot 2: …*); the hooks `saves.debug.slotChars(n)`, `saves.debug.corrupt(n)`. The supply row's rule (§6.8.1)
 and the appetite term with its sign line and bands (§6.8.4).
 **Acceptance:**
@@ -992,16 +1118,29 @@ and the appetite term with its sign line and bands (§6.8.4).
   garbage JSON and one with a wrong crc → their rows' codes, `loadSlot` refused, the other slots fine; a Phase 3 blob
   (Phase 4 fields removed: `farm.cond`, `env.powerOn`, `env.targetShift`) loads and plays a day; a hot-season backup
   restored into slot 3 loads with `farm.condition === 'hot'`; `mergeProfiles` keeps the larger of each;
-  `importSave(exportSave())` leaves the run key and every start byte-identical.
+  `importSave(exportSave())` leaves the run key and every start byte-identical; review round: loading slot 1 (a week-2
+  run) over a run in play at weeks 4–5 leaves **no** start of the replaced run (`run.hasStart('weeks45', 29)` false,
+  `store.info().starts` only the loaded run's) and the run key's `savedAt` newer than every slot (Continue then resumes
+  the loaded farm); a v1 envelope (`migrate`'s `levelId 'level1'`) loads as a run at the brooding week; the autosave key
+  holding garbage → its row's `error` `damaged`, Continue takes the newest slot; *This farm only* of the day-67 run ≤ 30 %
+  of the whole run's characters and its restore plays (a Replay of week 2 then a standard start); the whole run as parts
+  pasted in reverse order restores byte-identical, one part left out → `missing-parts` naming it; a blocked storage →
+  `importText(text, 'play')` plays the backup from memory.
 - `node scripts/test-watch.mjs` — the new supply case of §6.8.1 (day 33 12:00 and 15:00 green, the tank ≥ 90 %;
-  `waterPumpUnfixed` warned ≥ 6 farm hours before 20 %), every Phase 4 case as before.
+  `waterPumpUnfixed` warned ≥ 6 farm hours before 20 %); the iron filter's case (`waterFilterLate` warns on the intake or
+  Supply row with the filter as its cause within main's hours of day 24–25); the hot ideal's intake row never amber from
+  `fHot` alone (§6.8.4); every Phase 4 case as before.
 - `node scripts/test-cond.mjs` (full and `--quick`) and `node scripts/test-cycle.mjs` — the bands of §6.8.4 (hot ideal 2–5 %
-  under the normal ideal, FCR ≤ 1.62, EPEF ≥ 390, every level passes, every branch ≥ 2; the normal ideal's harvest
-  2,853–2,911 g and every Phase 4 band); `node scripts/test-sim.mjs` unchanged; `npm run perf` alone within budget.
+  under the normal ideal — measured at the review round with the term as specified: 3.4 % —, FCR ≤ 1.62, EPEF ≥ 390,
+  every level passes, every branch ≥ 2); the normal season byte-identical (a new digest check of the normal ideal's
+  day-42 row against main's) and every Phase 4 band; `node scripts/test-sim.mjs` unchanged; `npm run perf` alone within
+  budget.
 - `--steps scripts/p5-saves.json` (960 × 600) — PASS: in a level, Esc → Save or load → Save here in slot 1 names the farm;
-  `advance` a farm hour, Save here in slot 2 (the in-panel question on a full slot); Load slot 1 → the day and hour of slot 1;
-  Delete slot 2 by its in-panel question with `window.confirm` replaced by a function that throws (never called); Back up slot
-  1 → the clipboard holds `CF5.gz64.` or the fallback box is shown selected with it; clear storage, reload, Restore into slot
+  Esc → the menu again (the return path), Esc → the farm; `advance` a farm hour, Save here in slot 2 (the in-panel
+  question on a full slot; **Esc answers *Keep it* and the panel stays open**, `ui.openPanelId === 'saves'`); Load slot 1 →
+  the day and hour of slot 1; Delete slot 2 by its in-panel question with `window.confirm` replaced by a function that
+  throws (never called); with a result shown (`level.debug.result(true)`), `ui.openSaves()` → Save here → Esc → the result
+  again; Back up slot 1 → the clipboard holds `CF5.gz64.` or the fallback box is shown selected with it; clear storage, reload, Restore into slot
   1 by pasting (an `input` event on the box) → its name back; Continue from the title → slot 1's day; `saves.debug.corrupt(3)`
   → slot 3's row says the save is damaged and offers Delete only; a reload keeps the slots; no console or page errors.
 - `--steps scripts/p5-saves-migrate.json` — a v3 run key written by eval (from a standard start's `run.serialize()` and
@@ -1019,39 +1158,56 @@ reads them), `src/player-*.js`, `src/flock.js`, `src/flock-*.js` except `flock-w
 (§6.5; looks and behaviour unchanged) `src/world*.js`, `src/house*.js`, `src/props*.js`; scripts: new `test-settings.mjs`,
 new `p5-settings.json`, new `p5-gfx.json`, new `p5-guide.json`.
 **Contract:** §4 entirely, §6.2, §6.5, §8.3–§8.5, §8.9 (`soundView` stays the sound's door; `keys.rows` / `labels` for the
-legend and the guide; `flock.setDetail`). The settings panel, the guide and their menu entries (orders 40, 60) and title
-actions (20, 30) register themselves as in code (`registerSettingsPanel`, `registerGuidePanel`, `{ open(tab | section) }`
-returned; ui.js wires `ui.openSettings` / `ui.openGuide` to them).
+legend and the guide; `flock.setDetail`; `flock.positions()` stays as in code, the map reads it). The settings panel, the
+guide and their menu entries (orders 40, 60, `via` passed on) and title actions (20, 30) register themselves as in code
+(`registerSettingsPanel`, `registerGuidePanel`, `{ open(tab | section, via) }` returned; ui.js wires `ui.openSettings` /
+`ui.openGuide` to them); their styles in `#settings-style` / `#guide-style` (in code, §8.11); the DOM hooks of §8.10
+(`data-tab`, `data-group`, `data-setting` with the stored value, `data-key-action`, `data-key-change`, `data-guide`). The
+Keys tab's *Change* uses `ctx.ui.captureNextKey(fn)` (in code), the words of a refused key are `REBIND_WORDS`' (in code).
+**No quality change may compile a shader** (§4.4): `renderer.shadowMap.enabled` / `.type` and a light's `castShadow` stay
+as main.js set them (the shadow steps are in code and must keep `renderInfo().linked` unchanged).
 **Builds:** the menu of §4.2 (six tabs, native labelled controls with their values, a line of plain words under each tab,
 *Reset this tab*, the Graphics presets of §4.1 with *custom*, the governor's state on the Graphics tab, the frame-rate
-readout); the Keys tab with *Change* (the next key press; Esc cancels; a taken key swaps and both rows show it; fixed and
-reserved keys refused with words) and *Reset all keys*; player-input.js and player.js on `keys.matches` for every move,
+readout); the Keys tab with *Change* (the next key press through `captureNextKey`, so W, E, the arrows reach it; Esc
+cancels; a taken key swaps and both rows show it; fixed, reserved and Tab / Enter / Space refused with `REBIND_WORDS`) and
+*Reset all keys*; player-input.js and player.js on `keys.matches` for every move,
 turn and zoom key and on the camera settings (§4.5, live); gfx-quality.js's steps 4 and 5 and `restart` (§4.4);
 `flock.setDetail('full' | 'reduced')` with the reduced bird mesh and the far birds' half-rate pose (§4.4); the performance
 pass of §6.5 (find what costs draw calls or programs in each named view; merge or instance repeated static meshes, share
-materials; compile everything in the warm-up; every look unchanged: the earlier look files' pixel checks pass); the guide's
-final words, the HUD picture and *Show the introduction again* (it calls `ctx.ui.intro.reset()` then closes; the intro
-package owns the cards).
+materials; compile everything in the warm-up; every look unchanged: the earlier look files' pixel checks pass); **the 3D
+items of the look pass** (§6.4 (d): z-fighting or flicker on the boards, the cut-away in every condition, the rain over
+the cut-away house, the crew and crates fading) — experience's p5-look lists what fails, this package fixes it in
+`world*` / `house*` / `props*`; the guide's final words (keys and the Time settings through `fillGuide`'s tokens, in code),
+the HUD picture and *Show the introduction again* (it calls `ctx.ui.intro.reset()` then closes; the intro package owns
+the cards).
 **Acceptance:**
 - `node scripts/test-settings.mjs` (added to npm test at the merge): every schema item's `coerce` (out-of-range numbers
   clamped, unknown choices to the default, wrong types to the default); `reset(group)`; the presets (high → 1.5 · high · full;
   medium → 1 · low · full; low → 0.85 · off · reduced; one changed by hand → `graphics.quality` reads `custom`); keys: the
-  Phase 1–4 defaults, a rebind and its swap, `useDead` following `use` (E → R: Shift+R picks up the dead bird), reserved and
-  fixed refused, `rows()` showing a rebind, `matches` by `key` when `code` is empty; quality with a fake renderer: frames of
-  60 ms on a 2× screen → pixel ratio 1, then the simple shadow, then 0.85, then reduced flock, then shadows off, then no
-  more steps, each 3 s apart; frames of 30 ms → no step; a manual pixel ratio pins it through every step; `restart` from the
+  Phase 1–4 defaults and the new O / P / 1 / 4 / J, a rebind and its swap, `useDead` following `use` (E → R: Shift+R picks
+  up the dead bird; `actionOf` Shift+R → `useDead`), reserved, fixed and Tab / Enter / Numpad Enter / Space refused,
+  zoomIn keeping Numpad + across a swap, `rows()` showing a rebind, `matches` by `key` when `code` is empty (letters and
+  digits); quality with a fake renderer: frames of
+  60 ms on a 2× screen → pixel ratio 1, then the simple shadow (1024, the type unchanged), then 0.85, then reduced flock,
+  then shadows off (`shadowMap.enabled` still true, `autoUpdate` false), then no more steps, each 3 s apart; frames of 30 ms → no step; a manual pixel ratio pins it through every step; `restart` from the
   top; the camera: rotate speed 2 → the yaw change of a 200 px drag doubles (± 1 %), invert flips its sign, zoom speed 0.5
   halves the wheel's zoom factor's logarithm.
 - `--steps scripts/p5-settings.json` (960 × 600) — PASS: Settings opens from the title card, the game menu, the gear key and
   `ui.openSettings('sound')` (the Sound tab shown); every tab drawn without a horizontal scroll; volume 40 → `audio.settings.
-  volume` 0.4; Graphics *Low* → `quality.state()` `{ ratioCap 0.85, shadows 'off', flockDetail 'reduced' }` and
-  `renderer.shadowMap.enabled === false`, the picture renders, then *Automatic* back; Camera turn speed 2 → a 200 px
-  right-drag turns the view twice as far as at 1 (± 5 %), *the other way* flips it; Keys: *Change* on *Walk forward*, press
-  I → holding I walks him forward (the distance over 1 s ≥ 3 m), W does nothing, *Reset all keys*; a reload keeps every
+  volume` 0.4 (the slider at `value = '0.4'`, its output *40*); Graphics *Low* → `quality.state()` `{ ratioCap 0.85,
+  shadows 'off', flockDetail 'reduced' }`, `renderer.shadowMap.autoUpdate === false` and `renderInfo().linked` unchanged,
+  the picture renders with no shadow, then *Automatic* back; Camera turn speed 2 → a 200 px right-drag turns the view
+  twice as far as at 1 (± 5 %), *the other way* flips it; Keys: *Change* on *Walk forward*, press I → holding I walks him
+  forward (the distance over 1 s ≥ 3 m), W does nothing; *Change* on *Squeeze* and press W (it swaps with Walk forward),
+  then E (swaps with Use), then ArrowUp — each taken by the tab, the settings panel still open after E — then *Reset all
+  keys*; Esc during *Change* cancels it and the panel stays open; *Change* and Tab → the words of `REBIND_WORDS.ui`;
+  a reload keeps every
   changed value; *Reset this tab* restores the defaults; no console or page errors.
 - `--steps scripts/p5-gfx.json` (960 × 600) — every named view of §6.5 within `GFX.budget` (calls ≤ 110, triangles ≤ 650 K;
-  each view's numbers printed); `renderInfo().programs` the same after the last view as after the first; flock detail reduced
-  → the inside view's triangles at least 40 % fewer than full, with a screenshot pair; `flock.update`'s median ≤ 4 ms over
+  each view's numbers printed); **`renderInfo().linked` the same after the last view, the governor's steps
+  (`quality.debug.feed`) and the *Low* and *High* presets as right after the warm-up** (zero links in play); flock detail
+  reduced → the flock meshes' own triangles (index count ÷ 3 × drawn instances over `flock.meshes`) at least 40 % fewer
+  than full, with a screenshot pair, and the view's total under the budget; `flock.update`'s median ≤ 4 ms over
   300 frames on days 3 and 30; *Low* and *High* presets render with no error; the governor's order with `quality.debug.feed`.
 - `--steps scripts/p5-guide.json` — the guide opens from the title, the menu and the legend's *Full guide*; its keys list
   shows a rebound key (Q → B: *B Squeeze a handful of litter*); every section heading present; `openGuide('saving')`
@@ -1072,56 +1228,71 @@ scripts: `test-fixes.mjs`, `test-jobs.mjs`, `test-level.mjs`, new `test-map.mjs`
 `p5-a11y.json`, `p5-hud.json`, `p5-look.json`, `p5-boot.json`.
 **Contract:** §5, §6.1, §6.3, §6.4, §6.6, §6.7, §6.8.2, §6.8.3, the Time and Interface rows of §4.1, §8.6, §8.8, §8.9
 (`jobCard.spots()`, `level.saveNow()`; reads `keys.matches` / `rows`, `settings.get('time.*' | 'interface.*')`,
-`flock.dead.near`, `props.bucketDown`, `findPath` / `freeSpot`, `player.walkTo`). The hubs (`menu.add`, `title.addAction`,
-the panel ids, `ui.open*`, `busyPanels`, the Esc guard, Tab from the canvas) keep their in-code shape: the other packages
-call them.
+`flock.dead.near`, `flock.positions()`, `farm.house.closed`, `props.bucketDown`, `findPath` / `freeSpot`, `player.walkTo`).
+The hubs (`menu.add` with `via`, `title.addAction`, `title.note`, the panel ids, `ui.open*` with `via`, `busyPanels`,
+`parentPanels`, the Esc guard, the map on O and the time keys, the return path of the panel host, `captureNextKey`,
+`claimKeys` and the panels' `onKey`, `injectStyle`) keep their in-code shape: the other packages call them. The frozen DOM
+hooks of §8.10 it owns (`data-menu`, `data-title-action`, `data-place`, `data-map-view`) stay on its rebuilt screens.
 **Builds:** the game menu's look and focus order; the title card's first-run line, focus and key line from keys.js; the
-introduction (§6.1) with `ui.intro.state()`; the farm map of §5 (both views, every live layer, labels placed clear,
-hover / focus tags with the route's length and time, click and keyboard walking, the side list) with `ui.map.state()`;
+introduction (§6.1) with `ui.intro.state()`, its keys through `ctx.ui.claimKeys` and its words through `fillGuide`; the farm
+map of §5 (both views, every live layer — the flock from `flock.positions()`, the resting house shut —, labels placed
+clear, the house in the Farm view opening the House view, hover / focus tags with the route's length and time, click and
+keyboard walking, the side list) with `ui.map.state()`; the result panel's *Save or load* key (`ctx.ui.openSaves()`: the
+result is a parent, so it comes back);
 `jobCard.spots()`; ui.js, ui-help.js and ui-jobs.js on `keys.matches` / `labels` (every key check of ui.js; the legend; the
 prompt pills); the Interface settings applied live (HUD size, the watch shown / folded / hidden, caption time, the legend,
 the sound captions' line) and the Time settings in level.js (`defaultSpeed`, `signStops`, `atJobSlow`, `holdJobs`);
-`level.saveNow()`; the loading card's look and the error messages with their *Reload the page* key (§6.3); the visual pass
-(§6.4) and the accessibility pass (§6.6) over every panel; the phone note (§6.7); the bad batch's fail day (§6.8.2) and the
+`level.saveNow()`; the loading card's look and the error messages with their *Reload the page* key (§6.3; the slow line
+and the context-lost words are in code); the visual pass (§6.4: the HUD and its own panels; it lists the 3D items for the
+settings package and the settings / saves / guide screens' items for their packages) and the accessibility pass (§6.6)
+over every panel it owns, with the two text-size floors; the phone note (§6.7); the bad batch's fail day (§6.8.2) and the
 flock watch's whole warning (§6.8.3).
 **Acceptance:**
 - `node scripts/test-map.mjs` (added to npm test at the merge): `MAP_PLACES` unique and complete (every `SPOTS*` entry a
   player can use has a place); `projector` round trips; the always-shown labels' boxes (the font's widths from a fixed
-  Chakra Petch 12 px table) do not overlap at the map boxes of 960 × 600 and 1280 × 800; `jobCard.spots()`'s shape from a
-  job engine in node (open jobs with places, the current one first).
+  Chakra Petch 12 px table) do not overlap at the map boxes of 960 × 600, 1280 × 800 and a 600 px wide box (*Feed silos*
+  and *Water tank* first); `jobCard.spots()`'s shape from a job engine in node (open jobs with places, the current one
+  first).
 - `node scripts/test-fixes.mjs` — every Phase 4 case, plus: the bad batch's day-0 claim close (§6.8.2: "day 0" and "24:00" in
   the fail text, no "day 1", `failDay` 0); `time.atJobSlow` false → the work clock (90) at an open job's place; `time.holdJobs`
   false → a job closes at its window with its panel open; `time.defaultSpeed` '4x' → a level starts at 4×; `time.signStops`
   false → a sign runs the panel clock (24). `test-jobs.mjs` and `test-level.mjs` unchanged and passing.
-- `--steps scripts/p5-map.json` at 1280 × 800 and 960 × 600 — PASS: Tab from the farm view opens the map (Tab from a HUD
-  key moves focus instead); `ui.map.state()`: no two always-shown labels overlap (rect intersections 0) at both sizes; the
+- `--steps scripts/p5-map.json` at 1280 × 800 and 960 × 600 — PASS: O opens the map from the farm view and with the focus
+  on a HUD key (a mouse click there leaves no focus); Tab inside the map moves the focus and the map stays; from the menu,
+  *Farm map* then Esc → the menu again; in the Farm view a click on the house → the House view; `ui.map.state()`: no two always-shown labels overlap (rect intersections 0) at both sizes; the
   farmer's arrow at his position (± 1 map px) and facing (± 5°); one marker for each open job with a place, the current one
   marked; three dead birds laid with `flock.dead.layAt` → three crosses and *3 dead birds*; the bucket set down with G → its
   mark; the flock's dots all inside the house's box (1,800 on day 3); hovering *Feed silos* → a tag with *m* and *s walking*;
   a click on it → the map closes and he arrives within 1.5 m of its stand point; the House view: a click on the floor at
   x 5, z 0 → he walks in through the door to within 1 m; Tab / Enter on a place in the side list walks; Esc closes; from the
-  gate, `findPath` to every place's stand point is not null.
+  gate, `findPath` to every place's stand point is not null **with the house open**; on a rest day (`farm.house.closed`)
+  every inside place reads *The house is shut while it rests* and a click on one does not walk.
 - `--steps scripts/p5-first-play.json` — cleared storage, reload: the title's first-run line; *Start a new flock* → the
   *jobs* card anchored on the job card (`ui.intro.state()`: the arrow's box touches the card's box), the clock still over 2 s
   of `advance` (`env.day` unchanged), *Next* → the *signs* card on the gate sign's screen point, *Next* → the *time* card on
-  the time bar, *Got it* → no card and the clock runs; day 0 08:00 → the *watch* card on the flock watch; reload → no card;
-  the guide's *Show the introduction again* → the cards again; nothing in the cards a verdict.
+  the time bar (its words show the live keys: *O opens the farm map*), *Got it* → no card and the clock runs; with a card
+  shown, **Esc answers the card (skips) and the menu does not open** (`ui.openPanelId` null); day 0 08:00 → the *watch*
+  card on the flock watch; reload → no card; the guide's *Show the introduction again* → the cards again; nothing in the
+  cards a verdict.
 - `--steps scripts/p5-a11y.json` — the title's tab order (Continue or Start, Start at the brooding week, the quiet keys, the
   run card); Esc → the menu, every entry by Tab and Enter; a sign, a machine panel, the records book, the skill tree and a
   result opened and used by the keyboard, Esc closing each with the focus back where it was; every focusable element of the
   title, menu, settings, saves, map and the controller shows a visible focus ring (`outline-style` not `none` or a
-  box-shadow) when focused; no text under 12 px in the HUD or those panels (computed); at 390 × 844 and 412 × 915 the phone
-  note shows, `scrollWidth ≤ innerWidth`, its keys ≥ 44 px high; the prep day's first job (the gate dip, the gate sign) done
-  with the keyboard alone.
+  box-shadow) when focused; the two text floors (computed): uppercase labels and `.src` source lines ≥ 11 px with a
+  contrast ≥ 4.5 : 1, every other text ≥ 12 px, in the HUD and those panels; at 390 × 844 and 412 × 915 the phone note
+  shows, `scrollWidth ≤ innerWidth`, its keys ≥ 44 px high; the prep day's first job (the gate dip, the gate sign) done
+  with the keyboard alone, and **Next job (J), pause (P), 4× (4) and the map (O) by their keys**, then Tab to the time bar's
+  Next job key and Enter.
 - `--steps scripts/p5-hud.json` — at 960 × 600 and 1280 × 800: the water condition's supply warning (day 30, `waterPumpUnfixed`
   set by `farm.debug`) shown whole (its last word reachable in the box), the card never over the time bar or the job card;
   HUD size 0.9 / 1.15 / 1.3 → the card widths × the size ± 0.02 (1.3 shows as 1.15 at 960 px), no two HUD cards overlap; the
   watch folded and hidden; caption time 2 → a 4.5 s caption shows 9 s; the legend *always* / *never*; with sound captions on
   an `EV.SOUND_CAPTION` from eval shows `[text]`; no console or page errors.
 - `--steps scripts/p5-look.json` — the shots of §6.4 at both sizes, reviewed against its checklist (the report lists what was
-  fixed), no console or page errors. `--steps scripts/p5-boot.json` — the loading card's step words seen during boot;
-  `WEBGL_lose_context.loseContext()` → the *graphics stopped* message with its Reload key, the autosave's `savedAt` newer
-  than before.
+  fixed, and the items it handed to the settings / saves packages), no console or page errors. `--steps
+  scripts/p5-boot.json` — the loading card's step words seen during boot; `WEBGL_lose_context.loseContext()` in a level →
+  the *graphics stopped… saved just now* message with its Reload key, the autosave's `savedAt` newer than before; on the
+  title card → the *…Continue goes on from the last time the game saved* words.
 - Earlier files (its files touch everything on screen): **every** steps file and play-through of §9.3 with its PASS count;
   the real-input days of `p3-cycle.json` still under 6 minutes of play.
 
@@ -1131,22 +1302,33 @@ season's results in p4-hot and test-cond), **settings** (keys and the camera und
 **sound**, **experience** (it touches every screen: last, with every steps file and play-through run after it). Then the
 integrator: adds the new node tests to `npm test` (`test-audio-hour`, `test-saves`, `test-settings`, `test-map`) in
 package.json; checks every default against the Phase 4 game (`p5-design-stubs.json`, test-contracts' defaults); removes the
-design-round stub notes (`stub: true` in saves.js and ui-intro.js, the disabled slot keys); writes `scripts/p5-play.json`
-(§9.3) and runs every steps file and play-through of §9.3 at 960 × 600 (and the map, a11y, hud and look files at 1280 × 800
-too); runs `npm run perf` alone; fills PHASE5.md §6.8 / §9 with the measured numbers and ARCHITECTURE.md's **Phase 5 — as
+design-round stub notes (`stub: true` in saves.js and ui-intro.js, the disabled slot keys); updates `p5-design-stubs.json`
+for any expectation a package's report names (it drives only the §8.10 hooks); runs **the cross-panel look and a11y pass**
+after all four merges (one type scale and the two text floors, the close keys, the focus rings and the paddings across
+the menu, settings, saves, guide and map together; p5-look's and p5-a11y's checklists, the results in the report);
+writes `scripts/p5-play.json` (§9.3) and runs every steps file and play-through of §9.3 at 960 × 600 (and the map, a11y,
+hud and look files at 1280 × 800 too); runs `npm run perf` alone; fills PHASE5.md §6.8 / §9 with the measured numbers and ARCHITECTURE.md's **Phase 5 — as
 integrated** section (the modules, the contracts as merged, the tests and their counts, the open items).
 
 ## 12. Open questions for the farmer
 1. **Esc for the menu.** Esc with nothing open now opens the menu (the clock stops). Is that what you expect, or would you
    rather Esc only close panels and the menu sit on the gear key alone?
-2. **Tab for the map.** The map opens with Tab (and the map key on the time bar). Is another key easier for you (M is the
-   litter moisture view)? Any key can be changed in Settings → Keys.
+2. **The map on O.** The map opens with O (for *overview*) and the map key on the time bar; Tab stays the key that moves
+   between the buttons on the screen. P pauses the clock, 1 and 4 set its speed and J skips to the next job. Are these easy
+   for you to reach and remember, or would you like other keys (M is already the litter moisture view)? Any key can be
+   changed in Settings → Keys.
 3. **The map stops the clock.** While the map is open the farm stands still, as with the records book. Would you rather watch
    the flock's dots move on the map with the clock running?
 4. **Three slots** named by season, level, day and time: enough? Would you like to type your own name for a slot?
-5. **Backups as text** (copy, paste back): is that workable for you, for example kept in a LINE note or an e-mail to yourself?
-6. **The hot season costs a little weight now** (2–5 % lighter at the catch, even when the house is cooled well). Does that
-   match your April–May flocks? What do you see at the catch in the hot months against the cool months?
+5. **Backups as text** (copy, paste back). A whole run is about 210,000 characters, so it comes in about 25 parts of up to
+   9,000 characters each (one chat message holds about 10,000); *This farm only* (the farm now, without the level starts
+   for replays) is about 6 parts. Would you keep backups in LINE (Keep, or a chat with yourself), in e-mail, or not at
+   all? Is copying several parts workable, or is *This farm only* enough for you?
+6. **The hot season costs a little weight now**: in April–May the air behind the pads still stands above 28 °C in the hot
+   hours, and birds of three weeks and older eat a little less then, so a well-cooled flock finishes about 3–4 % lighter
+   at the catch than in the normal season (2,788 g against 2,887 g in our test flock). Does that match your April–May
+   flocks? What do you see at the catch in the hot months against the cool months, and from what house temperature do
+   your birds eat less?
 7. **The sounds.** The catching crew is a murmur of voices without words, the office has a desk fan and a soft phone ring:
    do these sound like your farm? Anything that should be there (a radio in the office, the feed truck's horn, dogs at the
    gate)? And the power-cut alarm: keep beeping every 6 s, or thin out after two minutes as planned?
@@ -1159,3 +1341,6 @@ integrated** section (the modules, the contracts as merged, the tests and their 
     let a player switch them off in Settings → Time (for someone who wants a faster game)?
 12. **Reduced flock detail** on a slow laptop: the birds stay the same in number and colour but are drawn with simpler shapes.
     If you try *Graphics → Low*, does the flock still read right to you (huddles, panting, spread)?
+13. **Coming back to the menu.** What the game menu opens (Settings, Save or load, the map, How to play) now goes back to the
+    menu when you close it, and a second Esc returns to the farm. Do you like that, or should closing go straight back to
+    the farm?

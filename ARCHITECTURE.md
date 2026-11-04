@@ -986,12 +986,13 @@ packages `sound`, `saves`, `settings`, `experience` §10). In code now, every de
 - **settings.js** (the store: `SETTINGS_SCHEMA` of sound, time, graphics, camera, interface, keys, intro; `createSettings`,
   `coerce`, `defaults`, `soundView`), **motion.js** (`reducedMotion()` = the system or *Reduce motion: Always*; the
   `reduce-motion` class on `<html>`; ui-dom.js and world-cond.js re-export it), **keys.js** (`KEY_ACTIONS` = the Phase 1–4
-  keys plus Tab (map) and Esc (menu); `createKeys(settings)`: `matches`, `labels`, `rows`, `rebind` with swap, `reset`),
+  keys plus O (map), P (pause), 1 and 4 (the clock's speed), J (Next job) and Esc (menu); `createKeys(settings)`:
+  `matches`, `actionOf`, `labels`, `rows`, `rebind` with swap, `reset`),
   **gfx-quality.js** (Phase 1's frame-time governor moved out of main.js unchanged; manual pixel ratio, shadows and flock
   detail; `debug.feed`), **boot-screen.js** (the loading card's steps and `BOOT_ERRORS`).
 - **UI hubs**: `ui-menu.js` (the game menu panel `menu`, kind 'paused', `add` / `open` / `entries`); `ui-title.js`
   `addAction` / `refresh`; `ui-panels.js` `busyIds()`; ui.js wires Esc → the menu in a level (not within 600 ms of a panel
-  closing: `ESC_GUARD_MS`), Tab from the canvas → the map, the map and gear keys on the time bar, the settings / guide /
+  closing: `ESC_GUARD_MS`), O → the map, the map and gear keys on the time bar, the settings / guide /
   saves / map panels, the intro, sound captions shown while `interface.soundCaptions`, and `ui.menu`, `ui.title`, `ui.map`,
   `ui.intro`, `openSettings`, `openGuide`, `openSaves`, `busyPanels`; Continue goes through `ctx.saves`.
 - **Working stubs**: `ui-settings.js` (one control per setting from the schema), `ui-guide.js` + `content-guide.js` (the
@@ -1005,6 +1006,45 @@ packages `sound`, `saves`, `settings`, `experience` §10). In code now, every de
   `keys`, `quality`, `saves`, `perf`, `renderInfo()`.
 - **Tests**: test-contracts' Phase 5 cases (the store, the keys, the codec and slot names, the guide's words and the map's
   places, the governor's order); `scripts/p5-design-stubs.json` (15 PASS at the design run: the hooks, the defaults, the
-  budget, Esc → the menu, the settings stored in both keys, the Esc guard, Tab → the map, a walk to the silos, the saves
+  budget, Esc → the menu, the settings stored in both keys, the Esc guard, Tab → the map (O since the review round), a walk to the silos, the saves
   panel, the guide, the title keys). Measured at the design run (SwiftShader, 960 × 600): 66–93 draw calls, 312–553 K
   triangles, 66 programs; a whole run's save 857 KB raw, 157 KB gzip; `flock.update` 1.8–2.6 ms median.
+
+### Phase 5 design — the review round (PHASE5.md, commit after d974e71)
+A critic's review found six things to fix before the packages branch; all are fixed in code or in the spec:
+- **Backups read back whole** (save-codec.js, complete): the marker line `CF5.<enc>.<crc>.<chars>.` carries the payload's
+  length and `parseText` counts that many base64 characters after every marker (whitespace skipped), never looking for
+  END (the design round's reader cut 56 % of whole-run backups at an `END` inside the base64). Long backups come as parts
+  of at most `SAVE_SLOTS.partChars` 9,000 characters (`composeParts`, marker `…p2of25.`), pasted back in any order;
+  `missing-parts` and `mixed` codes. test-contracts round-trips 300 random 50–250 K backups (END planted at line starts and
+  mid-line; parts shuffled) byte-identical. `migrate` reads the Phase 2 save (its `level.levelId` set to `level1`).
+- **The hot season's appetite** (spec §6.8.4, package saves): keyed on the house air (above 28 °C, birds of 21 days and
+  older, hot season only: 2.5 % a °C, floor 0.85), not on comfort (which cut both seasons alike); measured in a scratch
+  copy: the hot ideal 2,788 g against the normal 2,887 g (3.4 % lighter, seeds 1–3), FCR 1.569, EPEF 416, every level
+  passed; the normal season untouched. The flock watch's intake row expects the dip.
+- **Keys before ui.js closes a panel** (ui.js, in code): `ui.captureNextKey(fn)` (the next key, any key: the Keys tab's
+  Change), `ui.claimKeys(fn)` (the intro card), a built panel's `onKey(e)` (a saves question's Esc, the menu's arrows).
+- **The map on O; Tab is the focus key** (keys.js, ui.js, ui-hud.js): P / 1 / 4 / J press pause, 1×, 4× and Next job; a
+  pointer click leaves no focus on a time-bar key; rebinding refuses Tab, Enter, Numpad Enter and Space (`UI_CODES`,
+  `REBIND_WORDS`); `actionOf` checks Shift rules first (Shift+E is `useDead`); an action's alternates survive a swap.
+- **The panel host's return path** (ui-panels.js): `openPanel(id, { returnTo })`, `register(…, { parent: true })` for the
+  result and the summary, `closeAll()`; the menu's entries pass `via`, so menu → Settings → Esc shows the menu again (on
+  Settings), and a panel opened over the result comes back to it.
+- **No collisions at the merge**: the frozen DOM hooks of PHASE5.md §8.10 (`data-menu`, `data-tab`, `data-setting` with the
+  stored value, `data-slot`, `data-place`, `data-guide`, `data-title-action` …) drive `p5-design-stubs.json`; each package
+  styles its own screens with `injectStyle` (ui-dom.js; the settings, saves and guide rules moved out of the template);
+  `flock.positions()` for the map's dots; the 3D look items go to package settings; the cross-panel look and a11y pass is
+  the integrator's, after the four merges.
+- Smaller fixes in code: the shadow settings never compile a shader (three 0.160 keys programs on `shadowMap.enabled` /
+  `.type` and a light's `castShadow`: the simple shadow keeps the soft filter on a 1024 map, *off* is an empty 256 map no
+  longer drawn; `renderInfo().linked` counts `gl.linkProgram`); the 20 s boot timer says *Still loading…* while the module
+  runs (`window.__bootStarted`) and the library message only when it never started; the context-lost words follow
+  `level.saveNow()`'s answer; the guide's and the intro's words name the live keys and Time settings (`fillGuide` tokens),
+  say signs stop the clock and hold no praise; `title.note(text)`; ui.js shows EV.SAVE messages; `saves.continueAuto()`.
+- In the spec: the sound's numbers (drips 0.2–0.6 a second; thunder flash-driven, its reduced-motion timer exponential
+  with a 20 s floor; one shared noise source and machine bed, about 205 of the 230 nodes); two text floors (11 px for caps
+  labels and source lines at 4.5 : 1, 12 px for running text); the flock detail check on the flock meshes' own
+  triangles; the saves' edge cases (import clears the replaced run's starts and stamps `savedAt`, the autosave row's error,
+  *Restore and play now* with storage blocked, *This farm only*, the backup built when its box opens and copied
+  synchronously in the click); the map's resting house and its Farm view house click; the iron filter's watch case.
+
