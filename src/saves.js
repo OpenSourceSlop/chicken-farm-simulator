@@ -201,6 +201,15 @@ export function createSaves({ run, level, save, events, settings, ui, storage = 
       refresh();
       return { ok: true };
     },
+    /** The autosave key that does not read (its row's Delete): the run key and its level starts go. */
+    deleteAuto() {
+      if (!autoEntry().error) return fail('invalid', { kind: 'delete', slot: 'auto' });
+      try { run?.store?.clear?.(); } catch { return fail('blocked', { kind: 'delete', slot: 'auto' }); }
+      emit({ kind: 'delete', slot: 'auto', ok: true, message: null });
+      try { title()?.note?.(null); } catch { /* optional */ }
+      refresh();
+      return { ok: true };
+    },
     async exportText(n, { farmOnly = false } = {}) {
       let env;
       const profile = profileNow();
