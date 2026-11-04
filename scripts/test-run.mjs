@@ -137,7 +137,7 @@ chain('goto(7, 21, auto) passes the brooding week; Continue starts week 2 at day
     `the same flock: ${alive} -> ${R.farm.flock.alive} alive, level start ${s.alive}`);
   assert(R.run.state().levels.week2.starts.includes(8) && R.run.replay && R.run.state().levels.level1.state === 'passed', 'week 2 start saved, the brooding week passed');
   const open = R.level.jobs.open().map((i) => i.key);
-  assert(open.includes('w2-lights@8') && open.includes('r-minvent@8'), `day 8 jobs: ${open.join(' ')}`);
+  assert(open.includes('w2-lights@8') && open.includes('r-drinkers@8'), `day 8 jobs: ${open.join(' ')}`);
 });
 
 chain('goto(auto) through every level passes each one; the cycle summary exists', (R) => {

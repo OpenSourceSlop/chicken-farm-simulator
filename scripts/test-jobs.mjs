@@ -301,10 +301,10 @@ const T = (id, done, extra = {}) => ({ id, kind: 'dated', day: 20, round: 'am', 
 test('per-level days and windows: week 2 makes days 8-14 only, onDays, rounds of the level, the level end', () => {
   const L = makeCycle(WEEK2);
   assert(L.jobs.level === WEEK2, 'engine runs week 2');
-  assert(L.st('w2-lights@8') === 'open' && L.st('r-minvent@8') === 'open' && L.st('r-walk@8') === 'open', 'day 8 morning jobs open');
+  assert(L.st('w2-lights@8') === 'open' && !L.jobs.byKey('r-minvent@8') && L.st('r-walk@8') === 'open', 'day 8 morning jobs open (the step-up on the odd mornings)');
   assert(!L.jobs.list().some((i) => i.day < 8 || i.def.kind === 'dated' && i.def.day < 8), 'nothing of the brooding week');
   L.at(9, 6.1);
-  assert(!L.jobs.byKey('r-minvent@9') && L.jobs.byKey('r-minvent@10') == null, 'onDays: no step-up on day 9 (day 10 not made yet)');
+  assert(L.jobs.byKey('r-minvent@9') && L.jobs.byKey('r-minvent@10') == null && !L.jobs.byKey('r-drinkers@9'), 'onDays: the step-up on day 9, no flow tests that morning (day 10 not made yet)');
   L.at(11, 6.1);
   assert(L.jobs.byKey('r-raise@11') && !L.jobs.byKey('r-raise@9'), 'r-raise on days 8, 11, 14 only');
   assert(L.jobs.byKey('r-controller-pm@11') && L.jobs.byKey('r-dips@11'), 'Phase 2 routines run on into week 2');

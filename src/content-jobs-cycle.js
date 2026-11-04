@@ -61,7 +61,8 @@ export const JOBS_CYCLE = [
     done: { type: 'count', id: 'light.lux', n: 3, sectors: 3, sectorsOf: 'used' } }),
   // the feed meter alone on the mornings without the silo gauge (content-jobs.js SILO_DAYS)
   R('r-feedmeter', [8, 41], 'am', 'Read the feed meter at the feeder box', { onDays: FEEDMETER_DAYS, spot: 'feederBox', signs: ['feeder-box'], branch: null, done: A('feed.meter') }),
-  R('r-minvent', [8, 20], 'am', 'Step up the minimum ventilation for the birds’ weight', { onDays: even(8, 20), spot: 'controller', signs: ['sign-vent'], branch: 'moisture', done: A('vent.timer', { result: { stepUp: true } }) }),
+  // every other morning, on the mornings without the flow tests (content-jobs.js FLOW_DAYS: even days)
+  R('r-minvent', [8, 20], 'am', 'Step up the minimum ventilation for the birds’ weight', { onDays: [9, 11, 13, 15, 17, 19], spot: 'controller', signs: ['sign-vent'], branch: 'moisture', done: A('vent.timer', { result: { stepUp: true } }) }),
   D('w2-ready', 9, 'pm', 'Get the rest of the house ready for the birds', { spot: 'litterHeap', signs: ['sign-curtain', 'sign-litter'], branch: 'brooding', done: ST('house-ready') }),
   D('w2-curtain', 9, 'pm', 'Lift the brooding curtain and let the birds spread', { window: [13, 66], pin: true, spot: 'curtainWinch', signs: ['sign-curtain'], branch: 'brooding',
     done: A('house.curtain', { open: true }) }),

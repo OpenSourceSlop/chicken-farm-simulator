@@ -243,13 +243,15 @@ SEGMENTS.week2 = () => [
   ...autoTo(7, 21), passed('level1', ', ratio: r.ratio'), shot('p3c-08-brooding-result'),
   ...continueOn('Continue to Week 2', 'week2', 8),
   ev(`__timer('day 8')`), shot('p3c-09-day8-gate'),
-  ...morning({ day: 8, whole: false, controller: [...growingLights('w2-lights@8'), ...minVent()], inside: lux3() }),
-  job('w2-lights@8', 'the growing birds’ light program (controller, Lights)'), job('w2-lux@8', 'light measured at bird level with L in three parts'), job('r-minvent@8', 'minimum ventilation stepped up by the sign'),
+  ...morning({ day: 8, whole: false, controller: growingLights('w2-lights@8'), inside: lux3() }),
+  job('w2-lights@8', 'the growing birds’ light program (controller, Lights)'), job('w2-lux@8', 'light measured at bird level with L in three parts'),
   ...next(), ev(`'Next job -> ' + __t()`),
   ...afternoon({ day: 8, whole: false, raise: true }),
   job('r-raise@8', 'drinker and feeder lines raised for the birds’ size'),
   ...evening(8), ev(`__timerEnd('day 8')`),
   ev(`'not done on day 8: ' + (__missed(8) || 'none')`), exp(`__missed(8) === '' && 'every job of day 8 done'`, 'day 8 played by real input: every job done'),
+  // day 9 (an odd morning): the minimum ventilation stepped up by the vent sign's table at the controller
+  ...autoTo(9, 6.05), ...gateToHouse(), ...controllerRead(), ...minVent(), ...esc(), job('r-minvent@9', 'minimum ventilation stepped up by the sign (day 9)'),
   // day 10: the brooding curtain lifts at the winch
   ...autoTo(10, 6.05), ev(`'day 10 morning at ' + __t() + ', curtain ' + (__game.env.broodCurtain ? 'down' : 'up')`),
   ...gateToHouse(), W(2.0, -4.7, 0.35), ...E('curtain-winch', 'E opens the curtain winch'), click('Wind the curtain up'), adv(1.5), shot('p3c-10-winch'), ...esc(),
@@ -296,7 +298,7 @@ const nightAtController = (n, label) => [W(-12, -4.6, 0.3), ...E('controller', l
 SEGMENTS.week3 = () => [
   ...continueOn('Continue to Week 3', 'week3', 15),
   ...autoTo(16, 6.05), ev(`__timer('day 16')`),
-  ...morning({ day: 16, whole: true, controller: minVent() }),
+  ...morning({ day: 16, whole: true }),
   ...nextTo(13), ev(`'Next job -> ' + __t()`),
   // 16-day-old birds: six fans, no pad (the heat sign: young birds as few tunnel fans as the heat allows; with the pad too they chill);
   // the droppings of five birds on the walk back west from the fan panel
