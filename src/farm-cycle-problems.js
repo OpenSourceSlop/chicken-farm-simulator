@@ -116,16 +116,18 @@ export function tickCycleProblems(farm, env) {
 }
 
 /**
- * heat-handled (PHASE3.md §3.1, the heat sign and the pad plate): never while the birds are chilled (mean felt
- * comfort under -1.5 °C: too much air for their age). Then few birds panting (10 % or less), or every fan that
- * turns is on with the pad running (or off over its humidity limit). Young birds (under 21 days: "as few tunnel
- * fans as the heat allows") never by the pad: it is for big birds in the heat.
+ * heat-handled (PHASE3.md §3.1, the heat sign and the pad plate; Phase 4 PHASE4.md §2.2 row 23): never while the birds
+ * are chilled (mean felt comfort under -1.5 °C: too much air for their age). Young birds (under 21 days) may have the
+ * pad with few tunnel fans (the heat sign's young-birds line, the hot season's remedy: one fan in week 2, two or three
+ * in week 3), never with more (six fans and the pad chill them). Then few birds panting (10 % or less), or every fan
+ * that turns is on with the pad running (or off over its humidity limit).
  */
+export const YOUNG_PAD_MAX_FANS = 3;   // model: the hot season's week 3 plan (two or three fans with the pad)
 export function heatHandled(farm, env) {
   const C = farm.comfort || {}, e = Number.isFinite(C.meanOver) ? C.meanOver : (C.e ?? 0), pant = C.pantShare ?? 0;
   if (e < -1.5) return false;
   const young = (farm.age ?? 21) < 21;
-  if (young && env.padOn) return false;
+  if (young && env.padOn && env.fansEffective > YOUNG_PAD_MAX_FANS) return false;
   if (pant <= 0.1) return true;
   const allFans = env.fansEffective >= 6 - (env.fansBroken || []).length;
   return allFans && (young || env.padOn || env.houseRH > HEAT.padOffAboveRH);

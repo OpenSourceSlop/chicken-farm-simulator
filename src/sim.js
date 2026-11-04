@@ -2,8 +2,9 @@
 // Owner: systems/UI agent. Other modules read `env`; only ui.js and test hooks call the setters.
 import {
   HEATERS, HOUSE, BIRD_BOUNDS, BROOD_BOUNDS, FAN_COUNT, TIME, WEATHER, MIN_DAY, AIR, EQUIP, targetTempAt, weightAt,
-  OUTSIDE_WATER_GM3, PAD_EFF,
+  OUTSIDE_WATER_GM3, PAD_EFF, PLACEMENT_DAY,
 } from './config.js';
+import { windChillP4 } from './farm-tuning.js';
 //
 // Phase 2 additions (package "sim", PHASE2.md §6.2). The level climate runs only while
 // env.levelClimate is true (farm.start sets it, farm.stop clears it). With it false the climate is
@@ -60,6 +61,17 @@ import {
 //                   pad runs from padOverC; null = the fans and the pad by hand
 //   env.heatBudget() -> { wallsCh, airCh, brooderCh, birdsCh, sunCh, slabCh }   °C per hour each term moved the
 //                   house air in the last level-climate step (negative = cooling): the heat loss readout
+//
+// Phase 4 (PHASE4.md §9.1, §9.2; package "sim"):
+//   env.setWindChillP4(on) / env.windChillP4   the Phase 4 wind chill (farm-tuning.js windChillP4: by age, speed and
+//                   house air) instead of Phase 2's formula; the farm turns it on with the cycle model (Week 2 on).
+//                   Off: the brooding week of every condition and the sandbox keep Phase 2's / Phase 1's.
+//   env.setPower(on) / env.powerOn   the house has power (the farm's mains or generator). While false the env counts
+//                   no fans (manual or timer: fansOn, fansEffective, fanMean 0, no air speed), no pad, no lights and no
+//                   brooder ignition (heaterDemand 0); the farmer's settings (fansManual, ventTimer, padOn, setpoint)
+//                   stay and act again when the power comes back.
+//   env.setTargetShift(c, toDay = 3) / env.targetShiftC   env.targetTemp = the brooder sign's row + c on calendar days
+//                   0..toDay (a bad batch brooded 1 °C warmer); 0 = the sign's row (every reader agrees with it)
 
 const HOUR = 3600;
 export const MAX_DAY = 42;  // the last day of the flock; after it the clock keeps day 42
@@ -128,6 +140,10 @@ function initialState() {
     fansEffective: 0,              // Phase 3: manual fans that move air
     padWorking: 1,                 // Phase 3: share of the pad with water on it (farm sets it)
     broodersUp: false,             // Phase 3: brooders off for good and winched up (setBroodersUp)
+    windChillP4: false,            // Phase 4: the tuned wind chill (setWindChillP4; the farm, from Week 2)
+    powerOn: true,                 // Phase 4: the house has power (setPower; the farm's mains or generator)
+    targetShiftC: 0,               // Phase 4: the target over the sign's row on days 0..targetShiftToDay (setTargetShift)
+    targetShiftToDay: 3,
     fanStages: null,               // Phase 3: { stages: [{ overC, fans }], padOverC } or null (setFanStages)
     heatTerms: null,               // Phase 3: the last level-climate step's terms, °C/h (heatBudget)
     // Phase 2 (see the contract at the top)
@@ -272,6 +288,10 @@ export function createSim() {
     setFansBroken(list) { this.fansBroken = (list || []).filter((i) => i >= 0 && i < FAN_COUNT); derive(this); emit('controls'); },
     wetBulb() { return wetBulbOf(this.outsideTemp, this.outsideRH); },
     setBroodersUp(on) { this.broodersUp = !!on; thermostat(this); if (this.broodersUp) this.heaterLevel = 0; derive(this); emit('controls'); },
+    // Phase 4 contract (see the top of the file)
+    setWindChillP4(on) { this.windChillP4 = !!on; derive(this); },
+    setPower(on) { const was = this.powerOn; this.powerOn = !!on; thermostat(this); if (!this.powerOn) this.heaterLevel = 0; derive(this); if (was !== this.powerOn) emit('controls'); },
+    setTargetShift(c, toDay = 3) { this.targetShiftC = Number.isFinite(c) ? c : 0; this.targetShiftToDay = Number.isFinite(toDay) ? toDay : 3; derive(this); },
     setFanStages(t) {
       const stages = t && Array.isArray(t.stages) ? t.stages.filter((x) => Number.isFinite(x.overC) && Number.isFinite(x.fans))
         .map((x) => ({ overC: x.overC, fans: Math.max(0, Math.min(FAN_COUNT, Math.round(x.fans))) })).sort((a, b) => a.overC - b.overC) : null;
@@ -345,7 +365,8 @@ function derive(env) {
     env.outsideRH = rh;
   }
   // The target follows the whole flock day (the brooder sign's table): day 1 is 34 °C all day.
-  env.targetTemp = targetTempAt(dayNumberOf(env));
+  const dn = dayNumberOf(env);
+  env.targetTemp = targetTempAt(dn) + (env.targetShiftC && dn >= 0 && dn <= env.targetShiftToDay ? env.targetShiftC : 0);
   env.bodyWeight = weightAt(env.day);
   env.broodCurtain = env.curtainForced != null ? env.curtainForced : env.day < HOUSE.broodUntilDay;
   if (env.levelClimate) {
@@ -359,6 +380,8 @@ function derive(env) {
     env.fansOn = Math.min(FAN_COUNT, env.fansManual + (onPart ? t.fans : 0));
     const timerMean = env.fanMean - env.fansEffective;
     env.airSpeed = (env.fansEffective + timerMean * INLET_SPEED_SHARE) * (2.5 / FAN_COUNT);
+    // Phase 4: no power, no fans (the settings stay: fansManual, ventTimer)
+    if (env.powerOn === false) { env.fansEffective = 0; env.fanMean = 0; env.fansOn = 0; env.airSpeed = 0; }
   } else {
     env.fanMean = env.fansOn;
     env.fansEffective = env.fansOn;
@@ -366,20 +389,24 @@ function derive(env) {
   }
   env.airflowM3h = AIR.infiltrationM3h + env.fanMean * EQUIP.fanM3h;
   // Wind chill felt by the birds (general practice): young birds feel moving air more.
-  const ageK = 3.0 - 1.6 * Math.max(0, Math.min(1, (env.day - 7) / 28));
-  env.windChill = env.airSpeed * ageK;
+  // Phase 4 (from Week 2, env.windChillP4): by age, speed and the house air (farm-tuning.js)
+  if (env.windChillP4 && env.levelClimate) env.windChill = windChillP4(env.airSpeed, env.day - PLACEMENT_DAY, env.houseTemp);
+  else {
+    const ageK = 3.0 - 1.6 * Math.max(0, Math.min(1, (env.day - 7) / 28));
+    env.windChill = env.airSpeed * ageK;
+  }
   env.feelsLike = env.houseTemp - env.windChill;
   // Light program: 23 hours of light, dark 02:00–03:00 (week 1 guide) unless the farm sets another
   const lp = env.lightProgram || { darkStart: 2, darkHours: 1, dimmer: 1 };
   const intoDark = (((env.hour - lp.darkStart) % 24) + 24) % 24;
-  env.lightsOn = !(lp.darkHours > 0 && intoDark < lp.darkHours);
+  env.lightsOn = env.powerOn !== false && !(lp.darkHours > 0 && intoDark < lp.darkHours);
   env.lightLevel = env.lightsOn ? (lp.dimmer ?? 1) : 0;
 }
 
 // Brooder thermostat, measured on the house air: proportional output across HEAT_BAND.
 // Phase 3: brooders winched up (env.broodersUp) ask for nothing.
 function thermostat(env) {
-  const d = env.broodersUp ? 0 : (env.heaterSetpoint + HEAT_OFF_ABOVE - env.houseTemp) / HEAT_BAND;
+  const d = env.broodersUp || env.powerOn === false ? 0 : (env.heaterSetpoint + HEAT_OFF_ABOVE - env.houseTemp) / HEAT_BAND;
   env.heaterDemand = d < 0 ? 0 : d > 1 ? 1 : d;
   env.heatersOn = env.heaterDemand > 0.02;
 }
@@ -417,7 +444,7 @@ function levelClimate(env, hrs) {
   const tunnelShare = env.fanMean > 0 ? Math.min(1, env.fansEffective / env.fanMean) : 0;
   // Phase 2: about 1 °C per 5 % of humidity the air can still take up (Broiler Ventilation), 85 % of it.
   // Phase 3 (cycle climate): PAD_EFF of the way to the outside wet bulb, on the share of the pad that is wet.
-  const padDrop = !env.padOn ? 0 : env.cycleClimate
+  const padDrop = !env.padOn || env.powerOn === false ? 0 : env.cycleClimate
     ? PAD_EFF * Math.max(0, env.outsideTemp - wetBulbOf(env.outsideTemp, env.outsideRH)) * tunnelShare * Math.max(0, Math.min(1, env.padWorking))
     : Math.min(9, (100 - env.outsideRH) / 5) * 0.85 * tunnelShare;
   const inlet = env.outsideTemp - padDrop;

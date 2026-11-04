@@ -36,6 +36,8 @@ import { createProblems, tickProblems, actionSymptoms, onNear, onListen, problem
   installWeather, applyEffects } from './farm-problems.js';
 import { doAct } from './farm-act.js';
 import { absHumSat } from './sim.js';
+import { humidityTerm } from './farm-heat.js';
+import { waterPerKgP4, sensibleHeatK } from './farm-tuning.js'; // Phase 4: from Week 2 (PHASE4.md §9.1)
 // Phase 3 (PHASE3.md §6, §13): the cycle state, its actions and the per-step model of Week 2 on
 import { installCycle, cycleAct } from './farm-cycle.js';
 import { installConditions, condAct } from './farm-cond.js'; // Phase 4 (PHASE4.md §10.5)
@@ -255,13 +257,16 @@ function stepFarm(farm, env, hrs, spill) {
         // minutes): Phase 2's figures stay as they are
         if (!((farm.zoneTick = (farm.zoneTick || 0) + 1) % 3) || !C.eZ || !Number.isFinite(C.eZ[0])) {
           const Z = cycleComfort(farm, env, farm.zoneScratch || (farm.zoneScratch = {}), age);
-          C.eZ = Z.eZ; C.wZ = Z.wZ; C.hotFrom = Z.hotFrom;
+          C.eZ = Z.eZ; C.wZ = Z.wZ; C.hotFrom = Z.hotFrom; C.pantFrom = Z.pantFrom; C.pantAll = Z.pantAll;
         }
+        // Phase 4: the fan panel's Birds feel (the house less the wind chill, plus the damp) in the brooding week too
+        C.feltMean = C.meanOver + env.targetTemp + humidityTerm(env.houseRH, env.houseTemp);
       }
       C.out = env.brooderOut.length; farm.comfortH = 0;
     }
-    const io = { feedAccess: feedAccess(feed, age, env.dayNumber), eat: (kg) => eat(feed, kg), waterPerKg: waterPerKg(env.houseTemp) };
-    if (X) cycleFactors(farm, env, age);
+    // Phase 4 (from Week 2): the birds drink by their comfort (waterPerKgP4 of the mean e), not by the weather
+    const io = { feedAccess: feedAccess(feed, age, env.dayNumber), eat: (kg) => eat(feed, kg), waterPerKg: X ? waterPerKgP4(C.meanOver ?? 0) : waterPerKg(env.houseTemp) };
+    if (X) cycleFactors(farm, env, age, hrs);
     const r = stepFlock(farm, env, hrs, C, io);
     drunkL = r.drunkL; breathL = r.breathL;
     drink(water, drunkL, age, spill);
@@ -286,7 +291,8 @@ function stepFarm(farm, env, hrs, spill) {
   // Phase 3: the climate sees the litter's actual drying at the house RH (the warm litter under big birds dries more)
   env.dryPotentialGh = X ? L.vapourGh / Math.max(0.05, 1 - env.houseRH / 100) : L.dryPotentialGh;
   const birds = fl.alive, w = fl.meanWeightG;
-  env.flockHeatPerH = birds > 0 ? ((0.2 * birds) / 6000 + (1.3 * birds * w) / (6000 * 2850)) * (X ? X.heatK : 1) : 0;
+  // Phase 4 (from Week 2): the sensible term x sensibleHeatK (farm-tuning flockLoadsP4: x 2.5, less in hot air)
+  env.flockHeatPerH = birds > 0 ? ((0.2 * birds) / 6000 + ((1.3 * birds * w) / (6000 * 2850)) * (X ? sensibleHeatK(env.houseTemp) : 1)) * (X ? X.heatK : 1) : 0;
   if (farm.depthVersion !== L.version) { farm.depthVersion = L.version; env.litterDepthCm = meanDepth(L); }
   if (farm.mode === 'level') cyclePost(farm, env, hrs, { drunkL });
 }

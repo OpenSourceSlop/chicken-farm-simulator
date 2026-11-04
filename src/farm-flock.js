@@ -6,6 +6,7 @@ import { mixtureStats, mixtureQuantile } from './farm-rng.js';
 import { EV } from './events.js';
 import { feedAccess } from './farm-feed.js';
 import { GROUP_W } from './farm-comfort.js';
+import { TUNING } from './farm-tuning.js';
 
 // model constants
 export const FLOCK = {
@@ -309,7 +310,7 @@ export function stepFlock(farm, env, hrs, C, io) {
   // Phase 3: older birds' spread grows less from the same stress (model: Phase 2's terms x cvCycleK from Week 2)
   const dcv = (FLOCK.cvBase + (FLOCK.cvTemp * (1 - fT) + FLOCK.cvGroup * fTsd + FLOCK.cvWater * (1 - A)
     + FLOCK.cvFeed * (1 - Math.min(1, fF * (wantKg > 0 ? Math.min(1, k) : 1))) + FLOCK.cvCaked * (farm.litter.cakedShare || 0) + FLOCK.cvAir * (1 - fAir)) * (X ? FLOCK.cvCycleK : 1)
-    + (X ? X.fx.dcv : 0)) * (hrs / 24);
+    + (X ? X.fx.dcv : 0)) * (hrs / 24) * (X && age > 14 ? TUNING.cvGrowthAfter14 : 1);   // Phase 4: less spread after day 14
   c.good.cv += dcv; c.late.cv += dcv; c.weak.cv += dcv;
   if (FLOCK_DEBUG.on && X) {
     const D = FLOCK_DEBUG.acc[env.dayNumber] || (FLOCK_DEBUG.acc[env.dayNumber] = { temp: 0, group: 0, water: 0, feed: 0, caked: 0, air: 0, crowd: 0, f: 0, n: 0, fT: 0, fF: 0, fW: 0, fAir: 0, fL: 0, fx: 0, k: 0 });
@@ -345,7 +346,8 @@ export function stepFlock(farm, env, hrs, C, io) {
   fl.hungryH = hungry ? (fl.hungryH || 0) + hrs : Math.max(0, (fl.hungryH || 0) - 2 * hrs);
   const starving = fl.hungryH > FLOCK.hungryAfterH ? alive * FLOCK.hungryRate * Math.min(1, (fl.hungryH - FLOCK.hungryAfterH) / FLOCK.hungryRampH) : 0;
   rates[1] = (age >= FLOCK.starveFrom && age < FLOCK.starveTo ? c.late.n * FLOCK.starveRate : 0) + starving;
-  rates[2] = alive * FLOCK.coldRate * coldSq;
+  // Phase 4: from day 14 the cold deaths of older birds (farm-tuning coldDeathRateP4 per cell, farm-house.js)
+  rates[2] = X && age >= TUNING.cold.fromAge ? alive * (C.coldDeathPerH || 0) : alive * FLOCK.coldRate * coldSq;
   // Phase 3: heat deaths per cell of the floor in use (farm-heat.heatDeathRate through farm-house.js)
   rates[3] = X ? alive * (C.heatDeathPerH || 0) : C.meanOver > FLOCK.heatFrom ? alive * FLOCK.heatRate * (C.meanOver - FLOCK.heatFrom) ** 2 : 0;
   rates[4] = A < FLOCK.dehydBelow ? alive * FLOCK.dehydRate * ((FLOCK.dehydBelow - A) / FLOCK.dehydBelow) * (X ? X.fx.dehydK : 1) : 0;

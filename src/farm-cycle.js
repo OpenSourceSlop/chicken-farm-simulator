@@ -57,7 +57,11 @@ function resetCycle(farm, { keepPlan = null } = {}) {
 /** The env settings the farm owns (the curtain, cycle climate, last day, brooders, fans, pad), from the farm. */
 function syncEnv(farm, env, { fresh = false } = {}) {
   const on = !!farm.cyc.on;
-  env.setCycleClimate(on);
+  // Phase 4: a condition may run the cycle climate from the prep day (the hot and rainy seasons, config conditionLevel);
+  // the tuned wind chill comes with the cycle model only (the brooding week keeps Phase 2's in every condition)
+  const def = farm.cycleLevel || farm.level;
+  env.setCycleClimate(on || !!(farm.condition && def && farm.levelFor && farm.levelFor(def).cycleClimate));
+  env.setWindChillP4(on);
   // the clean-out runs the clock to day 70; a fresh start goes back to 42 (entering a level never lowers it)
   if (farm.cycleLevel && farm.cycleLevel.id === 'cleanout') env.setMaxDay(CYCLE.lastDay); else if (fresh) env.setMaxDay(42);
   env.setBroodCurtain(!farm.house.curtainOpen);
@@ -94,7 +98,7 @@ export function installCycle(farm, env) {
   farm.stop = () => {
     stop();
     farm.cycleLevel = null; farm.cyc.on = false;
-    env.setBroodCurtain(null); env.setCycleClimate(false); env.setMaxDay(42); env.setBroodersUp(false); env.setFanStages(null); env.setFansBroken([]); env.padWorking = 1;
+    env.setBroodCurtain(null); env.setCycleClimate(false); env.setWindChillP4(false); env.setMaxDay(42); env.setBroodersUp(false); env.setFanStages(null); env.setFansBroken([]); env.padWorking = 1;
   };
   farm.serialize = () => {
     const d = serialize();

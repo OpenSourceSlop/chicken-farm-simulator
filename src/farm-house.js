@@ -12,6 +12,7 @@ import { HEATERS, BIRD_BOUNDS, FAN_COUNT, BROOD_BOUNDS } from './config.js';
 import { HEAT_MODEL, humidityTerm, hotFrom, deathFrom, ZONES, dustIndex } from './farm-heat.js';
 import { BROOD_CELLS, ALL_CELLS, cellCentre, usedCells } from './farm-litter.js';
 import { LITTER_FEEL, comfortNow } from './farm-comfort.js';
+import { TUNING, hotFromP4, pantFromP4, pantAllP4, deathFromP4, coldDeathFromP4 } from './farm-tuning.js';
 
 // model constants (PHASE3.md §6.2, §6.4; tuning log §6.16)
 export const HOUSE_MODEL = {
@@ -74,23 +75,40 @@ function fillFelt(env, farm, cells, age) {
  * The comfort of the birds on the floor in use now (farm.comfort, PHASE3.md §13.5).
  * eZ[8] mean e of each 6 m strip (NaN where no birds), wZ[8] the strip's share of the birds, e the 0.3
  * quantile (Phase 2's figure), meanOver, coldShare (e < -2), pantShare, heatDeathPerH (share of the birds
- * per hour), fHeat (intake factor), hotFrom / deathFrom (°C over the target at this age), feltMean °C,
- * groupShare (birds in strips inside -1.5..hotFrom), eG (Phase 2's brooder groups while the brooders burn).
+ * per hour), fHeat (intake factor), hotFrom / deathFrom (°C over the target at this age), feltMean °C (the fan
+ * panel's Birds feel: the house less the wind chill, plus the damp), groupShare (birds in strips inside
+ * -1.5..hotFrom), eG (Phase 2's brooder groups while the brooders burn).
+ * Phase 4 (`p4`, the cycle model from Week 2: PHASE4.md §2.3, farm-tuning.js): panting over a 4 °C ramp, the heat
+ * deaths and intake of the tuned model, cold deaths of older birds (coldDeathPerH, from day 14), pantFrom / pantAll
+ * (°C over the target at which the first / every bird pants: the comfort legend). Without it Phase 3's farm-heat.js
+ * (the brooding week's scratch zones for the scene).
  */
-export function houseComfort(env, farm, out, age, weightG) {
+export function houseComfort(env, farm, out, age, weightG, { p4 = !!(farm.cyc && farm.cyc.on) } = {}) {
   const cells = usedCells(farm.litter);
   fillFelt(env, farm, cells, age);
   const eZ = out.eZ && out.eZ.length === ZONES ? out.eZ : (out.eZ = new Float64Array(ZONES));
   const wZ = out.wZ && out.wZ.length === ZONES ? out.wZ : (out.wZ = new Float64Array(ZONES));
   const nZ = NZ; nZ.fill(0);
   eZ.fill(0);
-  let sum = 0, cold = 0, pant = 0, death = 0, fh = 0;
+  let sum = 0, cold = 0, pant = 0, death = 0, fh = 0, coldD = 0;
   // farm-heat's pantingAt / heatDeathRate / heatIntake, with the age's thresholds read once per call
-  const hf = hotFrom(age), df = deathFrom(age, weightG), M = HEAT_MODEL;
+  const hf = p4 ? hotFromP4(age) : hotFrom(age), df = p4 ? deathFromP4(age, weightG) : deathFrom(age, weightG), M = HEAT_MODEL;
+  // Phase 4: farm-tuning.js pantShareP4 / heatDeathRateP4 / heatIntakeP4 / coldDeathRateP4 with the age's thresholds read
+  // once per call (the same arithmetic; scripts/test-cond.mjs checks it against the functions)
+  const pf = p4 ? pantFromP4(age) : 0, pw = TUNING.pant.width, TD = TUNING.death, cf = p4 ? coldDeathFromP4(age) : null, ck = 0.0004 * TUNING.cold.rateShare;
   for (let k = 0; k < cells.length; k++) {
     const i = cells[k], e = E[i];
     sum += e; SORT[k] = e; eZ[ZONE[i]] += e; nZ[ZONE[i]]++;
     if (e < -2) cold++;
+    if (p4) {
+      const pv = (e - pf) / pw;
+      pant += pv < 0 ? 0 : pv > 1 ? 1 : pv;
+      const dd = e - df;
+      if (dd > 0) death += Math.min(TD.max, TD.k * dd * dd);
+      fh += Math.max(0.5, 1 - 0.04 * Math.max(0, e - hf));
+      if (cf != null && e < cf) coldD += ck * (cf - e) * (cf - e);
+      continue;
+    }
     const pv = 0.5 + (e - hf) / M.pantRamp;
     pant += pv < 0 ? 0 : pv > 1 ? 1 : pv;
     const dd = e - df;
@@ -106,8 +124,9 @@ export function houseComfort(env, farm, out, age, weightG) {
   sorted.sort();
   out.e = sorted[Math.floor(0.3 * (n - 1))];
   out.meanOver = sum / n; out.feltMean = sum / n + env.targetTemp;
-  out.coldShare = cold / n; out.pantShare = pant / n; out.heatDeathPerH = death / n; out.fHeat = fh / n;
+  out.coldShare = cold / n; out.pantShare = pant / n; out.heatDeathPerH = death / n; out.fHeat = fh / n; out.coldDeathPerH = p4 ? coldD / n : 0;
   out.hotFrom = hf; out.deathFrom = df; out.groupShare = ok;
+  out.pantFrom = p4 ? pantFromP4(age) : hf - M.pantRamp / 2; out.pantAll = p4 ? pantAllP4(age) : hf + M.pantRamp / 2;
   // the brooder groups (Phase 2's eG) while the brooders burn: the scene's huddles for young birds
   if (env.heaterLevel > 0.01 && !farm.litter.usedAll) { const tmp = out._p2 || (out._p2 = {}); comfortNow(env, tmp, { litter: farm.litter, age }); out.eG = tmp.eG; }
   return out;

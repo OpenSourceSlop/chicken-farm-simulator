@@ -14,6 +14,7 @@ import { stepHarvest } from './farm-harvest.js';
 import { stepClean } from './farm-clean.js';
 import { usedCells, addWater } from './farm-litter.js';
 import { meanPanFill } from './farm-feed.js';
+import { waterPerKgP4, dehydrationAllowed } from './farm-tuning.js';
 
 const H = 1 / 24;
 const PAD_CELLS = []; // the two westmost cell columns (the pad overflow)
@@ -38,7 +39,7 @@ export function cyclePre(farm, env, hrs) {
 export function cycleComfort(farm, env, C, age) { return houseComfort(env, farm, C, age, farm.flock.meanWeightG); }
 
 /** The cycle's factors for this flock step: f_space x f_form x f_heat x f_health x the change shock x lame birds. */
-export function cycleFactors(farm, env, age) {
+export function cycleFactors(farm, env, age, hrs = 0) {
   const X = farm.cyc, fx = X.fx, fl = farm.flock, C = farm.comfort;
   const cr = (X.crowd = crowding(farm, age));
   const form = feedForm(farm.feed, age);
@@ -50,9 +51,11 @@ export function cycleFactors(farm, env, age) {
   // a short dry spell (the vaccine's thirst) is no dehydration: deaths only after 4 h with the main shut
   const h = farm.health;
   h.dryH = h.mainClosed ? (h.dryH || 0) : 0;
-  fx.dehydK = h.mainClosed ? Math.max(0, Math.min(1, ((h.dryH || 0) - 4) / 2)) : 1;
+  // Phase 4: birds of 3 weeks and older die of thirst only after 6 h with no water in reach (the catch's lines up)
+  X.dryH = farm.water.access < 0.5 ? (X.dryH || 0) + hrs : 0;
+  fx.dehydK = h.mainClosed ? Math.max(0, Math.min(1, ((h.dryH || 0) - 4) / 2)) : dehydrationAllowed(age, X.dryH) ? 1 : 0;
   fx.otherK = 0.4;           // background deaths from Week 2 (model: Phase 2's 'other' x 0.4)
-  X.waterPerKg = 1.75 + 0.03 * Math.max(0, env.houseTemp - 30);
+  X.waterPerKg = waterPerKgP4(C.meanOver ?? 0);
 }
 
 export function cyclePost(farm, env, hrs, r) {
