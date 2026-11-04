@@ -4,11 +4,13 @@
 //   surfaceAt(x, z)            'litter' | 'concrete' | 'gravel' | 'grass' | 'dip' under the farmer's boots
 //   indoorness(x, z, inside)   0 outside .. 1 inside; a 3 m crossfade through the house door
 //   ambientTargets(s, out)     bed gains 0..1 (and filter cut-offs) for the place, the hour and the house's machines
+//   fanSpinOf(env), padFlowOf(env)  the fans and the pad as heard, from the game's env
 //   flockLoudness(birds)       0..~1.15 from the birds within earshot (nearness-weighted real birds)
 //   flockMix(snd, F, day, out) event rates and bed gains of the flock from flock.sounds()
+//   flockHabituation(s), flockSignature(snd)  the ear getting used to a contented flock (and when it starts over)
 //   createStepTracker()        footfalls from the farmer's speed, the same cycle as player-anim.js
 //   LEVELS                     dBFS of each layer at the default volume (the mix rule: background -30..-36)
-import { HOUSE, HOUSE_BOUNDS, HEATERS, FARM, PAD } from './config.js';
+import { HOUSE, HOUSE_BOUNDS, HEATERS, FARM, PAD, FAN_COUNT } from './config.js';
 
 export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -45,7 +47,7 @@ export const range = (rng, a, b) => a + (b - a) * rng();
 // scripts/p5-sound.json measures every layer: background RMS -30..-36 dBFS, cues a few dB over it.
 export const LEVELS = {
   birds: -36, distant: -42,
-  flock: -36, distress: -31, pant: -40, snick: -35,
+  flock: -36, distress: -32, pant: -40, snick: -35,
   steps: -38, cue: -32, tick: -33, click: -42,
 };
 
@@ -114,8 +116,24 @@ export function distantRates(hour, weather, out = {}) {
 
 // ---- the house's machines and the outdoor bed ----
 const FAN_WALL = HB.xMax, PAD_WALL = PAD.x;
+/** A timer cycle shorter than this in real seconds is heard as its mean (FAN_FOLLOW_SEC). */
+export const FAN_FOLLOW_SEC = 20;
 /**
- * s: { x, z, k (indoorness), hour, weather, rain (0..1), fanSpin (0..1: fans turning / 6), heaterLevel, padOn }
+ * The fans heard, 0..1 of FAN_COUNT. In a level env.fansOn switches the minimum ventilation timer's fans on
+ * and off on the game clock: a 300 s cycle passes in 2.5 real seconds at the work clock, and following it
+ * would make the hum swell on a beat. While a cycle passes in under FAN_FOLLOW_SEC real seconds (or the clock
+ * is stopped) the hum follows the mean of the fans running instead; a slower cycle is heard switching.
+ */
+export function fanSpinOf(env) {
+  const t = env.levelClimate ? env.ventTimer : null, rate = env.paused ? 0 : +env.timeScale || 0;
+  const n = t && (rate <= 0 || t.cycleSec / rate < FAN_FOLLOW_SEC) ? (env.fansManual || 0) + t.fans * (env.ventDuty || 0) : env.fansOn || 0;
+  return clamp(n, 0, FAN_COUNT) / FAN_COUNT;
+}
+/** The pad's water as heard, 0..1: off without its pump, else the share of the pad with water on it (env.padWorking). */
+export const padFlowOf = (env) => (env.padOn ? clamp(Number.isFinite(env.padWorking) ? env.padWorking : 1, 0, 1) : 0);
+/**
+ * s: { x, z, k (indoorness), hour, weather, rain (0..1), fanSpin (0..1: fans turning / 6), heaterLevel,
+ *      padOn (0..1, padFlowOf: the wet share of the pad; true = 1) }
  * out (gains 0..1 before LEVELS): breeze, crickets, cicadas, fans, fanCut (Hz), gas, roar, pad, rain, rainCut,
  * outCut (Hz, the outdoor bed's low-pass: the walls muffle it inside), flockAtten, flockCut
  */
@@ -143,11 +161,12 @@ export function ambientTargets(s, out = {}) {
   const heat = clamp(s.heaterLevel || 0, 0, 1);
   out.gas = heat * Math.min(1, near) * k;
   out.roar = heat * (0.25 + 0.75 * Math.min(1, near)) * k * smooth(-30, -8, -Math.abs(x + 10));
-  // pad: water trickling down the west end wall while the pump runs
+  // pad: water trickling down the west end wall while the pump runs; a part-clogged pad trickles less
+  // (independent sections: the level goes with the square root of the wet share)
   const dPadIn = Math.max(0, x - PAD_WALL);
   const dPadOut = Math.hypot(Math.min(0, x - (PAD_WALL - 0.3)), Math.max(0, Math.abs(z) - HB.zMax));
   const padIn = Math.exp(-dPadIn / 8), padOut = 0.8 * Math.exp(-dPadOut / 5) * (x < PAD_WALL + 1 ? 1 : 0.3);
-  out.pad = s.padOn ? lerp(padOut, padIn, k) : 0;
+  out.pad = Math.sqrt(clamp(+s.padOn || 0, 0, 1)) * lerp(padOut, padIn, k);
   // rain (Phase 4 storms: farm.weatherNow.rain) drums on the roof inside
   out.rain = clamp(s.rain || 0, 0, 1) * lerp(0.75, 1, k);
   out.rainCut = lerp(5000, 2600, k);
@@ -192,6 +211,7 @@ export function flockVoice(snd, cold, hot, dark, out = {}) {
  * out: chirp / distress / snick / rattle / flutter (events per second), murmur / chorus / pant (bed gains 0..1),
  * age (0 chicks .. 1 grown birds: pitch and call type).
  */
+export const CHIRP_MAX = 2.8;
 export function flockMix(snd, F, day, out = {}) {
   const f = clamp(F || 0, 0, 1.15);
   const age = smooth(6, 26, day || 0);
@@ -199,7 +219,8 @@ export function flockMix(snd, F, day, out = {}) {
   const pant = clamp(snd?.pant ?? 0, 0, 1), sn = clamp(snd?.snick || 0, 0, 1), ra = clamp(snd?.rattle || 0, 0, 1);
   const quiet = Math.max(0.1, 1 - 1.1 * pant); // hot birds hardly call: they pant with open beaks
   out.age = age;
-  out.chirp = f * c * (1 - d) * quiet * lerp(6.5, 1.6, age);
+  // contentment is sparse (the ear tires of a steady high chirp): at most CHIRP_MAX calls a second
+  out.chirp = Math.min(CHIRP_MAX, f * c * (1 - d) * quiet * lerp(2.4, 1.2, age));
   out.distress = f * d * lerp(15, 6, age);
   out.chorus = f * smooth(0.15, 0.8, d);
   out.murmur = f * age * (0.35 + 0.65 * c) * (1 - 0.5 * d) * (1 - 0.65 * pant); // panting birds hardly murmur
@@ -208,6 +229,15 @@ export function flockMix(snd, F, day, out = {}) {
   out.snick = f * sn * 1.1;
   out.rattle = f * ra * 0.5;
   return out;
+}
+
+/** The ear gets used to a contented flock: its chirps and murmur come down 3.5 dB over the first minute in
+ *  the house (seconds of it), so a change (cold peeping, panting, snicks) still stands out. */
+export const flockHabituation = (seconds) => lerp(1, 0.67, smooth(15, 60, seconds));
+/** What the flock is doing, coarsely (flockVoice's output): habituation starts over when this changes. */
+export function flockSignature(snd) {
+  if (!snd) return 0;
+  return (snd.distress > 0.3 ? 1 : 0) + (snd.pant > 0.3 ? 2 : 0) + (snd.snick > 0.15 || snd.rattle > 0.15 ? 4 : 0) + (snd.contented > 0.05 ? 8 : 0);
 }
 
 // ---- footfalls (the same cycle as player-anim.js, so a sound lands with each boot) ----

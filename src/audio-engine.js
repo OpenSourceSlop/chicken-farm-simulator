@@ -6,7 +6,7 @@
 //   walls) · cues; each -> its layer gain -> master (the volume) -> soft clipper -> destination, and a
 //   send to one shared room reverb.
 import { makeRng, dbToGain, LEVELS, indoorness, ambientTargets, flockLoudness, flockMix, surfaceAt,
-  createStepTracker, stepHabituation } from './audio-mix.js';
+  createStepTracker, stepHabituation, flockHabituation, flockSignature } from './audio-mix.js';
 import { noiseBuffers, noiseSource, roomImpulse, clipperCurve, makeWaves, voicePool, gainNode, biquad, toward } from './audio-synth.js';
 import { buildBeds } from './audio-beds.js';
 import { createScheduler } from './audio-sched.js';
@@ -18,14 +18,14 @@ export const LAYERS = ['outside', 'house', 'flock', 'cues'];
 // two of a kind (audio-clock s)]. The gains are calibrated with scripts/p5-sound.json so a cue's loudest
 // 100 ms sits at -34..-40 dBFS (the key click -56, the winch -49) with its peak at or under -22 dBFS.
 const CUES = {
-  door: ['cue', 23, 0.8], valve: ['cue', 15, 0.6], waterValve: ['cue', 14.5, 0.6], winch: ['cue', 15.5, 0.5],
-  beep: ['cue', 3, 0.25], probe: ['cue', 3.5, 0.3], paper: ['cue', 17, 0.45], click: ['click', 20, 0.05],
-  tick: ['tick', 11, 2.0], box: ['cue', 22, 1.2], bin: ['cue', 24.5, 0.8], squeeze: ['cue', 14, 0.5],
+  door: ['cue', 21, 0.8], valve: ['cue', 15, 0.6], waterValve: ['cue', 14.5, 0.6], winch: ['cue', 15.5, 0.5],
+  beep: ['cue', 3, 0.25], probe: ['cue', 3.5, 0.3], paper: ['cue', 15, 0.45], click: ['click', 20, 0.05],
+  tick: ['tick', 11, 2.0], box: ['cue', 20, 1.2], bin: ['cue', 24.5, 0.8], squeeze: ['cue', 14, 0.5],
   alarm: ['cue', 3, 4], truck: ['cue', 0, 20],
 };
 const CUE_NAMES = Object.keys(CUES);
 // footfalls: gain over LEVELS.steps; the loudest 100 ms of a walk at -42 (the foot dip) .. -47 dBFS, peaks <= -27
-const STEP_DB = { gravel: 19, concrete: 20, litter: 13.5, grass: 11.5, dip: 19.5 };
+const STEP_DB = { gravel: 19, concrete: 20, litter: 14, grass: 13.5, dip: 19.5 };
 const CONTROLLER = { x: -12, z: -5.8 };
 
 /** opts: { rng | seed, lookahead (s ahead of the clock a sound starts), solo (a layer name: the others silent) } */
@@ -76,9 +76,9 @@ export function createEngine(ac, opts = {}) {
   const S = {
     x: 0, z: 0, inside: false, speed: 0, dist: -1, camYaw: 0, teleport: false, jump: false,
     hour: 10, weather: 'normal', rain: 0, fanSpin: 0, heaterLevel: 0, padOn: false, day: 1,
-    snd: null, flockW: 0, pickBird: null, auger: 0, augerPan: 0, trickle: -1, powerOff: false, k: 0,
+    snd: null, flockW: 0, pickBird: null, auger: 0, augerPan: 0, trickle: -1, powerOff: false, k: 0, outT: 26,
   };
-  const A = {}, M = { chirp: 0, distress: 0, chorus: 0, murmur: 0, pant: 0, flutter: 0, snick: 0, rattle: 0, age: 0 };
+  const A = {}, M = { chirp: 0, distress: 0, chorus: 0, murmur: 0, pant: 0, flutter: 0, snick: 0, rattle: 0, age: 0, habit: 1 };
   function pan(dx, dz) {
     const d = Math.hypot(dx, dz);
     if (d < 1e-3) return 0;
@@ -113,16 +113,16 @@ export function createEngine(ac, opts = {}) {
     let ok = false;
     switch (name) {
       case 'door': ok = V.door(P, t, g, rng); break;
-      case 'valve': case 'waterValve': ok = V.valve(P, t, g, name === 'waterValve', rng); break;
+      case 'valve': case 'waterValve': ok = V.valve(P, t, g, name === 'waterValve', rng, p); break;
       case 'winch': ok = V.winch(P, t, g, rng); break;
-      case 'beep': case 'probe': ok = V.beep(P, t, g, name === 'probe'); break;
+      case 'beep': case 'probe': ok = V.beep(P, t, g, name === 'probe', p); break;
       case 'paper': ok = V.paper(P, t, g, rng); break;
       case 'click': ok = V.click(P, t, g, rng); break;
       case 'tick': ok = V.tick(P, t, g, rng); break;
-      case 'box': ok = V.thump(P, t, g, rng); if (Number.isFinite(x)) sched.burst(x, z); break;
-      case 'bin': ok = V.thump(P, t, g, rng, true); break;
+      case 'box': ok = V.thump(P, t, g, rng, false, p); if (Number.isFinite(x)) sched.burst(x, z); break;
+      case 'bin': ok = V.thump(P, t, g, rng, true, p); break;
       case 'squeeze': ok = V.crackle(P, t, g, rng); break;
-      case 'alarm': ok = V.alarm(P, t, g); break;
+      case 'alarm': ok = V.alarm(P, t, g, p); break;
       case 'truck': ok = sched.truck(t); break;
     }
     if (ok) { lastAt[i] = t; counts[name]++; }
@@ -137,13 +137,17 @@ export function createEngine(ac, opts = {}) {
   }
   const atDoor = (x, z) => Math.abs(x - HOUSE.door.x) < 2.2 && Math.abs(z - HOUSE.door.z) < 4.5;
   let lastX = NaN, lastZ = NaN;
-  let bedAcc = 0, bedNow = -1, lastInside = null, walkT = 0, lastStepAt = -1e9, alarmAt = 0;
+  let bedAcc = 0, bedNow = -1, lastInside = null, walkT = 0, lastStepAt = -1e9, alarmAt = 0, habT = 0, habSig = -1;
   const lastBus = new Float64Array(4).fill(-1);
   function update(dtIn) {
     const dt = Math.min(Math.max(dtIn || 0, 0), 0.25);
     const now = ac.currentTime, t = now + look;
     // cues queued since the last frame (none survive a clock jump: a skip is not the farmer's doing)
     while (qLen > 0) { const j = qHead; qHead = (qHead + 1) % QN; qLen--; if (!S.jump) play(qName[j], qX[j], qZ[j], now); }
+    // the ear gets used to a contented flock in the house; a change in the flock, or a while outside, starts it over
+    const sig = flockSignature(S.snd);
+    if (sig !== habSig) { habSig = sig; habT = 0; }
+    habT = S.k > 0.5 ? habT + dt : Math.max(0, habT - 4 * dt);
     // the place, the hour and the machines: ten times a second (of game steps and of the audio clock,
     // so a burst of steps in one task never piles automation up)
     if (((bedAcc -= dt) <= 0 && now - bedNow >= 0.05) || bedNow < 0 || S.teleport) {
@@ -152,6 +156,7 @@ export function createEngine(ac, opts = {}) {
       S.k = indoorness(S.x, S.z, S.inside);
       ambientTargets(S, A);
       flockMix(S.snd, flockLoudness(S.flockW), S.day, M);
+      M.habit = flockHabituation(habT); M.murmur *= M.habit;
       if (opts.calibrate) calibrate(opts.calibrate);
       beds.update(now, A, M, S, first);
       lastBus[0] = toward(outLP.frequency, A.outCut, now, tau, lastBus[0], 0.02);

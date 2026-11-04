@@ -6,10 +6,10 @@
 // Files: audio-settings (volume / mute store), audio-mix (pure rules), audio-synth / -beds / -voices /
 // -sched / -engine (Web Audio), audio-ui (the speaker button), audio-measure (offline level checks).
 import { EV } from './events.js';
-import { FAN_COUNT, FEEDER_LINES_Z, LINE_X, BIRDS_PER_INSTANCE } from './config.js';
+import { FEEDER_LINES_Z, LINE_X, BIRDS_PER_INSTANCE } from './config.js';
 import { createSoundSettings, volumeToGain, DEFAULT_VOLUME, SOUND_KEY } from './audio-settings.js';
 import { createEngine } from './audio-engine.js';
-import { nearWeight, surfaceAt, flockVoice } from './audio-mix.js';
+import { nearWeight, surfaceAt, flockVoice, fanSpinOf, padFlowOf } from './audio-mix.js';
 import { COLD, HOT } from './flock-state.js';
 import { createSoundUI } from './audio-ui.js';
 import { measure } from './audio-measure.js';
@@ -84,7 +84,7 @@ export function createAudio(ctx, deps = {}) {
     } else { S.teleport = false; S.jump = false; S.dist = -1; }
     S.x = p.x; S.z = p.z; S.inside = player.isInside; S.speed = player.speed || 0; S.camYaw = player.cameraYaw || 0;
     S.hour = env.hour; S.weather = env.weather; S.day = env.day; S.heaterLevel = env.heaterLevel || 0;
-    S.fanSpin = (env.fansOn || 0) / FAN_COUNT; S.padOn = !!env.padOn && env.padWorking !== false;
+    S.fanSpin = fanSpinOf(env); S.padOn = padFlowOf(env); S.outT = Number.isFinite(env.outsideTemp) ? env.outsideTemp : 26;
     S.rain = +farm?.weatherNow?.rain || 0;
     S.powerOff = farm?.mode === 'level' && farm.power?.on === false;
     S.pickBird = pickBird;
@@ -123,6 +123,9 @@ export function createAudio(ctx, deps = {}) {
   }
   function unlock() {
     if (engine || failed || !AC) { if (ac && ac.state !== 'running' && !settings.muted && !document.hidden) ac.resume().catch(() => {}); return !!engine; }
+    // the context is made only while the page holds a user activation, so the browser lets it start (else
+    // Chrome makes it blocked and warns "The AudioContext was not allowed to start")
+    if (typeof navigator !== 'undefined' && navigator.userActivation && !navigator.userActivation.isActive) return false;
     try {
       ac = new AC({ latencyHint: 'interactive' });
       engine = createEngine(ac);
@@ -132,11 +135,16 @@ export function createAudio(ctx, deps = {}) {
     } catch { failed = true; engine = null; ac = null; }
     return !!engine;
   }
-  const onGesture = () => unlock();
+  // only the events the HTML rules count as a user activation: a mouse press, a touch or pen lifted (a
+  // touch's pointerdown does not count), a key other than Esc; synthetic events never do
+  const activates = (e) => e.isTrusted !== false && (e.type === 'keydown' ? e.key !== 'Escape'
+    : e.type === 'pointerdown' ? !e.pointerType || e.pointerType === 'mouse'
+      : e.type === 'pointerup' ? !!e.pointerType && e.pointerType !== 'mouse' : true);
+  const onGesture = (e) => { if (activates(e)) unlock(); };
   // a cue only while the sound plays: nothing raised while it was off or hidden bursts out when it comes back
   const cue = (name, x, z) => { if (engine && ac.state === 'running') engine.cue(name, x, z); };
   if (typeof window !== 'undefined') {
-    for (const t of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(t, onGesture, { capture: true, passive: true });
+    for (const t of ['pointerdown', 'pointerup', 'keydown', 'touchend']) window.addEventListener(t, onGesture, { capture: true, passive: true });
     document.addEventListener('visibilitychange', () => {
       if (!ac) return;
       if (document.hidden) ac.suspend().catch(() => {});

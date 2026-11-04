@@ -9,7 +9,7 @@ import * as V from './audio-voices.js';
 // Peak level of one event over its layer's LEVELS (dB): calibrated with scripts/p5-sound.json so the
 // layers' RMS land on LEVELS at the default volume.
 export const EVENT_DB = {
-  chirp: 14, distress: 5.5, cluck: 9, snick: 24, rattle: 12, flutter: 14, burst: 7,
+  chirp: 13, distress: 5.5, cluck: 9, snick: 24, rattle: 12, flutter: 14, burst: 7,
   twitter: 7, dove: 6, bulbul: 6, frog: 2, gecko: 2, dog: 4, moto: 6, truck: 9,
 };
 const peak = (kind, layer) => dbToGain(LEVELS[layer] + EVENT_DB[kind]);
@@ -40,9 +40,10 @@ export function createScheduler({ pools, E, S, rng, pan }) {
     if (d < 0) return;
     const w = nearWeight(d), p = pan(B.x - S.x, B.z - S.z);
     const near = 0.3 + 0.7 * Math.sqrt(w), age = M.age, P = pools.flock;
-    if (kind === 'chirp') {
-      if (age > 0.55 && rng() < (age - 0.55) / 0.45) V.cluck(P, t, peak('cluck', 'flock') * near, p, range(rng, 360, 470), rng);
-      else V.chirp(P, t, peak('chirp', 'flock') * near, p, lerp(3900, 2400, Math.min(1, age / 0.55)), rng);
+    if (kind === 'chirp') { // contented calls: habituated (M.habit) after a minute among a calm flock
+      const h = near * (M.habit ?? 1);
+      if (age > 0.55 && rng() < (age - 0.55) / 0.45) V.cluck(P, t, peak('cluck', 'flock') * h, p, range(rng, 360, 470), rng);
+      else V.chirp(P, t, peak('chirp', 'flock') * h, p, lerp(3900, 2400, Math.min(1, age / 0.55)), rng);
     } else if (kind === 'distress') V.distressPeep(P, t, peak('distress', 'distress') * near, p, lerp(4100, 1900, age), rng);
     else if (kind === 'snick') V.snick(P, t, peak('snick', 'snick') * near, p, rng);
     else if (kind === 'rattle') V.rattle(P, t, peak('rattle', 'snick') * near, p, rng);

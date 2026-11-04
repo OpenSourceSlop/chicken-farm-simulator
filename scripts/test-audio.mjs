@@ -5,11 +5,15 @@
 // Run: node scripts/test-audio.mjs   (also part of `npm test`)
 import { createSoundSettings, volumeToGain, DEFAULT_VOLUME, SOUND_KEY } from '../src/audio-settings.js';
 import { surfaceAt, indoorness, ambientTargets, birdRate, insectLevel, cicadaLevel, distantRates, flockLoudness, nearWeight,
-  flockMix, flockVoice, createStepTracker, stepHabituation, makeRng, nextGap, pick, LEVELS } from '../src/audio-mix.js';
+  flockMix, flockVoice, createStepTracker, stepHabituation, makeRng, nextGap, pick, LEVELS, fanSpinOf, padFlowOf, CHIRP_MAX,
+  flockHabituation, gainToDb } from '../src/audio-mix.js';
 import { BED_DB } from '../src/audio-beds.js';
 import { createEngine } from '../src/audio-engine.js';
+import { voicePool, makeWaves } from '../src/audio-synth.js';
+import * as V from '../src/audio-voices.js';
 import { FakeAudioContext } from './fake-audio.mjs';
 import { HOUSE, FARM, HEATERS } from '../src/config.js';
+import { createSim } from '../src/sim.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -115,7 +119,8 @@ test('the flock: silent when empty, chirps when comfortable, loud peeps when col
   const silent = mix({ distress: 1, contented: 1, snick: 1, pant: 1 }, 2, 0);
   for (const [k, v] of Object.entries(silent)) if (k !== 'age') assert(v === 0, `empty: ${k} ${v}`);
   const ok = mix(flockVoice({ distress: 0, contented: 1, snick: 0 }, 0, 0, false));
-  assert(ok.chirp > 3 && ok.distress === 0, `comfortable ${JSON.stringify(ok)}`);
+  assert(ok.chirp > 1.5 && ok.chirp <= CHIRP_MAX && ok.distress === 0, `comfortable: a few chirps a second ${JSON.stringify(ok)}`);
+  assert(mix(flockVoice({ distress: 0, contented: 1 }, 0, 0, false), 2, 1.15).chirp <= CHIRP_MAX, 'contentment capped near the birds');
   const cold = mix(flockVoice({ distress: 1, contented: 0, snick: 0 }, 0.6, 0, false));
   assert(cold.distress > 2 * ok.chirp && cold.chirp < 0.5, `cold ${JSON.stringify(cold)}`);
   // the sandbox's flock.sounds() counts hot birds as distress: flockVoice takes that back out
@@ -128,6 +133,97 @@ test('the flock: silent when empty, chirps when comfortable, loud peeps when col
   assert(sn.snick > 0.5 && ok.snick === 0, 'snicking only with a breathing problem');
   assert(flockVoice({ distress: 0, contented: 1 }, 0, 0, true).contented < 0.5, 'quieter in the dark');
   assert(mix({ contented: 1 }, 35).murmur > 0.5 && mix({ contented: 1 }, 2).murmur === 0, 'grown birds murmur');
+});
+
+test('the fans under the minimum ventilation timer: a steady hum at game speed, heard switching on a slow clock', () => {
+  const env = createSim();
+  env.setLevelClimate(true);
+  const fanDb = () => gainToDb(ambientTargets(base({ x: 0, z: 0, k: 1, fanSpin: fanSpinOf(env) }), {}).fans);
+  for (const [scale, fans] of [[120, 1], [480, 1], [120, 2], [30, 2]]) {
+    env.setVentTimer({ fans, onSec: 60 * fans, cycleSec: 300 });
+    env.timeScale = scale;
+    let lo = Infinity, hi = -Infinity, on = 0, off = 0;
+    for (let i = 0; i < 60 * 12; i++) {
+      env.update(1 / 60);
+      const d = fanDb();
+      lo = Math.min(lo, d); hi = Math.max(hi, d);
+      if (env.fansOn > env.fansManual) on++; else off++;
+    }
+    assert(on > 0 && off > 0, `${scale}x: the timer switched its fans (on ${on}, off ${off} frames)`);
+    assert(Number.isFinite(lo) && hi - lo < 1, `${scale}x, ${fans} fan(s): the hum moves ${(hi - lo).toFixed(2)} dB through the cycles (under 1 dB)`);
+  }
+  env.setVentTimer({ fans: 1, onSec: 60, cycleSec: 300 });
+  env.timeScale = 5; // a 300 s cycle over 60 real seconds: the switching is heard
+  const seen = new Set();
+  for (let i = 0; i < 60 * 70; i++) { env.update(1 / 60); seen.add(fanSpinOf(env)); }
+  assert(seen.has(0) && seen.has(1 / 6), `a slow clock follows the timer: ${[...seen].map((v) => v.toFixed(3))}`);
+  env.timeScale = 120; env.paused = true;
+  assert(Math.abs(fanSpinOf(env) - 0.2 / 6) < 1e-9, 'a stopped clock: the mean');
+  env.paused = false; env.setLevelClimate(false); env.setFans(3);
+  assert(fanSpinOf(env) === 0.5, 'the sandbox: the fans switched on');
+});
+
+test('the pad: a part-clogged pad trickles less; no pump, no trickle', () => {
+  const at = (padOn) => ambientTargets(base({ x: -23, z: 0, k: 1, padOn }), {}).pad;
+  const full = at(padFlowOf({ padOn: true, padWorking: 1 })), part = at(padFlowOf({ padOn: true, padWorking: 0.3 }));
+  assert(gainToDb(part) < gainToDb(full) - 3, `padWorking 0.3 ${gainToDb(part).toFixed(1)} dB vs 1 ${gainToDb(full).toFixed(1)} dB`);
+  assert(at(padFlowOf({ padOn: false, padWorking: 1 })) === 0 && at(padFlowOf({ padOn: true })) === full && at(true) === full, 'off; the default share; a plain true');
+});
+
+test('a contented full house: a few chirps a second, softer after a minute; a change in the flock is heard fresh', () => {
+  const { eng, frame } = rig({ birds: 1, S: { x: -14, z: 0, inside: true, flockW: 1e6, snd: { distress: 0, contented: 1, snick: 0, rattle: 0, pant: 0 } } });
+  let n = 0;
+  const take = eng.pools.flock.take;
+  eng.pools.flock.take = (kind, t0, dur) => { const v = take(kind, t0, dur); if (v && kind === 'tone') n++; return v; };
+  for (let i = 0; i < 60 * 60; i++) frame();
+  assert(n >= 100 && n <= 60 * 3, `${n} chirps in a minute (at most 3 a second)`);
+  assert(eng.flock.habit < 0.7 && eng.flock.habit > 0.6, `about 3.5 dB softer after a minute: ${gainToDb(eng.flock.habit).toFixed(1)} dB`);
+  eng.S.snd = { distress: 1, contented: 0, snick: 0, rattle: 0, pant: 0 };
+  for (let i = 0; i < 12; i++) frame();
+  assert(eng.flock.habit === 1 && flockHabituation(0) === 1, 'cold peeping starts the ear over');
+});
+
+test('cues placed in the world pan to their side; the farmer\'s own cues are centred', () => {
+  const { ac, eng, frame } = rig({ S: { x: -14, z: 0, inside: true, camYaw: 0, speed: 4 } });
+  for (let i = 0; i < 90; i++) frame(); // footfalls leave the voices panned a little left and right
+  eng.S.speed = 0;
+  for (let i = 0; i < 60; i++) frame();
+  const pans = (kind) => eng.pools.cues.voices.filter((v) => v.kind === kind && v.busy > ac.currentTime + 0.05)
+    .map((v) => v.pan.events.filter((e) => e[0] === 'set').pop()[1]);
+  eng.cue('box', -8, 0); frame();
+  assert(pans('noise').length === 1 && pans('noise')[0] > 0.5, `a box tipped 6 m to his right: pan ${pans('noise')}`);
+  for (let i = 0; i < 90; i++) frame();
+  eng.cue('alarm', -20, 0); frame();
+  assert(pans('tone').length === 1 && pans('tone')[0] < -0.5, `the alarm 6 m to his left: pan ${pans('tone')}`);
+  for (let i = 0; i < 90; i++) frame();
+  eng.cue('door'); frame();
+  assert(pans('noise').length === 1 && pans('noise')[0] === 0 && pans('tone').every((p) => p === 0), `the door is centred: ${pans('noise')} ${pans('tone')}`);
+});
+
+test('every one-shot ends inside the time its voice is held (no fade cut off by the next sound)', () => {
+  const ac = new FakeAudioContext(), rng = makeRng(9), src = ac.createBufferSource();
+  const P = voicePool(ac, ac.destination, { tones: 3, noises: 4, waves: makeWaves(ac), sources: [src] });
+  const recipes = {
+    chirp: (t) => V.chirp(P, t, 0.1, 0, 3000, rng), distress: (t) => V.distressPeep(P, t, 0.1, 0, 3000, rng), cluck: (t) => V.cluck(P, t, 0.1, 0, 400, rng),
+    snick: (t) => V.snick(P, t, 0.1, 0, rng), rattle: (t) => V.rattle(P, t, 0.1, 0, rng), flutter: (t) => V.flutter(P, t, 0.1, 0, rng),
+    twitter: (t) => V.twitter(P, t, 0.1, 0, rng), dove: (t) => V.dove(P, t, 0.1, 0, rng), bulbul: (t) => V.bulbul(P, t, 0.1, 0, rng),
+    frog: (t) => V.frog(P, t, 0.1, 0, rng), gecko: (t) => V.gecko(P, t, 0.1, 0, rng), dog: (t) => V.dog(P, t, 0.1, 0, rng),
+    door: (t) => V.door(P, t, 0.1, rng), valve: (t) => V.valve(P, t, 0.1, false, rng), waterValve: (t) => V.valve(P, t, 0.1, true, rng),
+    winch: (t) => V.winch(P, t, 0.1, rng), beep: (t) => V.beep(P, t, 0.1), probe: (t) => V.beep(P, t, 0.1, true), paper: (t) => V.paper(P, t, 0.1, rng),
+    click: (t) => V.click(P, t, 0.1, rng), tick: (t) => V.tick(P, t, 0.1, rng), box: (t) => V.thump(P, t, 0.1, rng), bin: (t) => V.thump(P, t, 0.1, rng, true),
+    squeeze: (t) => V.crackle(P, t, 0.1, rng), alarm: (t) => V.alarm(P, t, 0.1),
+  };
+  for (const s of ['gravel', 'concrete', 'litter', 'dip', 'grass']) recipes[`step ${s}`] = (t) => V.footstep(P, t, 0.1, 0, s, rng() < 0.5 ? 0 : 1, rng);
+  let t = 1;
+  for (let k = 0; k < 60; k++) for (const [name, play] of Object.entries(recipes)) {
+    t += 5;
+    assert(play(t), `${name} found a voice`);
+    for (const v of P.voices) {
+      if (v.busy <= t) continue;
+      const end = Math.max(...v.g.events.map((e) => e[2]));
+      assert(end <= v.busy - 0.01 + 1e-9, `${name}: its last gain change at +${(end - t).toFixed(3)} s, the voice held to +${(v.busy - 0.01 - t).toFixed(3)} s`);
+    }
+  }
 });
 
 // ---- footfalls ----
@@ -170,9 +266,12 @@ function rig(o = {}) {
 }
 const voicesOf = (pool, kind, t) => pool.voices.filter((v) => v.kind === kind && v.busy > t).length;
 
-test('engine: builds once on a context, a few hundred nodes at most', () => {
-  const { ac } = rig();
-  assert(ac.nodes > 50 && ac.nodes < 320, `${ac.nodes} nodes`);
+test('engine: builds once on a context, under 200 nodes', () => {
+  const { ac, frame } = rig();
+  const n = ac.nodes;
+  assert(n > 50 && n < 200, `${n} nodes`);
+  for (let i = 0; i < 600; i++) frame();
+  assert(ac.nodes === n, `no node made after start-up (${ac.nodes - n} more)`);
 });
 
 test('engine: a quiet yard writes little automation per frame (no per-frame writes when nothing changes)', () => {

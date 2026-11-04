@@ -3,8 +3,11 @@
 // automation on a voice that is already running (no node is created per sound or per frame).
 //
 //   toneVoice:  oscillator -> gain -> stereo pan -> bus   (f, g, pan params; setWave(name))
-//   noiseVoice: shared looping noise -> biquad -> gain -> stereo pan -> bus   (f, q, g, pan params)
-//   pool.take(t0, dur): a voice free at t0 (its last envelope has ended), marked busy until t0 + dur; null if none
+//   noiseVoice: shared looping noise -> gain -> biquad -> low-pass -> stereo pan -> bus   (g, f, q, lp, pan params)
+//               The gain comes first: a silent voice's filters hear silence, so retuning them for the next
+//               sound (4 kHz grit, then a 160 Hz door thump) has nothing to ring with.
+//   pool.take(t0, dur): a voice free at t0 (its last envelope has ended), marked busy until t0 + dur, its pan
+//               centred and its low-pass open; null if none
 
 const MIN = 1e-4;
 
@@ -104,16 +107,22 @@ function toneVoice(ac, bus, waves, name) {
   };
 }
 
+/** The low-pass of a noise voice when a recipe does not set one (wide open). */
+export const LP_OPEN = 18000;
 function noiseVoice(ac, src, bus) {
+  const g = ac.createGain();
+  g.gain.value = 0;
   const flt = ac.createBiquadFilter();
   flt.type = 'bandpass';
   flt.frequency.value = 1000;
   flt.Q.value = 1;
-  const g = ac.createGain();
-  g.gain.value = 0;
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = LP_OPEN;
+  lp.Q.value = 0.5;
   const p = ac.createStereoPanner();
-  src.connect(flt); flt.connect(g); g.connect(p); p.connect(bus);
-  return { kind: 'noise', busy: 0, f: flt.frequency, q: flt.Q, g: g.gain, pan: p.pan, flt };
+  src.connect(g); g.connect(flt); flt.connect(lp); lp.connect(p); p.connect(bus);
+  return { kind: 'noise', busy: 0, f: flt.frequency, q: flt.Q, lp: lp.frequency, g: g.gain, pan: p.pan, flt };
 }
 
 /** A pool of voices on one bus. take() only returns a voice whose last sound has ended. */
@@ -129,8 +138,10 @@ export function voicePool(ac, bus, { tones = 0, noises = 0, waves, wave = 'sine'
         if (v.kind !== kind || v.busy > t0 - 0.002) continue;
         v.busy = t0 + dur + 0.01;
         v.g.cancelScheduledValues(t0); v.f.cancelScheduledValues(t0); v.pan.cancelScheduledValues(t0);
-        if (v.q) v.q.cancelScheduledValues(t0);
         v.g.setValueAtTime(0, t0);
+        v.pan.setValueAtTime(0, t0); // the farmer's own sounds are centred; a placed sound pans itself
+        if (v.q) v.q.cancelScheduledValues(t0);
+        if (v.lp) { v.lp.cancelScheduledValues(t0); v.lp.setValueAtTime(LP_OPEN, t0); }
         return v;
       }
       return null;

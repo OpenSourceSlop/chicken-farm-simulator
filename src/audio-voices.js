@@ -1,10 +1,13 @@
 // Sound layer, one-shot recipes: each one schedules automation on a pooled voice (audio-synth.js) and
 // returns false when no voice is free (the sound is simply skipped: the mix never stacks up).
 // P = a voice pool, t = start time (context clock), g = peak gain, pan = -1..1, rng = the engine's generator.
+// pool.take() centres a voice: the farmer's own sounds (steps aside) stay in the middle, and a sound placed in
+// the world (a tipped box, the controller's alarm, a valve) pans itself with panAt.
 import { envelope, glide, grain } from './audio-synth.js';
 import { range } from './audio-mix.js';
 
 const BARKS = new Float64Array(4); // bark times, reused (no allocation per sound)
+const SEGS = new Float64Array(4);  // the paper's rustles, reused
 const panAt = (v, t, pan) => v.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), t);
 
 // ---- the flock ----
@@ -213,14 +216,14 @@ export function footstep(P, t, g, pan, surface, run, rng) {
   } else if (surface === 'concrete') {
     v.q.setValueAtTime(1.1, t); glide(v.f, t, range(rng, 1300, 1700), t + 0.05, 900);
     envelope(v.g, t, k, 0.005, 0.01, 0.055);
-  } else if (surface === 'litter') {
-    v.q.setValueAtTime(0.7, t); v.f.setValueAtTime(range(rng, 3600, 4800), t);
+  } else if (surface === 'litter') { // dry shavings: a soft crunch, not a hiss
+    v.q.setValueAtTime(0.7, t); v.f.setValueAtTime(range(rng, 2000, 3500), t); v.lp.setValueAtTime(7000, t);
     envelope(v.g, t, k * 0.8, 0.012, 0.02, 0.09 - 0.03 * run);
   } else if (surface === 'dip') {
     v.q.setValueAtTime(1.4, t); glide(v.f, t, 600, t + 0.16, range(rng, 1200, 1500));
     envelope(v.g, t, k * 1.2, 0.01, 0.04, 0.16);
-  } else { // grass
-    v.q.setValueAtTime(0.5, t); v.f.setValueAtTime(range(rng, 4400, 5800), t);
+  } else { // grass: a swish
+    v.q.setValueAtTime(0.6, t); v.f.setValueAtTime(range(rng, 1500, 3000), t); v.lp.setValueAtTime(6000, t);
     envelope(v.g, t, k * 0.7, 0.02, 0.02, 0.11);
   }
   return true;
@@ -236,15 +239,15 @@ export function door(P, t, g, rng) {
   return true;
 }
 /** A valve or regulator turned: a dry creak; water valves let a soft rush through. */
-export function valve(P, t, g, water, rng) {
+export function valve(P, t, g, water, rng, pan = 0) {
   const v = P.take('tone', t, 0.5);
   if (!v) return false;
-  v.setWave('cluck');
+  v.setWave('cluck'); panAt(v, t, pan);
   glide(v.f, t, range(rng, 210, 260), t + 0.4, range(rng, 380, 460));
   for (let i = 0; i < 9; i++) grain(v.g, t + i * 0.044, g * range(rng, 0.45, 0.8), 0.034, 0.008);
   if (water) {
     const w = P.take('noise', t + 0.2, 0.8);
-    if (w) { w.q.setValueAtTime(0.6, t + 0.2); w.f.setValueAtTime(950, t + 0.2); envelope(w.g, t + 0.2, g * 0.5, 0.15, 0.2, 0.4); }
+    if (w) { panAt(w, t + 0.2, pan); w.q.setValueAtTime(0.6, t + 0.2); w.f.setValueAtTime(950, t + 0.2); envelope(w.g, t + 0.2, g * 0.5, 0.15, 0.2, 0.4); }
   }
   return true;
 }
@@ -258,23 +261,25 @@ export function winch(P, t, g, rng) {
   return true;
 }
 /** An electronic beep (the scale; probe = the thermometer, higher and shorter). */
-export function beep(P, t, g, probe = false) {
+export function beep(P, t, g, probe = false, pan = 0) {
   const v = P.take('tone', t, 0.14);
   if (!v) return false;
-  v.setWave('sine'); v.f.setValueAtTime(probe ? 2900 : 2050, t);
+  v.setWave('sine'); panAt(v, t, pan); v.f.setValueAtTime(probe ? 2900 : 2050, t);
   envelope(v.g, t, g, 0.004, probe ? 0.03 : 0.075, 0.04);
   return true;
 }
 /** Paper: a board's sheet or a plate turned over, a page of the notebook. */
 export function paper(P, t, g, rng) {
-  const v = P.take('noise', t, 0.42);
+  let len = 0; // the rustles first, so the voice is held for all of them and the fade after (len + 0.04)
+  for (let i = 0; i < 4; i++) { SEGS[i] = range(rng, 0.05, 0.1); len += SEGS[i]; }
+  const v = P.take('noise', t, len + 0.05);
   if (!v) return false;
   v.q.setValueAtTime(0.7, t);
   glide(v.f, t, range(rng, 2200, 2800), t + 0.15, range(rng, 3400, 4200));
   v.f.exponentialRampToValueAtTime(range(rng, 2400, 3000), t + 0.36);
   v.g.setValueAtTime(0, t);
   let s = t;
-  for (let i = 0; i < 4; i++) { const d = range(rng, 0.05, 0.1); v.g.linearRampToValueAtTime(g * range(rng, 0.4, 1), s + d * 0.4); v.g.linearRampToValueAtTime(g * 0.15, s + d); s += d; }
+  for (let i = 0; i < 4; i++) { const d = SEGS[i]; v.g.linearRampToValueAtTime(g * range(rng, 0.4, 1), s + d * 0.4); v.g.linearRampToValueAtTime(g * 0.15, s + d); s += d; }
   v.g.linearRampToValueAtTime(0, s + 0.04);
   return true;
 }
@@ -295,9 +300,10 @@ export function tick(P, t, g, rng) {
   return true;
 }
 /** Cardboard: a stack of chick boxes tipped (the chicks' peeps come from the flock), or a bin lid (lid = true). */
-export function thump(P, t, g, rng, lid = false) {
+export function thump(P, t, g, rng, lid = false, pan = 0) {
   const v = P.take('noise', t, 0.45);
   if (!v) return false;
+  panAt(v, t, pan);
   v.q.setValueAtTime(lid ? 1.2 : 0.6, t); v.f.setValueAtTime(lid ? 320 : range(rng, 200, 260), t);
   envelope(v.g, t, g, lid ? 0.003 : 0.02, lid ? 0.02 : 0.12, lid ? 0.2 : 0.25);
   return true;
@@ -311,10 +317,10 @@ export function crackle(P, t, g, rng) {
   return true;
 }
 /** The controller's alarm after a power cut: three soft beeps. */
-export function alarm(P, t, g) {
+export function alarm(P, t, g, pan = 0) {
   const v = P.take('tone', t, 0.75);
   if (!v) return false;
-  v.setWave('sine'); v.f.setValueAtTime(1750, t);
+  v.setWave('sine'); panAt(v, t, pan); v.f.setValueAtTime(1750, t);
   for (let i = 0; i < 3; i++) envelope(v.g, t + i * 0.24, g, 0.005, 0.1, 0.03);
   return true;
 }
