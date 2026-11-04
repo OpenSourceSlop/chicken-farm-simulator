@@ -36,7 +36,7 @@ export function hot() {
     // after the first full cycle (the harness's way: the skill profile's count) the run card offers the harder flocks
     ev(`(__game.skills.profile.cyclesDone = 1, __game.level.toTitle(), 'title: ' + __game.level.mode + ', cycles done ' + __game.skills.profile.cyclesDone)`), adv(0.4),
     exp(`/Start a new flock in the hot season/.test(document.querySelector('#hud').textContent) && 'the run card: Harder flocks'`, 'the title card offers the harder flocks after a cycle'),
-    shot('p4h-00-title'),
+    click('Harder flocks', 0, '#hud'), adv(0.2), shot('p4h-00-title'),
     click('Start a new flock in the hot season', 0, '#hud'), adv(0.4),
     exp(`__game.level.def.id === 'plan' && __game.farm.condition === 'hot' && __game.env.weather === 'hot' && 'planning day ' + __t() + ', ' + __game.farm.condition + ', ' + __game.env.weather`, 'a new flock in the hot season: the planning day in its weather'),
     hudTag('Hot season'), shot('p4h-01-plan'),
@@ -60,7 +60,8 @@ export function hot() {
     ...autoTo(10, 10.9), ev(`__timer('day 10')`),
     ...gateToHouse(), ...toFanPanel(), ...E('fan-panel', 'day 10 at 11:00: the fan panel'), adv(2.4),
     ev(`__game.env.padOn ? 'pad already on' : ([...document.querySelectorAll('#hud .panel:not([hidden]) button')].find((b) => /Start the pad pump/.test(b.textContent))?.click(), 'pad pump on')`), adv(0.2),
-    ev(`__game.env.fansManual === 1 ? 'one fan already' : ([...document.querySelectorAll('#hud .panel:not([hidden]) [aria-label="Fan 1 switch"]')][0]?.click(), 'fan 1 switched')`), adv(0.2),
+    // one tunnel fan: switch 2 off when more run (fans run 1..n), switch 1 on when none run
+    ev(`(() => { const m = __game.env.fansManual, k = m >= 2 ? 2 : m === 0 ? 1 : 0; if (k) document.querySelector('#hud .panel:not([hidden]) [aria-label="Fan ' + k + ' switch"]')?.click(); return 'fans ' + m + ' -> ' + __game.env.fansManual; })()`), adv(0.2),
     exp(`__game.env.padOn && __game.env.fansManual === 1 && 'the young birds: the pad with one fan at ' + __t()`, 'day 10: the pad with one tunnel fan'), ...esc(),
     ...nextTo(13), until(`__game.level.jobs.byKey('h-young-heat@10')?.status === 'open'`, 120), ev(`'Next job -> ' + __t()`),
     ...E('fan-panel', 'day 10 afternoon: the fan panel read'), adv(2.4), shot('p4h-05-day10-fans'), ...esc(),

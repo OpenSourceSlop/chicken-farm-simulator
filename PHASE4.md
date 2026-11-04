@@ -421,6 +421,15 @@ rainy day 21 964 g, the cut 0.05 % (10 min), harvest 2,868 g, EPEF 422; bad batc
 never under 90.6 %, the pump 2.40 / 2.11 bar at 06:15 on days 26 / 27, harvest 2,876 g. Speed (node, alone): a whole
 cycle 2.5–3.1 s in every condition, a 24 h skip 62–91 ms, `farm.step` 0.02–0.07 ms.
 
+**Integrator at the merge** (agreed: every band move above). Changes of its own, each measured:
+
+| Change | Why | Effect / bands |
+| --- | --- | --- |
+| The hot season drops week 2's rainy spell (`CONDITIONS.hot.levels.week2.drop`) | 92 % outside air at 33–36 °C (the normal season's spell in the hot weather) is no April–May afternoon; the pad could not cool it and the play-through's 10-day-olds panted all day under the pad with one fan (felt 37.9 °C) | the pad with one fan holds them at their row (felt 30.2 °C, none panting, `h-young-heat` done); test-cond `hotYoungAsNormal` · `heatW2Pct` [3, ∞] → **[1, ∞]** (week 2 still fails: the level ends the day its deaths pass 1 %, at 1.2 % heat deaths) |
+| The ideal re-checks the droppings of ten birds when abnormal deaths are found on days 19–21 and no cause is seen yet | the day-19 check can come before the blood shows (a dry floor): the water condition's standard start through level.js failed week 3 at 1.13 % | every condition's whole run passes through level.js goto(auto) (new test-run case); the normal ideal's trace unchanged (test-cycle) |
+| The brooding week of goto(auto) plays the sim's `broodStopsCond` rounds with the condition's Phase 2 profile | the hot season's standard starts played the brooding week without the 11:00 pad | the level path's hot brooding week: the house 33.6 / 33.0 / 32.2 °C at 15:00 on days 1 / 3 / 6, ratio 4.87 |
+| The young birds' panting threshold (2–3 weeks) | 1.5–2 °C under general practice (§2.8 row 6); raising it hides the week-3 warm afternoon's panting that the listen finds (three test-tuning references and Phase 3's day-16 play-through would move) | kept; open question 14.1 |
+
 ### 2.8 The audit as integrated (main after the Phase 4 merge)
 `npm run audit` on the merged model (the normal ideal, seed 1), the conditions from `scripts/test-cond.mjs` and the env
 references of `scripts/tuning-refs*.mjs`. Sources: a guide name for the facts of PHASE2.md §6.1 / PHASE3.md §5.1, else

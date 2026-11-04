@@ -52,7 +52,7 @@
   {"wait": 800},
   {"press": "e"},
   {"wait": 1200},
-  {"clickOn": "#hud section.panel:not([hidden]) .key"},
+  {"clickOn": "#hud section.panel:not([hidden]) .key[aria-label=\"Raise the brooder thermostat by 0.5 °C\"]"},
   {"wait": 1200},
   {"expect": "__game.audio.state().played.click > __p0.click", "label": "a controller key clicks softly"},
   {"press": "Escape"},

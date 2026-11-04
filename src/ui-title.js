@@ -20,6 +20,9 @@ export function createTitle(root, o) {
   const cont = button({ class: 'btn btn--big' }, h('span', { html: ICONS.next, 'aria-hidden': 'true' }), h('span'));
   const sandbox = button({ class: 'btn btn--quiet' }, h('span', { html: ICONS.outside, 'aria-hidden': 'true' }), LEVEL_TEXT.sandbox);
   const skills = button({ class: 'btn btn--quiet' }, h('span', { html: ICONS.tree, 'aria-hidden': 'true' }), LEVEL_TEXT.skills);
+  // Phase 4: after the first full cycle the Harder flocks cards sit under the seven level rows of the run card; at
+  // 960 x 600 they are below its fold: this key scrolls them into view (integrator, Phase 4 merge)
+  const harderKey = button({ class: 'btn btn--quiet', hidden: true }, h('span', { html: ICONS.play, 'aria-hidden': 'true' }), 'Harder flocks');
   const saveNote = h('p', { class: 'title-save' });
   const keys = h('p', { class: 'title-keys' }, LEVEL_KEYS.map((k) => h('span', null, h('kbd', { class: 'kbd' }, k.key), ` ${k.what}`)));
   const runCard = createRunCard({ run: o.run, onReplay: (id, day) => o.onReplay(id, day),
@@ -32,7 +35,7 @@ export function createTitle(root, o) {
       h('p', { class: 'title-line' }, LEVEL_TEXT.line),
       h('div', { class: 'title-btns' }, cont, start, brooding),
       saveNote,
-      h('div', { class: 'title-more' }, sandbox, skills),
+      h('div', { class: 'title-more' }, sandbox, skills, harderKey),
       keys),
     runCard.el);
   const el = h('div', { class: 'title', hidden: true }, card);
@@ -62,6 +65,11 @@ export function createTitle(root, o) {
   cont.addEventListener('click', () => o.onContinue());
   sandbox.addEventListener('click', () => o.onSandbox());
   skills.addEventListener('click', () => o.onSkills());
+  harderKey.addEventListener('click', () => {
+    const sec = runCard.el.querySelector('.harder');
+    sec?.scrollIntoView({ block: 'start' });
+    sec?.querySelector('.harder-go:not([disabled])')?.focus({ preventScroll: true });
+  });
   function reset() {
     confirm = null;
     for (const b of [start, brooding]) { b.classList.remove('is-confirm'); setText(b.lastChild, b.__label); }
@@ -74,6 +82,7 @@ export function createTitle(root, o) {
     setText(saveNote, o.saveAvailable() ? LEVEL_TEXT.saveNote : LEVEL_TEXT.noSave);
     saveNote.classList.toggle('is-off', !o.saveAvailable());
     runCard.refresh();
+    harderKey.hidden = !o.run?.()?.harderOpen;
   }
   return {
     el,

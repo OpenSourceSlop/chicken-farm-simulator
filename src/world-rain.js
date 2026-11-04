@@ -19,7 +19,7 @@ const BOX = new THREE.Vector3(44, 18, 44);
 const rainVert = /* glsl */`
 attribute vec4 aOff;
 uniform vec3 uCenter; uniform vec3 uSize; uniform vec3 uCam; uniform vec4 uHouse; uniform vec2 uWind;
-uniform float uTime; uniform float uLen; uniform float uWidth;
+uniform float uTime; uniform float uLen; uniform float uWidth; uniform float uInside;
 varying float vA;
 void main() {
   vec3 base = uCenter - uSize * 0.5;
@@ -34,7 +34,8 @@ void main() {
   vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), normalize(toCam + vec3(1e-4))));
   vec3 w = p + right * position.x * uWidth + dir * (position.y - 0.5) * uLen * (0.8 + 0.4 * aOff.w);
   // under the house roof (cut away for the camera) no rain falls
-  bool inHouse = p.x > uHouse.x && p.x < uHouse.y && p.z > uHouse.z && p.z < uHouse.w && p.y < 4.3;
+  // (with the farmer inside, the roof and the walls are cut away for the camera: no streak over the house at any height)
+  bool inHouse = p.x > uHouse.x && p.x < uHouse.y && p.z > uHouse.z && p.z < uHouse.w && (p.y < 4.3 || uInside > 0.5);
   // thin out the streaks right in front of the lens
   float dc = length(uCam - p);
   vA = (0.25 + 0.75 * position.y) * smoothstep(1.5, 5.0, dc);
@@ -63,7 +64,7 @@ function streaks() {
   const uniforms = {
     uCenter: { value: new THREE.Vector3() }, uSize: { value: BOX.clone() }, uCam: { value: new THREE.Vector3() },
     uHouse: { value: new THREE.Vector4(H.xMin - 0.3, H.xMax + 0.3, H.zMin - 0.3, H.zMax + 0.3) }, uWind: { value: new THREE.Vector2(0.6, 0.35) },
-    uTime: { value: 0 }, uLen: { value: 1.25 }, uWidth: { value: 0.022 },
+    uTime: { value: 0 }, uLen: { value: 1.25 }, uWidth: { value: 0.022 }, uInside: { value: 0 },
     uColor: { value: new THREE.Color(0xcdd6de) }, uAlpha: { value: 0.42 },
   };
   const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: rainVert, fragmentShader: rainFrag, transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide });
@@ -148,6 +149,7 @@ export function buildRain(root) {
         s.uniforms.uCam.value.copy(c);
         s.uniforms.uCenter.value.set(f.x + (c.x - f.x) * 0.3, 0, f.z + (c.z - f.z) * 0.3);
         s.uniforms.uTime.value = st.t % 1000;
+        s.uniforms.uInside.value = view.playerInside ? 1 : 0;
       }
       p.mesh.visible = st.wet > 0.01;
       p.mat.opacity = 0.7 * st.wet;
