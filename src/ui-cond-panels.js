@@ -10,8 +10,9 @@
 //                                         (a bad batch; ui-cond-grading.js; the chick table's Grade the stacks tab shows it too)
 // Each panel shows the open job done there at the top of its working plate (ui-jobstrip.js withJobStrip). A plate built
 // with no condition on the farm reads its own board (ui-boards buildPlate), so a harness can open any of them.
-// What this adds to L: L.cond.panel(id) the built panel of an id (tests).
-import { withJobStrip } from './ui-jobstrip.js';
+// What this adds to L: L.cond.panel(id) the built panel of an id, L.cond.grading() the grading table, L.cond.stripRowsHtml(rows)
+// the job strip's drawing of rows (tests and the harness).
+import { withJobStrip, stripRowsHtml } from './ui-jobstrip.js';
 import { injectCondStyle } from './ui-cond-kit.js';
 import { buildGenerator } from './ui-cond-generator.js';
 import { buildWaterTank } from './ui-cond-tank.js';
@@ -28,7 +29,7 @@ export function registerCondPanels(api) {
   const L = api.L;
   gradingFor(L); // the grading table listens to the bus from the start (the hatchery call, every chicks.grade)
   const built = {};
-  L.cond = { panel: (id) => built[id] ?? null, grading: () => gradingFor(L) };
+  L.cond = { panel: (id) => built[id] ?? null, grading: () => gradingFor(L), stripRowsHtml };
   for (const [id, p] of Object.entries(COND_PANELS)) {
     api.register(id, withJobStrip(L, id, () => {
       const panel = p.build(api);

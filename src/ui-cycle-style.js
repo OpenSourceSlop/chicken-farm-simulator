@@ -36,7 +36,6 @@ const CSS = `
 .fanbank { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .fan-sw { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); }
 .fan-sw .key { width: 40px; height: 36px; }
-.fan-sw .key[aria-pressed="true"] { background: linear-gradient(180deg, var(--key-on-hi), var(--key-on-lo)); }
 .fan-name { font: 600 13px/1.15 var(--font-display); letter-spacing: 0.07em; text-transform: uppercase; }
 .fan-name small { display: block; font: 500 11.5px/1.2 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--key-sub); }
 .fan-vane { display: inline-flex; width: 30px; height: 30px; color: var(--key-sub); }

@@ -5,11 +5,12 @@
 //                heatLoss: the house air's heat terms, °C per hour (env.heatBudget)
 //   Ventilation  minVentCalc: fresh air for the birds and their weight (the vent sign's table) -> timer seconds
 //                humidityChart: 24 hours of house and outside humidity
+//                the rainy season (Phase 4): the storm flaps on the south inlets (inlets.storm { closed }), a lit switch
 //   Lights       lightPresets: config LIGHT_PRESETS (light.preset, then light.program)
 //                dimming: dawn and dusk dimming minutes, sent as light.program { rampMin }
 import { EQUIP, LIGHT_PRESETS, minVentM3hPer1000, FAN_COUNT } from './config.js';
 import { h, button, setText, uniqueId, fmt1 } from './ui-dom.js';
-import { machineRow, stepper } from './ui-equipment.js';
+import { machineRow, stepper, toggleKey } from './ui-equipment.js';
 import { int } from './ui-format.js';
 import { heatBudgetOf, lineChart, historyOf, knownBirds } from './ui-cycle-kit.js';
 import { clock } from './clock.js';
@@ -47,6 +48,13 @@ export function cycleControllerParts(L, { draft, lp, refresh }) {
     h('div', { class: 'cyc-row2' }, h('label', { class: 'cyc-check', for: birdsId }, 'Birds ', birdsIn), h('label', { class: 'cyc-check', for: wId }, 'Weight, g ', weightIn)),
     h('div', { class: 'ctrl-apply' }, calcOut, toTimer));
   const rhChart = h('div', { class: 'cyc-chart', hidden: true });
+  // Phase 4, the rainy season (PHASE4.md §4.2): the storm flaps on the south side-wall inlets (inlets.storm { closed }),
+  // a lit switch; while it storms with them open the rain drives in along the south wall
+  const flapsShut = () => !!farm.house?.flapsClosed;
+  const flaps = toggleKey('Open the storm flaps', 'Close the storm flaps', () => { L.act('inlets.storm', { closed: !flapsShut() }); sync(); refresh(); });
+  const flapRow = machineRow('Storm flaps on the south inlets', '', flaps.el);
+  flapRow.led.classList.add('led--pad');
+  flapRow.el.hidden = true;
   // ---------- Lights: presets and dimming ----------
   const presetBtns = Object.entries(LIGHT_PRESETS).map(([id, p]) => {
     const b = button({ class: 'key key--wide' }, p.label);
@@ -107,12 +115,19 @@ export function cycleControllerParts(L, { draft, lp, refresh }) {
     calcBox.hidden = !skills?.unlocked?.('minVentCalc') || farm.mode !== 'level';
     presets.hidden = !skills?.unlocked?.('lightPresets') || farm.mode !== 'level';
     dimRow.el.hidden = !skills?.unlocked?.('dimming') || farm.mode !== 'level';
+    const rainy = farm.mode === 'level' && farm.condition === 'rainy', shut = flapsShut(), rain = (farm.weatherNow?.rain ?? 0) > 0;
+    flapRow.el.hidden = !rainy;
+    if (rainy) {
+      flaps.set(shut); flapRow.led.classList.toggle('is-on', shut);
+      flapRow.setState(`Storm flaps: ${shut ? 'closed over the south inlets' : 'open'}${rain ? ' · raining now' : ''}`);
+      setText(flapRow.small, shut ? 'closed, they keep the driven rain out; the inlets let less air in while they are shut' : 'hinged plates over the south side-wall inlets: closed, they keep driven rain out of the house');
+    }
     dim.set(String(lp.rampMin || 0));
   }
   let slow = 0;
   return {
     temp: [brooders.el, heat],
-    vent: [calcBox, rhChart],
+    vent: [flapRow.el, calcBox, rhChart],
     lights: [presets],
     lightsRows: [dimRow.el],
     onOpen() {

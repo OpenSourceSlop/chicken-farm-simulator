@@ -1,5 +1,7 @@
 // The job strip (the clarity round): the top of an equipment panel shows the open job done there, its steps
 // with live progress, the target from the sign beside the live value, and a note when the job needs farm time.
+// Phase 4 (PHASE4.md §6.3, §6.6): a row's bar may carry the sign's band ({ v, band, max }: the band marked on the
+// track, an arrow past the scale); the strip is marked done only when the engine says done and every step is ticked.
 // Content: job-strips.js (pure rows); this draws them. No buttons inside (the panel's keys stay the only
 // controls), neutral words only. A job finished while the panel is open stays in the strip, marked done,
 // until the panel closes.
@@ -36,7 +38,7 @@ const CSS = `
 .js-bar > span { display: block; height: 100%; background: var(--sign-yellow); transform-origin: left center; }
 .js-bar--scale { position: relative; height: 6px; overflow: visible; }
 .js-bar--scale > span { border-radius: 2px; }
-.js-band { position: absolute; top: -2px; bottom: -2px; border: 1px solid var(--key-ink); border-radius: 2px; opacity: 0.7; }
+.js-band { position: absolute; top: -2px; bottom: -2px; border: 1px solid var(--key-ink); border-radius: 2px; background: rgba(255, 255, 255, 0.1); opacity: 0.75; }
 .js-bar--over::after { content: '▶'; position: absolute; right: -11px; top: -5px; font-size: 9px; color: var(--sign-yellow); }
 .js-more { margin: 5px 0 0; font-size: 12px; color: var(--key-sub); }
 /* machine rows: the state word beside the title, keys that name their action, the pans' fill as a number */
@@ -89,6 +91,9 @@ function rowHtml(r, n) {
   return `<li class="js-line"><span class="js-dot" aria-hidden="true"></span><span class="js-text">${esc(r.text)}</span></li>`;
 }
 
+/** The html of strip rows as a strip draws them (the harness draws test rows with it, PHASE4.md §12.3). */
+export const stripRowsHtml = (rows) => { injectStyle(); let n = 0; return `<ol class="js-rows">${rows.map((r) => rowHtml(r, r.k === 'step' ? ++n : 0)).join('')}</ol>`; };
+
 export function createJobStrip(L, panelId, { section = null, ctx = () => ({}), label = {} } = {}) {
   injectStyle();
   const el = h('section', { class: 'jstrip', hidden: true, 'aria-label': 'The job done here' });
@@ -107,10 +112,12 @@ export function createJobStrip(L, panelId, { section = null, ctx = () => ({}), l
     const c = base();
     let html = '';
     here.slice(0, 3).forEach((s, k) => {
-      const done = s.inst.status === 'done';
+      const engineDone = s.inst.status === 'done';
       let rows;
       try { rows = stripRows(s.strip, c, s.inst, panelId); } catch (err) { console.error('job strip', s.inst.key, err); rows = []; }
-      if (!rows.length) rows = [{ k: 'step', text: s.inst.def.title, done }];
+      if (!rows.length) rows = [{ k: 'step', text: s.inst.def.title, done: engineDone }];
+      // the clarity round (PHASE4.md §6.6): the strip reads done only when the engine says so and every step is ticked
+      const done = engineDone && rows.every((r) => r.k !== 'step' || !!r.done);
       let n = 0;
       html += `<div class="js-job"${k ? ' style="margin-top: 8px"' : ''}><p class="js-head"><span class="js-k${done ? ' is-done' : ''}">${done ? 'Done' : 'Job here'}</span><span class="js-title">${esc(s.strip?.title || s.inst.def.title)}</span></p>
         <ol class="js-rows">${rows.map((r) => rowHtml(r, r.k === 'step' ? ++n : 0)).join('')}</ol></div>`;

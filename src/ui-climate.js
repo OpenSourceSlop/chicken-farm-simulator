@@ -15,11 +15,31 @@ import { hhmm, int } from './ui-format.js';
 import { cycleControllerParts } from './ui-cycle-controller.js';
 // the clarity round: the open job done here, its steps, the sign's target beside the live value
 import { createJobStrip } from './ui-jobstrip.js';
-import { timerAirM3h, luxOfDimmer } from './job-figures.js';
+import { timerAirM3h, luxOfDimmer, ventNeed } from './job-figures.js';
 // the steps hotfix: a setting a held job waits on runs a paused clock again, with a note under the display
 import { farmTimeNote, heldWaitText } from './ui-farmtime.js';
 
 const READ_AFTER = 2; // real seconds open before the controller counts as read
+
+/** "This setting ≈ 960 m³/h = 103 % of the need (vent sign: about 900; 928 worked out for tomorrow's chicks)": the
+ *  timer setting on the keys (not sent yet or sent) beside the need of the flock the farmer knows (job-figures ventNeed:
+ *  the vent sign's table; on the prep day the sign's own example of 6,000 chicks of 42 g). */
+export function ventLine(env, farm, draft) {
+  const v = ventNeed(env, farm, draft), air = Math.round(timerAirM3h(draft));
+  if (!(v.need > 0)) return `This setting ≈ ${int(air)} m³/h`;
+  const share = Math.round((air / v.need) * 100);
+  const need = Math.round(v.need);
+  return `This setting ≈ ${int(air)} m³/h = ${share} % of the need (${v.prep ? `vent sign: about 900; ${int(need)} worked out for tomorrow’s chicks` : `${int(need)} m³/h worked out for today’s flock from the vent sign’s table`})`;
+}
+
+/** Scroll the panel (not the page) so `el` is inside its visible part, the least distance (block: nearest). */
+function scrollIntoPanel(el) {
+  const box = el.closest('.panel');
+  if (!box) return;
+  const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+  if (r.bottom > b.bottom) box.scrollTop += Math.min(r.bottom - b.bottom + 6, r.top - b.top);
+  else if (r.top < b.top) box.scrollTop -= b.top - r.top + 6;
+}
 
 export function buildLevelControllerPanel(L) {
   const { env, farm, skills } = L;
@@ -41,8 +61,10 @@ export function buildLevelControllerPanel(L) {
   const SECTION = { temp: 'Temperature', vent: 'Ventilation', lights: 'Lights' };
   const tabBtns = tabs.map((t, i) => button({ class: 'ctrl-tab', role: 'tab', 'aria-selected': String(i === 0) }, t));
   const secs = tabs.map(() => h('div', { class: 'ctrl-sec', role: 'tabpanel' }));
-  let tab = 0;
-  const showTab = (i) => { tab = i; tabBtns.forEach((b, j) => b.setAttribute('aria-selected', String(i === j))); secs.forEach((s, j) => { s.hidden = i !== j; }); };
+  let tab = 0, keepTimerInView = 0;
+  // the clarity round (PHASE4.md §6.2): the Ventilation tab opens with the timer's keys, its line and Send this setting
+  // on screen together (a short window scrolls the panel to them; the job strips above settle first, so a few frames)
+  const showTab = (i) => { tab = i; tabBtns.forEach((b, j) => b.setAttribute('aria-selected', String(i === j))); secs.forEach((s, j) => { s.hidden = i !== j; }); if (i === 1) keepTimerInView = 0.6; };
   tabBtns.forEach((b, i) => b.addEventListener('click', () => showTab(i)));
   const out = () => h('output', { class: 'lcd-mini', 'aria-live': 'polite' });
   const row = (title, sub, ...c) => h('div', { class: 'ctrl-row' }, h('span', { class: 'led', 'aria-hidden': 'true' }), h('div', { class: 'ctrl-label' }, h('span', null, title), sub ? h('small', null, sub) : null), h('div', { class: 'ctrl-keys' }, c));
@@ -67,6 +89,7 @@ export function buildLevelControllerPanel(L) {
   const tFans = out(), tOn = out(), tCycle = out(), tAir = h('span', { class: 'ctrl-air' }), tNow = h('p', { class: 'ctrl-timer-now' });
   // Shift held: the big step (10 s on-seconds), as the winches step 5 cm
   const step = (k, d, lo, hi, big = d) => (e) => { draft[k] = Math.max(lo, Math.min(hi, draft[k] + (e && e.shiftKey ? big : d))); if (draft.onSec > draft.cycleSec) draft.onSec = draft.cycleSec; refresh(); };
+  let timerBox = null;
   const applyTimer = button({ class: 'key key--wide key--apply key--act' }, 'Send this setting to the timer');
   const timerOff = button({ class: 'key key--wide key--act' }, 'Switch the timer off');
   applyTimer.addEventListener('click', () => {
@@ -78,7 +101,7 @@ export function buildLevelControllerPanel(L) {
   secs[1].append(
     row('Tunnel fans', 'running all the time, switched by hand: air along the floor, for big birds in the heat', key('One tunnel fan fewer', ICONS.minus, () => manualFans(-1)), fanOut,
       key('One tunnel fan more', ICONS.plus, () => manualFans(1))),
-    h('div', { class: 'ctrl-timer' },
+    timerBox = h('div', { class: 'ctrl-timer' },
       h('p', { class: 'ctrl-timer-k' }, 'Minimum ventilation timer', h('small', null, ' · fresh air in at the side inlets, moisture and ammonia out')),
       tNow,
       row('Fans on the timer', 'how many fans the timer starts', key('One timer fan fewer', ICONS.minus, step('fans', -1, 1, FAN_COUNT)), tFans, key('One timer fan more', ICONS.plus, step('fans', 1, 1, FAN_COUNT))),
@@ -162,8 +185,8 @@ export function buildLevelControllerPanel(L) {
     padBtn.setAttribute('aria-pressed', String(env.padOn)); setText(padBtn, env.padOn ? 'Stop the pad pump' : 'Start the pad pump');
     setText(padState, `Pad pump: ${env.padOn ? 'on, water over the west end pad' : 'off'} · it cools the tunnel air of big birds in the heat`);
     setText(tFans, String(draft.fans)); setText(tOn, `${draft.onSec} s`); setText(tCycle, `${draft.cycleSec} s`);
-    const air = Math.round(timerAirM3h(draft));
-    setText(tAir, `This setting ≈ ${int(air)} m³/h`);
+    // the clarity round (PHASE4.md §6.2): the setting beside the need it is for, on screen with the keys
+    setText(tAir, ventLine(env, farm, draft));
     const vt = env.ventTimer;
     setText(tNow, `Timer now: ${vt && vt.fans > 0 && vt.onSec > 0 ? `${vt.fans} fan${vt.fans === 1 ? '' : 's'}, ${vt.onSec} s on in every ${vt.cycleSec} s = ${int(timerAirM3h(vt))} m³/h` : 'off'}`);
     setText(lStart, hhmm(lp.darkStart)); setText(lHours, `${fmt1(lp.darkHours)} h`); setText(lDim, `${Math.round(lp.dimmer * 100)} %`);
@@ -181,6 +204,7 @@ export function buildLevelControllerPanel(L) {
       if (fresh.el.querySelectorAll('.plate-items > li').length !== lightsPlate.el.querySelectorAll('.plate-items > li').length) { lightsPlate.el.replaceWith(fresh.el); lightsPlate = fresh; }
       cyc.onOpen();
       for (const st of strips) st.onOpen();
+      if (tab === 1) keepTimerInView = 0.6;
     },
     onClose() { for (const st of strips) st.onClose(); },
     update(dt, force) {
@@ -189,6 +213,7 @@ export function buildLevelControllerPanel(L) {
       acc -= dt; chartAcc -= dt;
       if (force || acc <= 0) { acc = 0.1; refresh(); }
       stripAcc -= dt; if (force || stripAcc <= 0) { stripAcc = 0.25; for (const st of strips) st.update(); }
+      if (keepTimerInView > 0 && tab === 1 && timerBox) { keepTimerInView -= dt; scrollIntoPanel(timerBox); }
       if (force || chartAcc <= 0) { chartAcc = 1; drawChart(); }
       cyc.update(dt, force);
     },

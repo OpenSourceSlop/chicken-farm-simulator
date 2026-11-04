@@ -1,6 +1,7 @@
 // Phase 3 parts of the water supply panel (ui-water.js builds it; PHASE3.md §6.7, §6.10, §13.3, §13.9).
 // Package "panels". From day 8 the panel gets tabs: Lines (Phase 2's meter, filter and flush valves, plus
-// the main valve and, with waterTest, the test kit), Vaccine (water.main, vaccine.mix { stabiliser }, the
+// the main valve and, with waterTest, the test kit; Phase 4: the kit in a water problem's run from the prep day, with
+// the iron), Vaccine (water.main, vaccine.mix { stabiliser }, the
 // vaccine plate), Medicine (water.medicate { on }, the medicator plate) and from day 43 Clean-out
 // (water.disinfect { on }, then each line flushed with the tank disinfected: water.flush -> disinfected).
 // The brooding week shows Phase 2's panel exactly (no tabs, no new rows).
@@ -41,7 +42,9 @@ export function cycleWaterParts(L, { linesSec, foldPlates, needTime = null }) {
   const testBtn = button({ class: 'btn btn--machine' }, 'Test the water');
   testBtn.addEventListener('click', () => {
     const r = L.act('water.test', {});
-    if (r && typeof r === 'object') testOut.set(`pH ${one(r.ph)} · chlorine ${one(r.chlorinePpm)} ppm`, `tested ${env.timeLabel}`);
+    // Phase 4, a water problem: the kit reads the iron too (water.test adds ironMgL)
+    const iron = r && typeof r === 'object' && Number.isFinite(r.ironMgL) ? ` · iron ${one(r.ironMgL)} mg/L` : '';
+    if (r && typeof r === 'object') testOut.set(`pH ${one(r.ph)} · chlorine ${one(r.chlorinePpm)} ppm${iron}`, `tested ${env.timeLabel}${iron ? ' · water supply plate: iron over about 0.3 mg/L clogs the filter and the nipples' : ''}`);
     else testOut.set('—', `tested ${env.timeLabel}`);
   });
   const testBox = h('div', { class: 'equip-reads', hidden: true }, testOut.el, testBtn);
@@ -101,7 +104,8 @@ export function cycleWaterParts(L, { linesSec, foldPlates, needTime = null }) {
     tabs.visible(1, on && !clean); tabs.visible(2, on && !clean); tabs.visible(3, on && clean);
     if (!on && tabs.current !== 0) tabs.show(0);
     mainLines.el.hidden = !on;
-    testBox.hidden = !on || !skills?.unlocked?.('waterTest');
+    // the test kit: with its unlock from day 8, and in a water problem's run from the prep day (given with the condition)
+    testBox.hidden = !((on && skills?.unlocked?.('waterTest')) || (farm.mode === 'level' && farm.condition === 'water'));
     const shut = mainShut(farm);
     for (const m of [mainLines, mainVac]) { m.t.set(shut); m.led.classList.toggle('is-on', !shut); m.setState(shut ? 'Main valve: shut, no water to the lines' : 'Main valve: open, water reaches the lines'); }
     for (const m of [mainLines, mainVac]) setText(m.small, shut ? `shut${memo.at != null ? ` since ${whenText(memo.at)}` : ''}: no water reaches the lines` : 'water to the header tank and the lines');
