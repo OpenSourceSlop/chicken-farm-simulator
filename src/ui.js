@@ -65,7 +65,8 @@ const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowlef
 const ARROW_KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
 // Phase 5 (PHASE5.md §4.3): every key check through keys.js (a rebound key works here at once); the walk keys as bound now
 const MOVE_IDS = ['forward', 'back', 'left', 'right', 'run', 'turnLeft', 'turnRight'];
-// the level's own keys, each to its action (the views and meters come with the level, PHASE3.md §13.6)
+// the level's own keys, each to its action (the views and meters come with the level, PHASE3.md §13.6); the bucket's key
+// ('bucket', KeyG by default: PHASE4.md §15.3) is acted on here only, as every other farm key
 const LEVEL_IDS = ['squeeze', 'probe', 'notebook', 'skills', 'floorView', 'lux', 'air', 'comfortView', 'moistureView'];
 const P1_IDS = new Set(['sign-gate', 'controller', 'sign-brooder']); // what E reaches in the sandbox
 const TWO_HANDS_PANELS = new Set(['chick-table', 'chick-grading']);    // PHASE4.md §15.3 (c): panels that handle chicks
