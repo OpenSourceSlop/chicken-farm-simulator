@@ -1,47 +1,85 @@
-// How to play (PHASE5.md §6.2): the player guide inside the game. It says how the GAME works (controls, the day, jobs,
-// signs, records, levels, saving); every farming fact stays on the signs and plates at the place it is used, so this
-// page holds none, and no word of it is a verdict (scripts/test-contracts.mjs checks it). Owner after the design round:
-// package "settings" (the guide's words and order); `controls: true` sections show the live key bindings (keys.js).
-// Review round: the words name the live keys and the Time settings through tokens, so a rebound key or a changed setting
-// reads the same everywhere: {key:<action id>} -> keys.label(id) ('Q', or 'B' after a rebind); {time:signs|atJob|hold} ->
-// the sentence for the Time setting now. fillGuide(text, { keys, settings }) fills them (ui-guide.js draws the result).
+// How to play (PHASE5.md §6.2): the player guide inside the game. It says how the GAME works (controls, the screen, the
+// day, jobs, signs, records, levels, saving); every farming fact stays on the signs and plates at the place it is used, so
+// this page holds none, and no word of it is a verdict (scripts/test-contracts.mjs checks it). Owner: package "settings".
+// Plain English a Thai farmer reads easily: one idea a sentence, the HUD's own names in **bold** (ui-guide.js draws
+// **…** as bold). `controls: true` sections show the live key list (keys.js), `picture: true` the HUD picture.
+// The words name the live keys and the Time settings through tokens, so a rebound key or a changed setting reads the same
+// everywhere: {key:<action id>} -> keys.label(id) ('Q', or 'B' after a rebind); {time:signs|atJob|hold} -> the sentence
+// for the Time setting now. fillGuide(text, { keys, settings }) fills them (ui-guide.js draws the result; the intro cards
+// of ui-intro.js use it too).
 import { KEY_ACTIONS, codeLabel } from './keys.js';
 
 export const GUIDE = {
   title: 'How to play',
-  intro: 'You run house 1 of a broiler farm: 6,000 chicks from the plan to the clean, rested house. Days pass in a few minutes; the farm’s numbers tell you how the flock is doing.',
+  intro: 'You run house 1 of a broiler farm, from the plan to the clean, rested house. A farm day passes in a few minutes. The flock and the farm’s records show you how it goes.',
   sections: [
     { id: 'controls', head: 'Getting around', controls: true,
-      text: ['Walk with {key:forward} {key:left} {key:back} {key:right} or click the ground (a quick second click runs there). Turn the view with {key:turnLeft} {key:turnRight} or a right-drag, zoom with the wheel or {key:zoomIn} {key:zoomOut}.',
-        '{key:use} uses what is in front of you: a sign, a machine’s panel, a bird, a box. {key:menu} closes a panel; with none open it opens the menu. {key:map} opens the farm map.',
-        '{key:pause} pauses the clock, {key:speed1} and {key:speed4} set its speed, {key:nextJob} skips to the next job. Tab moves between the buttons on the screen and Enter presses one, so every panel works without the mouse.'] },
+      text: ['Walk with {key:forward} {key:left} {key:back} {key:right}, or click the ground. Click twice quickly to run there, or hold {key:run} while you walk.',
+        'Turn the view with {key:turnLeft} {key:turnRight} or by dragging with the right mouse button. Zoom with the wheel or {key:zoomIn} {key:zoomOut}.',
+        '{key:use} uses what is in front of you: a sign, a machine’s panel, a bird or a box.',
+        '{key:menu} closes a panel. With no panel open, it opens the **menu**.',
+        '{key:map} opens the farm map. Click a place on it and you walk there.',
+        'Tab moves between the buttons on the screen and Enter presses one, so every panel works without the mouse.'] },
+    { id: 'screen', head: 'The screen', picture: true,
+      text: ['The **clock** and the **gauges** sit at the top left: the farm time, the weather and the house as its controller reads it.',
+        'The **flock watch** sits under them once the chicks are in the house.',
+        'The **job card** at the top right lists the jobs of the day.',
+        'The **time bar** at the bottom left holds pause, 1×, 4×, **Next job**, the map, the menu and the sound.',
+        'When you stand at something you can use, its name and its key show at the bottom of the screen.'] },
     { id: 'day', head: 'Your day',
-      text: ['The job card (top right) lists today’s jobs in the order of the day’s rounds. The job at the top is the one to do now: the orange marker on the farm shows its place, and the card says which sign holds its facts.',
-        'A job’s strip at the top of its panel shows its steps and the figures it works toward. A job closes when its window passes{time:hold}.',
-        'Next job skips the clock to the next job. With jobs still open it asks first and stops when one of them closes.'] },
+      text: ['The **job card** lists today’s jobs in the order of the day’s rounds.',
+        'The job at the top is the one to do now. An orange marker on the farm shows its place, and the card says which sign holds its facts.',
+        'The strip at the top of a job’s panel shows the job’s steps and the figures it works toward.',
+        'A job closes when its window passes{time:hold}.',
+        '**Next job** ({key:nextJob}) skips the clock to the next job. When jobs are still open it asks first, and it stops when one of them closes.'] },
     { id: 'signs', head: 'Signs and plates',
-      text: ['Facts sit on signs where you use them: the brooder sign by the controller, the water sign by the drinker lines, the plates on each machine. Under each fact a small line names its source: one of the guides, or general broiler practice.',
-        'Read a sign, then look at the flock and the gauges and set the house.'] },
+      text: ['Facts sit on signs at the place where you use them: the brooder sign by the controller, the water sign by the drinker lines, a plate on each machine.',
+        'Under each fact a small line names its source: one of the guides, or general broiler practice.',
+        'Read a sign, then look at the flock and the gauges, and set the house.'] },
     { id: 'flock', head: 'Reading the flock',
-      text: ['Stand still in the house and you see and hear the flock: where the birds sit, how they move, what the droppings look like, what you hear. The notebook ({key:notebook}) keeps what you saw and every reading you took.',
-        'The flock watch (top left) measures the birds every farm hour: weight, deaths, comfort, intake, and the water supply where it matters, each beside the level’s line. It turns amber, then red, and writes a warning that says what, the likely cause and where to look.',
-        'Views from the skill tree show more on the floor: floor temperature ({key:floorView}), the birds’ comfort ({key:comfortView}), litter moisture ({key:moistureView}).'] },
+      text: ['Stand still in the house to see and hear the flock: where the birds sit, how they move, the droppings and the sounds they make.',
+        'The **notebook** ({key:notebook}) keeps what you saw and every reading you took.',
+        'The **flock watch** measures the birds every farm hour: weight, deaths, comfort and intake, and the water supply where it matters. Each row stands beside the level’s line.',
+        'A row turns amber, then red, and a warning says what changed, the likely cause and where to look.',
+        'Views from the **skill tree** show more on the floor: the floor temperature ({key:floorView}), the birds’ comfort ({key:comfortView}) and the litter moisture ({key:moistureView}).'] },
     { id: 'records', head: 'Records',
-      text: ['The records book on the office desk holds a row for every day: body weight against the target, feed and water, deaths by cause, the litter, the house. Sign the day’s record in the evening.',
-        'The result of a level is its key measurement: the day-7 chick weight, a week’s weight, the harvest, the swabs after the clean-out.'] },
+      text: ['The **records book** on the office desk keeps a row for every day: body weight against the target, feed and water, deaths by cause, the litter and the house.',
+        'Sign the day’s record in the evening.',
+        'Each level ends on its key measurement: the chick weight at the end of the brooding week, a week’s weight, the harvest, the swabs after the clean-out.'] },
     { id: 'levels', head: 'Levels',
-      text: ['Seven levels follow one flock: plan the farm, the brooding week, week 2, week 3, weeks 4 and 5, finishing and harvest, clean-out and rest. Each level ends with its key target; when the target is missed the level is replayed from its start (or the level before it, when that is where the trouble began).',
-        'After the first full cycle you can raise harder flocks: the hot season, the rainy season, a bad batch of chicks, a water problem.'] },
+      text: ['Seven levels follow one flock: plan the farm, the brooding week, week 2, week 3, weeks 4 and 5, finishing and harvest, clean-out and rest.',
+        'Each level has a key target. When the target is missed, you play the level again from its start, or from the level before when that is where the trouble began.',
+        'After your first full cycle you can raise harder flocks: the hot season, the rainy season, a bad batch of chicks or a water problem.'] },
     { id: 'skills', head: 'Skill tree',
-      text: ['Points come from what happens on your farm when you do a branch’s jobs in play. Each level of a branch unlocks a tool or a view ({key:skills} opens the tree).'] },
+      text: ['Points come from what happens on your farm when you do a branch’s jobs in play.',
+        'Each level of a branch unlocks a tool or a view. {key:skills} opens the **skill tree**.'] },
     { id: 'time', head: 'Time',
-      text: ['Pause, 1× and 4× sit on the time bar (bottom left). {time:signs} At a machine’s panel the clock runs slowly{time:atJob}. It stops while a book, the menu, the map or this guide is open.'] },
+      text: ['The **time bar** holds pause ({key:pause}), 1× ({key:speed1}) and 4× ({key:speed4}).',
+        '{time:signs}',
+        'At a machine’s panel the clock runs slowly{time:atJob}.',
+        'The clock stands still while a book, the menu, the map or this guide is open.',
+        'Settings → Time changes how the clock runs.'] },
     { id: 'saving', head: 'Saving',
-      text: ['The game saves by itself as you play and keeps the start of every level for a replay. The menu’s Save or load keeps up to three farms in slots, loads them, and backs one up as text you can paste back later (in this browser or another).'] },
+      text: ['The game saves by itself as you play. It keeps the start of every level, so you can play a level again.',
+        'In the **menu**, **Save or load** keeps up to three farms in slots and loads them again.',
+        '**Back up** gives a farm as text. Keep the text somewhere safe, like a note or a chat with yourself, and paste it back later in this browser or another.',
+        '**Continue** on the title card goes on from your newest save.'] },
     { id: 'settings', head: 'Sound and settings',
-      text: ['{key:sound} turns the sound on or off. Settings (the gear on the time bar, or the menu) hold the volume, the clock, the graphics, the camera, the HUD size, sound captions and the keys.'] },
+      text: ['{key:sound}, or the speaker key on the time bar, turns the sound off and on.',
+        '**Settings** (the gear on the time bar, or the menu) hold the volume, the clock, the graphics, the camera, the size of the HUD, sound captions and the keys.',
+        'Every key can be changed in Settings → Keys. This guide always shows the keys as they are now.'] },
   ],
 };
+
+/** The HUD picture's boxes (ui-guide.js): where each card sits on the screen, in % of the screen, and its name. */
+export const HUD_PICTURE = [
+  { id: 'clock', name: 'Clock', x: 2, y: 3, w: 15, h: 15 },
+  { id: 'gauges', name: 'Gauges', x: 18, y: 3, w: 30, h: 15 },
+  { id: 'watch', name: 'Flock watch', x: 2, y: 21, w: 26, h: 30 },
+  { id: 'jobs', name: 'Job card', x: 72, y: 3, w: 26, h: 42 },
+  { id: 'prompt', name: 'What you can use', x: 35, y: 78, w: 32, h: 8 },
+  { id: 'timebar', name: 'Time bar', x: 2, y: 88, w: 40, h: 9 },
+];
 
 /** The Time settings' sentences (settings.get('time.*'); the defaults are the farmer's requests). */
 const TIME_WORDS = {
@@ -56,4 +94,15 @@ export function fillGuide(text, { keys = null, settings = null } = {}) {
   const get = (p, d) => { try { const v = settings?.get?.(p); return v == null ? d : v; } catch { return d; } };
   const label = (id) => { try { return keys?.label?.(id) || DEFAULT_LABEL[id] || id; } catch { return DEFAULT_LABEL[id] || id; } };
   return String(text).replace(/\{key:(\w+)\}/g, (_, id) => label(id)).replace(/\{time:(\w+)\}/g, (_, k) => (TIME_WORDS[k] ? TIME_WORDS[k](get) : ''));
+}
+
+/** A filled sentence as runs for drawing: [{ text, bold }] (the **…** marks; no other markup). */
+export function guideRuns(text) {
+  const out = [];
+  String(text).split(/(\*\*[^*]+\*\*)/).forEach((part) => {
+    if (!part) return;
+    const b = /^\*\*[^*]+\*\*$/.test(part);
+    out.push({ text: b ? part.slice(2, -2) : part, bold: b });
+  });
+  return out;
 }
