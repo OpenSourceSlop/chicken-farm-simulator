@@ -21,6 +21,7 @@ import { buildProps } from './props.js';
 import { createLevel } from './level.js';
 // Phase 3 (PHASE3.md): the run of seven levels on one flock (a stub until package "run" builds it)
 import { createRun } from './run.js';
+import { createAudio } from './audio.js'; // Phase 5: the sound layer (src/audio*.js)
 
 function webglAvailable() {
   try {
@@ -110,6 +111,8 @@ function start(saved = {}) {
   ctx.level = level;
   const run = createRun({ level, save, events, farm, env, records });
   ctx.run = run;
+  const audio = createAudio(ctx, { player, flock, events, farm, ui }); // starts on the first key press or click
+  ctx.audio = audio;
 
   if (saved.player) player.teleport(saved.player.x, saved.player.z, saved.player.yaw);
 
@@ -140,6 +143,7 @@ function start(saved = {}) {
     flock.update(dt, env, player.position);
     ui.update(dt);
     level.update(dt);
+    audio.update(dt);
   }
 
   // Frame-time governor: if the median frame over 2 s is slower than about 28 fps, step quality
@@ -208,6 +212,7 @@ function start(saved = {}) {
     // Phase 3 (PHASE3.md §15): the run; startLevel({ level }) for a later level is a standard start
     // (stub: level.debug.freeRun to its start); cycleAt(day, hour) = a level-mode farm at any age
     run,
+    audio,                        // Phase 5: settings, state(), debug.measure(opts) (audio-measure.js)
     startRun(opts = {}) { return run.startRun(opts); },
     startLevel(opts = {}) { return opts.level && opts.level !== 'level1' ? run.startLevel(opts.level, opts) : level.start(opts); },
     cycleAt(day, hour = 6) { return level.debug.freeRun(day, hour); },
