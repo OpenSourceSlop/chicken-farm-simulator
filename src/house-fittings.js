@@ -8,6 +8,7 @@ import { SIGNS, SOURCES, brooderTableRows } from './content.js';
 import { Batch, mat, canvasTexture, roundRect, smooth, clamp01, FONT } from './house-kit.js';
 import { TRUSS_Y } from './house-shell.js';
 import { nippleHeight } from './house-drinkers.js';
+import { powerOff, reducedMotion } from './world-cond.js';
 
 const { xMin, xMax, zMin, zMax } = HOUSE_BOUNDS;
 // Boards hang on the side-wall columns at SPOTS (north wall when z < 0). IN points into the house.
@@ -60,8 +61,10 @@ function lcdCanvas() {
   return { c, g: c.getContext('2d'), t };
 }
 
-function drawLcd(lcd, env) {
+function drawLcd(lcd, env, dark = false) {
   const { g, c } = lcd;
+  // Phase 4: no power, a blank screen (the alarm lamp above it blinks on its battery)
+  if (dark) { g.fillStyle = '#0b100c'; g.fillRect(0, 0, c.width, c.height); lcd.t.needsUpdate = true; return; }
   g.fillStyle = '#0e2412'; g.fillRect(0, 0, c.width, c.height);
   g.fillStyle = '#b9e27a';
   g.font = `700 54px ${FONT}`; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
@@ -95,6 +98,17 @@ export function buildFittings(kit) {
   screen.position.set(cx, cy + 0.13, cz + IN * 0.095);
   screen.rotation.y = back;
   group.add(screen);
+  // Phase 4: the red alarm lamp over the amber one, lit while the house has no power (blinking; steady under
+  // prefers-reduced-motion), with a little red glow on the cabinet face
+  const alarm = new THREE.Group();
+  const alarmLamp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff2a1a, toneMapped: false }));
+  alarmLamp.position.set(cx - L * 0.16, cy + 0.36, cz + IN * 0.01);
+  const alarmGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.5), new THREE.MeshBasicMaterial({ color: 0xff3020, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending }));
+  alarmGlow.position.set(cx - L * 0.12, cy + 0.3, cz + IN * 0.1);
+  alarmGlow.rotation.y = back;
+  alarm.add(alarmLamp, alarmGlow);
+  alarm.visible = false;
+  group.add(alarm);
 
   // BROODER HEATERS sign on the column at SPOTS.signBrooder
   const sx = SPOTS.signBrooder.x, sy = 1.5;
@@ -141,16 +155,25 @@ export function buildFittings(kit) {
   probeCables.frustumCulled = false;
   group.add(probeCables);
 
-  let lcdTimer = 0, lcdText = '', lampK = 0, bulbK = 0, lastProbeY = NaN;
+  let lcdTimer = 0, lcdText = '', lampK = 0, bulbK = 0, lastProbeY = NaN, blink = 0;
+  let darkNow = false;
   return {
+    alarm,
+    /** test hooks: the house lamps' strength now (0 = off) and whether the house is dark (no power) */
+    get lamp() { return lampK; },
+    get dark() { return darkNow; },
     update(dt, env, view) {
-      // LCD: redraw only when what it shows changes (at most 4 times a second)
+      const dark = powerOff(kit.farm, env);
+      darkNow = dark;
+      // LCD: redraw only when what it shows changes (at most 4 times a second); at once when the power goes
       lcdTimer -= dt;
-      if (lcdTimer <= 0) {
+      if (lcdTimer <= 0 || dark !== (lcdText === 'dark')) {
         lcdTimer = 0.25;
-        const key = `${env.houseTemp.toFixed(1)}|${env.heaterSetpoint}|${Math.round(env.houseRH)}|${env.fansOn}|${env.padOn}|${env.heatersOn}`;
-        if (key !== lcdText) { lcdText = key; drawLcd(lcd, env); }
+        const key = dark ? 'dark' : `${env.houseTemp.toFixed(1)}|${env.heaterSetpoint}|${Math.round(env.houseRH)}|${env.fansOn}|${env.padOn}|${env.heatersOn}`;
+        if (key !== lcdText) { lcdText = key; drawLcd(lcd, env, dark); }
       }
+      blink = dark ? (blink + dt) % 1 : 0;
+      alarm.visible = dark && (reducedMotion() || blink < 0.55);
       // lights: bulbs glow while the light programme is on; the interior is lit at night. The
       // world's night factor (view.night) switches them with the yard lamps and office windows.
       const h = env.hour;
@@ -158,11 +181,13 @@ export function buildFittings(kit) {
         ? clamp01((view.night - 0.15) / 0.5)
         : (h >= 12 ? clamp01((h - 17.9) / 1.0) : clamp01((6.4 - h) / 0.9));
       // env.lightLevel: 0 in the dark period, the dimmer while lit (1 in the sandbox: Phase 1)
-      const lux = env.lightsOn ? env.lightLevel ?? 1 : 0;
+      // Phase 4: no power, no light (the night look by night; by day only the shade roof's dimness)
+      const lux = env.lightsOn && !dark ? env.lightLevel ?? 1 : 0;
       bulbK = smooth(bulbK, lux, 6, dt);
       // The roof shade (house-roof.js) keeps the sun off the litter at every hour, so the house
       // lights help by day as well (23 h light programme): a third of their night strength.
-      lampK = smooth(lampK, env.lightsOn ? Math.max(0.35, night) * lux : 0, 6, dt);
+      lampK = smooth(lampK, env.lightsOn && !dark ? Math.max(0.35, night) * lux : 0, dark ? 30 : 6, dt);
+      if (dark) bulbK = Math.min(bulbK, lampK);
       bulbMat.emissiveIntensity = bulbK * (0.7 + 1.3 * night);
       // Tuned against the world's real night (hemisphere 1.25 at 22:00, the moon kept off the litter
       // by the roof shade): a warm fill that reads as "lights on" without washing the litter out.

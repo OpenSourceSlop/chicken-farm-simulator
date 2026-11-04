@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { COLORS, FAN_COUNT, FAN_DIAMETER, HOUSE_BOUNDS } from './config.js';
 import { Batch, mat, smooth, canvasTexture, roundRect, FONT } from './house-kit.js';
 import { T, H } from './house-shell.js';
+import { powerOff } from './world-cond.js';
 
 // Number plates 1..FAN_COUNT above the fans on the inside of the end wall (one atlas, one mesh),
 // so "fans on: 3" can be matched to the fans that spin.
@@ -151,10 +152,14 @@ export function buildFans(kit) {
       // Phase 3: a fan whose belt is broken (env.fansBroken) has its lamp on but the blade stands
       // still and the shutters stay shut (no air through it); the sandbox never has one
       const broken = env.fansBroken && env.fansBroken.length ? env.fansBroken : null;
+      // Phase 4: a power cut (farm.power.on false) stops every fan, tunnel and timer: the blades run down
+      // evenly over 3 s (the motors lose their current at once) instead of coasting
+      const dark = powerOff(kit.farm, env);
       for (let i = 0; i < FAN_COUNT; i++) {
-        const on = i < env.fansOn && !(broken && broken.includes(i));
+        const on = !dark && i < env.fansOn && !(broken && broken.includes(i));
         const target = on ? MAX_SPIN : 0;
-        speed[i] = smooth(speed[i], target, on ? 0.9 : 0.45, dt);
+        if (dark) speed[i] = Math.max(0, speed[i] - (MAX_SPIN / 3) * dt);
+        else speed[i] = smooth(speed[i], target, on ? 0.9 : 0.45, dt);
         if (!on && speed[i] < 0.05) speed[i] = 0;
         angle[i] = (angle[i] + speed[i] * dt) % (Math.PI * 2);
         const o = smooth(open[i], Math.min(1, speed[i] / (MAX_SPIN * 0.4)), 3, dt);

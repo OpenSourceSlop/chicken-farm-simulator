@@ -31,9 +31,19 @@ const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 
 export function refreshAccess(lv, farm, env) {
   const lines = farm.water?.lines || [];
+  // Phase 4 (PHASE4.md §8.8): the flock's water access (farm.water.access) under 0.8 and below what the lines alone
+  // give (the tank run low, a weak pump: the house's water, not one line) scales every line down, so the birds crowd
+  // the drinker lines as they crowd the dry lines of the vaccine's thirst. In Phase 2 / 3 farm.water.access is never
+  // under the lines' mean (0.75 x mean + 0.25 x max), so nothing changes there.
+  let raw = 0;
+  for (let k = 0; k < lv.acc.length; k++) raw += Math.max(0, Math.min(1, num(lines[k]?.access, 1)));
+  raw /= lv.acc.length;
+  const A = num(farm.water?.access, 1);
+  const house = A < 0.8 && raw > 1e-6 && A < raw ? A / raw : 1;
+  lv.houseShort = house < 1;
   let sum = 0, min = 2;
   for (let k = 0; k < lv.acc.length; k++) {
-    const a = Math.max(0, Math.min(1, num(lines[k]?.access, 1)));
+    const a = Math.max(0, Math.min(1, num(lines[k]?.access, 1))) * house;
     lv.acc[k] = a;
     lv.waterPull[k] = Math.max(0.01, a * a * a);
     sum += a;
@@ -59,8 +69,14 @@ export function refreshAccess(lv, farm, env) {
 }
 
 /** Sick birds on the floor (and in the hand) match farm.flock.sick, 1:1, at most 24. */
-export function updateSick(S, farm, heldSick) {
-  const want = Math.max(0, Math.min(MAX_SICK, Math.round(num(farm.flock?.sick, 0))));
+export function updateSick(S, farm, heldSick, env) {
+  let want = Math.max(0, Math.min(MAX_SICK, Math.round(num(farm.flock?.sick, 0))));
+  // Phase 4 (PHASE4.md §8.7): a bad batch's weak chicks on the floor in the brooding week are drawn as sick birds,
+  // as many as their share of the drawn flock (at most MAX_SICK)
+  if (farm.condition === 'badChicks' && (env?.dayNumber ?? 99) <= 7) {
+    const weak = num(farm.flock?.cohorts?.weak?.n, 0), alive = num(farm.flock?.alive, 0);
+    if (weak > 0 && alive > 0) want = Math.max(want, Math.min(MAX_SICK, Math.round((weak * S.n) / alive)));
+  }
   let have = heldSick;
   // (Phase 3 lame birds, sick 3, are flock-cycle.js's: not counted or cleared here)
   for (let i = 0; i < S.n; i++) if (S.sick[i] && S.sick[i] !== 3) have++;

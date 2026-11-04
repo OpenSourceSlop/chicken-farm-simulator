@@ -79,9 +79,9 @@ export function buildLamps(group, mats, colliders) {
   const off = new THREE.Color(0x8c8c86), on = new THREE.Color(0xfff1c8);
   let last = -1;
   return {
-    // night: 0 (day) .. 1 (full night)
-    update(night) {
-      const k = Math.max(0, Math.min(1, (night - 0.15) / 0.5));
+    // night: 0 (day) .. 1 (full night); power 0..1 (Phase 4: 0 while the farm has no power, the lamps go out)
+    update(night, power = 1) {
+      const k = Math.max(0, Math.min(1, (night - 0.15) / 0.5)) * power;
       if (Math.abs(k - last) < 1e-3) return;
       last = k;
       headMat.color.copy(off).lerp(on, k);

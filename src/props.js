@@ -37,7 +37,7 @@
 //   serialize() / restore(d)  what the save needs that the farm model does not hold
 import * as THREE from 'three';
 import { EV } from './events.js';
-import { SPOTS2, HEATERS, DRINKER_LINES_Z, BROOD_BOUNDS, LEVEL1, FLOOR_GRID } from './config.js';
+import { SPOTS2, SPOTS4, HEATERS, DRINKER_LINES_Z, BROOD_BOUNDS, LEVEL1, FLOOR_GRID } from './config.js';
 import { Batch, makePropMaterials, createBoxPool } from './props-kit.js';
 import { withOcclusionFade } from './world-util.js';
 import { buildFloorStates } from './props-floor.js';
@@ -113,6 +113,10 @@ export function buildProps(ctx, { house } = {}) {
   const reg = (it) => ctx.interact && ctx.interact.add(it);
   const lv = () => st.level;
   for (const it of boards.interactables) reg({ ...it, enabled: lv });
+  // Phase 4: the power cut board by the generator, read in the rainy season only (the ui opens the sign panel
+  // registered under 'sign-power', content-signs-cond.js BOARDS_COND)
+  reg({ id: 'sign-power', label: SPOTS4.signPower.label, x: SPOTS4.signPower.x, z: SPOTS4.signPower.z, radius: 2.0, inside: false, verb: 'Read the',
+    enabled: () => st.level && ctx.farm?.condition === 'rainy' });
   const panel = (id, spot, radius, extra = {}) => reg({ id, label: spot.label, x: spot.x, z: spot.z, radius, inside: spot.inside, enabled: lv, ...extra });
   panel('feeder-box', SPOTS2.feederBox, 2.0, { verb: 'Use the' });
   panel('water-supply', SPOTS2.waterSupply, 1.8, { verb: 'Use the' });
@@ -305,7 +309,7 @@ export function buildProps(ctx, { house } = {}) {
     triggers.update(dt, true);
     if (house && house.lineHeights) for (let i = 0; i < 4; i++) lineY[i] = house.lineHeights[i];
     equip.update(dt, f, env, lineY);
-    boards.update(dt);
+    boards.update(dt, f, env);
     // Phase 3
     const roll = house?.debug?.brooders?.curtainRoll ?? 0;
     equip3.update(dt, f, env, { moving: Math.abs(roll - (st.roll ?? roll)) > 1e-4 });
@@ -423,6 +427,7 @@ export function buildProps(ctx, { house } = {}) {
       catchNight.leave(0, true); catchNight.leave(1, true);
       tools.reset();
       floor.refresh(ctx.farm);
+      ctx.condScene?.reset?.();     // Phase 4: the cull box empties with a new level
     },
     serialize() {
       return {
@@ -434,6 +439,8 @@ export function buildProps(ctx, { house } = {}) {
         // Phase 3: the catching trucks, the panels put up, the tape's hook, the feed truck's silo
         catchTrucks: catchNight.trucks.map((t) => (t.state === 'parked' || t.state === 'in' ? 1 : 0)), panels: tools.panelsSeen ? 1 : 0,
         tape: tools.st.tape ? { ...tools.st.tape } : null, feedSilo: trucks.feedSilo,
+        // Phase 4: the cull box's count (a bad batch's grading); absent in older saves
+        ...(ctx.condScene?.serialize ? { cond: ctx.condScene.serialize() } : {}),
       };
     },
     restore(d) {
@@ -451,10 +458,12 @@ export function buildProps(ctx, { house } = {}) {
       (d.catchTrucks || []).forEach((on, i) => { if (on) catchNight.arrive(i, true); else catchNight.leave(i, true); });
       tools.st.panelsSeen = !!d.panels;
       tools.st.tape = d.tape && props.carrying === 'tape' ? { ...d.tape } : null;
+      ctx.condScene?.restore?.(d.cond || null);
       floor.refresh(ctx.farm);
     },
     // test and tooling hooks (not part of the contract)
-    debug: { trucks, boxes, floor, pool, triggers, yard, equip, boards, equip3, yard3, catchNight, get tools() { return tools; }, dust },
+    debug: { trucks, boxes, floor, pool, triggers, yard, equip, boards, equip3, yard3, catchNight, get tools() { return tools; }, dust,
+      get cond() { return ctx.condScene || null; } },   // Phase 4: the conditions' scene (props-cond.js), for the harness
   };
   tools = createCycleTools(ctx, { props, pool, yard: yard3, lv });
   return props;

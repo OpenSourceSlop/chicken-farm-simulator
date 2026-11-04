@@ -13,6 +13,7 @@ import { buildFeeders, PAN_X, feederRim } from './house-feeders.js';
 import { buildDrinkers, NIPPLE_X, nippleHeight } from './house-drinkers.js';
 import { buildBrooders } from './house-brooders.js';
 import { buildFittings } from './house-fittings.js';
+import { buildCondHouse } from './house-cond.js'; // Phase 4 (package "scene"): the storm flaps, rust on line 4
 
 const { xMin, xMax, zMin, zMax } = HOUSE_BOUNDS;
 
@@ -42,6 +43,8 @@ export function buildHouse(ctx) {
 
   const parts = [buildPad, buildFans, buildFeeders, buildDrinkers, buildBrooders, buildFittings].map((make) => make(kit));
   const drinkerPart = parts[3], fanPart = parts[1], broodPart = parts[4];
+  const condPart = buildCondHouse(kit, walls[1].group, drinkerPart.heights);
+  parts.push(condPart);
 
   group.add(stat.mesh(mats.vc));
   group.add(statDS.mesh(mats.vcDS, { receive: false }));
@@ -122,9 +125,10 @@ export function buildHouse(ctx) {
     // nipple tip height of each drinker line now (m): the farm's heights in a level (props)
     lineHeights: drinkerPart.heights,
     // test hooks (Phase 3 scene steps): fan blade angles / spin, the curtain roll, the pad parts
-    debug: { fans: fanPart, brooders: broodPart, pad: parts[0], get doorShut() { return leavesShut.visible; } },
+    debug: { fans: fanPart, brooders: broodPart, pad: parts[0], fittings: parts[5], cond: condPart, get doorShut() { return leavesShut.visible; } },
     update(dt, env, view) {
       cutaway(dt, view);
+      roof.setWet(view && Number.isFinite(view.rainWet) ? view.rainWet : 0); // Phase 4: the world's rain (world.js)
       for (const p of parts) p.update(dt, env, view);
     },
   };

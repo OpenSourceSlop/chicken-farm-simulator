@@ -158,8 +158,15 @@ export function buildRoof(group) {
   caster.name = 'house-shade';
   group.add(caster);
 
+  let wetK = 0;
   return {
     roof,
+    /** Phase 4 (PHASE4.md §8.1): the wet roof while and after rain is darker (wet 0..1; 0 = Phase 1's colour). */
+    setWet(wet) {
+      if (Math.abs(wet - wetK) < 0.002) return;
+      wetK = wet;
+      mat.color.setScalar(1 - 0.3 * wet);
+    },
     // k: 1 = roof on (farmer away from the house), 0 = roof off
     setFade(k) {
       fade.value = k;
