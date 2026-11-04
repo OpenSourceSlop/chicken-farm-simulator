@@ -766,6 +766,9 @@ export function createLevel(ctx, deps = {}) {
       },
     },
     boot() {
+      // Phase 5: a level started or resumed before the boot finished (a harness's Continue right after a reload, while
+      // main.js still warms the shaders up) keeps running; the boot never drops it back to the sandbox or the title
+      if (level.mode === 'level' || level.mode === 'result' || level.mode === 'title') return;
       loadProfile();
       if (typeof navigator !== 'undefined' && navigator.webdriver) { level.mode = 'sandbox'; ui?.setMode?.('sandbox'); return; }
       level.toTitle();
