@@ -38,6 +38,7 @@ import { doAct } from './farm-act.js';
 import { absHumSat } from './sim.js';
 // Phase 3 (PHASE3.md §6, §13): the cycle state, its actions and the per-step model of Week 2 on
 import { installCycle, cycleAct } from './farm-cycle.js';
+import { installConditions, condAct } from './farm-cond.js'; // Phase 4 (PHASE4.md §10.5)
 import { cyclePre, cycleComfort, cycleFactors, cyclePost } from './farm-cycle-step.js';
 import { stepAugersCycle } from './farm-silos.js';
 import { onBus } from './farm-cycle-act.js';
@@ -152,7 +153,8 @@ export function createFarm(env, { events } = {}) {
      * Emits EV.ACTION { id, ...args, result } unless args.quiet.
      */
     act(id, args = {}) {
-      const cyc = cycleAct(farm, env, id, args);
+      const cond = condAct(farm, env, id, args);
+      const cyc = cond !== undefined ? cond : cycleAct(farm, env, id, args);
       const result = cyc !== undefined ? cyc : doAct(farm, env, id, args);
       if (farm.mode === 'level') { actionSymptoms(farm, env, id, args, result); cycleSymptoms(farm, env, id, args, result); }
       if (!args.quiet) emit(EV.ACTION, { id, ...args, result });
@@ -183,6 +185,7 @@ export function createFarm(env, { events } = {}) {
   };
   farm.flock.weightQuantile = makeQuantile(farm.flock);
   installCycle(farm, env);
+  installConditions(farm, env);
   farm.onLabLetter = () => onLabLetter(farm, env);
 
   if (events) {

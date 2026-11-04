@@ -1,8 +1,9 @@
 // The climate controller in a level: one LCD with the house now, min / max since the last read,
 // setpoint, vent timer and light program, and three sections to set them (Temperature,
 // Ventilation, Lights). Keeping it open 2 s reads it into the notebook (ui action controller.read,
-// once per opening). No target is shown here: the farmer reads it off the brooder sign.
-// Owner: package "level". Brooding level 2 adds the 24-hour temperature chart.
+// once per opening). The LCD shows measured values only; the target is the brooder sign's row of the day, shown
+// as the sign's figure in the job strips above the sections (Sign / Yours, ui-jobstrip.js) while a job works toward it.
+// Owner: package "panels" (Phase 3 on). Brooding level 2 adds the 24-hour temperature chart.
 import { FAN_COUNT, EQUIP } from './config.js';
 import { h, button, setText, uniqueId, fmt1, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';

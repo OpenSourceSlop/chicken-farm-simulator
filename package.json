@@ -7,7 +7,8 @@
   "scripts": {
     "build": "node build.mjs",
     "shoot": "node scripts/shoot.mjs",
-    "test": "node scripts/test-contracts.mjs && node scripts/test-sim.mjs && node scripts/test-jobs.mjs && node scripts/test-level.mjs && node scripts/test-cycle.mjs && node scripts/test-run.mjs"
+    "test": "node scripts/test-contracts.mjs && node scripts/test-sim.mjs && node scripts/test-jobs.mjs && node scripts/test-level.mjs && node scripts/test-cycle.mjs && node scripts/test-run.mjs && node scripts/test-tuning.mjs",
+    "audit": "node scripts/tuning-audit.mjs"
   },
   "dependencies": {
     "three": "0.160.0"

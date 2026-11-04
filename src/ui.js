@@ -41,6 +41,7 @@ import { createBusyCard } from './ui-run.js';
 import { buildSummaryPanel } from './ui-summary.js';
 // Phase 3 (PHASE3.md §13.8): the panels package registers its panels here
 import { registerCyclePanels } from './ui-cycle-panels.js';
+import { registerCondPanels } from './ui-cond-panels.js'; // Phase 4 (package "panels"; placeholders until it builds them)
 import { withJobStrip } from './ui-jobstrip.js';
 import { boardsForDay } from './content-signs-cycle.js';
 import { sourceLabel } from './content-signs.js';
@@ -300,6 +301,14 @@ export function createUI(ctx, deps) {
       plate: (id, opts) => buildPlate(id, opts), openPanel: (id) => openPanel(id),
     });
   } catch (err) { console.error('Phase 3 panels failed to register', err); }
+  // Phase 4 panels (package "panels"; PHASE4.md §10.6), the same api
+  try {
+    registerCondPanels({
+      register: (id, build, opts) => panels.register(id, build, opts),
+      L, boards: (id) => boardsForDay(env.dayNumber)[id] || null, sourceLabel,
+      plate: (id, opts) => buildPlate(id, opts), openPanel: (id) => openPanel(id),
+    });
+  } catch (err) { console.error('Phase 4 panels failed to register', err); }
 
   // ---- title card and the job card ----
   const title = createTitle(root, {

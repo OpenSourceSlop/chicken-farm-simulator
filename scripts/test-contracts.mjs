@@ -16,6 +16,12 @@ import { MILESTONES_CYCLE } from '../src/skills-cycle.js';
 import { ALL_MILESTONES } from '../src/skills.js';
 import { planSums, planOutcome } from '../src/farm-plan.js';
 import { SPOTS3, LEVELS, LEVEL1, CYCLE, UNLOCKS, SKILL_BRANCHES, SKILL_LEVEL_POINTS, levelOfDay, feedStdGAt, MIN_VENT_PER_1000 } from '../src/config.js';
+// Phase 4 contracts (PHASE4.md §10)
+import { JOBS_COND, JOB_WHERE_COND, STATE_TEST_IDS_P4, DONE_P4 } from '../src/content-jobs-cond.js';
+import { BOARD_P4_ITEMS, BOARD_COND_ITEMS, BOARDS_COND, BOARD_IDS_COND } from '../src/content-signs-cond.js';
+import { MILESTONES_COND } from '../src/skills-cond.js';
+import { CONDITIONS, CONDITION_IDS, SPOTS4, SIGN_FIGURES, conditionLevel } from '../src/config.js';
+import { UI_ACTION_IDS_COND } from '../src/events.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -226,6 +232,95 @@ test('skills: Phase 2 milestones belong to the brooding week (PHASE3.md §9: no 
   events.emit(EV.RECORD_CLOSED, { day: 14, signed: true });
   assert(tierOf() == null, 'the week 2 weigh-in (12 x chick weight) earns no day7-weight');
   assert(ALL_MILESTONES.filter((m) => MILESTONES.some((p) => p.id === m.id)).every((m) => m.level === 'level1'), 'Phase 2 milestones tagged level1');
+});
+
+// ---------------- Phase 4 (PHASE4.md §10) ----------------
+test('conditions: four, each with its levels; the merge drops, replaces and adds problems without touching the level defs', () => {
+  assert(CONDITION_IDS.join() === 'hot,rainy,badChicks,water', `condition ids ${CONDITION_IDS}`);
+  const before = JSON.stringify(LEVELS.map((l) => l.problems));
+  for (const id of CONDITION_IDS) {
+    const c = CONDITIONS[id];
+    assert(c.label && c.summary && typeof c.available === 'boolean' && !VERDICT.test(c.summary), `${id}: label, summary, available`);
+    for (const [lv, part] of Object.entries(c.levels)) {
+      const def = LEVELS.find((l) => l.id === lv);
+      assert(def, `${id}: unknown level ${lv}`);
+      for (const d of part.drop || []) assert(def.problems.some((p) => p.id === d), `${id}/${lv}: drops ${d}, not a problem of the level`);
+      for (const r of Object.keys(part.replace || {})) assert(def.problems.some((p) => p.id === r), `${id}/${lv}: replaces ${r}, not a problem of the level`);
+      for (const p of part.problems || []) assert(p.id && (p.conditional || Number.isFinite(p.day)) && (p.day == null || (p.day >= def.startDay && p.day <= def.endDay)), `${id}/${lv}: problem ${p.id} inside the level`);
+      const m = conditionLevel(def, id);
+      for (const d of part.drop || []) assert(!m.problems.some((p) => p.id === d), `${id}/${lv}: ${d} still there`);
+    }
+  }
+  assert(JSON.stringify(LEVELS.map((l) => l.problems)) === before, 'the level defs are unchanged by the merge');
+  assert(conditionLevel(LEVELS[3], 'hot').problems.find((p) => p.id === 'warm-afternoon3').outsideRise === 2.5, 'replace merges fields');
+  for (const k of Object.keys(SPOTS4)) assert(Number.isFinite(SPOTS4[k].x) && Number.isFinite(SPOTS4[k].z), `SPOTS4.${k}`);
+});
+
+test('condition jobs: ids, conditions, spots, signs, rules, problems and actions resolve', () => {
+  const ids = new Set(ALL_JOBS.map((j) => j.id));
+  const allBoards = new Set([...ALL_BOARD_IDS, ...BOARD_IDS_COND]);
+  const spotOk = (s) => s in SPOTS || s in SPOTS2 || s in SPOTS3 || s in SPOTS4 || s in FARM || /^drinkers\.[0-3]$/.test(s) || DYNAMIC_SPOTS.includes(s);
+  const states = [...STATE_TEST_IDS, ...STATE_TEST_IDS_CYCLE, ...STATE_TEST_IDS_P4];
+  for (const j of JOBS_COND) {
+    assert(!ids.has(j.id), `duplicate job ${j.id}`); ids.add(j.id);
+    assert(CONDITIONS[j.condition], `${j.id}: condition ${j.condition}`);
+    assert(spotOk(j.spot), `${j.id}: spot ${j.spot}`);
+    assert(JOB_WHERE_COND[j.id], `${j.id}: no where line`);
+    assert(!VERDICT.test(j.title), `${j.id}: verdict word in the title`);
+    for (const s of j.signs) assert(allBoards.has(s), `${j.id}: sign ${s}`);
+    if (j.kind === 'problem') {
+      const inCond = LEVELS.some((l) => conditionLevel(l, j.condition).problems.some((p) => p.id === j.problem));
+      assert(inCond, `${j.id}: problem ${j.problem} in no level of ${j.condition}`);
+    }
+    if (j.onDays) for (const d of j.onDays) assert(d >= j.days[0] && d <= j.days[1], `${j.id}: onDay ${d}`);
+  }
+  const walk = (id, r) => {
+    if (r.type === 'state') assert(states.includes(r.test), `${id}: state ${r.test}`);
+    if (['action', 'each', 'count'].includes(r.type)) assert(ACTION_IDS.includes(r.id), `${id}: action ${r.id} not in ACTION_IDS`);
+    (r.of || []).forEach((x) => walk(id, x));
+  };
+  for (const j of JOBS_COND) walk(j.id, j.done);
+  for (const [id, done] of Object.entries(DONE_P4)) { assert(ALL_JOBS.some((j) => j.id === id), `DONE_P4 for unknown job ${id}`); walk(id, done); }
+  for (const a of UI_ACTION_IDS_COND) assert(ACTION_IDS.includes(a), `ui action ${a}`);
+  assert(new Set(ACTION_IDS).size === ACTION_IDS.length, 'ACTION_IDS has duplicates');
+});
+
+test('condition signs: known sources (all general), no page numbers, no verdicts; on real boards; sign figures printed', () => {
+  const known = { ...BOARDS, ...BOARDS_CYCLE, ...BOARDS_COND };
+  const chk = (where, it) => {
+    for (const k of [].concat(it.source)) assert(k === 'general', `${where}: Phase 4 lines are general practice, got ${k}`);
+    assert(!/\bp\.\s*\d|\bpage\b/i.test(it.text), `${where}: page reference`);
+    assert(!VERDICT.test(it.text), `${where}: verdict word in "${it.text}"`);
+  };
+  for (const [id, b] of Object.entries(BOARDS_COND)) { assert(!(id in BOARDS) && !(id in BOARDS_CYCLE) && b.title && b.where && b.items.length, `${id}`); b.items.forEach((it) => chk(id, it)); }
+  for (const [id, p] of Object.entries(BOARD_P4_ITEMS)) {
+    assert(id in known, `Phase 4 lines for unknown board ${id}`);
+    (p.add || []).forEach((it) => chk(id, it));
+    for (const r of p.replace || []) { chk(id, r); assert(known[id].items.some((x) => x.text === r.was), `${id}: the line to replace is not on the board: "${r.was}"`); }
+  }
+  for (const [c, boards] of Object.entries(BOARD_COND_ITEMS)) {
+    assert(CONDITIONS[c], `lines for unknown condition ${c}`);
+    for (const [id, list] of Object.entries(boards)) { assert(id in known, `${c}: unknown board ${id}`); list.forEach((it) => chk(`${c}/${id}`, it)); }
+  }
+  // every sign figure is printed on its board (the Phase 4 lines, a condition's lines or a new board)
+  const p4Text = (id) => [...(known[id]?.items || []), ...(BOARD_P4_ITEMS[id]?.add || []), ...(BOARD_P4_ITEMS[id]?.replace || []),
+    ...Object.values(BOARD_COND_ITEMS).flatMap((b) => b[id] || [])].map((x) => x.text.toLowerCase()).join(' | ');
+  for (const f of SIGN_FIGURES) {
+    const t = p4Text(f.board), key = f.text.toLowerCase().replace(/ \(.*\)$/, '').split(/[;:]/)[0].slice(0, 28);
+    assert(t.includes(key), `${f.id}: "${key}" not on ${f.board}`);
+  }
+});
+
+test('condition skills: milestones well formed, in the eleven branches, for a condition and a level', () => {
+  const ids = new Set(ALL_MILESTONES.map((m) => m.id));
+  for (const m of MILESTONES_COND) {
+    assert(!ids.has(m.id), `duplicate milestone ${m.id}`); ids.add(m.id);
+    assert(CONDITIONS[m.condition], `${m.id}: condition ${m.condition}`);
+    assert(SKILL_BRANCHES.some((b) => b.id === m.branch), `${m.id}: branch ${m.branch}`);
+    assert(LEVELS.some((l) => l.id === m.level) && CHECKPOINTS.includes(m.checkpoint), `${m.id}: level / checkpoint`);
+    assert(m.tiers.length && m.tiers.every((t, i) => t.points > 0 && (i === 0 || t.points > m.tiers[i - 1].points)), `${m.id}: tiers`);
+    assert(!VERDICT.test(m.text), `${m.id}: verdict word in "${m.text}"`);
+  }
 });
 
 let failed = 0;

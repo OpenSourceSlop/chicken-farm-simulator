@@ -32,6 +32,10 @@ const CSS = `
 .js-note .js-text, .js-time .js-text { color: var(--sign-yellow); }
 .js-bar { grid-column: 2; height: 4px; margin-top: 3px; border-radius: 2px; background: rgba(0, 0, 0, 0.35); overflow: hidden; }
 .js-bar > span { display: block; height: 100%; background: var(--sign-yellow); transform-origin: left center; }
+.js-bar--scale { position: relative; height: 6px; overflow: visible; }
+.js-bar--scale > span { border-radius: 2px; }
+.js-band { position: absolute; top: -2px; bottom: -2px; border: 1px solid var(--key-ink); border-radius: 2px; opacity: 0.7; }
+.js-bar--over::after { content: '▶'; position: absolute; right: -11px; top: -5px; font-size: 9px; color: var(--sign-yellow); }
 .js-more { margin: 5px 0 0; font-size: 12px; color: var(--key-sub); }
 /* machine rows: the state word beside the title, keys that name their action, the pans' fill as a number */
 .ctrl-label > .ctrl-state { display: block; margin-top: 3px; font: 600 12px/1.25 var(--font-display); letter-spacing: 0.02em; text-transform: none; color: var(--sign-yellow); }
@@ -59,7 +63,18 @@ function injectStyle() {
   document.head.append(h('style', { id: 'jobstrip-style' }, CSS));
 }
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const bar = (v) => (v == null ? '' : `<span class="js-bar" aria-hidden="true"><span style="transform: scaleX(${Math.max(0, Math.min(1, v)).toFixed(3)})"></span></span>`);
+/**
+ * A row's bar: a share 0..1 (Phase 3), or (Phase 4, PHASE4.md §6.3) { v, band: [lo, hi], max }: the value and the
+ * sign's band in the row's own units (e.g. shares of the need, 1 = the need), drawn on a scale 0..max (default 1.6):
+ * the band is marked on the track, a value over max fills the bar and shows an arrow at its end.
+ */
+const bar = (b) => {
+  if (b == null) return '';
+  if (typeof b === 'number') return `<span class="js-bar" aria-hidden="true"><span style="transform: scaleX(${Math.max(0, Math.min(1, b)).toFixed(3)})"></span></span>`;
+  const max = b.max > 0 ? b.max : 1.6, v = Math.max(0, Number(b.v) || 0), f = Math.min(1, v / max);
+  const band = Array.isArray(b.band) ? `<i class="js-band" style="left: ${((100 * b.band[0]) / max).toFixed(1)}%; width: ${((100 * (b.band[1] - b.band[0])) / max).toFixed(1)}%"></i>` : '';
+  return `<span class="js-bar js-bar--scale${v > max ? ' js-bar--over' : ''}" aria-hidden="true">${band}<span style="transform: scaleX(${f.toFixed(3)})"></span></span>`;
+};
 
 function rowHtml(r, n) {
   if (r.k === 'step') return `<li class="js-step${r.done ? ' is-done' : ''}"><span class="js-mark" aria-hidden="true">${r.done ? '✓' : n}</span><span class="js-text">${r.done ? '<span class="sr-only">done: </span>' : ''}${esc(r.text)}</span>${bar(r.bar)}</li>`;

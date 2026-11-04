@@ -12,6 +12,7 @@ import { createUI } from './ui.js';
 // Phase 2 (PHASE2.md): shared bus and registry, farm model, records, skills, save, props, level
 import { createEvents } from './events.js';
 import { createInteract } from './interact.js';
+import { buildCondScene } from './props-cond.js'; // Phase 4 (package "scene"; PHASE4.md §10.7)
 import { createFarm } from './farm.js';
 import { createRecords } from './records.js';
 import { createSkills } from './skills.js';
@@ -93,6 +94,8 @@ function start(saved = {}) {
   ctx.interact = interact;
   const props = buildProps(ctx, { house, world });
   ctx.props = props;                 // flock and ui call props.startCarry / props.drop (PHASE2.md §13.6)
+  const condScene = buildCondScene(ctx); // Phase 4: the conditions' machines, rain, the power cut
+  ctx.condScene = condScene;
   // ctx.colliders: the one array the farmer collides with; props may add / remove its own entries.
   const colliders = [...world.colliders, ...house.colliders, ...props.colliders];
   ctx.colliders = colliders;
@@ -133,6 +136,7 @@ function start(saved = {}) {
     view.night = world.night; // the world's day/night state drives the house lights too
     house.update(dt, env, view);
     props.update(dt, env, view);
+    condScene.update(dt, env, view);
     flock.update(dt, env, player.position);
     ui.update(dt);
     level.update(dt);
@@ -207,6 +211,10 @@ function start(saved = {}) {
     startRun(opts = {}) { return run.startRun(opts); },
     startLevel(opts = {}) { return opts.level && opts.level !== 'level1' ? run.startLevel(opts.level, opts) : level.start(opts); },
     cycleAt(day, hour = 6) { return level.debug.freeRun(day, hour); },
+    // Phase 4 (PHASE4.md §11): the harder conditions. startRun({ condition }) / startLevel({ level, from, condition })
+    // carry it (run package); setCondition(id) sets it on the running farm for the other packages' harness runs only.
+    conditions() { return run.conditionsAvailable ? run.conditionsAvailable() : []; },
+    setCondition(id) { farm.condition = id && config.CONDITIONS[id] ? id : null; return farm.condition; },
     nextJob() { return level.nextJob(); },
     jobs() { return level.jobs.list().map((j) => ({ key: j.key, status: j.status, progress: j.progress })); },
     get frames() { return frames; },

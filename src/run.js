@@ -95,6 +95,9 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   let seed = 1, levelId = null, plan = null, summary = null;
   let lastCycle = null;             // { plan, summary } of the last finished cycle (planCarry; kept across startRun)
   let conditions = [];
+  // Phase 4 (PHASE4.md §3.1): the run's condition (null = the normal season). STUB until the run package passes it to
+  // farm.start / level.start and the standard starts (the farm stub keeps farm.condition; nothing changes the model yet).
+  let condition = null;
   const levels = {};
   const mem = new Map();            // level starts in memory: key -> { version, levelId, day, savedAt, run, blob }
   let memRun = null;                // the run save in memory (node, storage blocked)
@@ -102,10 +105,10 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   const emit = (p) => events?.emit(EV.RUN, p);
   const entry = (id) => levels[id] || (levels[id] = { state: 'reached', key: null, attempts: 0, starts: [], carried: [] });
 
-  function serialize() { return { v: 1, seed, levelId, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], lastCycle: clone(lastCycle) }; }
+  function serialize() { return { v: 1, seed, levelId, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], condition, lastCycle: clone(lastCycle) }; }
   function adopt(d) {
     if (!d) return;
-    seed = d.seed ?? 1; levelId = d.levelId ?? null; plan = clone(d.plan) ?? null; summary = clone(d.summary) ?? null; conditions = [...(d.conditions || [])];
+    seed = d.seed ?? 1; levelId = d.levelId ?? null; plan = clone(d.plan) ?? null; summary = clone(d.summary) ?? null; conditions = [...(d.conditions || [])]; condition = d.condition && CONDITIONS[d.condition] ? d.condition : null;
     lastCycle = clone(d.lastCycle) ?? lastCycle;
     for (const k of Object.keys(levels)) delete levels[k];
     Object.assign(levels, clone(d.levels) || {});
@@ -226,9 +229,10 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     stub: false,
     store,
     get available() { return !!store.available; },
-    state() { return { levelId, seed, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], lastCycle: clone(lastCycle) }; },
+    state() { return { levelId, seed, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], condition, lastCycle: clone(lastCycle) }; },
     startRun(opts = {}) {
       seed = opts.seed ?? 1; plan = null; summary = null; conditions = []; levelId = null;
+      condition = opts.condition && CONDITIONS[opts.condition] ? opts.condition : null;
       clearStarts(RUN_ORDER[0]);
       for (const k of Object.keys(levels)) delete levels[k];
       const at = opts.at && levelById(opts.at) ? opts.at : PLAN_LEVEL.id;

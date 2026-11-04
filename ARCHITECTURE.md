@@ -10,7 +10,9 @@ day 7 weigh-in, autosave. The Phase 1 sections below are still valid; **"Phase 2
 end lists the modules, the contracts as integrated, and the tests. **Phase 3** (the full flock cycle:
 seven levels on one flock from the plan to the rested house, all eleven skill branches) is specified in
 `PHASE3.md` and integrated on main: see **"Phase 3 (the full flock cycle) — as integrated"** at the end.
-Not in scope yet: sound, settings, farm overview map (Phase 5), harder replays (Phase 4).
+**Phase 4** (simulation tuning against general broiler practice, the four harder replay conditions and the
+clarity leftovers) is specified in `PHASE4.md`; its contracts are in code (see **"Phase 4 — design"** at the end).
+Not in scope yet: sound, settings, save slots, farm overview map (Phase 5).
 
 ## Decisions already made (from the plan doc)
 
@@ -20,7 +22,10 @@ Not in scope yet: sound, settings, farm overview map (Phase 5), harder replays (
 - English text. Facts sit at the place on the farm where you use them (signs), never as quizzes.
 - **No "correct" / "wrong" messages anywhere.** The player reads the flock, gauges and records.
   The HUD shows measured values only (clock, flock age, house/outside temperature, humidity).
-  The *target* temperature is only on the brooder heater sign (and in the Phase 1 test tools).
+  The *target* temperature is the brooder sign's table. It appears as the sign's own figure wherever a job works
+  toward it (the controller's job strips, *Sign / Yours*; the job card's readings; the result screen's "Your week"
+  sign column; the records' target column with the *recordsTargets* unlock; the cycle summary's dashed line) and in
+  the Phase 1 test tools — never as a verdict, and never on the HUD or the controller's LCD.
 - Farm layout: a typical Thai tunnel-ventilated (EVAP) broiler house: cooling pad at the west end,
   tunnel fans at the east end, nipple drinker lines, pan feeder lines, gas brooders.
 - A day passes in a few minutes of play; a "next job" / skip button jumps ahead.

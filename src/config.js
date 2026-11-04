@@ -668,6 +668,11 @@ export const SPOTS4 = {
   chickTable: SPOTS2.chickTable,                                                      // the grading of a bad batch (PHASE4.md §4.3)
 };
 
+// The evening of big birds (heat sign, general; PHASE4.md §2.4): from day padEveningFromAge, 18:00-21:00, every fan
+// and the pads while the outside air is at or over padEveningAboveC (the controller's Outside reading); the night
+// ventilation job is met with at most nightPantMax of the birds panting (a few birds pant on warm evenings).
+export const HEAT_P4 = { padEveningAboveC: 29.5, padEveningFromAge: 28, eveningUntil: 21, nightPantMax: 0.25 };
+
 // The generator and the well pump (general where a sign says so, else model; PHASE4.md §4.2, §4.4).
 export const GENERATOR = { fuelL: 150, litresPerH: 15, startMin: 2, testMin: 10, kva: 60 };
 export const WATER_TANK = { m3: 10, pumpM3h: 4.0, lowPct: 30, refillFromPct: 60 };
@@ -721,6 +726,7 @@ export const CONDITIONS = {
           { id: 'damp-spell', day: 29, hour: 7, outsideDrop: 2, rh: 97, until: { day: 31, hour: 18 }, forecastDay: 28 },
           { id: 'storm-33', day: 33, hour: 14, outsideDrop: 4, rh: 98, storm: true, until: { day: 33, hour: 18 } },
           { id: 'power-cut', day: 33, hour: 15 + 10 / 60, back: { day: 33, hour: 18 + 10 / 60 }, alarm: true },
+          { id: 'mains-back', day: 33, hour: 18 + 10 / 60, conditional: 'generator' },   // only while the generator carries the house
         ],
       },
       finish: { drop: ['hot-finish'], problems: [{ id: 'storm-39', day: 39, hour: 14, outsideDrop: 4, rh: 98, storm: true, until: { day: 39, hour: 18 } }] },
@@ -781,7 +787,7 @@ export const SIGN_FIGURES = [
   { id: 'wind-chill-5wk', board: 'sign-heat', text: 'at 2.5 m/s birds of 5 weeks feel about 5–6 °C cooler', model: 'windChill35', band: [5, 6] },
   { id: 'wind-chill-2wk', board: 'sign-heat', text: 'birds of 2 weeks about 7 °C', model: 'windChill14', band: [6.5, 7.5] },
   { id: 'wind-chill-hot', board: 'sign-heat', text: 'moving air cools less once the air is over about 35 °C; near 40 °C it gives little: then the pads cool the birds', model: 'windChillHot', band: [0.1, 0.4] },
-  { id: 'air-per-fan', board: 'sign-heat', text: 'six fans about 2.5 m/s at bird height, each about 0.4 m/s', model: 'airPerFan', band: [0.4, 0.43] },
+  { id: 'air-per-fan', board: 'sign-heat', text: 'All six fans give about 2.5 m/s at bird height, each fan about 0.4 m/s', model: 'airPerFan', band: [0.4, 0.43] },
   { id: 'pant-felt-5wk', board: 'sign-heat', text: 'birds of 5 weeks start to pant when they feel about 24 °C, all of them by about 28 °C (felt: the house less the wind chill)', model: 'firstPant35', band: [23.5, 24.5] },
   { id: 'pant-all-5wk', board: 'sign-heat', text: 'all of them by about 28 °C', model: 'allPant35', band: [27.5, 28.5] },
   { id: 'water-feed', board: 'drinker', text: 'water : feed about 1.8 L/kg while the birds are comfortable', model: 'waterRatioComfort', band: [1.7, 1.9] },
@@ -790,6 +796,6 @@ export const SIGN_FIGURES = [
   { id: 'pad-most', board: 'pad-pump', text: 'a pad in good order gives most of that, never all of it', model: 'padShareOfRule', band: [0.6, 0.95] },
   { id: 'pad-most-max', board: 'pad-pump', text: 'a pad in good order gives most of that, never all of it', model: 'padShareOfRuleMax', band: [0.6, 0.95] },
   { id: 'pad-rainy', board: 'pad-pump', text: 'in the damp air of the rainy season a pad cools only about 2–4 °C', model: 'rainyPadC', band: [2, 4] },
-  { id: 'power-cut-30', board: 'generator', text: 'without fans big birds overheat at once: after half an hour the first die', model: 'powerCut30', band: [0.1, 0.6] },
-  { id: 'power-cut-120', board: 'generator', text: 'after two hours a few in every hundred', model: 'powerCut120', band: [1, 5] },
+  { id: 'power-cut-30', board: 'sign-power', text: 'without fans big birds overheat at once: after half an hour the first die', model: 'powerCut30', band: [0.1, 0.6] },
+  { id: 'power-cut-120', board: 'sign-power', text: 'after two hours a few in every hundred', model: 'powerCut120', band: [1, 5] },
 ];

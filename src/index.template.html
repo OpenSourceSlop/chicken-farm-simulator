@@ -68,6 +68,10 @@
   --key-sub: #a8b1b5;
   --key-on-hi: #3f87ab;
   --key-on-lo: #2b6787;
+  /* Phase 4 (PHASE4.md §6.1): a toggle that is on is a lit switch (pressed in, its lamp lit), never the blue of the
+     primary action keys (key--apply, btn--go) */
+  --switch-face: #262c30;
+  --switch-lamp: #ffcf5a;
   --screw-hi: #f6f3ea;
   --screw-lo: #8e8979;
   --sign-shade: rgba(0, 0, 0, 0.16);
@@ -359,7 +363,8 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .key:hover { background: linear-gradient(180deg, var(--key-hover), var(--key-hi)); }
 .key:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--key-edge), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
 .key--wide { width: auto; min-width: 112px; padding: 0 14px; letter-spacing: 0.07em; text-transform: uppercase; }
-.key--wide[aria-pressed="true"] { background: linear-gradient(180deg, var(--key-on-hi), var(--key-on-lo)); }
+.key[aria-pressed="true"] { position: relative; background: linear-gradient(180deg, var(--switch-face), #1d2225); color: var(--switch-lamp); box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.65), 0 1px 0 var(--key-edge); transform: translateY(2px); }
+.key[aria-pressed="true"]::before { content: ''; position: absolute; top: 5px; left: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--switch-lamp); box-shadow: 0 0 8px var(--switch-lamp); }
 .lcd-mini { min-width: 96px; padding: 8px 10px; border-radius: 4px; background: var(--lcd); color: var(--lcd-ink); text-align: center; font: 700 20px/1 var(--font-display); box-shadow: inset 0 0 0 2px var(--plate-edge), inset 0 0 10px rgba(50, 80, 15, 0.4); }
 .led { width: 12px; height: 12px; border-radius: 50%; background: var(--led-off); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6); }
 .led--heat.is-on { background: var(--led-heat); box-shadow: 0 0 9px var(--led-heat); }

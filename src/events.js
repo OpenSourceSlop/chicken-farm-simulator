@@ -4,7 +4,7 @@
 //   const off = events.on('footdip', (p) => ...);   events.emit('footdip', { where: 'gate' });
 //   events.on('*', (p, type) => ...)                  // every event (records, tests)
 //
-// Event names and payloads are listed in EV below and in PHASE2.md "Event catalogue" / PHASE3.md §13.2.
+// Event names and payloads are listed in EV below and in PHASE2.md "Event catalogue" / PHASE3.md §13.2 / PHASE4.md §10.2.
 // Handlers run synchronously in the order they were added; a throwing handler is logged and the
 // others still run (one bad listener must not stop the farm).
 
@@ -54,6 +54,9 @@ export const EV = {
   RUN: 'run',                       // { phase: 'start'|'level-start'|'level-end'|'cycle-end', level, pass? } (run.js)
   CATCH: 'catch',                   // { phase: 'start'|'section'|'end', i, birds } the catching crew's progress (farm)
   LETTER: 'letter',                 // { kind: 'contract'|'reply'|'vet'|'lab', day } something new on the office desk (farm)
+  // Phase 4 (PHASE4.md §10.2)
+  POWER: 'power',                   // { on, source: 'mains'|'generator'|null, mains } the house's power changed (farm: a cut,
+                                    //   the generator taking the load, the mains back); the scene darkens the house, the ui shows the alarm
 };
 
 /**
@@ -74,9 +77,14 @@ export const ACTION_IDS = [
   'feed.withdraw', 'feed.wash', 'litter.fork', 'phone.vet', 'phone.bookCatch', 'phone.bookChicks', 'catch.panels',
   'load.ticket', 'clean.scrape', 'clean.wash', 'clean.spray', 'clean.brush', 'clean.washbay', 'clean.bait',
   'clean.swab', 'house.close', 'swab.read', 'water.disinfect',
+  // Phase 4 (PHASE4.md §10.3)
+  'gen.start', 'gen.stop', 'gen.switch', 'gen.test', 'gen.fuel', 'inlets.storm', 'water.tank', 'pump.fix', 'chicks.grade',
+  'brood.trays', 'phone.hatchery',
 ];
 /** Phase 3 action ids that are ui-only (EV.ACTION with result undefined; the farm sees them on the bus). */
 export const UI_ACTION_IDS_CYCLE = ['plan.letter', 'plan.reply', 'fans.read', 'phone.vet', 'swab.read', 'light.preset', 'sign.read'];
+/** Phase 4 action ids that are ui-only (the office phone's call to the hatchery about a bad batch). */
+export const UI_ACTION_IDS_COND = ['phone.hatchery'];
 
 /**
  * Does `payload` contain `pattern`? Every key of the pattern must be equal in the payload; a

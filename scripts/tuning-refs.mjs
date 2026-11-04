@@ -9,7 +9,7 @@
 // off from age 21, minimum ventilation by the sign table); its heat and breath come from flockLoadsP4 (the
 // sensible heat x 2.5 fading in hot air, the water ratio from the birds' comfort).
 import { createSim } from '../src/sim.js';
-import { weightAt, minVentM3hPer1000, EQUIP, PLACEMENT_DAY } from '../src/config.js';
+import { weightAt, minVentM3hPer1000, EQUIP, PLACEMENT_DAY, HEAT_P4 } from '../src/config.js';
 import { dustIndex } from '../src/farm-heat.js';
 import { heatStateP4, flockLoadsP4 } from '../src/farm-tuning.js';
 import { PLANS, EVENTS as EVENTS_P3, CHECK_FLOCK } from './cycle-refs.mjs';
@@ -27,12 +27,12 @@ const minVent = (env, w, birds) => {
 /** The Phase 4 ideal: Phase 3's fan plan, and on warm evenings of big birds (from day 28, 18:00-21:00) every fan,
  *  with the pads while the outside air is at or over PAD_EVENING_ABOVE_C and the house RH at or under 90 % (the heat
  *  sign's evening line, PHASE4.md §2.4); from the 21:00 stop Phase 3's plan again (tunnel air all night). */
-export const PAD_EVENING_ABOVE_C = 29.5;
+export const PAD_EVENING_ABOVE_C = HEAT_P4.padEveningAboveC;
 const evening = (env, a) => a >= 21 && env.hour >= 18;
 const P4 = {
   ideal(env, h, a, w, birds) {
     PLANS.ideal(env, h, a, w, birds);
-    if (a >= 28 && h >= 18 && h < 21) { env.setFans(6); env.setPad(env.outsideTemp >= PAD_EVENING_ABOVE_C && env.houseRH <= 90); }
+    if (a >= HEAT_P4.padEveningFromAge && h >= 18 && h < HEAT_P4.eveningUntil) { env.setFans(6); env.setPad(env.outsideTemp >= PAD_EVENING_ABOVE_C && env.houseRH <= 90); }
   },
   // the evening of day 37 from 18:00 with n tunnel fans (and the pad)
   eve3: (env, h, a, w, b) => { P4.ideal(env, h, a, w, b); if (evening(env, a)) { env.setFans(3); env.setPad(false); } },
