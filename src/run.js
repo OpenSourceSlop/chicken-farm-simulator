@@ -16,6 +16,16 @@
 //   info()                the title card's Continue line: { levelId, title, day, hour } | null
 //   card()                the run card: one row per level (PHASE3.md §1)
 //   serialize() / restore(d)   the run's part of the save (PHASE3.md §11)
+//   Phase 5 (PHASE5.md §3.3, §8.7; package saves):
+//   exportSave()          the autosave written first (a level in play), then { run, blob, starts: [{ levelId, day, savedAt,
+//                         run, blob }], savedAt } — the run key's lean blob and every start the run knows (memory or storage)
+//   importSave(env, { memoryOnly })  (a) every live start of the run in play cleared (memory and storage, from plan on),
+//                         (b) the envelope's starts and its run key written, (c) the run key's savedAt now, (d) resumed
+//                         (continueSave; run null: a Phase 2 save, a run at the brooding week): true / false; a resume that
+//                         fails puts the replaced run's keys back (an exception: the title card first, then rethrown)
+//   autosave()            the run key as it is now (the memory copy first) or null
+//   onSave(fn)            fn({ ok, kind: 'run' | 'start', levelId }) after every write of the autosave (saves.js: the
+//                         autosave-failed message); returns the unsubscribe
 // Events: EV.RUN { phase: 'start' | 'level-start' | 'level-end' | 'cycle-end', level, pass?, condition }.
 //
 // Phase 4 (PHASE4.md §3.1): one condition per run, held on the farm only: startRun({ seed, at, condition }) and
@@ -123,6 +133,9 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   const levels = {};
   const mem = new Map();            // level starts in memory: key -> { version, levelId, day, savedAt, run, blob }
   let memRun = null;                // the run save in memory (node, storage blocked)
+  const saveFns = new Set();        // Phase 5: onSave listeners (saves.js)
+  let holdSaves = false;            // Phase 5: no autosave while a failed import goes back to the title card
+  const told = (p) => { for (const fn of saveFns) { try { fn(p); } catch (err) { console.error('run onSave listener failed', err); } } };
   const store = createRunStore();     // save.js (package "sim"): the run key and the level starts
   const emit = (p) => events?.emit(EV.RUN, p);
   const entry = (id) => levels[id] || (levels[id] = { state: 'reached', key: null, attempts: 0, starts: [], carried: [] });
@@ -147,11 +160,14 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   }
   /** The run key carries the run beside the blob: the blob's own copy (level.run, for the hot reload) is left out. */
   const lean = (blob) => (blob && blob.level && blob.level.run ? { ...blob, level: (({ run, ...rest }) => rest)(blob.level) } : blob);
-  function saveRun(full = level.saveBlob()) {
-    const blob = lean(full);
+  function saveRun(full) {
+    if (holdSaves) return false;
+    const blob = lean(full ?? level.saveBlob());
     const d = { version: RUN_SAVE.version, savedAt: Date.now(), run: serialize(), blob };
     memRun = clone(d);
-    return store.save(d.run, blob);
+    const ok = store.save(d.run, blob);
+    if (saveFns.size) told({ ok, kind: 'run', levelId: d.run.levelId });
+    return ok;
   }
   function saveStart(id, day) {
     const e = entry(id);
@@ -159,7 +175,8 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     e.starts.sort((a, b) => a - b);
     const r = serialize(), blob = lean(level.saveBlob());
     mem.set(startKey(id, day), clone({ version: RUN_SAVE.version, levelId: id, day, savedAt: Date.now(), run: r, blob }));
-    store.saveStart(id, day, r, blob);
+    const ok = store.saveStart(id, day, r, blob);
+    if (saveFns.size) told({ ok, kind: 'start', levelId: id });
   }
   function loadStart(id, day) {
     const def = levelById(id);
@@ -294,6 +311,19 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     for (const k of Object.keys(levels)) delete levels[k];
     emit({ phase: 'start', level: at, condition: runCond });
   }
+  /** A Phase 2 level save resumed as a run at the brooding week, with no plan (run.continueSave, run.importSave). */
+  function joinBrooding(p2) {
+    if (!p2 || !level.resume(p2)) return false;
+    level.joinRun();
+    plan = null; summary = null; seed = p2.level?.seed ?? 1;
+    for (const k of Object.keys(levels)) delete levels[k];
+    levelId = LEVEL1.id;
+    const e = entry(LEVEL1.id); e.attempts = 1; e.starts = [LEVEL1.startDay];
+    emit({ phase: 'level-start', level: LEVEL1.id });
+    saveRun();
+    return true;
+  }
+
   /** The harder flocks open after the first full cycle (skill profile cyclesDone; a Phase 3 profile without it: 1 if a
    *  finished cycle is stored). */
   let storedCycle;                  // a finished cycle in the stored run save (read once: the save is large)
@@ -371,14 +401,7 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       if (d?.blob && level.resume(d.blob)) { adopt(d.run); return true; }
       // a Phase 2 save (chickenFarm.level1.v1) continues as a run at the brooding week, with no plan
       const p2 = save?.load?.() ?? store.migratePhase2()?.blob;
-      if (!p2 || !level.resume(p2)) return false;
-      level.joinRun();
-      plan = null; summary = null; seed = p2.level?.seed ?? 1;
-      for (const k of Object.keys(levels)) delete levels[k];
-      levelId = LEVEL1.id;
-      const e = entry(LEVEL1.id); e.attempts = 1; e.starts = [LEVEL1.startDay];
-      emit({ phase: 'level-start', level: LEVEL1.id });
-      saveRun();
+      if (!joinBrooding(p2)) return false;
       save?.clear?.();                     // the run key replaces it
       return true;
     },
@@ -423,6 +446,74 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     hasStart: (id, day) => !!loadStart(id, day),
     /** The saved start record { version, levelId, day, savedAt, run, blob } (tests, harness). */
     debugStart: (id, day) => loadStart(id, day),
+    // ---------------- Phase 5: the run's whole save (PHASE5.md §3.3, §8.7; package saves) ----------------
+    /** The run key as the autosave holds it now (the memory copy first), or null. Not a copy: read it, do not change it. */
+    autosave: () => memRun || store.load(),
+    /** fn({ ok, kind: 'run' | 'start', levelId }) after every autosave write; returns the unsubscribe. */
+    onSave(fn) { saveFns.add(fn); return () => saveFns.delete(fn); },
+    /** The autosave written first (a level of the run in play), then { run, blob, starts, savedAt } or null (no run save). */
+    exportSave() {
+      try {
+        if (typeof level.saveNow === 'function') level.saveNow();
+        else if (level.mode === 'level' && level.inRun && !level.result) saveRun();
+      } catch (err) { console.error('the autosave before an export failed', err); }
+      const d = memRun || store.load();
+      if (!d || !d.blob) return null;
+      const known = d.run?.levels || {}, starts = [];
+      for (const id of RUN_ORDER) {
+        const days = [...new Set([...(known[id]?.starts || []), ...(levels[id]?.starts || [])])].sort((a, b) => a - b);
+        for (const day of days) { const st = loadStart(id, day); if (st) starts.push({ levelId: st.levelId, day: st.day, savedAt: st.savedAt, run: st.run, blob: st.blob }); }
+      }
+      return { run: clone(d.run), blob: clone(d.blob), starts, savedAt: d.savedAt };
+    },
+    /**
+     * A whole run from an envelope (PHASE5.md §3.3): (a) every live start of the run in play cleared, memory and storage,
+     * from plan on; (b) the envelope's starts and its run key written (memoryOnly: memory only, storage blocked); (c) the
+     * run key's savedAt now (Continue then resumes this farm); (d) resumed — run null is a Phase 2 save: a run at the
+     * brooding week. False (or a thrown error, after the title card) puts the replaced run's keys and state back.
+     */
+    importSave(envelope, { memoryOnly = false } = {}) {
+      if (!envelope || !envelope.blob || !envelope.blob.level || !envelope.blob.env) return false;
+      const back = { memRun, mem: new Map(mem), raw: store.rawKeys?.() ?? null, state: serialize() };
+      const rollback = () => {
+        memRun = back.memRun; mem.clear(); for (const [k, v] of back.mem) mem.set(k, v);
+        if (back.raw) store.putRawKeys(back.raw);
+        adopt(back.state);
+      };
+      try {
+        // (a) no start of the replaced run answers loadStart / hasStart / store.info().starts afterwards
+        clearStarts(RUN_ORDER[0]);
+        mem.clear();
+        // (b) the envelope's starts, each with its own time
+        for (const st of envelope.starts || []) {
+          if (!st || !st.blob || !levelById(st.levelId) || !Number.isFinite(st.day)) continue;
+          const at = Number.isFinite(st.savedAt) ? st.savedAt : Date.now();
+          mem.set(startKey(st.levelId, st.day), clone({ version: RUN_SAVE.version, levelId: st.levelId, day: st.day, savedAt: at, run: st.run, blob: st.blob }));
+          if (!memoryOnly) store.saveStart(st.levelId, st.day, st.run, st.blob, at);
+        }
+        let ok;
+        if (envelope.run) {
+          // (b, c) the run key, stamped now; (d) resumed as Continue does
+          const now = Date.now();
+          memRun = clone({ version: RUN_SAVE.version, savedAt: now, run: envelope.run, blob: envelope.blob });
+          if (!memoryOnly) store.save(envelope.run, envelope.blob, now);
+          ok = run.continueSave();
+        } else {
+          // a Phase 2 save (migrate's v1: level.levelId 'level1'): a run at the brooding week, no plan, no condition
+          memRun = null;
+          runCond = condition = null; startedAt = LEVEL1.id; standard = false; mixed = false; counted = false; conditions = [];
+          ok = joinBrooding(clone(envelope.blob));
+        }
+        if (!ok) { rollback(); return false; }
+        return true;
+      } catch (err) {
+        // the resume began and threw: the title card (no autosave of the half-restored farm), then the run as it was
+        holdSaves = true;
+        try { level.toTitle?.(); } catch (e2) { console.error('back to the title card failed', e2); } finally { holdSaves = false; }
+        rollback();
+        throw err;
+      }
+    },
     serialize,
     restore: adopt,
   };

@@ -123,14 +123,42 @@ export function createRunStore({ key = RUN_SAVE.key, startPrefix = RUN_SAVE.star
   const store = {
     get available() { return !!storage(); },
     load() { const d = read(key); return d && d.version === version ? d : null; },
-    save(run, blob) { return write(key, { version, savedAt: Date.now(), run, blob }, run && run.levelId); },
+    // (Phase 5, package saves: savedAt may be given, so a restored start keeps its own time; run.importSave stamps the run key)
+    save(run, blob, savedAt = Date.now()) { return write(key, { version, savedAt, run, blob }, run && run.levelId); },
     loadStart(id, day) {
       if (day != null || !multi(id)) { const d = read(startKey(id, day)); return d && d.version === version ? d : null; }
       const L = LEVELS.find((l) => l.id === id), days = (L.starts || []).slice().reverse();
       for (const dd of days) { const d = read(startKey(id, dd)); if (d && d.version === version) return d; }
       return null;
     },
-    saveStart(id, day, run, blob) { return write(startKey(id, day), { version, levelId: id, day, savedAt: Date.now(), run, blob }, id); },
+    saveStart(id, day, run, blob, savedAt = Date.now()) { return write(startKey(id, day), { version, levelId: id, day, savedAt, run, blob }, id); },
+    /** Phase 5 (package saves): the raw text of the run key and of every level start key (run.importSave's way back). */
+    rawKeys() {
+      try { const st = storage(); if (!st) return null; const out = { [key]: st.getItem(key) }; for (const sk of startKeys()) out[sk] = st.getItem(sk); return out; } catch { return null; }
+    },
+    /** Put raw texts back (null removes the key); every start key not in `raw` is removed. */
+    putRawKeys(raw) {
+      if (!raw) return false;
+      try {
+        const st = storage(); if (!st) return false;
+        for (const sk of startKeys()) if (!(sk in raw)) st.removeItem(sk);
+        for (const [k, v] of Object.entries(raw)) { if (v == null) st.removeItem(k); else st.setItem(k, v); }
+        return true;
+      } catch { return false; }
+    },
+    /** Phase 5 (package saves): the run key's raw text exists but does not read ('damaged' / 'newer'), else null. */
+    keyError() {
+      try {
+        const st = storage(); const raw = st && st.getItem(key);
+        if (raw == null) return null;
+        let d; try { d = JSON.parse(raw); } catch { return 'damaged'; }
+        if (!d || typeof d !== 'object') return 'damaged';
+        if (d.version === version) return d.blob && d.blob.env ? null : 'damaged';
+        return Number.isFinite(d.version) && d.version > version ? 'newer' : 'damaged';
+      } catch { return null; }
+    },
+    /** The run key's stored length in characters (0: none). */
+    chars() { try { const st = storage(); return (st && st.getItem(key) || '').length; } catch { return 0; } },
     /** Delete one saved start (weeks 4-5: a replay from day 22 drops the day 29 start). */
     clearStart(id, day) { remove(startKey(id, day)); },
     clearStarts(fromId) {

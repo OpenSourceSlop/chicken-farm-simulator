@@ -1,7 +1,8 @@
 // Save slots, the pure part (PHASE5.md §3.2-§3.8): the envelope a slot or a backup holds, its name, the migrations from
 // the Phase 2-4 formats, the checks before a resume, and the slot store over any Storage-like object. No DOM: node tests
-// run it with a fake storage. Owner after the design round: package "saves". metaOf, slotName and the envelope shape are
-// the frozen contract (the panel and the title card read them); the store and the migrations are STUBS now.
+// run it with a fake storage. Owner: package "saves". metaOf, slotName and the envelope shape are the frozen contract (the
+// panel and the title card read them); Phase 5 adds the slot store (read / write / remove / list, the quota and blocked
+// rules, maxSlotChars) and the stored form of an envelope (meta outside, the payload packed by save-codec.js).
 //
 //   metaOf({ run, blob })            -> { name, condition, conditionLabel, levelId, levelN, levelShort, day, hour, time }
 //   slotName(meta)                   -> "Hot season · Level 5 – Weeks 4 and 5 · Day 30, 14:20"
@@ -9,10 +10,13 @@
 //   migrate(obj)                     -> an envelope (v 5) from a v1 level save, a v3 run save or an envelope; throws SaveError
 //                                       (a v1 save gets level.levelId 'level1' and run null)
 //   checkEnvelope(env)               -> null when it can be resumed, else the SaveError code ('invalid')
-//   createSlotStore({ storage })     -> { available, list(), read(n), write(n, stored), remove(n), keyOf(n) }   (stub)
+//   createSlotStore({ storage })     -> { available, list(), read(n), load(n), write(n, stored), remove(n), keyOf(n), chars(n) }
+//                                       (storage: a Storage-like object or a function returning one; every access in try/catch)
+//   await packEnvelope(env, { gzip? }) -> the stored form { format, v, build, savedAt, meta, enc, crc, data, chars }
+//   await unpackStored(stored)       -> the envelope (migrated, checked) or throws SaveError
 //   mergeProfiles(a, b)              -> the skill profile with the larger of each (a backup's skill points brought in)
 import { SAVE_SLOTS, BUILD, LEVELS, levelById, conditionLabel, CONDITIONS } from './config.js';
-import { SaveError } from './save-codec.js';
+import { SaveError, encodePayload, decodePayload, crc32, hex8 } from './save-codec.js';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 const hhmm = (h) => { const m = Math.round((((h % 24) + 24) % 24) * 60) % 1440; return `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`; };
@@ -61,8 +65,11 @@ export function migrate(obj) {
   if (!obj || typeof obj !== 'object') throw new SaveError('not-a-save');
   if (obj.format === SAVE_SLOTS.format) {
     if (obj.v > SAVE_SLOTS.version) throw new SaveError('newer', `format ${obj.v}`);
-    return obj;
+    if (obj.data != null && obj.blob == null) throw new SaveError('damaged', 'stored form');   // unpackStored reads that one
+    // (an envelope of an older 5.x build: its starts and its name filled in; nothing else is rewritten)
+    return { ...obj, starts: Array.isArray(obj.starts) ? obj.starts : [], meta: obj.meta && obj.meta.name ? obj.meta : metaOf(obj), profile: obj.profile ?? null };
   }
+  if (Number.isFinite(obj.version) && obj.version > SAVE_SLOTS.version) throw new SaveError('newer', `version ${obj.version}`);
   if (obj.version === 3 && obj.blob) return makeEnvelope({ run: obj.run ?? null, blob: obj.blob, starts: [], savedAt: obj.savedAt ?? Date.now() });
   if (obj.version === 1 && obj.level && obj.env) {
     const { version, savedAt, ...blob } = obj;
@@ -82,17 +89,92 @@ export function checkEnvelope(e) {
   return null;
 }
 
-/** STUB (package saves): the slot keys over a Storage-like object. */
+/** An envelope in its stored form (PHASE5.md §3.2): meta outside (the list is drawn without unpacking a run), the run packed. */
+export async function packEnvelope(env, { gzip = true } = {}) {
+  const { meta, savedAt, build } = env;
+  const p = await encodePayload(env, { gzip });
+  return { format: SAVE_SLOTS.format, v: SAVE_SLOTS.version, build: build || BUILD.id, savedAt, meta, enc: p.enc, crc: p.crc, data: p.data, chars: p.data.length };
+}
+/** The stored form's own checks without unpacking: null when it reads, else the SaveError code (PHASE5.md §3.3, §3.7). */
+export function storedError(st) {
+  if (!st || typeof st !== 'object' || st.format !== SAVE_SLOTS.format) return 'damaged';
+  if (!(st.v >= 1)) return 'damaged';
+  if (st.v > SAVE_SLOTS.version) return 'newer';
+  if (typeof st.data !== 'string' || !st.data.length || typeof st.enc !== 'string') return 'damaged';
+  if (st.chars != null && st.chars !== st.data.length) return 'incomplete';
+  try {
+    const clean = st.data.replace(/\s+/g, '');
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(clean) || clean.length % 4) return 'incomplete';
+    const bytes = typeof Buffer !== 'undefined' ? new Uint8Array(Buffer.from(clean, 'base64')) : Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
+    if (st.crc != null && hex8(crc32(bytes)) !== String(st.crc).toLowerCase()) return 'incomplete';
+  } catch { return 'damaged'; }
+  return null;
+}
+/** The envelope a stored slot holds: unpacked, migrated and checked; throws SaveError. */
+export async function unpackStored(st) {
+  const code = storedError(st);
+  if (code) throw new SaveError(code);
+  const obj = await decodePayload({ enc: st.enc, crc: st.crc, data: st.data });
+  const env = migrate(obj);
+  const bad = checkEnvelope(env);
+  if (bad) throw new SaveError(bad);
+  return env;
+}
+
+/** The three slot keys over a Storage-like object (PHASE5.md §3.3): a write never leaves a half slot; quota and blocked. */
 export function createSlotStore({ storage = null } = {}) {
   const keyOf = (n) => `${SAVE_SLOTS.keyPrefix}${n}`;
-  return {
-    get available() { try { if (!storage) return false; storage.setItem('__cf_probe__', '1'); storage.removeItem('__cf_probe__'); return true; } catch { return false; } },
+  const st = () => { try { return typeof storage === 'function' ? storage() : storage; } catch { return null; } };
+  const probe = () => { try { const s = st(); if (!s) return false; s.setItem('__cf_probe__', '1'); s.removeItem('__cf_probe__'); return true; } catch { return false; } };
+  const readable = () => { try { const s = st(); if (!s) return false; s.getItem('__cf_probe__'); return true; } catch { return false; } };
+  // storage that reads and writes, or that reads and holds keys but is full (a full storage refuses even the probe)
+  const usable = () => readable() && (probe() || (() => { try { return (st().length || 0) > 0; } catch { return false; } })());
+  const valid = (n) => Number.isInteger(n) && n >= 1 && n <= SAVE_SLOTS.count;
+  const raw = (n) => { const s = st(); if (!s) throw new SaveError('blocked'); return s.getItem(keyOf(n)); };
+  const store = {
+    get available() { return usable(); },
     keyOf,
-    list: () => Array.from({ length: SAVE_SLOTS.count }, (_, i) => ({ slot: i + 1, empty: true, meta: null, savedAt: null })),
-    read: () => null,
-    write: () => ({ ok: false, code: 'not-built' }),
-    remove: () => ({ ok: false, code: 'not-built' }),
+    /** The stored text's length (the row's size), 0 when empty or unreadable. */
+    chars(n) { try { return (raw(n) || '').length; } catch { return 0; } },
+    /** The parsed stored form of slot n, or null (empty); throws SaveError('blocked' | 'damaged'). */
+    load(n) {
+      if (!valid(n)) return null;
+      let text;
+      try { text = raw(n); } catch { throw new SaveError('blocked'); }
+      if (text == null) return null;
+      try { return JSON.parse(text); } catch { throw new SaveError('damaged', 'json'); }
+    },
+    /** One row: { slot, empty, meta, savedAt, chars, enc, error? } (error: the SaveError code of a slot that cannot be read). */
+    read(n) {
+      const row = { slot: n, empty: true, meta: null, savedAt: null, chars: 0, enc: null };
+      let o;
+      try { o = store.load(n); } catch (e) { return { ...row, empty: false, error: e.code || 'damaged' }; }
+      if (!o) return row;
+      const err = storedError(o);
+      row.empty = false; row.chars = store.chars(n);
+      if (o && typeof o === 'object') { row.meta = o.meta && typeof o.meta === 'object' ? o.meta : null; row.savedAt = Number.isFinite(o.savedAt) ? o.savedAt : null; row.enc = o.enc ?? null; }
+      if (err) row.error = err;
+      return row;
+    },
+    list: () => Array.from({ length: SAVE_SLOTS.count }, (_, i) => store.read(i + 1)),
+    /** Write a stored form (packEnvelope's) into slot n: { ok, code? } — 'full' over maxSlotChars or on a quota error (the
+     *  old slot kept as it was), 'blocked' with no storage. */
+    write(n, stored) {
+      if (!valid(n)) return { ok: false, code: 'invalid' };
+      const text = JSON.stringify(stored);
+      if (text.length > SAVE_SLOTS.maxSlotChars) return { ok: false, code: 'full', chars: text.length };
+      const s = st();
+      if (!s || !usable()) return { ok: false, code: 'blocked' };
+      try { s.setItem(keyOf(n), text); return { ok: true, chars: text.length }; } catch { return { ok: false, code: usable() ? 'full' : 'blocked', chars: text.length }; }
+    },
+    remove(n) {
+      if (!valid(n)) return { ok: false, code: 'invalid' };
+      const s = st();
+      if (!s) return { ok: false, code: 'blocked' };
+      try { s.removeItem(keyOf(n)); return { ok: true }; } catch { return { ok: false, code: 'blocked' }; }
+    },
   };
+  return store;
 }
 
 /** The larger of each: earned milestones (by tier), cycles, conditions, details (PHASE5.md §3.5). */
