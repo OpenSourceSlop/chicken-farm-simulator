@@ -356,7 +356,7 @@ function stateTest(test, st, { env, farm, props }, inst, rule = {}) {
       return farm.water.lines.every((l) => l.lastFlow && l.lastFlow.at >= from - EPS && Math.abs(l.lastFlow.mlMin - want) <= FLOW_BAND + EPS && nippleInBand(l.heightCm, env));
     }
     case 'all-placed': return farm.flock.inBoxes === 0 && farm.flock.placed > 0;
-    case 'dead-cleared': return farm.flock.deadOnFloor === 0 && props?.carrying !== 'bucket';
+    case 'dead-cleared': return farm.flock.deadOnFloor === 0 && props?.carrying !== 'bucket' && !(props?.bucketDown?.n > 0); // PHASE4.md §15.3: nor one set down
     case 'house-near-target':
       // what the chicks feel (farm-problems feltNearTarget: house air less the wind chill of the
       // fans, at chick level) within -1.5..+1.5 °C of the target for 30 game minutes in a row:
@@ -401,7 +401,7 @@ function stateProgress(test, { env, farm, props }, st, rule = {}) {
     case 'lines-up': return share(farm.water.lines, (l) => l.heightCm >= LINES_UP_CM - EPS);
     case 'all-up': return share([...farm.water.lines.map((l) => l.heightCm >= LINES_UP_CM - EPS), ...farm.feed.lines.map((l) => l.heightCm >= PANS_UP_CM - EPS), !!(env.broodersUp ?? farm.house?.broodersUp)], Boolean);
     case 'feeders-checked': return share(farm.feed.lines, (l) => l.running && l.panFill >= FEED.accessFill - EPS && (env.dayNumber < 4 || rimInBand(l.heightCm, env)));
-    case 'dead-cleared': return farm.flock.deadOnFloor === 0 ? (props?.carrying === 'bucket' ? 0.7 : 1) : 0;
+    case 'dead-cleared': return farm.flock.deadOnFloor === 0 ? (props?.carrying === 'bucket' ? 0.7 : props?.bucketDown?.n > 0 ? 0.6 : 1) : 0;
     case 'lame-cleared': return (farm.flock.lameOnFloor ?? 0) === 0 ? 1 : 0;
     case 'house-empty': return farm.harvest?.started ? clamp01(1 - farm.flock.alive / Math.max(1, farm.flock.alive + (farm.flock.caught || 0))) : 0;
     case 'vent-in-band': { const v = ventNeed(env, farm); return ventInBand(env, farm) ? 1 : Math.min(0.95, v.share <= 1 ? v.share / VENT_BAND[0] : VENT_BAND[1] / v.share); }

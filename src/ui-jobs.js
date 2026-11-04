@@ -135,7 +135,7 @@ function stateText(test, inst, ctx) {
     case 'lines-raised': return `drinker lines ${n(W, (l) => nippleInBand(l.heightCm, env))} / 4 near ${Math.round(nippleCmToday(env))} cm · pans ${n(F, (l) => rimInBand(l.heightCm, env))} / 3 near ${Math.round(rimCmNow(env))} cm`;
     case 'lines-up': return `${n(W, (l) => l.heightCm >= LINES_UP_CM)} / 4 lines lifted to ${LINES_UP_CM} cm or more`;
     case 'all-up': return `drinker lines up ${n(W, (l) => l.heightCm >= LINES_UP_CM)} / 4 · pans up ${n(F, (l) => l.heightCm >= PANS_UP_CM)} / 3 · brooders ${env.broodersUp ? 'up' : 'down'}`;
-    case 'dead-cleared': { const d = f.flock.deadOnFloor ?? 0; return d > 0 ? `dead birds on the floor: ${d}${ctx.props?.carrying === 'bucket' ? ' · bucket in your hand' : ''}` : ctx.props?.carrying === 'bucket' ? 'bucket in your hand: count them at the bin' : 'no dead birds on the floor this round'; }
+    case 'dead-cleared': { const d = f.flock.deadOnFloor ?? 0, bd = ctx.props?.bucketDown; const down = bd?.n > 0 ? ` · bucket set down with ${bd.n}` : ''; return d > 0 ? `dead birds on the floor: ${d}${ctx.props?.carrying === 'bucket' ? ' · bucket in your hand' : down}` : ctx.props?.carrying === 'bucket' ? 'bucket in your hand: count them at the bin' : bd?.n > 0 ? `the bucket you set down holds ${bd.n}: pick it up (E), then the bin` : 'no dead birds on the floor this round'; }
     case 'lame-cleared': return `birds that cannot walk well, sitting apart: ${f.flock.lameOnFloor ?? 0}`;
     case 'house-empty': return f.harvest?.started ? `birds still in the house: ${Math.round(f.flock.alive)} · tunnel fans running ${env.fansEffective ?? 0} (catch sign: at least three)` : 'the crew starts at the booked time';
     case 'vaccine-drunk': return ({ none: 'main valve open, no vaccine yet', thirst: 'main valve shut: the birds get thirsty', mixed: 'vaccine in the header tank: open the main valve', drinking: 'the birds are drinking the vaccine: walk them up', drunk: 'header tank empty' })[f.health?.vaccine?.state] || '';
@@ -249,7 +249,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     switch (d.spot) {
       case 'heater': return heater();
       case 'heater-out': { const i = ctx.env.brooderOut?.[0] ?? LEVEL1.problems.find((x) => x.id === 'brooder-out')?.heater ?? 0; const ht = HEATERS[i]; return { x: ht.x, z: ht.z, y: HEATER_HEIGHT + 1, gz: 0 }; }
-      case 'dead': { const near = ctx.flock?.dead?.near?.(p.x, p.z, 80) || []; return near.length ? ground(near[0], 1.2) : place(SPOTS2.deadBin); }
+      case 'dead': { const near = ctx.flock?.dead?.near?.(p.x, p.z, 80) || []; const bd = ctx.props?.bucketDown; return near.length ? ground(near[0], 1.2) : bd?.n > 0 ? ground(bd, 1.2) : place(SPOTS2.deadBin); }
       case 'leak': { const lk = ctx.farm.water.leak || LEVEL1.problems.find((x) => x.id === 'leaking-nipple'); return lk ? ground({ x: lk.x, z: DRINKER_LINES_Z[lk.line ?? 2] }, 1.6) : null; }
       case 'lame': { const b = nearestOf((ctx.flock?.debug?.sickBirds?.() || []).filter((x) => x.lame), p); return b ? ground(b, 1.2) : place(SPOTS2.birdScale); }
       case 'fan-broken': { const i = (ctx.env.fansBroken || [])[0] ?? 3; return { x: 23.2, z: FAN_Z[i] ?? 0, y: 2.6, gz: 0 }; }
@@ -386,13 +386,16 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     return `closes in ${m} farm minute${m === 1 ? '' : 's'}`;
   }
   ctx.events.on(EV.JOB_SOON, (p) => {
-    const chip = soonEls.get(p.key)?.chip;
-    if (chip && !chip.hidden) { chip.classList.remove('is-cue'); void chip.offsetWidth; chip.classList.add('is-cue'); }
-    else sig = ''; // the next render shows it; the pulse comes with the caption
+    for (const key of p.keys || [p.key]) {
+      const chip = soonEls.get(key)?.chip;
+      if (chip) { chip.classList.remove('is-cue'); void chip.offsetWidth; chip.classList.add('is-cue'); }
+    }
   });
   let acc = 0;
   return {
     el: card,
+    /** The job marker's edge pointer (PHASE4.md §15.4). */
+    get pointerEl() { return marker.pointer; },
     /** PHASE4.md §15.2: the farmer stands at this open job's place. */
     atJob: (key) => atKeys.has(key),
     atAnyJob: () => atKeys.size > 0,

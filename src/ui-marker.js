@@ -60,6 +60,8 @@ export function createMarker(ctx, root, { name = 'job-marker', avoid } = {}) {
 
   return {
     object3d: marker,
+    /** The edge pointer element (PHASE4.md §15.4: the dead-bird chip keeps clear of it). */
+    pointer,
     /** s: spot or null; p: farmer position; panelOpen: hide the pointer. */
     update(dt, s, p, panelOpen) {
       t += dt;

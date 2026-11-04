@@ -171,6 +171,14 @@ export function createDeadBirds(ctx, S, uniforms, pop) {
   }
 
   const api = {
+    /** Harness hook (PHASE4.md §15.5): one drawn dead bird at (x, z); the caller adds it to farm.flock.deadOnFloor too
+     *  (the farm owns the count; without it the mirror takes the oldest away after 1 s). */
+    layAt(x, z, cause = 'other') {
+      const p = clampB({ x, z });
+      list.push({ id: nextId++, x: p.x, z: p.z, yaw: rnd() * 6.283, side: rnd() < 0.5 ? -1 : 1, s: S.L * 0.9, cause: CAUSES.includes(cause) ? cause : 'other', tint: rnd() * 2 - 1 });
+      dirty = true;
+      return { x: p.x, z: p.z };
+    },
     /** dead birds on the floor: drawn + waiting to be drawn (mirrors farm.flock.deadOnFloor) */
     get count() { return list.length + queue.length; },
     get drawn() { return list.length; },

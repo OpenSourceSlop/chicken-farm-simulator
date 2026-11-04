@@ -69,6 +69,7 @@ import { clock as stepClock } from './clock.js';
 import { stripsAt } from './job-strips.js';
 import { STRIPS_CYCLE } from './job-strips-cycle.js';
 import { JOB_HOLD } from './config.js';
+import { createFlockWatch } from './flock-watch.js'; // PHASE4.md §15.1: the flock watch and its early warnings
 
 const H = 1 / 24;
 const CARRY_KINDS = new Set(['boxes', 'barrow', 'sack', 'frame']);
@@ -87,6 +88,9 @@ export function createLevel(ctx, deps = {}) {
   const { farm, records, skills, save, player, flock, props, ui, events } = deps;
   const env = ctx.env;
   const engine = createJobEngine({ events, env, farm, props, records });
+  // PHASE4.md §15.1: one sample of the flock per farm hour (skips and goto(auto) included), its warnings on the bus
+  const watch = createFlockWatch({ env, farm, events, records });
+  env.addStepper?.(watch.step);
   const C = LEVEL1.clock;
   let def = LEVEL1;                 // the level that runs (config LEVELS)
   let inRun = false;                // part of a run (run.js): checkpoints carry level + run, results the run's buttons
@@ -246,15 +250,22 @@ export function createLevel(ctx, deps = {}) {
     return toolOf(inst.def.done) === c;
   }
   engine.setHold(holdJob);
+  watch.attach(() => ({ active: level.mode === 'level' && !ended && !free, def: lv(), deaths: levelDeaths(),
+    chickG: farm.stats?.chickWeightMeasuredG ?? farm.flock?.chickWeightG, endAt: engine.endAt(), catchAt: farm.harvest?.catchAt ?? null }));
   const soonWarned = new Set();
-  /** Once per open job, when it is JOB_HOLD.warnMin farm minutes from its close: EV.JOB_SOON (the card's cue). */
+  /** Once per open job, when it is JOB_HOLD.warnMin farm minutes from its close: EV.JOB_SOON (the card's cue); the jobs
+   *  crossing in the same tick (a round's jobs all close at 12:00) go in one event, so one caption and one click. */
   function soonCues() {
-    const now = env.day, w = JOB_HOLD.warnMin / 1440;
+    const now = env.day, w = JOB_HOLD.warnMin / 1440, due = [];
     for (const i of engine.open()) {
       if (i.closesAt == null || soonWarned.has(i.key) || i.heldFrom != null) continue;
       const left = i.closesAt - now;
-      if (left > 0 && left <= w + 1e-7 && i.closesAt < engine.endAt() - 1e-7) { soonWarned.add(i.key); events?.emit(EV.JOB_SOON, { id: i.id, key: i.key, closesAt: i.closesAt }); }
+      if (left > 0 && left <= w + 1e-7 && i.closesAt < engine.endAt() - 1e-7) { soonWarned.add(i.key); due.push(i); }
     }
+    if (!due.length) return;
+    due.sort((a, b) => a.closesAt - b.closesAt);
+    const cur = engine.current?.(), first = due.find((i) => i === cur) || due[0];
+    events?.emit(EV.JOB_SOON, { id: first.id, key: first.key, closesAt: first.closesAt, keys: due.map((i) => i.key) });
   }
 
   // ---------------- checkpoints, the end ----------------
@@ -626,7 +637,9 @@ export function createLevel(ctx, deps = {}) {
       if (r === 'vent' && !jobOpen('d0-vent')) return;
       if (r === 'crop' && !jobOpen('d1-crop')) return;
       if (r === 'weigh' && !jobOpen('d7-weigh')) return;
-      try { applyRound(farm, env, s.d, r, p2Profile()); } catch (err) { console.error('applyRound failed', err); }
+      // a named or given Phase 2 profile (scripts/test-watch.mjs: the thermostat under the sign's row) or the ideal
+      const P = profile === 'ideal' || profile == null ? p2Profile() : typeof profile === 'string' ? profileOf(profile) : profile;
+      try { applyRound(farm, env, s.d, r, P); } catch (err) { console.error('applyRound failed', err); }
       if (r === 'am' || r === 'pm') pickDead();
       return;
     }
@@ -639,6 +652,8 @@ export function createLevel(ctx, deps = {}) {
   const level = {
     mode: 'sandbox',
     engine,
+    /** PHASE4.md §15.1: the flock watch (status() for the HUD card, warnings). */
+    watch,
     /** null, or the sample the open job wants: 'vent' | 'crop' | 'weigh' | 'bird'. The flock's `chick`
      *  interact provider only answers while this is set. */
     sampling: null,
@@ -731,6 +746,7 @@ export function createLevel(ctx, deps = {}) {
       if (cond && is(d, PLAN_LEVEL)) { const w = conditionLevel(d, cond).weather; if (w && env.weather !== w) { env.setWeather(w); env.houseTemp = env.outsideTemp + 1; } }
       startAt = env.day;
       reached.add(`${d.id}@${d.startDay}`);
+      watch.reset();
       engine.start(d.startDay, d);
       player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw);
       prevDay = env.day;
@@ -757,6 +773,7 @@ export function createLevel(ctx, deps = {}) {
       if (records?.compact && prevDef) records.compact(prevDef.startDay);
       startAt = env.day;
       reached.add(`${next.id}@${next.startDay}`);
+      watch.reset();
       engine.start(next.startDay, next);
       ui?.jobCard?.reset?.();
       ui?.clearCaptions?.();
@@ -816,6 +833,7 @@ export function createLevel(ctx, deps = {}) {
       seed = lv.seed ?? 1;
       inRun = !!lv.inRun;
       engine.restore(lv.jobs, d);
+      watch.restore(lv.watch || null);
       fired = new Set(lv.fired || []); points = lv.points || []; weighs = lv.weighs || []; signedEnd = !!(lv.signedEnd ?? lv.signed7); fast = !!lv.fast;
       failAt = lv.failAt ?? null; startAt = lv.startAt ?? env.day;
       if (lv.bad) bad = { gradedOut: lv.bad.gradedOut || 0, looked: lv.bad.looked || 0, weak: lv.bad.weak || 0, called: lv.bad.called ?? null };
@@ -947,6 +965,7 @@ export function createLevel(ctx, deps = {}) {
       return { v: 1, mode: level.mode, seed, levelId: def.id, inRun, jobs: engine.serialize(), fired: [...fired], points, weighs,
         signed7: signedEnd, signedEnd, fast, failAt, startAt, reached: [...reached], ended: ended ? ended.reason : null,
         ...(bad.gradedOut || bad.called != null ? { bad: { ...bad } } : {}),
+        watch: watch.serialize(),
         ...(inRun && runApi ? { run: runApi.serialize() } : {}) };
     },
     saveBlob() {

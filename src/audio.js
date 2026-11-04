@@ -177,6 +177,7 @@ export function createAudio(ctx, deps = {}) {
     events.on(EV.BOX_TIP, (p) => cue('box', +p?.x, +p?.z));
     events.on(EV.JOB_DONE, () => cue('tick'));
     events.on(EV.JOB_SOON, () => cue('click'));   // PHASE4.md §15.2: the soft cue of a job 30 farm minutes from its close
+    events.on(EV.WATCH, () => cue('paper'));      // PHASE4.md §15.1: the flock watch's warning goes in the notebook
     events.on(EV.DEAD_DROP, () => cue('bin'));
     events.on(EV.FARM_DELIVERY, (p) => { if (p?.phase === 'arrive' || p?.phase === 'leave') cue('truck'); });
   }

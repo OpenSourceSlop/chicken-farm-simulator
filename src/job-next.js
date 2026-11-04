@@ -233,7 +233,10 @@ export function jobPlaces(inst, c) {
   if (inst.def.spot === 'dead') {
     if (carrying === 'bucket') return [place('deadBin', 'count them into the bin')];
     const near = c.flock?.dead?.near?.(c.from?.x ?? -14, c.from?.z ?? 0, 80) || [];
-    return near.length ? [floor(near[0].x, near[0].z, 'the nearest dead bird', 'E picks it up')] : null;
+    if (near.length) return [floor(near[0].x, near[0].z, 'the nearest dead bird', props?.bucketDown ? 'E puts it in the bucket you set down' : 'E picks it up')];
+    // PHASE4.md §15.3: the bucket set down with birds in it: back to it, then the bin
+    const b = props?.bucketDown;
+    return b && b.n > 0 ? [b.inside ? floor(b.x, b.z, 'the bucket you set down', 'E picks it up') : { id: 'bucket', at: { x: b.x, z: b.z, inside: false, label: 'Bucket' }, name: 'the bucket you set down', along: 'outside', todo: 'E picks it up' }] : null;
   }
   if (WEIGH_IDS.has(id)) {
     if (carrying !== 'frame') return (st.list || []).length >= inst.def.done.n ? [] : [{ id: 'birdScale', at: SPOTS2.birdScale, name: 'the bird scale', along: 'in the house', todo: 'take the scale and frame' }];

@@ -57,7 +57,7 @@ export function buildWashBay(api) {
     const open = env.dayNumber >= CYCLE.cleanFrom || !!farm.harvest?.result;
     for (const t of tools) {
       t.take.hidden = props.carrying === t.kind; t.back.hidden = props.carrying !== t.kind;
-      t.take.disabled = !open || (!!props.carrying && props.carrying !== t.kind);
+      t.take.disabled = !open || props.handsBusy(t.kind);
       t.row.led.classList.add('led--run'); t.row.led.classList.toggle('is-on', props.carrying === t.kind);
     }
     washed.set(pct(C.washShare), 'of the house floor');

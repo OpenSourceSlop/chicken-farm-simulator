@@ -39,7 +39,8 @@ export function createCatcher(ctx, S, pop, isLevel) {
     return best;
   }
 
-  const handsEmpty = () => !ctx.props?.carrying;
+  // PHASE4.md §15.3: the bucket blocks nothing (startCarry('chick') sets it down at his feet first)
+  const handsEmpty = () => !ctx.props?.carrying || ctx.props.carrying === 'bucket';
 
   const catcher = {
     held, frame,

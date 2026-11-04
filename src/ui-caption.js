@@ -9,9 +9,10 @@ export function createCaption(root) {
   root.appendChild(el);
   const queue = [];
   let left = 0;
-  function show(msg, seconds = 4.5) {
+  // now: replace the caption showing (feedback on what the farmer just did: the bucket set down, PHASE4.md §15.3)
+  function show(msg, seconds = 4.5, { now = false } = {}) {
     if (!msg) return;
-    if (!el.hidden && left > 1.2) { queue.push([msg, seconds]); if (queue.length > 3) queue.shift(); return; }
+    if (!now && !el.hidden && left > 1.2) { queue.push([msg, seconds]); if (queue.length > 3) queue.shift(); return; }
     setText(text, msg); el.hidden = false; left = seconds;
     el.classList.remove('is-in'); void el.offsetWidth; if (!reducedMotion()) el.classList.add('is-in');
   }

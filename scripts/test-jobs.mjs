@@ -1006,7 +1006,7 @@ test('§15.2 level: a job held while its panel is open, missed 20 farm minutes a
   const C = LEVEL1.clock;
   assert(C.work === 90 && C.fast === 360 && C.panel === 24 && C.carry === 24 && C.atJob === 60 && C.sign === 0, `the clock ${JSON.stringify(C)}`);
   const soon = [];
-  L.events.on(EV.JOB_SOON, (p) => soon.push(p.key));
+  L.events.on(EV.JOB_SOON, (p) => soon.push(...(p.keys || [p.key])));
   L.level.debug.goto(0, 1.55);  // the prep day's flush still open (16:00-02:00), nothing done
   const key = 'prep-flush@-1';
   assert(L.level.jobs.byKey(key)?.status === 'open', `flush open at 01:33: ${L.level.jobs.byKey(key)?.status}`);

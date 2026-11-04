@@ -23,6 +23,11 @@ import { MILESTONES_COND } from '../src/skills-cond.js';
 import { CONDITIONS, CONDITION_IDS, SPOTS4, SIGN_FIGURES, conditionLevel, PHASE4 } from '../src/config.js';
 import { UI_ACTION_IDS_COND } from '../src/events.js';
 
+// the farmer's requests during Phase 4 (PHASE4.md §15)
+import { causeOf, WATCH_STATES } from '../src/flock-watch.js';
+import { LEVEL_HELP_KEYS } from '../src/content.js';
+import { readFileSync, readdirSync } from 'node:fs';
+
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 const assert = (cond, msg) => { if (!cond) throw new Error(msg); };
@@ -357,6 +362,25 @@ test('condition skills: milestones well formed, in the eleven branches, for a co
     assert(m.tiers.length && m.tiers.every((t, i) => t.points > 0 && (i === 0 || t.points > m.tiers[i - 1].points)), `${m.id}: tiers`);
     assert(!VERDICT.test(m.text), `${m.id}: verdict word in "${m.text}"`);
   }
+});
+
+// ---------------- the farmer's requests during Phase 4 (PHASE4.md §15) ----------------
+test('§15.1 flock watch: every cause names a real sign or plate and a place, in neutral words; the state words', () => {
+  const boards = { ...BOARDS, ...BOARDS_CYCLE, ...BOARDS_COND };
+  for (const kind of ['cold', 'heat', 'water', 'feed', 'light', 'air', 'weak', 'legs', 'disease', 'sds', 'claim', null]) for (const age of [2, 12, 30]) {
+    const c = causeOf(kind, age);
+    assert(boards[c.sign], `${kind} at ${age} d: sign ${c.sign} is a board or plate`);
+    for (const t of [c.why, c.check, c.signName]) assert(typeof t === 'string' && t && !VERDICT.test(t), `${kind}: verdict word or empty in "${t}"`);
+  }
+  assert(Object.values(WATCH_STATES).join(' ') === 'steady watch alert', 'the dots read steady / watch / alert');
+});
+test('§15.3 keys: G and Shift+E in the help legend, verdict-free; G bound only by the level ui', () => {
+  const g = LEVEL_HELP_KEYS.find((k) => k.keys.length === 1 && k.keys[0] === 'G'), se = LEVEL_HELP_KEYS.find((k) => k.keys.join('+') === 'Shift+E');
+  assert(g && /bucket/i.test(g.what) && se && /dead bird/i.test(se.what), 'G and Shift+E in the legend');
+  for (const k of LEVEL_HELP_KEYS) assert(!VERDICT.test(k.what), `verdict word in the legend: ${k.what}`);
+  const files = readdirSync(new URL('../src/', import.meta.url)).filter((f) => f.endsWith('.js'));
+  const binders = files.filter((f) => /KeyG/.test(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')));
+  assert(binders.length === 1 && binders[0] === 'ui.js', `KeyG bound in ${binders.join(', ')}`);
 });
 
 let failed = 0;

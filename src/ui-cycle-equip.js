@@ -185,7 +185,7 @@ export function cycleHeapParts(L) {
         const on = level(L) && env.dayNumber >= t.fromDay;
         t.take.hidden = !on || props.carrying === t.kind;
         t.back.hidden = !on || props.carrying !== t.kind;
-        t.take.disabled = !!props.carrying && props.carrying !== t.kind;
+        t.take.disabled = props.handsBusy(t.kind);
       }
     },
   };

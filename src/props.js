@@ -25,6 +25,14 @@
 //                           carrying, calls player.carry(kind) for the mesh, emits EV.CARRY
 //                           { kind, opts }. 'bucket' adds opts.n / opts.causes to what is carried.
 //   drop()                  hands empty: player.carry(null), EV.CARRY { kind: null }
+//   The farmer's request during Phase 4 (PHASE4.md §15.3): the dead-bird bucket never locks him out.
+//   bucketDown              null | { x, z, n, causes, inside } the bucket standing where he set it down
+//   setBucketDown({ auto }) G (or a two-handed task: auto) sets the carried bucket down at his feet: EV.BUCKET
+//   pickUpBucket()          E at the bucket on the floor: carried again (its birds with it)
+//   handsBusy(kind)         carrying something other than the bucket (and other than `kind`): what one hand
+//                           cannot do; every Take key and provider that needs hands asks it
+//   startCarry(kind) of another kind while carrying the bucket sets the bucket down first (auto); a dead bird
+//   picked up while the bucket stands on the floor goes into that bucket (EV.BUCKET { into: true })
 //   Providers (PHASE2.md §13.3): 'tip' (carrying boxes, inside BROOD_BOUNDS, priority 20),
 //   'patch' (carrying a sack, on litter, 20), 'frame' (carrying the frame, inside BROOD_BOUNDS,
 //   20: flock.catchGroup then EV.FRAME_SET); fixed 'brooder-0..7' (enabled while that brooder is
@@ -56,6 +64,7 @@ import { buildCatch, CATCH_STOPS } from './props-catch.js';
 import { createCycleTools } from './props-tools.js';
 import { buildDust } from './props-air.js';
 import { OVERLAYS } from './props-overlay.js';
+import { bucket as bucketModel } from './props-models.js'; // PHASE4.md §15.3: the bucket set down on the floor
 
 const CHICKS_PER_STACK = (LEVEL1.boxes / LEVEL1.stacks) * LEVEL1.chicksPerBox;
 const inBrood = (p) => p.x > BROOD_BOUNDS.xMin && p.x < BROOD_BOUNDS.xMax && p.z > BROOD_BOUNDS.zMin && p.z < BROOD_BOUNDS.zMax;
@@ -90,6 +99,12 @@ export function buildProps(ctx, { house } = {}) {
   const catchNight = buildCatch(mats, group);
   const dust = buildDust(group);
   const boxes = buildBoxes(mats.vc, group);
+  // PHASE4.md §15.3: the dead-bird bucket where the farmer set it down (with its birds showing)
+  const floorBucketB = new Batch(); bucketModel(floorBucketB, { dead: true });
+  const floorBucket = floorBucketB.mesh(mats.vc, { cast: true });
+  floorBucket.name = 'props-bucket-down';
+  floorBucket.visible = false;
+  group.add(floorBucket);
   const fx = createFx(pool);
   const triggers = createTriggers(ctx, fx);
   const tabSpots = new Map([...boards.tabSpots, ...equip.tabSpots, ...yard.tabSpots, ...equip3.tabSpots, ...yard3.tabSpots]);
@@ -105,8 +120,15 @@ export function buildProps(ctx, { house } = {}) {
   // ---------------- carrying ----------------
   function showCarry(kind) {
     yard.barrow.visible = kind !== 'barrow';
-    yard.spareBucket.visible = kind !== 'bucket';
+    yard.spareBucket.visible = kind !== 'bucket' && !props.bucketDown;
     yard.scaleKit.visible = kind !== 'frame';
+  }
+
+  function dropHands() {
+    props.carrying = null; props.carryOpts = null;
+    ctx.player?.carry?.(null);
+    showCarry(null);
+    ctx.events?.emit(EV.CARRY, { kind: null, opts: null });
   }
 
   // ---------------- interactables ----------------
@@ -128,7 +150,7 @@ export function buildProps(ctx, { house } = {}) {
   panel('litter-heap', SPOTS2.litterHeap, 2.4, { verb: 'Use the' });
   boxes.stacks.forEach((s) => reg({
     id: `box-stack-${s.i}`, label: `chick boxes (stack ${s.i + 1})`, verb: 'Pick up', x: s.x, z: s.z, radius: 0.95, inside: false,
-    enabled: () => st.level && s.state === 'ground' && !props.carrying,
+    enabled: () => st.level && s.state === 'ground' && !props.handsBusy('boxes'),
     use() {
       s.state = 'carried';
       props.startCarry('boxes', { stack: s.i });
@@ -149,6 +171,13 @@ export function buildProps(ctx, { house } = {}) {
     // Phase 3: with "dead birds by look" unlocked (skills deadByLook) E opens the panels package's
     // dead-bin panel (no use(): the ui opens the panel registered under the id), which counts them
     get use() { return ctx.skills?.unlocked?.('deadByLook') ? undefined : countIntoBin; },
+  });
+  // PHASE4.md §15.3 (b): E at the bucket on the floor picks it up again (16 within 0.9 m: it beats the board behind it)
+  ctx.interact?.addProvider?.('bucket', (p, inside) => {
+    const b = props.bucketDown;
+    if (!st.level || !b || props.handsBusy('bucket') || b.inside !== !!inside) return null;
+    return { id: 'bucket', label: `bucket (${b.n} dead bird${b.n === 1 ? '' : 's'})`, verb: 'Pick up the', x: b.x, z: b.z, radius: 1.4, inside: b.inside,
+      priority: 7, nearRadius: 0.9, nearPriority: 16, use: () => props.pickUpBucket() };
   });
   const leakSpot = () => {
     const lk = ctx.farm?.water?.leak;
@@ -304,8 +333,11 @@ export function buildProps(ctx, { house } = {}) {
     floor.update(dt, ctx.farm || {}, level, OVERLAYS.find((k) => props.overlay[k]) || null, env);
     colliderTimer -= dt;
     if (colliderTimer <= 0) { colliderTimer = 0.25; syncColliders(); }
-    if (!level) return;
+    if (!level) { floorBucket.visible = false; return; }
     const f = ctx.farm;
+    const bd = props.bucketDown;
+    floorBucket.visible = !!bd;
+    if (bd) floorBucket.position.set(bd.x, bd.inside ? 0.02 : 0, bd.z);
     triggers.update(dt, true);
     if (house && house.lineHeights) for (let i = 0; i < 4; i++) lineY[i] = house.lineHeights[i];
     equip.update(dt, f, env, lineY);
@@ -379,7 +411,41 @@ export function buildProps(ctx, { house } = {}) {
     /** The tape's hook while it is hooked at a wall ({ axis, end, name, x, z }), else null (the steps hotfix: the
      *  measuring job points to the far wall). */
     get tapeHook() { return tools.st.tape ? { ...tools.st.tape } : null; },
+    bucketDown: null,
+    /** Carrying something other than the bucket (and other than `kind`): the hands are full (PHASE4.md §15.3 a). */
+    handsBusy(kind) { const c = props.carrying; return !!c && c !== 'bucket' && c !== kind; },
+    /** G, or a two-handed task (auto): the carried bucket on the litter at his feet, a little in front (PHASE4.md §15.3 b, c). */
+    setBucketDown({ auto = false } = {}) {
+      if (props.carrying !== 'bucket') return false;
+      const P = pl(), p = P?.position || { x: 0, z: 0 }, yaw = P?.yaw ?? 0;
+      let x = p.x - Math.sin(yaw) * 0.4, z = p.z - Math.cos(yaw) * 0.4;
+      const inside = !!P?.isInside;
+      if (inside) { x = Math.max(-23.6, Math.min(23.6, x)); z = Math.max(-5.6, Math.min(5.6, z)); }
+      const o = props.carryOpts || { n: 0, causes: {} };
+      props.bucketDown = { x: +x.toFixed(2), z: +z.toFixed(2), n: o.n || 0, causes: { ...(o.causes || {}) }, inside };
+      dropHands();
+      ctx.events?.emit(EV.BUCKET, { down: true, x: props.bucketDown.x, z: props.bucketDown.z, n: props.bucketDown.n, auto: !!auto });
+      return true;
+    },
+    /** E at the bucket on the floor: carried again with its birds. */
+    pickUpBucket() {
+      const b = props.bucketDown;
+      if (!b || props.handsBusy('bucket')) return false;
+      props.bucketDown = null;
+      props.startCarry('bucket', { n: b.n, causes: b.causes });
+      ctx.events?.emit(EV.BUCKET, { down: false, x: b.x, z: b.z, n: props.carryOpts?.n ?? b.n });
+      return true;
+    },
     startCarry(kind, opts = {}) {
+      // a two-handed task while carrying the bucket: the bucket goes down at his feet first, never a lock-out
+      if (props.carrying === 'bucket' && kind !== 'bucket') props.setBucketDown({ auto: true });
+      // a dead bird picked up while the bucket stands on the floor goes into that bucket
+      if (kind === 'bucket' && props.carrying !== 'bucket' && props.bucketDown) {
+        const b = props.bucketDown; b.n += opts.n || 0;
+        for (const [k, v] of Object.entries(opts.causes || {})) b.causes[k] = (b.causes[k] || 0) + v;
+        ctx.events?.emit(EV.BUCKET, { into: true, down: true, x: b.x, z: b.z, n: b.n, added: opts.n || 0 });
+        return;
+      }
       if (kind === 'bucket' && props.carrying === 'bucket') {
         const c = props.carryOpts; c.n += opts.n || 0;
         for (const [k, v] of Object.entries(opts.causes || {})) c.causes[k] = (c.causes[k] || 0) + v;
@@ -393,10 +459,7 @@ export function buildProps(ctx, { house } = {}) {
     },
     drop() {
       if (props.carrying === 'frame') pickFrame();
-      props.carrying = null; props.carryOpts = null;
-      ctx.player?.carry?.(null);
-      showCarry(null);
-      ctx.events?.emit(EV.CARRY, { kind: null, opts: null });
+      dropHands();
     },
     truck: {
       get state() { return trucks.st.chicks.state; },
@@ -419,6 +482,7 @@ export function buildProps(ctx, { house } = {}) {
     highlight(ids = []) { props.highlighted = [...ids]; boards.setTabs(props.highlighted); },
     reset() {
       if (props.carrying) props.drop();
+      props.bucketDown = null; showCarry(null);
       trucks.leave('chicks', true); trucks.leave('feed', true);
       boxes.reset();
       st.delivered = false; st.frameAt = null; yard.frameSet.visible = false;
@@ -441,11 +505,14 @@ export function buildProps(ctx, { house } = {}) {
         tape: tools.st.tape ? { ...tools.st.tape } : null, feedSilo: trucks.feedSilo,
         // Phase 4: the cull box's count (a bad batch's grading); absent in older saves
         ...(ctx.condScene?.serialize ? { cond: ctx.condScene.serialize() } : {}),
+        // PHASE4.md §15.3: the bucket standing on the floor
+        ...(props.bucketDown ? { bucketDown: { ...props.bucketDown, causes: { ...props.bucketDown.causes } } } : {}),
       };
     },
     restore(d) {
       if (!d) return;
       props.carrying = d.carrying ?? null; props.carryOpts = d.carryOpts ?? null;
+      props.bucketDown = d.bucketDown && Number.isFinite(d.bucketDown.x) ? { x: d.bucketDown.x, z: d.bucketDown.z, n: d.bucketDown.n || 0, causes: { ...(d.bucketDown.causes || {}) }, inside: d.bucketDown.inside !== false } : null;
       ctx.player?.carry?.(props.carrying);
       showCarry(props.carrying);
       const settle = (s) => (s === 'parked' || s === 'driving-in' ? 'parked' : 'away');

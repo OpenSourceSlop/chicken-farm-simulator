@@ -32,6 +32,8 @@ import { buildResultPanel } from './ui-result.js';
 import { createTitle } from './ui-title.js';
 import { createJobCard } from './ui-jobs.js';
 import { createCaption, createFloatLabel } from './ui-caption.js';
+import { createDeadMarks } from './ui-deadmarks.js'; // PHASE4.md §15.4: the nearest dead bird's chip, markers within 15 m
+import { createWatchCard } from './ui-watch.js';       // PHASE4.md §15.1: the flock watch card
 import { int, one, feelWords } from './ui-format.js';
 import { FLOOR_TEMP_RAMP, COMFORT_RAMP, MOISTURE_RAMP, levelById, conditionLabel } from './config.js';
 import { sectorOf } from './job-engine.js';
@@ -55,6 +57,7 @@ const isKeyE = (e, k) => e.code === 'KeyE' || k === 'e';
 const isKeyHelp = (e, k) => e.code === 'KeyH' || k === 'h' || k === '?' || (e.code === 'Slash' && e.shiftKey);
 const isCode = (e, k, code, letter) => e.code === code || (!e.code && k === letter);
 const P1_IDS = new Set(['sign-gate', 'controller', 'sign-brooder']); // what E reaches in the sandbox
+const TWO_HANDS_PANELS = new Set(['chick-table', 'chick-grading']);    // PHASE4.md §15.3 (c): panels that handle chicks
 const clockText = (t) => { const m = Math.round((((t % 1) + 1) % 1) * 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 const inHouse = (p) => p.x > HOUSE_BOUNDS.xMin && p.x < HOUSE_BOUNDS.xMax && p.z > HOUSE_BOUNDS.zMin && p.z < HOUSE_BOUNDS.zMax;
 
@@ -75,7 +78,7 @@ export function createUI(ctx, deps) {
   root.appendChild(tr);
   // HUD elements the edge pointer keeps clear of: the cards, the E prompt and the captions
   const avoid = () => [tr, trL, root.querySelector('.hud-tl'), root.querySelector('.hud-bl'), root.querySelector('.hud-br'),
-    root.querySelector('.hud-bc .prompt'), root.querySelector('.caption')].filter((e) => e && !e.hidden);
+    root.querySelector('.hud-bc .prompt'), root.querySelector('.caption'), root.querySelector('.fw')].filter((e) => e && !e.hidden);
   const tasks = createTasks(tr, ctx, { player, root, avoid });
   const p1Marker = ctx.scene.getObjectByName('task-marker');
   const p1Pointer = root.querySelector('.edge-pointer');
@@ -120,6 +123,8 @@ export function createUI(ctx, deps) {
     canvas,
     onOpen: (id) => {
       tasks.notify(`open:${id}`); prompt.show(null); root.classList.add('has-panel');
+      // PHASE4.md §15.3 (c): grading chicks at the table needs both hands: the bucket goes down at his feet first
+      if (mode === 'level' && props?.carrying === 'bucket' && TWO_HANDS_PANELS.has(id)) props.setBucketDown({ auto: true });
       if (mode !== 'sandbox') {
         events.emit(EV.PANEL_OPEN, { id });
         if ((BOARDS[id] || BOARDS_CYCLE[id] || BOARDS_COND[id]) && id.startsWith('sign-')) uiAct('sign.read', { board: id });
@@ -283,13 +288,23 @@ export function createUI(ctx, deps) {
   events.on(EV.FARM_PROBLEM, (p) => { if (mode === 'level' && p && p.phase === 'symptom' && p.alarm) raiseAlarm(ALARM[p.id] || 'The controller’s alarm sounds.'); });
   events.on(EV.FARM_DELIVERY, (p) => { if (mode === 'level' && p.kind === 'feed' && p.phase === 'arrive') caption.show('The feed truck is filling the silos.'); });
   events.on(EV.SKILL_POINTS, (p) => { if (p.detail) details.set(p.milestone, p.detail); });
+  // PHASE4.md §15.3: the bucket set down (by G or by a two-handed task), picked up, a dead bird into the bucket on the floor
+  events.on(EV.BUCKET, (p) => {
+    if (mode !== 'level' || !p) return;
+    const n = (x) => `${int(x)} dead bird${x === 1 ? '' : 's'}`;
+    const now = { now: true };
+    if (p.into) caption.show(`Dead bird into the bucket you set down (${n(p.n)} in it).`, 4.5, now);
+    else if (p.down) caption.show(p.auto ? `Bucket set down here (${n(p.n)}): both hands for this job. E picks it up again.` : `Bucket set down here (${n(p.n)}). E picks it up again.`, 4.5, now);
+    else caption.show(`Bucket picked up (${n(p.n)}). Count them into the bin by the door.`, 4.5, now);
+  });
   // PHASE4.md §15.2: the soft cue of a job 30 farm minutes from its close (the card's chip pulses; a quiet click sounds)
   events.on(EV.JOB_SOON, (p) => {
     if (mode !== 'level') return;
     const inst = ctx.level?.engine?.byKey?.(p.key);
     if (!inst) return;
     const at = p.closesAt != null ? ` (${clockText(p.closesAt)})` : '';
-    caption.show(`${inst.def.title}: closes in ${Math.round((p.closesAt - env.day) * 1440)} farm minutes${at}.`, 5);
+    const more = (p.keys?.length || 1) - 1, m = Math.max(1, Math.round((p.closesAt - env.day) * 1440));
+    caption.show(more > 0 ? `${inst.def.title} and ${more} more job${more === 1 ? '' : 's'}: close in ${m} farm minutes${at}.` : `${inst.def.title}: closes in ${m} farm minutes${at}.`, 5);
   });
   // a bird in the hand: from day 8 the bird check (panels' bird-check), in week 1 Phase 2's chick in hand
   events.on(EV.BIRD_PICK, (p) => {
@@ -376,10 +391,19 @@ export function createUI(ctx, deps) {
     nextLabel: () => ctx.level?.nextLabel?.() ?? 'Next job',
   });
   nextBar.addEventListener('click', () => ctx.level?.nextJob());
+  const deadMarks = createDeadMarks(ctx, root, { avoid, jobPointer: () => jobCard.pointerEl });
+  const watchCard = createWatchCard(root, ctx);
+  // PHASE4.md §15.1: the flock watch's early warning as a caption (the notebook line comes from the watch itself)
+  events.on(EV.WATCH, (p) => { if (mode === 'level' && p?.text) caption.show(p.text, 10, { now: true }); });
   const togglePanel = (id) => { if (panels.openId === id) closePanel(); else openPanel(id); };
 
   // ---- E, Q, T ----
   const accept = (it) => !!it.use || panels.has(it.id);
+  // PHASE4.md §15.3 (d): while a job needs birds in the hand, E never picks up a dead bird or the bucket (Shift+E does)
+  const DEAD_IDS = new Set(['dead-bird', 'bucket']);
+  const chickJob = () => (mode === 'level' ? ctx.level?.chickJob ?? null : null);
+  const acceptE = (it) => accept(it) && !(DEAD_IDS.has(it.id) && chickJob());
+  const deadTarget = () => (mode === 'level' && interact ? interact.nearest(player, (it) => DEAD_IDS.has(it.id) && accept(it)) : null);
   function nearestTarget() {
     if (mode === 'sandbox') {
       // Phase 1: the nearest board within reach on the farmer's side of the wall
@@ -394,7 +418,22 @@ export function createUI(ctx, deps) {
       return best;
     }
     if (mode !== 'level') return null;
-    return interact ? interact.nearest(player, accept) : null;
+    return interact ? interact.nearest(player, acceptE) : null;
+  }
+  /** The prompt's extra pills: Shift+E for the dead bird (or the bucket) in a chick job; G while carrying the bucket. */
+  function promptAlts() {
+    if (mode !== 'level') return [];
+    const out = [];
+    if (chickJob()) {
+      const d = deadTarget();
+      if (d) out.push({ key: 'Shift+E', text: d.id === 'bucket' ? 'Pick up the bucket' : 'Pick up the dead bird', act: () => useTarget(d) });
+    }
+    if (props?.carrying === 'bucket') out.push({ key: 'G', text: 'Set the bucket down', act: () => setBucketDown() });
+    return out;
+  }
+  function setBucketDown() {
+    if (props?.carrying !== 'bucket') { if (props?.bucketDown) caption.show('The bucket stands where you set it down: E picks it up there.'); return false; }
+    return props.setBucketDown({ auto: false });
   }
   function useTarget(t) {
     if (!t) return;
@@ -474,8 +513,11 @@ export function createUI(ctx, deps) {
     if (typingInControl(e.target)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (isKeyE(e, k) && !e.repeat) {
-      const target = nearestTarget();
+      // Shift+E in a level: the dead bird (or the bucket) when a chick job keeps them off E
+      const target = e.shiftKey && mode === 'level' && chickJob() ? deadTarget() : nearestTarget();
       if (target) { e.preventDefault(); useTarget(target); }
+    } else if (mode === 'level' && !e.repeat && isCode(e, k, 'KeyG', 'g')) {
+      e.preventDefault(); setBucketDown();
     } else if (isKeyHelp(e, k) && !e.repeat) {
       helpAuto = false;
       (mode === 'sandbox' ? help : lhelp).toggle();
@@ -536,6 +578,7 @@ export function createUI(ctx, deps) {
       hud.refresh(tick);
       if (tick) { hudAcc = 0.1; if (mode === 'sandbox' && tools.open && (fitAcc = (fitAcc + 1) % 5) === 0) fitTools(); }
       if (mode === 'sandbox') {
+        deadMarks.hide(); watchCard.hide();
         tasks.update(dt, panels.openId);
         if (helpAuto && tasks.index >= 1) { helpAuto = false; if (help.visible) help.hide(); }
         tools.update(dt);
@@ -545,6 +588,8 @@ export function createUI(ctx, deps) {
         if (p1Pointer) p1Pointer.hidden = true;
         if (mode === 'level' || mode === 'result') jobCard.update(dt, !!panels.openId);
         if (mode === 'level') refreshNextBar(dt);
+        deadMarks.update(dt, mode === 'level' && farm?.mode === 'level', !!panels.openId || busy.open);
+        watchCard.update(dt, (mode === 'level' || mode === 'result') && farm?.mode === 'level');
       }
       panels.update(dt);
       tickFarmTimeNotes();
@@ -560,7 +605,7 @@ export function createUI(ctx, deps) {
       const show = mode === 'level' && (dark || alarmT > 0) && !!alarmMsg;
       if (alarm.hidden === show) alarm.hidden = !show;
       if (show) setText(alarmText, `${alarmMsg}${dark ? ' The farm clock runs slower while the house is dark (every farm minute counts); Next job does not skip.' : ''}${ctx.level?.skipStopped && Math.abs(ctx.level.skipStopped.at - env.day) < 2 / 1440 ? ' The Next job skip stopped here.' : ''}`);
-      prompt.show(panels.openId || narrow.open || title.open || busy.open ? null : nearestTarget());
+      { const off = panels.openId || narrow.open || title.open || busy.open; prompt.show(off ? null : nearestTarget(), off ? [] : promptAlts()); }
     },
     // hooks for level.js, the integrator and tests
     busy,
@@ -583,6 +628,11 @@ export function createUI(ctx, deps) {
     toggleView,
     replayLevel,
     caption: (msg, s) => caption.show(msg, s),
+    /** PHASE4.md §15.3: the keys of the prompt's extra pills now ('Shift+E', 'G'), for the harness. */
+    get promptAlts() { return prompt.alts; },
+    get promptId() { return prompt.id; },
+    /** PHASE4.md §15.4: the dead-bird chip, the bucket's chip and the markers shown now. */
+    deadMarks: () => deadMarks.state(),
     clearCaptions: () => caption.clear(),
     jobCard,
     squeeze,

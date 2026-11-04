@@ -251,7 +251,7 @@ export function buildHeapPanel(L) {
     barrow.hidden = carrying === 'barrow';
     back.hidden = carrying !== 'barrow';
     sack.hidden = env.dayNumber < LEVEL1.arrivalDay || carrying === 'barrow';
-    barrow.disabled = !!carrying && carrying !== 'barrow';
+    barrow.disabled = props.handsBusy('barrow');
     setText(hint, cyc.hint() ?? (carrying === 'barrow' ? 'Push the barrow over the floor: it spreads a strip about 2.4 m wide.' : 'With the barrow the clock runs slower; walk the whole house from wall to wall.'));
     cyc.update();
   }

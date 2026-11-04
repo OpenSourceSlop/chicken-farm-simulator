@@ -45,7 +45,7 @@ export function createCycleTools(ctx, { props, pool, yard, lv }) {
     use() { farm()?.act('clean.bait', { x: b.x, z: b.z, i }); pose('crouch', 1.0); } }));
   for (const [part, s] of Object.entries(SPOTS3.brush)) {
     reg({ id: `brush-${part}`, label: s.label.toLowerCase(), verb: 'Brush the dust off the', x: s.x, z: s.z, radius: 1.6, inside: true,
-      enabled: () => lv() && clean() && !farm()?.clean?.brushed?.[part] && !props.carrying,
+      enabled: () => lv() && clean() && !farm()?.clean?.brushed?.[part] && !props.handsBusy(),
       use() { farm()?.act('clean.brush', { part }); pose('reach', 1.5); } });
   }
   const catchNight = () => { const d = day(), h = env()?.hour ?? 0, hv = farm()?.harvest || {}; return ((d === 41 && h >= 12) || (d === 42 && !hv.result)) && (farm()?.flock?.alive ?? 0) > 0; };

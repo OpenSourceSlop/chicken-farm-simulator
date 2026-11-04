@@ -138,6 +138,28 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .unit { font-size: 0.5em; font-weight: 500; color: var(--ink-dim); margin-left: 0.18em; letter-spacing: 0.02em; }
 
 .hud-tl { position: absolute; top: var(--top); left: var(--left); max-width: calc(100% - var(--jobs-w) - var(--left) - var(--right) - 16px); display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+/* PHASE4.md §15.1: the flock watch under the clock card; calm dots (steady / watch / alert), the last warning under them */
+.fw { position: absolute; top: calc(var(--top) + 108px); left: var(--left); width: 262px; padding: 8px 10px 9px; }
+.fw-head { display: flex; align-items: baseline; gap: 8px; }
+.fw-head .label { margin: 0; font-size: 11px; letter-spacing: 0.12em; }
+.fw-sub { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-faint); font: 600 10.5px/1 var(--font-display); letter-spacing: 0.04em; }
+.fw-fold { width: 20px; height: 20px; padding: 0; border-radius: 4px; border: 1px solid var(--panel-edge); background: var(--panel-sunk); color: var(--ink-dim); font: 700 13px/1 var(--font-display); cursor: pointer; }
+.fw-rows { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.fw-row { display: grid; grid-template-columns: 10px 58px 1fr; gap: 6px; align-items: baseline; font-size: 12px; line-height: 1.25; }
+.fw-row[hidden] { display: none; }
+.fw-dot { width: 9px; height: 9px; border-radius: 50%; align-self: center; background: var(--ink-faint); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.18); }
+.fw-dot.is-green { background: #7fbf6e; }
+.fw-dot.is-amber { background: #e2b04a; }
+.fw-dot.is-red { background: #e0684e; }
+.fw-k { color: var(--ink-dim); font: 600 11px/1.25 var(--font-display); letter-spacing: 0.03em; }
+.fw-v { min-width: 0; }
+.fw-value { display: block; color: var(--ink); font-weight: 500; }
+.fw-detail { display: block; color: var(--ink-faint); font-size: 11px; }
+.fw-row[data-state="red"] .fw-value { color: #f3b6a6; }
+.fw-warn { margin: 7px 0 0; padding: 5px 7px; border-left: 3px solid #e2b04a; border-radius: 3px; background: var(--panel-sunk); color: var(--ink); font-size: 11.5px; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.fw.is-folded .fw-detail, .fw.is-folded .fw-warn { display: none; }
+#hud.is-title .fw, #hud.has-panel .fw { display: none; }
 .hud-tr { position: absolute; top: var(--top); right: var(--right); width: var(--jobs-w); }
 .hud-bl { position: absolute; left: var(--left); bottom: var(--bottom); display: flex; flex-direction: column; align-items: flex-start; gap: 10px; max-width: calc(100% - var(--left) - var(--right)); }
 .hud-br { position: absolute; right: var(--right); bottom: var(--bottom); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-height: var(--tools-room, calc(100% - var(--top) - var(--bottom) - 320px)); min-height: 0; }
@@ -224,12 +246,20 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .edge-pointer { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 7px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--ink); box-shadow: var(--shadow); font: 600 13px/1 var(--font-display); white-space: nowrap; will-change: transform; }
 .edge-arrow { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); }
 .edge-arrow .icon { font-size: 17px; }
+/* PHASE4.md §15.4 / §15.3: the nearest dead bird and the bucket set down (muted, apart from the job's orange) */
+.edge-pointer--dead .edge-arrow { background: #c8604a; color: #fff6ec; }
+.edge-pointer--bucket .edge-arrow { background: #86a9c6; color: #10202c; }
+.edge-pointer--dead, .edge-pointer--bucket { font-size: 12.5px; }
 
 /* "E  Read the ... sign" prompt */
 .prompt { display: flex; align-items: center; gap: 11px; padding: 6px 18px 6px 6px; border-radius: 999px; border: 1px solid var(--panel-edge); background-color: var(--panel); color: var(--ink); box-shadow: var(--shadow); font: 500 15px/1.2 var(--font-body); cursor: pointer; white-space: nowrap; }
 .prompt:hover { background-color: var(--panel-raised); }
 .prompt .kbd { height: 30px; min-width: 30px; font-size: 15px; background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22); }
 .prompt b { font-weight: 600; }
+/* PHASE4.md §15.3: the second key beside the E prompt (Shift+E for the dead bird in a chick job, G for the bucket) */
+.hud-bc { display: flex; gap: 8px; align-items: center; }
+.prompt--alt { padding: 4px 14px 4px 5px; font-size: 13px; background-color: var(--panel-solid); }
+.prompt--alt .kbd { height: 24px; min-width: 24px; padding: 0 6px; font-size: 12px; background: var(--panel-raised-hi); color: var(--ink); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3); }
 
 /* controls legend */
 .help { width: 286px; padding: 10px 12px 11px; }

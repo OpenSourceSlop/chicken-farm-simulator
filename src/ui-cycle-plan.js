@@ -112,7 +112,7 @@ export function buildPlanSheet(api) {
       + (m.length && m.width ? ` = ${int(Math.round(m.length * m.width))} m² of floor` : ' (the company’s drawings: 50 × 12 m = 600 m²)'));
     takeTape.hidden = props.carrying === 'tape';
     backTape.hidden = props.carrying !== 'tape';
-    takeTape.disabled = !!props.carrying && props.carrying !== 'tape';
+    takeTape.disabled = props.handsBusy('tape');
     // planningCalc: his sums for these decisions, live (the same sums the company runs)
     const on = !!skills?.unlocked?.('planningCalc') && complete();
     calc.hidden = !on;

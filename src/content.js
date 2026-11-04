@@ -146,6 +146,8 @@ export const LEVEL_HELP_KEYS = [
   { keys: ['←', '→'], what: 'Turn, or right-drag' },
   { keys: ['Wheel', '+', '−'], what: 'Zoom in and out' },
   { keys: ['E'], what: 'Use, pick up, read a sign' },
+  { keys: ['Shift', 'E'], what: 'Pick up a dead bird while a job with chicks is open' },
+  { keys: ['G'], what: 'Set the dead-bird bucket down (E picks it up again)' },
   { keys: ['Q'], what: 'Squeeze a handful of litter' },
   { keys: ['T'], what: 'Floor thermometer at your feet' },
   { keys: ['L'], what: 'Light meter: lux at bird height' },
