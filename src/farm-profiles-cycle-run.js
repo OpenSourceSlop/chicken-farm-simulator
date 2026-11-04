@@ -16,6 +16,7 @@ import { applyCycleRound, cycleStops, cycleProfileOf } from './farm-profiles-cyc
 import { makeQuantile } from './farm-flock.js';
 import { BROOD_CELLS, meanMoistureOf } from './farm-litter.js';
 import { lastWeighing } from './farm-harvest.js';
+import { RAIN_CELLS } from './farm-cond-core.js';
 
 const ORDER = LEVELS.map((l) => l.id);
 const RANGE = {
@@ -100,7 +101,8 @@ function hourRow(world) {
     broodLitter: r3(meanMoistureOf(L, BROOD_CELLS) ?? 0), litterMean: r3(L.meanMoisturePct), droppings: cyc ? farm.cyc.droppings : fl.droppings,
     panType: { ...(farm.feed.panType || { starter: 1, grower: 0, finisher: 0 }) }, lameOnFloor: fl.lameOnFloor || 0,
     // Phase 4 (the conditions' checks, scripts/test-cond.mjs)
-    e: r3(C.e ?? 0), powerOn: !!env.powerOn, rain: farm.weatherNow ? farm.weatherNow.rain : 0, tankPct: farm.condition === 'water' ? r3(farm.waterTank.levelPct) : null,
+    e: r3(C.e ?? 0), eMean: r3(C.meanOver ?? 0), powerOn: !!env.powerOn, rain: farm.weatherNow ? farm.weatherNow.rain : 0, tankPct: farm.condition === 'water' ? r3(farm.waterTank.levelPct) : null,
+    strip: farm.condition === 'rainy' ? r3(meanMoistureOf(L, RAIN_CELLS) ?? 0) : null,
   };
 }
 

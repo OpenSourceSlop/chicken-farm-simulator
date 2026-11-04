@@ -77,6 +77,7 @@ export function condStops(fromDay, toDay, condition, P = condProfile(`${conditio
     for (const m of [10, 60]) add(CUT.day, CUT.hour + m / 60, 'cutGen');
     add(CUT.back.day, CUT.back.hour + 5 / 60, 'mainsBack');
     add(34, 1 + 40 / 60, 'genRestart');   // the generator left on runs dry about 01:20 (150 L, 10 h): started again
+    add(34, 6 + 20 / 60, 'mainsBackLate'); // ... and the pinned 'mains is back' job done on the morning round
   }
   void P;
   return out;
@@ -118,6 +119,7 @@ export function applyCondRound(farm, env, day, round, P, act) {
       return;
     }
     case 'mainsBack': if (P.mainsBackAt != null && farm.power.switch === 'generator') { act('gen.switch', { to: 'mains' }); act('gen.stop'); act('gen.fuel'); } return;
+    case 'mainsBackLate': if (P.genRestartMin != null && farm.power.switch === 'generator' && farm.power.mains) { act('gen.switch', { to: 'mains' }); act('gen.stop'); act('gen.fuel'); } return;
     case 'genRestart': {
       const st = farm.problems.find((p) => p.id === 'gen-dry');
       if (P.genRestartMin != null && st && st.phase === 'found') { act('gen.fuel'); act('gen.start'); }
@@ -194,6 +196,7 @@ export function condFanPlan(farm, env, P, day, age, n, pad) {
       // the mornings, the humid hours and the hot nights: tunnel fans by what they feel (at most three at night), no pad
       return { n: fansForFeel(env, age, 1, env.hour >= 9 && env.hour < 20 ? 6 : 3), pad: false };
     }
+    if (P.pads === 'never' && age >= 20.7) return { n, pad: false };   // hotNoPad: no pads from day 21
     if (P.night3 && age >= 27.7 && (env.hour >= 18.5 || env.hour < 6)) return { n: 3, pad: false };
     if (P.padsOffAt21 && age >= 20.7 && (env.hour >= 21 || env.hour < 7)) return { n, pad: false };
     // the pads stay on while the outside air is over about 30 °C (the hot sign's line: often all night)

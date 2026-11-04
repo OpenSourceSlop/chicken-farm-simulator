@@ -72,8 +72,10 @@ function stepTank(farm, env, hrs) {
     T.pumpShare = Math.max(def.minShare, 1 - def.lossPerDay * (env.day - wear.startedAt));
   }
   const birdsL = Math.max(0, W.meterL - (X.meterL ?? W.meterL)); X.meterL = W.meterL;
-  const cool = env.padOn && env.powerOn !== false ? PAD_EFF * Math.max(0, env.outsideTemp - wetBulbOf(env.outsideTemp, env.outsideRH)) * Math.min(1, env.padWorking) : 0;
-  const padLh = ((0.49 * cool * env.fansEffective * EQUIP.fanM3h) / 1000) * (1 + WATER_TANK.padBleed);
+  // the pads draw what they evaporate on their wet share, plus the bleed: padBleed of the full pad's flow, which the pad
+  // pump sends down the pad whatever its wetness (model; PHASE4.md §2.7)
+  const full = env.padOn && env.powerOn !== false ? PAD_EFF * Math.max(0, env.outsideTemp - wetBulbOf(env.outsideTemp, env.outsideRH)) : 0;
+  const padLh = ((0.49 * full * env.fansEffective * EQUIP.fanM3h) / 1000) * (Math.min(1, env.padWorking) + WATER_TANK.padBleed);
   const pumpLh = !T.fixing && env.powerOn !== false && T.levelPct < WATER_TANK.fullPct ? WATER_TANK.pumpM3h * 1000 * T.pumpShare : 0;
   const L = Math.max(0, Math.min(cap, (T.levelPct / 100) * cap + (pumpLh - padLh) * hrs - birdsL));
   T.levelPct = (100 * L) / cap;
