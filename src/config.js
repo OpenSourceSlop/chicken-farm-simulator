@@ -674,43 +674,64 @@ export const SPOTS4 = {
 export const HEAT_P4 = { padEveningAboveC: 29.5, padEveningFromAge: 28, eveningUntil: 21, nightPantMax: 0.25 };
 
 // The generator and the well pump (general where a sign says so, else model; PHASE4.md §4.2, §4.4).
-export const GENERATOR = { fuelL: 150, litresPerH: 15, startMin: 2, testMin: 10, kva: 60 };
-// The tank feeds the drinker lines and the cooling pads (the pads draw about as much as the birds drink on a hot
-// afternoon, or more); the line pressure falls under linesFromPct, the pad runs dry under padFromPct (model).
-export const WATER_TANK = { m3: 6, pumpM3h: 1.2, lowPct: 30, linesFromPct: 20, padFromPct: 15, repairH: 2 };
+// startMin / testMin are panel waits (the panel's bar at the panel clock, then the action: PHASE4.md §10.3);
+// clockWhileDark: the level clock speed (LEVEL1.clock key) while the house has no power, as Phase 2's chick
+// placement (every farm minute counts; the walk to the generator takes about 4-7 farm minutes at it).
+export const GENERATOR = { fuelL: 150, litresPerH: 15, startMin: 2, testMin: 10, kva: 60, clockWhileDark: 'carry' };
+// The tank feeds the drinker lines and the cooling pads: on a hot afternoon the pads draw about 700-1,200 L an hour
+// (0.49 g per m³ of tunnel air per °C they cool, plus padBleed), the birds about 100-150 (scripts/tuning-refs.mjs
+// TANK_REFS_P4). The pump fills it at pumpM3h x pumpShare while it is under fullPct; the line pressure falls under
+// linesFromPct, the pad runs dry from the far end under padFromPct (model). The pump's gauges (water.tank): pumpBar x
+// pumpShare bar and pumpA + 3 x (1 - pumpShare) A (the plate prints the good-order figures, general); the gauge's
+// marker keeps the lowest level since the last reading. wornBar: a reading at or under it is the worn pump's symptom.
+export const WATER_TANK = { m3: 6, pumpM3h: 1.2, fullPct: 95, startPct: 95, lowPct: 30, linesFromPct: 20, padFromPct: 15, repairH: 2,
+  padBleed: 0.1, pumpBar: 2.4, pumpA: 6, wornBar: 2.2 };
+// Phase 4 build switches (the integrator sets them at the merges; a harness may set them on __game.config.PHASE4):
+//   tunedSigns  the sign lines of the tuned model (content-signs-cond.js BOARD_P4_ITEMS) in every run; true at the sim
+//               merge, when the model that the lines describe goes live (until then every board reads as Phase 3)
+export const PHASE4 = { tunedSigns: false };
 
 /**
  * The harder replay conditions (PHASE4.md §3-§4), offered after the first full cycle (skills profile cyclesDone)
- * and selectable for any level on the run card. One condition per run (`run.state().condition`, the farm's
- * `farm.condition`). Each changes the levels through `levels[levelId]`:
+ * and selectable for any level on the run card. One condition per run, held on the farm only (`farm.condition`: the
+ * run puts it there through farm.start(def, { condition }); the engine, the signs, the HUD and level.js read it).
+ * Each changes the levels through `levels[levelId]`:
  *   weather     the level's weather key (WEATHER / OUTSIDE_WATER_GM3); `weather` on the condition = every level
  *   drop        problem ids of the level def that do not happen
  *   replace     { [problemId]: fields } merged into the level def's problem
  *   problems    extra problems (same shape as config LEVELS problems; `until` makes a weather event, `storm` marks
- *               rain, `back` ends a power cut, `alarm` stops a skip at its symptom)
+ *               rain, `back` ends a power cut, `alarm` emits its symptom at once and stops a skip, `conditional`
+ *               starts only when the farm's condition holds, `recurring` re-arms after it is fixed)
  *   target/fail fields merged into the level def's (the brooding week of a bad batch counts the chicks graded out
- *               at the table apart: `claimedApart`)
+ *               on day 0 apart, once the hatchery is told the same day: `claimedApart`)
  *   delivery    the brooding week's chick delivery as the condition has it (a bad batch: weight, spread, weak share,
- *               the truck's hour), null = Phase 2's
+ *               the truck's hour, the growth and infection terms), null = Phase 2's
  *   routineDays { [routine job id]: [fromDay, toDay] } the days a Phase 2/3 routine runs in this condition
- * cycleClimateFrom: the first level that runs the cycle climate (the hot and rainy seasons: the brooding week).
+ * sun:          { fromHour, toHour, perH } the afternoon sun on the roof every day of every level (the farm installs a
+ *               weather event `sun-<day>` per day: heatPerH only, Phase 2's 2 h ramps; model). The hot season's: a
+ *               closed house runs 4-6 °C over the chicks' row by 15:00 (scripts/tuning-refs.mjs hot brooding refs).
+ * cycleClimateFrom: the first level that runs the cycle climate (the hot and rainy seasons: the brooding week; the
+ *               brooding week keeps Phase 2's wind chill and chick comfort in every condition, PHASE4.md §2.3).
+ * dropMilestones: none: a milestone with `needsProblem` (skills*.js) is not evaluated where the merged levels lack it.
  * Condition jobs, signs and milestones: content-jobs-cond.js, content-signs-cond.js, skills-cond.js.
  * `available` is what the run card reads; the integrator sets it true at the run merge (as `earnable`).
  */
 export const CONDITIONS = {
   hot: {
     label: 'Hot season', months: 'April–May', available: false, weather: 'hot', cycleClimateFrom: 'level1',
-    summary: 'April–May: afternoons of 37–38 °C, nights hardly under 28 °C, a heat wave to about 41 °C in week 5. The cooling pads and the tunnel fans decide.',
+    sun: { fromHour: 11, toHour: 17, perH: 1.5 },     // every afternoon is Phase 2's warm afternoon, in 38 °C air
+    summary: 'April–May: afternoons of 37–38 °C with the sun on the roof, nights hardly under 28 °C, a heat wave to about 41 °C in week 5. The cooling pads decide, from the first day.',
     levels: {
       level1: { drop: ['warm-afternoon'] },           // every afternoon is warm: the routine h-brood-air instead
       week2: { routineDays: { 'r-fans-pm': [8, 41], 'r-vent-night': [8, 41] } },
-      week3: { replace: { 'warm-afternoon3': { outsideRise: 2.5 } } },                       // about 40 °C on day 16
+      // the daily sun carries the afternoons: the events' own sun off (the heat wave keeps a little)
+      week3: { replace: { 'warm-afternoon3': { outsideRise: 2.5, sunPerH: 0 } } },          // about 40 °C on day 16
       weeks45: {
-        replace: { 'hot-afternoon': { outsideRise: 1.5 }, 'heat-wave': { outsideRise: 3 } },  // about 39.5 / 41 °C
+        replace: { 'hot-afternoon': { outsideRise: 1.5, sunPerH: 0 }, 'heat-wave': { outsideRise: 3, sunPerH: 0.5 } },  // about 39.5 / 41 °C
         drop: ['humid-heat'],
-        problems: [{ id: 'hot-spell', day: 33, hour: 18, outsideRise: 2, sunPerH: 1, until: { day: 35, hour: 18 } }], // nights about 30 °C
+        problems: [{ id: 'hot-spell', day: 33, hour: 18, outsideRise: 2, sunPerH: 0, until: { day: 35, hour: 18 } }], // nights about 30 °C
       },
-      finish: { replace: { 'hot-finish': { outsideRise: 2 } } },                              // about 40 °C on day 38
+      finish: { replace: { 'hot-finish': { outsideRise: 2, sunPerH: 0 } } },                 // about 40 °C on day 38
     },
   },
   rainy: {
@@ -731,6 +752,8 @@ export const CONDITIONS = {
           { id: 'storm-33', day: 33, hour: 14, outsideDrop: 4, rh: 98, storm: true, until: { day: 33, hour: 18 } },
           { id: 'power-cut', day: 33, hour: 15 + 10 / 60, back: { day: 33, hour: 18 + 10 / 60 }, alarm: true },
           { id: 'mains-back', day: 33, hour: 18 + 10 / 60, conditional: 'generator' },   // only while the generator carries the house
+          // the house dark again with the mains still off: the generator ran dry or was stopped (any day of the level)
+          { id: 'gen-dry', conditional: 'dark-again', alarm: true },
         ],
       },
       finish: { drop: ['hot-finish'], problems: [{ id: 'storm-39', day: 39, hour: 14, outsideDrop: 4, rh: 98, storm: true, until: { day: 39, hour: 18 } }] },
@@ -738,26 +761,33 @@ export const CONDITIONS = {
   },
   badChicks: {
     label: 'A bad batch of chicks', months: '', available: false, cycleClimateFrom: null,
-    summary: 'Chicks from a young parent flock after a long trip: small (about 36 g) and uneven, many weak ones. Grade them, cull the weak, brood them closer.',
+    summary: 'Chicks from a young parent flock after a long trip: small (about 36 g) and uneven, many weak ones. Grade them, cull the weak, report the batch and brood them closer.',
     levels: {
       level1: {
         problems: [{ id: 'weak-batch', day: 0, hour: 10 }],
-        fail: { mortalityMaxPct: 2.5, claimedApart: true },   // the chicks graded out at the table are the hatchery's claim
+        fail: { mortalityMaxPct: 2.5, claimedApart: true },   // the chicks graded out on day 0 are the hatchery's claim
         // the delivery (model; Phase 2's are 41.5 g, CV 8 %, 0.8 % weak, 4 % red hocks, 08:00, 35 % of the weak die):
-        // the sim's delivery reads it, the run's truck anchor and the chick truck follow arrivalHour
+        // the sim's delivery reads it, the run's truck anchor and the chick truck follow arrivalHour (PLACEMENT_DAY
+        // and the flock's age stay Phase 2's: the age counts from 08:00 day 0 in every run)
+        //   gainK72h       the small chicks' gain in their first 72 h on the floor x this (they start slower)
+        //   infectionPerPctH  yolk-sac infection: while weak chicks are in the flock (days 0-7), the others die at this
+        //                  share an hour per 1 % of the flock that is weak (4.5 % weak ungraded: about +0.9 % in the week)
+        //   targetShiftC / shiftDays  env.targetTemp is the sign's row + targetShiftC on days 0..shiftDays (every reader
+        //                  agrees: the comfort, the strips, the readings label it "the sign's row + 1 °C (weak batch)")
         delivery: { chickWeightG: 36, chickWeightSdG: 1.5, cv: 0.14, weakShare: 0.045, redHockShare: 0.1, arrivalHour: 10, roadH: 7, lateBase: 0.05, weakDeathShare: 0.45,
-          note: 'parent flock 25 weeks old, 7 h on the road' },
+          gainK72h: 0.85, infectionPerPctH: 0.000012, targetShiftC: 1, shiftDays: 3, note: 'parent flock 25 weeks old, 7 h on the road' },
       },
     },
   },
   water: {
     label: 'A water problem', months: '', available: false, cycleClimateFrom: null,
-    summary: 'Iron in the well water and an old well pump: the filter and the nipples clog, and in week 4 the tank runs low in the afternoons. Find it from the water meter and the birds.',
+    summary: 'Iron in the well water and an old well pump: the filter and the nipples clog, and in week 4 the pump wears and the tank runs low in the afternoons. Find it from the pump\'s gauges, the water meter and the birds.',
     levels: {
       level1: { problems: [{ id: 'iron-water', day: -1, hour: 7 }] },
-      week2: { problems: [{ id: 'iron-filter', day: 13, hour: 10, flowFactor: 0.6 }] },
-      week3: { problems: [{ id: 'iron-nipples', day: 18, hour: 6, line: 3, flowFactor: 0.7 }] },
-      weeks45: { problems: [{ id: 'pump-wear', day: 26, hour: 6, lossPerDay: 0.1 }, { id: 'iron-filter', day: 31, hour: 10, flowFactor: 0.6 }] },
+      // the filter blocks before a flow-test morning (content-jobs.js FLOW_DAYS: even days), away from the pump's days
+      week2: { problems: [{ id: 'iron-filter', day: 12, hour: 4, flowFactor: 0.6 }] },
+      week3: { problems: [{ id: 'iron-nipples', day: 18, hour: 4, line: 3, flowFactor: 0.7 }] },
+      weeks45: { problems: [{ id: 'iron-filter', day: 24, hour: 4, flowFactor: 0.6 }, { id: 'pump-wear', day: 26, hour: 6, lossPerDay: 0.12, minShare: 0.25 }] },
     },
   },
 };
@@ -789,22 +819,41 @@ export function conditionLevel(def, condId) {
 
 /**
  * Every figure a Phase 4 sign prints that the model must also give (PHASE4.md §2.5; all general practice). `text`
- * is how the board prints it (package run: content-signs*.js); `model` names the check in scripts/test-tuning.mjs
- * (package sim: the model's value lies in `band`).
+ * is how the board prints it (package run: content-signs*.js; scripts/test-contracts.mjs finds its first words on
+ * `board`); `model` names the check in scripts/test-tuning.mjs (package sim: the model's value lies in `band`).
+ * Each check runs in the weather the sign is read in (the power-cut figures in the rainy season's storm, the pad's
+ * draw in a hot afternoon, the hot brooding line in the hot season).
  */
 export const SIGN_FIGURES = [
   { id: 'wind-chill-5wk', board: 'sign-heat', text: 'at 2.5 m/s birds of 5 weeks feel about 5–6 °C cooler', model: 'windChill35', band: [5, 6] },
   { id: 'wind-chill-2wk', board: 'sign-heat', text: 'birds of 2 weeks about 7 °C', model: 'windChill14', band: [6.5, 7.5] },
   { id: 'wind-chill-hot', board: 'sign-heat', text: 'moving air cools less once the air is over about 35 °C; near 40 °C it gives little: then the pads cool the birds', model: 'windChillHot', band: [0.1, 0.4] },
   { id: 'air-per-fan', board: 'sign-heat', text: 'All six fans give about 2.5 m/s at bird height, each fan about 0.4 m/s', model: 'airPerFan', band: [0.4, 0.43] },
-  { id: 'pant-felt-5wk', board: 'sign-heat', text: 'birds of 5 weeks start to pant when they feel about 24 °C, all of them by about 28 °C (felt: the house less the wind chill)', model: 'firstPant35', band: [23.5, 24.5] },
+  { id: 'pant-felt-5wk', board: 'sign-heat', text: 'birds of 5 weeks start to pant when they feel about 24 °C, all of them by about 28 °C (felt: the fan panel’s Birds feel reading)', model: 'firstPant35', band: [23.5, 24.5] },
   { id: 'pant-all-5wk', board: 'sign-heat', text: 'all of them by about 28 °C', model: 'allPant35', band: [27.5, 28.5] },
+  // the damp part of what the birds feel (farm-heat humidityTerm; the fan panel's Birds feel reading counts it)
+  { id: 'damp-felt-87', board: 'sign-heat', text: 'in damp air the birds feel warmer still: about 1 °C at 87 % humidity', model: 'dampFelt87', band: [0.8, 1.2] },
+  { id: 'damp-felt-90', board: 'sign-heat', text: 'about 2 °C at 90 %', model: 'dampFelt90', band: [1.6, 2.2] },
+  { id: 'damp-felt-95', board: 'sign-heat', text: 'about 4 °C at 95 %', model: 'dampFelt95', band: [3.6, 4.4] },
+  { id: 'evening-from', board: 'sign-heat', text: 'big birds (from day 28) on warm evenings want every fan', model: 'eveningFromAge', band: [28, 28] },
+  { id: 'evening-above', board: 'sign-heat', text: 'the pads while the outside air is over about 30 °C', model: 'eveningAboveC', band: [29, 30.5] },
+  { id: 'young-pad', board: 'sign-heat', text: 'young birds on a hot afternoon: the pad with one or two tunnel fans', model: 'youngPad1E', band: [-1.5, 1.5] },
   { id: 'water-feed', board: 'drinker', text: 'water : feed about 1.8 L/kg while the birds are comfortable', model: 'waterRatioComfort', band: [1.7, 1.9] },
-  { id: 'water-feed-hot', board: 'drinker', text: 'on hot days they drink more: about 2–2.5 L/kg', model: 'waterRatioHot', band: [2, 2.5] },
-  { id: 'water-feed-wave', board: 'drinker', text: 'in a heat wave up to about 3 L/kg', model: 'waterRatioWave', band: [2.8, 3.2] },
+  { id: 'water-feed-hot', board: 'drinker', text: 'while they are hot and panting they drink more: about 2–2.5 L/kg', model: 'waterRatioHot', band: [2, 2.5] },
+  { id: 'water-feed-wave', board: 'drinker', text: 'in a heat wave without cooling up to about 3 L/kg', model: 'waterRatioWave', band: [2.8, 3.2] },
   { id: 'pad-most', board: 'pad-pump', text: 'a pad in good order gives most of that, never all of it', model: 'padShareOfRule', band: [0.6, 0.95] },
   { id: 'pad-most-max', board: 'pad-pump', text: 'a pad in good order gives most of that, never all of it', model: 'padShareOfRuleMax', band: [0.6, 0.95] },
   { id: 'pad-rainy', board: 'pad-pump', text: 'in the damp air of the rainy season a pad cools only about 2–4 °C', model: 'rainyPadC', band: [2, 4] },
-  { id: 'power-cut-30', board: 'sign-power', text: 'without fans big birds overheat at once: after half an hour the first die', model: 'powerCut30', band: [0.1, 0.6] },
-  { id: 'power-cut-120', board: 'sign-power', text: 'after two hours a few in every hundred', model: 'powerCut120', band: [1, 5] },
+  // the hot season's brooding week: the pad with one tunnel fan keeps the chicks near their row (the closed house does not)
+  { id: 'hot-brood-pad', board: 'sign-brooder', text: 'hot season: every afternoon the closed house runs over the chicks’ row', model: 'hotBroodClosedE', band: [3.5, 7] },
+  { id: 'hot-brood-pad1', board: 'sign-brooder', text: 'the pad with one tunnel fan', model: 'hotBroodPad1E', band: [-1.5, 1.5] },
+  // the power cut, measured in the rainy season's storm (storm-33, the cut at 15:10): deaths to the next morning
+  { id: 'power-cut-10', board: 'sign-power', text: 'without fans big birds overheat at once: within minutes the first die', model: 'powerCut10', band: [0.03, 0.3] },
+  { id: 'power-cut-30', board: 'sign-power', text: 'after half an hour about 4 in 1,000', model: 'powerCut30', band: [0.3, 0.6] },
+  { id: 'power-cut-120', board: 'sign-power', text: 'after two hours one or two in every hundred', model: 'powerCut120', band: [1, 2.2] },
+  { id: 'gen-fuel-hours', board: 'generator', text: 'Fuel: 150 L, about 10 hours at full load', model: 'genFuelHours', band: [9.5, 10.5] },
+  // the tank and the well pump (the water condition; scripts/tuning-refs.mjs TANK_REFS_P4)
+  { id: 'pump-good', board: 'water-tank', text: 'a pump in good order: about 2.4 bar and 6 A', model: 'pumpGoodBar', band: [2.3, 2.5] },
+  { id: 'pad-draw', board: 'water-tank', text: 'on a hot afternoon the pads draw about 700–1,200 L an hour', model: 'padDrawHotLh', band: [700, 1200] },
+  { id: 'birds-draw', board: 'water-tank', text: 'the birds drink about 100–150 L an hour', model: 'birdsDrawHotLh', band: [90, 170] },
 ];

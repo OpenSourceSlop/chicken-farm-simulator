@@ -9,14 +9,27 @@
 // off from age 21, minimum ventilation by the sign table); its heat and breath come from flockLoadsP4 (the
 // sensible heat x 2.5 fading in hot air, the water ratio from the birds' comfort).
 import { createSim } from '../src/sim.js';
-import { weightAt, minVentM3hPer1000, EQUIP, PLACEMENT_DAY, HEAT_P4 } from '../src/config.js';
+import { weightAt, minVentM3hPer1000, EQUIP, PLACEMENT_DAY, HEAT_P4, CONDITIONS } from '../src/config.js';
 import { dustIndex } from '../src/farm-heat.js';
 import { heatStateP4, flockLoadsP4 } from '../src/farm-tuning.js';
 import { PLANS, EVENTS as EVENTS_P3, CHECK_FLOCK } from './cycle-refs.mjs';
 
-// Phase 3's weather events of the levels, and the hot season's heat wave as the farm installs it (CONDITIONS.hot:
-// +3 °C on the hot base, about 41 °C, PHASE4.md §4.1)
-export const EVENTS = { ...EVENTS_P3, waveHot: { id: 'heat-wave', fromDay: 30 + 10 / 24, toDay: 32 + 19 / 24, outsideDrop: -3, heatPerH: 2 } };
+// Phase 3's weather events of the levels, and the hot and rainy seasons' events as the farm installs them
+// (config CONDITIONS: the hot season's events carry no sun of their own, the daily sun does; PHASE4.md §4.1, §4.2)
+const at = (d, h) => d + h / 24;
+export const EVENTS = { ...EVENTS_P3,
+  waveHot: { id: 'heat-wave', fromDay: at(30, 10), toDay: at(32, 19), outsideDrop: -3, heatPerH: 0.5 },
+  warm3Hot: { id: 'warm-afternoon3', fromDay: at(16, 11), toDay: at(16, 17), outsideDrop: -2.5, heatPerH: 0 },
+  hot25Hot: { id: 'hot-afternoon', fromDay: at(25, 11), toDay: at(25, 17), outsideDrop: -1.5, heatPerH: 0 },
+  spellHot: { id: 'hot-spell', fromDay: at(33, 18), toDay: at(35, 18), outsideDrop: -2, heatPerH: 0 },
+  storm33: { id: 'storm-33', fromDay: at(33, 14), toDay: at(33, 18), outsideDrop: 4, rh: 98 },
+};
+/** The daily afternoon sun of a condition (config CONDITIONS[id].sun) as the farm installs it: one event a day. */
+export function addSun(env, sun, fromDay, toDay) {
+  if (!sun) return;
+  for (let d = Math.floor(fromDay) - 1; d <= Math.ceil(toDay); d++) env.addWeatherEvent({ id: `sun-${d}`, fromDay: at(d, sun.fromHour), toDay: at(d, sun.toHour), outsideDrop: 0, heatPerH: sun.perH });
+}
+export const SUN_OF = { hot: CONDITIONS.hot.sun };
 
 const minVent = (env, w, birds) => {
   const a = env.day - PLACEMENT_DAY;
@@ -43,22 +56,27 @@ const P4 = {
   pad6: (env, h, a, w, b) => { PLANS.ideal(env, h, a, w, b); if (h >= 11 && h < 18) { env.setFans(6); env.setPad(true); } },
 };
 for (const k of ['minVent', 'fansNoPad', 'padInHumid', 'fans2', 'fans6']) P4[k] = PLANS[k];
-// a power cut on day 33 at 15:00 for m minutes (no fans, no timer, no pad), the Phase 4 ideal before and after
-for (const m of [15, 30, 120]) P4[`cut${m}`] = (env, h, a, w, b) => {
-  const c0 = 33 + 15 / 24, c1 = c0 + m / 1440;
-  if (env.day >= c0 - 1e-6 && env.day < c1 - 1e-6) { env.setFans(0); env.setVentTimer(null); env.setPad(false); return; }
-  P4.ideal(env, h, a, w, b);
-};
+// the hot season (PHASE4.md §4.1): young birds' afternoons from 11:00 into the evening (20:00) the pad with one tunnel
+// fan in week 2 (to day 11), two to day 17, three to day 20 (the hot sign-heat line; hot:ideal)
+export const youngPadFans = (a) => (a < 11.7 ? 1 : a < 17.7 ? 2 : 3);
+P4.hotYoung = (env, h, a, w, b) => { P4.ideal(env, h, a, w, b); if (a >= 7.7 && a < 20.7 && h >= 11 && h < 20) { env.setFans(youngPadFans(a)); env.setPad(true); } };
+// six fans without the pad on the young birds' afternoons (11:00-18:00): the normal season's week 3 answer
+P4.hotFans6 = (env, h, a, w, b) => { P4.ideal(env, h, a, w, b); if (a >= 7.7 && a < 20.7 && h >= 11 && h < 18) { env.setFans(6); env.setPad(false); } };
+// big birds: three fans and no pads from 18:30 (days 28-41, hotNightFans3); the normal sign's evening (pads off at 21:00)
+P4.hotNight3 = (env, h, a, w, b) => { P4.hotYoung(env, h, a, w, b); if (a >= 27.7 && (h >= 18.5 || h < 6)) { env.setFans(3); env.setPad(false); } };
+P4.hotPadsTo21 = (env, h, a, w, b) => { P4.hotYoung(env, h, a, w, b); if (a >= 20.7 && (h >= 21 || h < 7)) env.setPad(false); };
+P4.hotNoPad = (env, h, a, w, b) => { P4.hotYoung(env, h, a, w, b); if (a >= 20.7) env.setPad(false); };
 export const PLANS_P4 = P4;
 
 /** An env at `fromDay` in level mode with the cycle climate, the check flock (Phase 4 loads) and events. */
-export function makeEnvP4({ weather = 'normal', events = [], fromDay, broken = [], padWorking = 1, light } = {}) {
+export function makeEnvP4({ weather = 'normal', events = [], fromDay, toDay = fromDay + 2, broken = [], padWorking = 1, light } = {}) {
   const env = createSim();
   env.setLevelClimate(true); env.setCycleClimate(true); env.setWeather(weather);
   env.setDay(Math.floor(fromDay)); env.setHour((fromDay - Math.floor(fromDay)) * 24);
   env.houseTemp = 28; env.slabTemp = 27; env.setFansBroken(broken); env.padWorking = padWorking;
   env.setLightProgram(light || { darkStart: 22, darkHours: 6, dimmer: 0.35 });
   for (const e of events) env.addWeatherEvent(EVENTS[e]);
+  addSun(env, SUN_OF[weather], fromDay, toDay);      // the hot season's sun on the roof every afternoon
   const F = CHECK_FLOCK, w = () => weightAt(env.day - PLACEMENT_DAY) * F.weightShare, last = { eMean: 0 };
   env.addStepper((e) => {
     const L = flockLoadsP4({ birds: F.birds, weightG: w(), age: e.day - PLACEMENT_DAY, houseC: e.houseTemp, eMean: last.eMean });
@@ -157,10 +175,7 @@ export const WINDOW_REFS_P4 = [
   { id: 'humid-padInHumid', from: 33.25, to: 34.25, plan: 'padInHumid', events: ['humid'], expect: { deathsPct: [0, 0.3], fHeatUnderIdeal: [0.003, 0.08] } },
   { id: 'hot38-ideal', from: 38.25, to: 39.25, plan: 'ideal', events: ['hot38'], expect: { deathsPct: [0, 0.01] } },
   { id: 'hot38-fansNoPad', from: 38.25, to: 39.25, plan: 'fansNoPad', events: ['hot38'], expect: { deathsPct: [0.4, 2] } },
-  // a power cut on day 33 at 15:00 (rainy season's storm, PHASE4.md §4.2): deaths to the next 06:00 by how long it lasts
-  { id: 'cut15', from: 33.25, to: 34.25, plan: 'cut15', expect: { deathsPct: [0, 0.2] } },
-  { id: 'cut30', from: 33.25, to: 34.25, plan: 'cut30', expect: { deathsPct: [0.1, 0.6] } },
-  { id: 'cut120', from: 33.25, to: 34.25, plan: 'cut120', expect: { deathsPct: [1.5, 4] } },
+  // (the power cut: in the rainy season's storm, scripts/tuning-refs-cond.mjs CUT_REFS_P4)
   // the hot season's heat wave (+3 °C on the hot base, about 41 °C): the pads decide
   { id: 'hot-wave-ideal', weather: 'hot', from: 30.25, to: 33.25, plan: 'ideal', events: ['waveHot'], expect: { deathsPct: [0, 0.1], pantH: [2, 20] } },
   { id: 'hot-wave-fansNoPad', weather: 'hot', from: 30.25, to: 33.25, plan: 'fansNoPad', events: ['waveHot'], expect: { deathsPct: [15, 60] } },

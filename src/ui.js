@@ -20,7 +20,7 @@ import { createPanelHost, buildSignPanel } from './ui-panels.js';
 import { buildControllerPanel } from './ui-controller.js';
 import { createTestTools } from './ui-testtools.js';
 import { createHelp, createNarrowNotice, createPrompt } from './ui-help.js';
-import { buildBoardPanel, buildPlate, setPlateDay } from './ui-boards.js';
+import { buildBoardPanel, buildPlate, setPlateDay, setPlateCondition } from './ui-boards.js';
 import { buildFeederPanel, buildSiloPanel, buildHeapPanel, buildBirdScalePanel } from './ui-equipment.js';
 import { buildDrinkerPanel, buildWaterSupplyPanel } from './ui-water.js';
 import { buildLevelControllerPanel } from './ui-climate.js';
@@ -301,17 +301,18 @@ export function createUI(ctx, deps) {
   // Phase 3 panels (package "panels"; placeholders until it builds them)
   try {
     setPlateDay(() => env.dayNumber);
+    setPlateCondition(() => farm?.condition ?? null); // Phase 4: the run's condition (PHASE4.md §3.2)
     registerCyclePanels({
       register: (id, build, opts) => panels.register(id, build, opts),
-      L, boards: (id) => boardsForDay(env.dayNumber)[id] || null, sourceLabel,
+      L, boards: (id) => boardsForDay(env.dayNumber, farm?.condition ?? null)[id] || null, sourceLabel,
       plate: (id, opts) => buildPlate(id, opts), openPanel: (id) => openPanel(id),
     });
   } catch (err) { console.error('Phase 3 panels failed to register', err); }
-  // Phase 4 panels (package "panels"; PHASE4.md §10.6), the same api
+  // Phase 4 panels (package "panels"; PHASE4.md §12.3), the same api
   try {
     registerCondPanels({
       register: (id, build, opts) => panels.register(id, build, opts),
-      L, boards: (id) => boardsForDay(env.dayNumber)[id] || null, sourceLabel,
+      L, boards: (id) => boardsForDay(env.dayNumber, farm?.condition ?? null)[id] || null, sourceLabel,
       plate: (id, opts) => buildPlate(id, opts), openPanel: (id) => openPanel(id),
     });
   } catch (err) { console.error('Phase 4 panels failed to register', err); }

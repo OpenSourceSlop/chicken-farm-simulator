@@ -15,9 +15,22 @@
 //   text        the result in the farmer's words (shown on the skill tree; never praise or a verdict)
 //   tiers       points of each tier and the measured condition (a note for the rule writer)
 //   needs       notebook kinds / stats the rule reads (records.compact keeps them, PHASE3.md §8.6)
+//   needsProblem (Phase 4, PHASE4.md §7) the problem whose outcome it measures: not evaluated where the level as the
+//               run's condition plays it lacks that problem (NEEDS_PROBLEM below; a 'heatwave' checkpoint needs 'heat-wave')
 const M = (id, branch, level, checkpoint, text, tiers, needs = []) => ({ id, branch, level, checkpoint, text, tiers: tiers.map(([points, rule]) => ({ points, rule })), needs });
 const LEVEL_NAMES = { level1: 'the brooding week', week2: 'week 2', week3: 'week 3', weeks45: 'weeks 4–5', finish: 'the last week' };
 const per = (ids, fn) => ids.map(fn);
+
+// Phase 4: the problem each of these milestones measures (PHASE4.md §7; a condition may drop it)
+export const NEEDS_PROBLEM = {
+  'warm-timer': 'warm-afternoon', 'thermostat-off': 'warm-afternoon', 'w3-heat': 'warm-afternoon3', 'hot-first': 'hot-afternoon',
+  'pads-limit': 'humid-heat', 'heat-finish': 'hot-finish', 'dust-cleared': 'dusty-air', 'fan-fixed': 'fan-belt', 'pad-flushed': 'pad-clog',
+  'damp-cleared': 'rainy-spell', 'pad-overflow': 'pad-overflow', 'cocci-treated': 'coccidiosis', 'cold-night': 'cold-night', 'lame-culled': 'lame-birds',
+  // Phase 2's (skills.js MILESTONES)
+  'brooder-relit': 'brooder-out', 'drop-spotted': 'blocked-filter', 'leak-fixed': 'leaking-nipple',
+};
+/** The problem a milestone needs (its own needsProblem, the table above, or 'heat-wave' for the heat-wave checkpoint). */
+export const needsProblemOf = (m) => m.needsProblem || NEEDS_PROBLEM[m.id] || (m.checkpoint === 'heatwave' ? 'heat-wave' : null);
 
 export const MILESTONES_CYCLE = [
   // ---------------- Farm Planning (max 17) ----------------

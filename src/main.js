@@ -12,7 +12,7 @@ import { createUI } from './ui.js';
 // Phase 2 (PHASE2.md): shared bus and registry, farm model, records, skills, save, props, level
 import { createEvents } from './events.js';
 import { createInteract } from './interact.js';
-import { buildCondScene } from './props-cond.js'; // Phase 4 (package "scene"; PHASE4.md §10.7)
+import { buildCondScene } from './props-cond.js'; // Phase 4 (package "scene"; PHASE4.md §8, §12.4)
 import { createFarm } from './farm.js';
 import { createRecords } from './records.js';
 import { createSkills } from './skills.js';
@@ -212,9 +212,14 @@ function start(saved = {}) {
     startLevel(opts = {}) { return opts.level && opts.level !== 'level1' ? run.startLevel(opts.level, opts) : level.start(opts); },
     cycleAt(day, hour = 6) { return level.debug.freeRun(day, hour); },
     // Phase 4 (PHASE4.md §11): the harder conditions. startRun({ condition }) / startLevel({ level, from, condition })
-    // carry it (run package); setCondition(id) sets it on the running farm for the other packages' harness runs only.
+    // carry it (run package); setCondition(id) puts it on the running farm (farm.setCondition: the merged problems,
+    // weather and sun of this level) and makes the level's jobs again with it (level.rebuildJobs, run package).
     conditions() { return run.conditionsAvailable ? run.conditionsAvailable() : []; },
-    setCondition(id) { farm.condition = id && config.CONDITIONS[id] ? id : null; return farm.condition; },
+    setCondition(id) {
+      const c = farm.setCondition ? farm.setCondition(id) : (farm.condition = id && config.CONDITIONS[id] ? id : null);
+      try { level.rebuildJobs?.(); } catch (err) { console.error('rebuildJobs failed', err); }
+      return c;
+    },
     nextJob() { return level.nextJob(); },
     jobs() { return level.jobs.list().map((j) => ({ key: j.key, status: j.status, progress: j.progress })); },
     get frames() { return frames; },

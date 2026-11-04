@@ -10,6 +10,7 @@
   {"expect": "__game.farm.weatherNow.storm === true && __game.farm.weatherNow.id === 'storm-33' && 'storm-33 rains now'", "label": "the stub rains in the rainy season's storm window"},
   {"eval": "JSON.stringify(__game.farm.debug.power(false)) + ' fans ' + __game.env.fansManual"},
   {"expect": "__game.farm.power.on === false && __game.env.fansManual === 0 && 'the power is off: no fans'", "label": "a power cut stops the fans (stub)"},
+  {"expect": "(__game.farm.problems.find((p) => p.id === 'power-cut') || {}).phase === 'found' && 'the cut is the power-cut alarm symptom'", "label": "in a rainy run the stub's cut raises the power-cut problem (alarm)"},
   {"eval": "__game.ui.openPanel('generator'), 'generator panel open'"},
   {"advance": 0.5},
   {"clickText": "Start the generator"},
@@ -18,5 +19,10 @@
   {"expect": "__game.farm.power.on === true && __game.farm.power.source === 'generator' && __game.env.fansManual === 6 && 'on the generator, six fans again'", "label": "start and switch at the generator placeholder bring the fans back"},
   {"shot": "p4-generator-stub"},
   {"eval": "__game.ui.closePanel ? __game.ui.closePanel() : null, __game.setCondition(null), 'condition cleared'"},
-  {"expect": "__game.farm.condition === null && 'normal season again'", "label": "setCondition(null)"}
+  {"expect": "__game.farm.condition === null && 'normal season again'", "label": "setCondition(null)"},
+  {"eval": "__game.startLevel({ seed: 1 }), __game.cycleAt(3, 14), __game.setCondition('hot'), 'day ' + __game.env.dayNumber + ', ' + __game.farm.condition + ', weather ' + __game.env.weather"},
+  {"expect": "__game.env.weather === 'hot' && __game.env.weatherEvents.some((e) => /^sun-/.test(e.id)) && __game.env.dayNumber === 3 && (__game.farm.problems.find((p) => p.id === 'warm-afternoon') || {}).phase === 'ended' && 'hot: the sun on, the warm afternoon dropped'", "label": "setCondition installs the condition's weather, sun and problems"},
+  {"expect": "__game.config.PHASE4.tunedSigns === false && __game.config.CONDITIONS.hot.sun.perH === 1.5 && 'tuned sign lines off until the sim merge'", "label": "the tuned sign lines wait for the sim merge"},
+  {"eval": "__game.setCondition(null), 'condition cleared'"},
+  {"expect": "__game.farm.condition === null && !__game.env.weatherEvents.some((e) => /^sun-/.test(e.id)) && (__game.farm.problems.find((p) => p.id === 'warm-afternoon') || {}).phase === 'pending' && __game.env.weatherEvents.some((e) => e.id === 'warm-afternoon') && 'normal season: no sun, the warm afternoon of day 6 back'", "label": "setCondition(null) takes the sun off and gives back the dropped problem"}
 ]

@@ -6,10 +6,13 @@
 //     others  plates: a fact column inside that equipment panel (panels builds them)
 //   BOARD_EXTRA_ITEMS: id of a Phase 2 board or plate -> [{ text, source, fromDay }]: lines added from that
 //     calendar day on, so the brooding week reads exactly as before
-//   boardsForDay(day) -> every board (Phase 2 + Phase 3) with the extra lines of that day merged in
+//   boardsForDay(day, condition) -> every board (Phase 2 + Phase 3) with the extra lines of that day merged in, and the
+//                   Phase 4 lines of the condition (and of the tuned model) through content-signs-cond.js mergeBoardsP4
 // source: a key of config GUIDES, an array of keys, or 'week1-4' (sourceLabel in content-signs.js).
 // 'general' = general broiler practice. No page numbers anywhere (scripts/test-contracts.mjs checks).
 import { BOARDS } from './content-signs.js';
+import { mergeBoardsP4 } from './content-signs-cond.js';   // Phase 4: the one merge (PHASE4.md §3.2)
+import { PHASE4 } from './config.js';
 
 const g = 'general';
 const it = (text, source = g, pic) => (pic ? { text, source, pic } : { text, source });
@@ -223,14 +226,16 @@ export const BOARD_EXTRA_ITEMS = {
   'sign-health': [{ text: 'Abnormal after week 1: more than about 0.15 % of the flock dying in one day (9 birds of 6,000).', source: g, fromDay: 8 }],
 };
 
-/** Every board of the game for calendar day `day`: Phase 2's, Phase 3's, and the extra lines due. */
-export function boardsForDay(day) {
+/** Every board of the game for calendar day `day`: Phase 2's, Phase 3's, and the extra lines due; Phase 4: the run's
+ *  condition (farm.condition: its lines, its boards and plates) and, while config PHASE4.tunedSigns, the tuned
+ *  model's lines (content-signs-cond.js mergeBoardsP4). No condition and the switch off: exactly Phase 3's boards. */
+export function boardsForDay(day, condition = null) {
   const out = {};
   for (const [id, b] of Object.entries({ ...BOARDS, ...BOARDS_CYCLE })) {
     const extra = (BOARD_EXTRA_ITEMS[id] || []).filter((x) => day >= x.fromDay).map(({ text, source }) => ({ text, source }));
     out[id] = extra.length ? { ...b, items: [...b.items, ...extra] } : b;
   }
-  return out;
+  return condition || PHASE4.tunedSigns ? mergeBoardsP4(out, day, condition, { tuned: PHASE4.tunedSigns }) : out;
 }
 
 export const BOARD_IDS_CYCLE = Object.keys(BOARDS_CYCLE);

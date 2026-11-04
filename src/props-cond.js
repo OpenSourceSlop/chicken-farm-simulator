@@ -1,4 +1,4 @@
-// Phase 4 scene of the harder conditions (PHASE4.md §8, §10.7). Owner: package "scene". main.js (integrator)
+// Phase 4 scene of the harder conditions (PHASE4.md §8, §12.4). Owner: package "scene". main.js (integrator)
 // builds it after the props and updates it every frame after props.update.
 // STUB (the Phase 4 design): registers the two new machines so E reaches their panels in a run of their condition
 // (`generator` in the rainy season, `water-tank` with a water problem; the panels package builds the panels, the

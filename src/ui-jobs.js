@@ -9,6 +9,7 @@
 import { CLEAN, DRINKER_LINES_Z, FARM, FLOOR_GRID, HEATERS, HEATER_HEIGHT, LEVEL1, ROUNDS, SPOTS, SPOTS2, SPOTS3 } from './config.js';
 import { BOARDS } from './content-signs.js';
 import { boardsForDay } from './content-signs-cycle.js';
+import { plateCondition } from './ui-boards.js'; // Phase 4: the run's condition for the merged boards
 import { jobWhere } from './content-jobs.js';
 import { FAN_Z } from './house-fans.js';
 import { EV } from './events.js';
@@ -33,7 +34,7 @@ const BOARD_SPOT = {
 };
 /** The panel that shows a board or plate (a plate lives inside its machine). */
 export const BOARD_PANEL = { 'controller-lights': 'controller', drinker: 'drinker-0', vaccine: 'water-supply', medicator: 'water-supply', 'plan-sheet': 'office-desk' };
-const boardTitle = (id, day) => boardsForDay(day)[id]?.title ?? BOARDS[id]?.title ?? id;
+const boardTitle = (id, day) => boardsForDay(day, plateCondition())[id]?.title ?? BOARDS[id]?.title ?? id;
 
 /** Round label for the card header. */
 export function roundLabel(env, anchors, farm = null) {

@@ -7,11 +7,17 @@
 //   PICS[pic]                          small pictograms for sign items
 import { BOARDS, BROODER_ROWS_L1, sourceLabel } from './content-signs.js';
 import { boardsForDay } from './content-signs-cycle.js';
+import { BOARDS_COND } from './content-signs-cond.js';
 
 // Phase 3 (PHASE3.md §13.9): plates read the merged boards of the day (Phase 3 plates and the extra lines
 // from their fromDay; the brooding week reads exactly Phase 2's). ui.js sets the day source once.
 let plateDay = () => 0;
 export function setPlateDay(fn) { plateDay = typeof fn === 'function' ? fn : () => 0; }
+// Phase 4 (PHASE4.md §3.2): the run's condition (farm.condition) for the merged boards; ui.js sets the source once.
+let plateCond = () => null;
+export function setPlateCondition(fn) { plateCond = typeof fn === 'function' ? fn : () => null; }
+/** The condition the boards are merged for now (null = the normal season). */
+export const plateCondition = () => { try { return plateCond() || null; } catch { return null; } };
 import { h, button, setText, uniqueId, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
@@ -48,7 +54,7 @@ export const PICS = {
 /** A painted sign board (sign-*): Phase 2's BOARDS and Phase 3's BOARDS_CYCLE, merged for the day
  *  (boardsForDay: the extra lines from their fromDay; the brooding week reads exactly Phase 2's). */
 export function buildBoardPanel(id, env, onClose) {
-  const boardOf = () => boardsForDay(env.dayNumber)[id] || BOARDS[id];
+  const boardOf = () => boardsForDay(env.dayNumber, plateCondition())[id] || BOARDS[id];
   let b = boardOf(), itemsDay = env.dayNumber;
   const titleId = uniqueId('board-title');
   const many = b.items.length > 5 || !!b.table;
@@ -107,8 +113,10 @@ export function buildBoardPanel(id, env, onClose) {
 }
 
 /** An engraved plate (equipment facts). open = shown at first; the clock stands still while open. */
-export function buildPlate(id, { open = true, day } = {}) {
-  const b = boardsForDay(day ?? plateDay())[id] || BOARDS[id];
+export function buildPlate(id, { open = true, day, condition } = {}) {
+  // a condition's plate reads its own board when no condition is on the farm (the panels' harness runs)
+  const b = boardsForDay(day ?? plateDay(), condition !== undefined ? condition : plateCondition())[id] || BOARDS[id] || BOARDS_COND[id];
+  if (!b) throw new Error(`no board or plate '${id}' for day ${day ?? plateDay()} (condition ${condition ?? plateCondition()})`);
   const bodyId = uniqueId('plate');
   const toggle = button({ class: 'plate-head', 'aria-expanded': String(open), 'aria-controls': bodyId },
     h('span', { class: 'plate-icon', html: ICONS.facts, 'aria-hidden': 'true' }),

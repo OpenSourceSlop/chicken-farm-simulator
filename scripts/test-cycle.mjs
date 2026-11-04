@@ -296,6 +296,9 @@ test('package: the whole cycle (-2 -> 67) in 15 s or less; farm.step <= 0.5 ms w
   const t1 = performance.now(); w.env.skipHours(24); const skip = performance.now() - t1;
   const t2 = performance.now(); for (let i = 0; i < 300; i++) w.farm.step(w.env, 60); const per = (performance.now() - t2) / 300;
   console.log(`     whole cycle ${(ms / 1000).toFixed(1)} s, 24 h skip ${skip.toFixed(0)} ms, farm.step ${per.toFixed(3)} ms (day ${w.env.dayNumber}, ${w.farm.litter.usedAll ? 576 : 300} cells)`);
+  // the time budgets are checked alone (npm run perf: scripts/test-perf.mjs, or this file with --perf): run beside other
+  // jobs on the 4 CPUs they fail by chance (PHASE4.md §9.5)
+  if (!process.argv.includes('--perf')) return;
   assert(ms <= 15000, `whole cycle ${ms.toFixed(0)} ms`);
   assert(skip <= 200, `24 h skip ${skip.toFixed(0)} ms`);
   assert(per <= 0.5, `farm.step ${per.toFixed(3)} ms`);

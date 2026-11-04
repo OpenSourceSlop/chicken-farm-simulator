@@ -624,24 +624,45 @@ on to the next regulator. Fixed for every job:
 ## Phase 4 — design (contracts in code; packages not merged yet)
 `PHASE4.md` is the spec: the tuning audit (§2), the four harder conditions (§3–§5), the clarity leftovers (§6), the
 contracts (§10) and the four packages `sim`, `run`, `panels`, `scene` (§12). In code now, with every Phase 1–3 number
-unchanged (`npm test` passes; the live farm still runs Phase 3's model):
+unchanged (`npm test` passes; the live farm still runs Phase 3's model; with no condition and
+`config.PHASE4.tunedSigns` false every board reads as Phase 3):
 - **Tuning contract**: `src/farm-tuning.js` (wind chill by age, speed and air temperature; a 4 °C panting ramp; heat and
   cold deaths of older birds; the flock's sensible heat × 2.5 from Week 2; water : feed from the birds' comfort; dry
-  hours before dehydration; the CV growth after day 14) with its env-only references `scripts/tuning-refs.mjs`, checked
-  by `scripts/test-tuning.mjs` (in `npm test`); the audit tool `scripts/tuning-audit.mjs` (`npm run audit`).
+  hours before dehydration; the CV growth after day 14) with its env-only references `scripts/tuning-refs.mjs` and the
+  conditions' `scripts/tuning-refs-cond.mjs` (the hot brooding week with the roof sun on Phase 2's chick comfort, the hot
+  weeks 2–6, the rainy power cut inside its storm, the water tank and the pump's gauges), checked by
+  `scripts/test-tuning.mjs` (in `npm test`); the audit tool `scripts/tuning-audit.mjs` (`npm run audit`); the time
+  budgets alone in `scripts/test-perf.mjs` (`npm run perf`; test-cycle asserts them only with `--perf`); the rough farm
+  checks behind PHASE4.md §4's "rough" numbers in `scripts/design-rough-checks.mjs` (not in npm test).
 - **Conditions** (`config.CONDITIONS`, `available: false` until the run merge; `conditionLevel(def, id)` merges a level's
-  problems, weather, target / fail, routine days, cycle climate and a bad batch's delivery; `SPOTS4`, `HEAT_P4`,
-  `GENERATOR`, `WATER_TANK`, `SIGN_FIGURES`; `OUTSIDE_WATER_GM3.hot` 22): contract data `content-jobs-cond.js` (the
-  condition jobs, `STATE_TEST_IDS_P4`, the clarity rules `DONE_P4`), `content-signs-cond.js` (every Phase 4 sign line,
-  all general), `skills-cond.js` (`MILESTONES_COND`).
-- **Stubs**: `src/farm-cond.js` (the farm's Phase 4 state and actions; `farm.act` routes there first; the power cut acts
-  on the env setters; storms from the condition's problems), `src/ui-cond-panels.js` (placeholder `generator`,
-  `water-tank`, `chick-grading` panels, registered by ui.js after the Phase 3 panels), `src/props-cond.js` (the
-  `generator` / `water-tank` interactables; built and updated by main.js), `run.state().condition`.
-- **Events / actions**: `EV.POWER`; `gen.start / stop / switch / test / fuel`, `inlets.storm`, `water.tank`,
-  `pump.fix`, `chicks.grade`, `brood.trays`, `phone.hatchery` (ui) in `ACTION_IDS`.
+  problems, weather, target / fail, routine days, cycle climate and a bad batch's delivery; the hot season's daily `sun`;
+  `SPOTS4`, `HEAT_P4`, `GENERATOR` (`clockWhileDark`), `WATER_TANK` (the pump's gauges, `wornBar`), `PHASE4.tunedSigns`,
+  `SIGN_FIGURES`; `OUTSIDE_WATER_GM3.hot` 22): contract data `content-jobs-cond.js` (the condition jobs,
+  `STATE_TEST_IDS_P4` with `pump-ok` and `lines-cool`, the clarity rules `DONE_P4`), `content-signs-cond.js` (every Phase 4
+  sign line, all general, and the one merge `mergeBoardsP4` that `content-signs-cycle.js boardsForDay(day, condition)`
+  calls), `skills-cond.js` (`MILESTONES_COND`), `skills-cycle.js NEEDS_PROBLEM` / `needsProblemOf` (a milestone that
+  measures a problem the condition drops is not evaluated).
+- **One holder of the condition**: `farm.condition` (`farm.start(def, { condition })`, `farm.setCondition(id)`);
+  `run.state().condition` mirrors it for the run card. `ui-boards.js setPlateCondition` (set by ui.js) passes it to every
+  plate, sign dialog and job card title; a condition plate with no condition reads its own board.
+- **Stubs**: `src/farm-cond.js` (the farm's Phase 4 state and actions with their final result shapes; `farm.act` routes
+  there first; the merged problems at start / enterLevel / setCondition, their weather and the daily sun; condition
+  problems start at their hour, alarm ones with their symptom; the rainy cut and the mains' return; the generator's fuel
+  and `gen-dry`; the worn pump and its 2-hour repair process; `farm.debug.power`, `farm.debug.symptom`),
+  `src/ui-cond-panels.js` (placeholder `generator`, `water-tank`, `chick-grading` panels, registered by ui.js after the
+  Phase 3 panels), `src/props-cond.js` (the `generator` / `water-tank` interactables; built and updated by main.js),
+  `run.state().condition`.
+- **Timed actions**: every farm action answers at once; the panel waits the short ones (`gen.start` 2 min, `gen.test` 10,
+  `chicks.grade` 6) as a bar at the panel clock (`machineJob`, `farmTimeNote`); `pump.fix` is a farm process whose job
+  ends on the live state `pump-ok`.
+- **Events / actions**: `EV.POWER` (every `on: false` stops a skip and sounds the alarm, run package); `gen.start / stop /
+  switch / test / fuel`, `inlets.storm`, `water.tank`, `pump.fix`, `chicks.grade`, `brood.trays`, `phone.hatchery` (ui)
+  in `ACTION_IDS`.
 - **UI contracts**: a toggle that is on is a lit switch (`.key[aria-pressed="true"]`, index.template.html); a job strip
   row's bar may be `{ v, band, max }` (ui-jobstrip.js).
-- **Hooks**: `__game.conditions()`, `__game.setCondition(id)`, `__game.farm.debug.power(mainsOn)`.
-- **Tests**: test-contracts checks the conditions, the condition jobs, signs (general, verdict-free, every sign figure on
-  its board) and milestones; `scripts/p4-design-stubs.json` drives the stubs in the browser (6 PASS).
+- **Hooks**: `__game.conditions()`, `__game.setCondition(id)` (farm.setCondition, then `level.rebuildJobs?.()`),
+  `__game.farm.debug.power(mainsOn)`, `__game.farm.debug.symptom(id)`, `__game.config.PHASE4.tunedSigns`.
+- **Tests**: test-contracts checks the conditions, the condition jobs, signs (general, verdict-free, every sign figure's
+  whole text on its board), the merged boards (no line twice in any condition and day; Phase 3's boards exactly with no
+  condition and the switch off), `needsProblem` and every branch reaching level 2 in every condition, and the milestones;
+  `scripts/p4-design-stubs.json` drives the stubs in the browser.

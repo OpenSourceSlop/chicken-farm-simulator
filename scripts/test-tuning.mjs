@@ -4,8 +4,10 @@
 //   node scripts/test-tuning.mjs            the checks
 //   node scripts/test-tuning.mjs --print    also print every measured value
 import { CLIMATE_REFS_P4, WINDOW_REFS_P4, runPlanP4 } from './tuning-refs.mjs';
+import { BROOD_REFS_P4, runBroodP4, COND_CLIMATE_P4, COND_WINDOWS_P4, CUT_REFS_P4, runCutP4, TANK_REFS_P4, runTankP4 } from './tuning-refs-cond.mjs';
+import { humidityTerm } from '../src/farm-heat.js';
 import { windChillP4, pantShareP4, pantFromP4, waterPerKgP4, coldDeathFromP4, sensibleHeatK, chillAirShare, dehydrationAllowed } from '../src/farm-tuning.js';
-import { SIGN_FIGURES, CONDITIONS, conditionLevel, LEVELS, levelById, OUTSIDE_WATER_GM3, PAD_EFF } from '../src/config.js';
+import { SIGN_FIGURES, CONDITIONS, conditionLevel, LEVELS, levelById, OUTSIDE_WATER_GM3, PAD_EFF, HEAT_P4, GENERATOR, WATER_TANK } from '../src/config.js';
 import { absHumSat, wetBulbOf } from '../src/sim.js';
 
 const print = process.argv.includes('--print');
@@ -26,7 +28,7 @@ const check = (m, expect) => {
 
 // ---- the climate references (env alone, Phase 4 responses) ----
 const climate = {};
-for (const ref of CLIMATE_REFS_P4) {
+for (const ref of [...CLIMATE_REFS_P4, ...COND_CLIMATE_P4]) {
   test(`P4 climate ${ref.id}`, () => {
     const o = runPlanP4(ref.plan, { weather: ref.weather, fromDay: ref.day - 1 + 6 / 24, toDay: ref.day + ref.hour / 24, events: ref.events || [] });
     const m = { outC: o.outC, outRh: o.outRh, houseC: o.houseC, rh: o.rh, feltC: o.s.feltMean, e: o.s.eMean, pant: o.s.pantShare, deathPerH: o.s.deathPerH * 100,
@@ -37,16 +39,40 @@ for (const ref of CLIMATE_REFS_P4) {
   });
 }
 const windows = {};
-for (const ref of WINDOW_REFS_P4) {
+for (const ref of [...WINDOW_REFS_P4, ...COND_WINDOWS_P4]) {
   test(`P4 window ${ref.id}: days ${ref.from}–${ref.to}, ${ref.plan}`, () => {
     const o = runPlanP4(ref.plan, { weather: ref.weather, fromDay: ref.from, toDay: ref.to, events: ref.events || [], broken: ref.broken, padWorking: ref.padWorking });
     const m = { deathsPct: o.deathsPct, pantH: o.pantH, coldH: o.coldH, fHeat: o.fHeat };
     windows[ref.id] = m;
-    const base = windows[ref.id.replace(/-(fan4-broken|pad-clogged|padInHumid)$/, '-ideal')];
+    const base = windows[ref.id.replace(/-(fan4-broken|pad-clogged|padInHumid|padsTo21)$/, '-ideal')];
     if (ref.expect.pantHOverIdeal) m.pantHOverIdeal = m.pantH / base.pantH;
     if (ref.expect.fHeatUnderIdeal) m.fHeatUnderIdeal = base.fHeat - m.fHeat;
     return check(m, ref.expect);
   });
+}
+
+// ---- the conditions (PHASE4.md §4): the hot brooding week, the rainy season's power cut, the water tank ----
+const brood = {};
+for (const ref of BROOD_REFS_P4) {
+  test(`P4 hot brooding week ${ref.id}: ${ref.plan}`, () => {
+    const o = runBroodP4(ref.plan, { report: Object.keys(ref.at).map((k) => k.slice(1).split('-').map(Number)) });
+    brood[ref.id] = o;
+    const bad = [];
+    for (const [k, ex] of Object.entries(ref.at)) for (const [q, b] of Object.entries(ex)) if (!inBand(o.at[k]?.[q], b)) bad.push(`${k} ${q} ${fmt(o.at[k]?.[q])} not in ${JSON.stringify(b)}`);
+    const m = { deathsPct: o.deathsPct, comfortShare: o.comfortShare, pmNearShare: o.pmNearShare };
+    for (const [q, b] of Object.entries(ref.expect)) if (!inBand(m[q], b)) bad.push(`${q} ${fmt(m[q])} not in ${JSON.stringify(b)}`);
+    assert(!bad.length, `${bad.join('; ')} | ${JSON.stringify(o.at)} ${JSON.stringify(m)}`);
+    return JSON.stringify({ at: Object.fromEntries(Object.entries(o.at).map(([k, v]) => [k, fmt(v.e)])), ...Object.fromEntries(Object.entries(m).map(([k, v]) => [k, fmt(v)])) });
+  });
+}
+const cuts = {};
+for (const ref of CUT_REFS_P4) {
+  test(`P4 rainy power cut ${ref.id}: ${ref.minutes} min from ${ref.startH ? 'the night' : '15:10 in storm-33'}`, () => { const o = runCutP4(ref.minutes, ref.startH ? { startH: ref.startH } : {}); cuts[ref.id] = o; return check(o, ref.expect); });
+}
+const tanks = {}, tankRuns = new Map();
+const tankRun = (repairAt) => { if (!tankRuns.has(repairAt)) tankRuns.set(repairAt, runTankP4({ repairAt })); return tankRuns.get(repairAt); };
+for (const ref of TANK_REFS_P4) {
+  test(`P4 water tank ${ref.id}`, () => { const m = ref.measure(tankRun(ref.repairAt)); tanks[ref.id] = m; return check(m, ref.expect); });
 }
 
 // ---- the responses themselves ----
@@ -73,7 +99,14 @@ const MODEL = {
   padShareOfRuleMax: () => Math.max(...[[33, 54], [36, 47], [39, 40]].map(([t, rh]) => (PAD_EFF * (t - wetBulbOf(t, rh))) / ((100 - rh) / 5))),
   rainyPadC: () => PAD_EFF * (30 - wetBulbOf(30, (100 * OUTSIDE_WATER_GM3.rainy) / absHumSat(30))),
   firstPant35: () => 20 + pantFromP4(35), allPant35: () => 20 + pantFromP4(35) + 4,
-  powerCut30: () => windows.cut30?.deathsPct, powerCut120: () => windows.cut120?.deathsPct,
+  dampFelt87: () => humidityTerm(87, 30), dampFelt90: () => humidityTerm(90, 30), dampFelt95: () => humidityTerm(95, 30),
+  eveningFromAge: () => HEAT_P4.padEveningFromAge, eveningAboveC: () => HEAT_P4.padEveningAboveC,
+  youngPad1E: () => climate['d16-15-warm3-pad1']?.e,
+  hotBroodClosedE: () => brood['hot-brood-sign']?.at['d3-15']?.e, hotBroodPad1E: () => brood['hot-brood-pad1']?.at['d6-15']?.e,
+  powerCut10: () => cuts.cut10?.deathsPct, powerCut30: () => cuts.cut30?.deathsPct, powerCut120: () => cuts.cut120?.deathsPct,
+  genFuelHours: () => GENERATOR.fuelL / GENERATOR.litresPerH, pumpGoodBar: () => WATER_TANK.pumpBar,
+  padDrawHotLh: () => tanks['tank-draw'] && Math.max(tanks['tank-draw'].pad25, tanks['tank-draw'].pad31),
+  birdsDrawHotLh: () => tanks['tank-draw'] && Math.max(tanks['tank-draw'].birds25, tanks['tank-draw'].birds31),
 };
 test('P4 sign figures: the model gives what the signs say (config SIGN_FIGURES)', () => {
   const out = [];

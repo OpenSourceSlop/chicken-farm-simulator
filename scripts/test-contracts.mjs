@@ -12,7 +12,7 @@ import { SPOTS, SPOTS2, FARM, GUIDES } from '../src/config.js';
 import { ACTION_IDS } from '../src/events.js';
 import { JOBS_CYCLE, STATE_TEST_IDS_CYCLE, JOB_WHERE_CYCLE } from '../src/content-jobs-cycle.js';
 import { BOARDS_CYCLE, BOARD_EXTRA_ITEMS, BOARD_IDS_CYCLE, boardsForDay } from '../src/content-signs-cycle.js';
-import { MILESTONES_CYCLE } from '../src/skills-cycle.js';
+import { MILESTONES_CYCLE, needsProblemOf, NEEDS_PROBLEM } from '../src/skills-cycle.js';
 import { ALL_MILESTONES } from '../src/skills.js';
 import { planSums, planOutcome } from '../src/farm-plan.js';
 import { SPOTS3, LEVELS, LEVEL1, CYCLE, UNLOCKS, SKILL_BRANCHES, SKILL_LEVEL_POINTS, levelOfDay, feedStdGAt, MIN_VENT_PER_1000 } from '../src/config.js';
@@ -20,7 +20,7 @@ import { SPOTS3, LEVELS, LEVEL1, CYCLE, UNLOCKS, SKILL_BRANCHES, SKILL_LEVEL_POI
 import { JOBS_COND, JOB_WHERE_COND, STATE_TEST_IDS_P4, DONE_P4 } from '../src/content-jobs-cond.js';
 import { BOARD_P4_ITEMS, BOARD_COND_ITEMS, BOARDS_COND, BOARD_IDS_COND } from '../src/content-signs-cond.js';
 import { MILESTONES_COND } from '../src/skills-cond.js';
-import { CONDITIONS, CONDITION_IDS, SPOTS4, SIGN_FIGURES, conditionLevel } from '../src/config.js';
+import { CONDITIONS, CONDITION_IDS, SPOTS4, SIGN_FIGURES, conditionLevel, PHASE4 } from '../src/config.js';
 import { UI_ACTION_IDS_COND } from '../src/events.js';
 
 const tests = [];
@@ -302,12 +302,48 @@ test('condition signs: known sources (all general), no page numbers, no verdicts
     assert(CONDITIONS[c], `lines for unknown condition ${c}`);
     for (const [id, list] of Object.entries(boards)) { assert(id in known, `${c}: unknown board ${id}`); list.forEach((it) => chk(`${c}/${id}`, it)); }
   }
-  // every sign figure is printed on its board (the Phase 4 lines, a condition's lines or a new board)
+  // every sign figure is printed on its board (the Phase 4 lines, a condition's lines or a new board): the figure's
+  // whole text (less a closing bracket) inside one line
   const p4Text = (id) => [...(known[id]?.items || []), ...(BOARD_P4_ITEMS[id]?.add || []), ...(BOARD_P4_ITEMS[id]?.replace || []),
-    ...Object.values(BOARD_COND_ITEMS).flatMap((b) => b[id] || [])].map((x) => x.text.toLowerCase()).join(' | ');
+    ...Object.values(BOARD_COND_ITEMS).flatMap((b) => b[id] || [])].map((x) => x.text.toLowerCase());
   for (const f of SIGN_FIGURES) {
-    const t = p4Text(f.board), key = f.text.toLowerCase().replace(/ \(.*\)$/, '').split(/[;:]/)[0].slice(0, 28);
-    assert(t.includes(key), `${f.id}: "${key}" not on ${f.board}`);
+    const key = f.text.toLowerCase().replace(/ \([^()]*\)$/, '');
+    assert(p4Text(f.board).some((t) => t.includes(key)), `${f.id}: "${key}" not on ${f.board}`);
+  }
+});
+
+test('condition signs merged (content-signs-cond mergeBoardsP4 through boardsForDay): no line twice, no Phase 4 line in a normal run while the switch is off', () => {
+  const was = PHASE4.tunedSigns;
+  try {
+    for (const tuned of [false, true]) {
+      PHASE4.tunedSigns = tuned;
+      for (const c of [null, ...CONDITION_IDS]) for (const day of [-1, 0, 3, 8, 15, 22, 30, 36, 43]) {
+        const B = boardsForDay(day, c);
+        for (const [id, b] of Object.entries(B)) {
+          const texts = b.items.map((x) => x.text);
+          assert(new Set(texts).size === texts.length, `${c || 'normal'} day ${day} ${tuned ? 'tuned' : ''}: a line twice on ${id}: "${texts.find((t, i) => texts.indexOf(t) !== i)}"`);
+          for (const it of b.items) assert(it.text && it.source, `${id}: an item without text or source`);
+        }
+        for (const [id, b] of Object.entries(BOARDS_COND)) assert(!!B[id] === (b.condition === c), `${c || 'normal'}: board ${id} ${B[id] ? 'shown' : 'missing'}`);
+        if (!c && !tuned) for (const [id, b] of Object.entries(B)) assert(b === boardsForDay(day)[id] || JSON.stringify(b) === JSON.stringify(boardsForDay(day)[id]), `normal run: ${id} changed`);
+      }
+      // the replaced lines are gone where they were replaced
+      const heat = boardsForDay(30, null)['sign-heat'].items.map((x) => x.text);
+      for (const r of BOARD_P4_ITEMS['sign-heat'].replace) assert(heat.includes(r.was) === !tuned && heat.includes(r.text) === tuned, `sign-heat replace (${tuned})`);
+    }
+  } finally { PHASE4.tunedSigns = was; }
+});
+
+test('condition skills: needsProblem names real problems; every branch can reach level 2 in every condition with the dropped problems left out', () => {
+  const allProblems = new Set(['abnormal-deaths', ...LEVELS.flatMap((l) => l.problems.map((p) => p.id))]);
+  for (const [id, pr] of Object.entries(NEEDS_PROBLEM)) { assert(ALL_MILESTONES.some((m) => m.id === id), `NEEDS_PROBLEM for unknown milestone ${id}`); assert(allProblems.has(pr), `${id}: problem ${pr}`); }
+  for (const c of [null, ...CONDITION_IDS]) {
+    const probs = new Set(LEVELS.flatMap((l) => conditionLevel(l, c).problems.map((p) => p.id)));
+    const ms = [...ALL_MILESTONES, ...MILESTONES_COND.filter((m) => m.condition === c)].filter((m) => { const need = needsProblemOf(m); return !need || probs.has(need); });
+    for (const b of SKILL_BRANCHES) {
+      const max = ms.filter((m) => m.branch === b.id).reduce((a, m) => a + Math.max(...m.tiers.map((t) => t.points)), 0);
+      assert(max >= SKILL_LEVEL_POINTS[1], `${c || 'normal'}: ${b.id} can reach only ${max} points (< level 2)`);
+    }
   }
 });
 

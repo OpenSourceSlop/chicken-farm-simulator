@@ -1,11 +1,11 @@
-// Phase 4 panels of the harder conditions (PHASE4.md §4, §10.6). Owner: package "panels". ui.js (package "run")
+// Phase 4 panels of the harder conditions (PHASE4.md §4, §10.3, §12.3). Owner: package "panels". ui.js (package "run")
 // calls registerCondPanels(api) once, after registerCyclePanels, with the same api (PHASE3.md §13.8).
 // STUB (the Phase 4 design): plain placeholders that call the farm's Phase 4 actions, so the run and scene
 // packages can open them (__game.ui.openPanel('generator')) and the farm stub answers; the panels package builds
 // the real ones (the generator's fuel gauge, start key and transfer switch, the tank's level, pressure and
 // current, the grading table of a bad batch) with their plates (content-signs-cond.js BOARDS_COND) and job strips.
 //
-// Panel ids and their plates (PHASE4.md §10.6):
+// Panel ids and their plates (PHASE4.md §12.3; the short waits are the panel's bar at the panel clock, §10.3):
 //   generator      plate 'generator'      gen.start, gen.switch { to }, gen.stop, gen.test, gen.fuel   (rainy season)
 //   water-tank     plate 'water-tank'     water.tank (read), pump.fix                                  (water problem)
 //   chick-grading  plate 'chick-grading'  chicks.grade { stack } per stack still in the boxes          (bad batch)
