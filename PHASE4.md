@@ -1498,3 +1498,13 @@ sign lines general):
 - **Not changed**: `b-warm` still counts on the first tick at row + 1 °C (a held three-day outcome would need a new held
   rule and a re-cut of p4-bad); the hot season still costs the ideal flock work, not weight (a hot-night intake term would
   move every hot band and COND_TARGETS; PHASE4.md §2.8 row 18 stands as an open tuning item).
+- **Results of the review round** (960 × 600, seed 1, no console or page errors anywhere): `npm test` 362 ok (test-watch 9,
+  with the per-condition allow-list; new test-jobs, test-run and test-contracts cases); test-cond 30 of 30; `npm run perf`
+  alone within every budget (whole cycles 2.6–2.9 s, a weeks 4–5 24 h skip 40–70 ms). `rv-hud` 16 PASS, `req-bucket` 18,
+  `req-watch` 13, `req-clock` 13, `req-deadmark` 6, `p4-scene-look` 2 (no rain pixel over the litter; the inlets' mean
+  luminance 88 closed, 46 open), `p4-hot` 43, `p4-rainy` 17, `p4-bad` 16, `p4-water` 15, `p4-clarity` 14, `p4-panels-cond`
+  27, `p4-panels-clarity` 6, `p4-panels-additions` 9, `p4-run-power` 7, `p4-run-ui` 11, `p4-run-conditions` 11,
+  `p4-scene-events` 30, `hotfix-steps` 21, `p3-panels-week2 / harvest / clean / heat` 12 / 7 / 15 / 12 (the harvest ticket
+  now adds up in whole kilograms), `p5-sound` 44, `p2-level1` 58, `p3-replay` 16, `p3-cycle` 140 (brooding week 4.87 ×,
+  week 2 492 g, week 3 985 g, weeks 4–5 2,318 g, harvest 2,882 g, FCR 1.58, EPEF 426; play time planning day 2.6 min, day 8
+  4.4, day 16 4.6, day 25 4.1, day 37 4.1, day 44 4.1), the Phase 1 tour and `phase1-jobs` (4 of 4).

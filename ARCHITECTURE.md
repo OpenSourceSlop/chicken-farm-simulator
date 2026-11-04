@@ -897,6 +897,10 @@ with (the no-verdict rule for the flock watch's warnings, the 4.5-minute day cei
     15:00 column (hot season) and deaths by cause (brooding week).
   - Harness: `scripts/rv-hud.json` (`rv-hud-steps.mjs`); req-bucket / req-watch check the notice and the caption are seen;
     p4-scene-look checks the rain over the litter and the flaps by pixels.
+  - Results: `npm test` 362 ok, test-cond 30, perf alone within budget; rv-hud 16, req-* 18 / 13 / 13 / 6, p4-hot 43, p4-rainy
+    17, p4-bad 16, p4-water 15, p4-clarity 14, the p4 package files, p3-cycle 140 (EPEF 426, every real-input day under 4.6
+    min of play), p3-replay 16, p2-level1 58, hotfix-steps 21, p5-sound 44, the Phase 1 tour and phase1-jobs, no errors.
+  - Left open: `b-warm` done on its first tick at row + 1 °C; the hot season costs the ideal no weight (PHASE4.md §2.8 row 18).
 
 
 ## Sound (branch feature/sound, ahead of Phase 5)
