@@ -821,7 +821,8 @@ with (the no-verdict rule for the flock watch's warnings, the 4.5-minute day cei
   engine's `setHold(fn)`; level.js holds an open job reaching its close while its strip shows in the open panel (or a panel
   finishing its machine job in the background, `ui.backgroundPanelIds()`), the farmer stands at its place, holds a bird for a
   sampling job or carries its tool; the close moves `JOB_HOLD.graceMin` (20) farm minutes on each time (`inst.heldFrom` keeps the
-  window's end, saved for open jobs, `EV.JOB_HELD`); never during a skip or goto(auto) (`noHold`). **Warned ahead**:
+  window's end, saved for open jobs, `EV.JOB_HELD`; the panel's strip adds "Its window closed at 12:00: it stays open while you
+  work here …", `job-strips.js heldRows`); never during a skip or goto(auto) (`noHold`). **Warned ahead**:
   `EV.JOB_SOON { keys }` once per job 30 farm minutes before its close (one event a tick: one caption, one click, the chips
   pulse); the job card's chip reads "closes in N farm minutes" / "held open while you work · N farm min after".
 - **The bucket**: `props.handsBusy(kind)`, `props.bucketDown { x, z, n, causes, inside }`, `setBucketDown({ auto })`,
@@ -854,8 +855,8 @@ with (the no-verdict rule for the flock watch's warnings, the 4.5-minute day cei
   `npm run perf` alone within every budget (the brooding week's 24 h skip 61 ms; a level 24 h skip with the watch 68 ms).
   `req-watch` 11 PASS (the thermostat 4 °C under the row by real clicks; the cold warning 4.4 farm hours later, caption,
   notebook line, red comfort row, deaths 0.03 % of the 2 % limit at 14:00; the thermostat back; right again), `req-clock`
-  12 (90 / ⅔ speed at the water supply / 24 with its panel; the chips and the cue; r-meter held past 12:00 with the panel
-  open, missed 21 farm minutes after its window once the panel closed; day 2's read at 12:05 done), `req-bucket` 17 (a dead
+  13 (90 / ⅔ speed at the water supply / 24 with its panel; the chips and the cue; r-meter held past 12:00 with the panel
+  open and its strip saying so, missed 21 farm minutes after its window once the panel closed; day 2's read at 12:05 done), `req-bucket` 17 (a dead
   bird 0.30 m away and the chick 1.08 m: E took the chick; Shift+E the bird; the sign read with the bucket; a vent sample with
   the bucket set it down 0.4 m from him with its caption; G, the chip at 6 m, E picked it up; the bin counted it),
   `req-deadmark` 6 ("4 dead birds · 3 m" over the bird, "· 12 m" at the edge clear of the job pointer, the flock watch and the

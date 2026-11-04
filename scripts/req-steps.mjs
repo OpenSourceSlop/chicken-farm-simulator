@@ -157,6 +157,7 @@ export function clock() {
     exp(`__game.env.timeScale === ${C}.panel && document.querySelector('.clock-rate').textContent === '¼ speed' && 'panel open, plate folded: ' + __game.env.timeScale + ' (¼ speed)'`, 'slower still with its panel open: 24'),
     until(`__game.env.hour >= 12.08`, 60, 0.5),
     exp(`(() => { const j = ${meter}; return j.status === 'open' && j.heldFrom != null && 'r-meter open at ' + __t() + ' (its window closed at ' + ((j.heldFrom % 1) * 24).toFixed(2) + ' h): held while the panel is open'; })()`, 'no job expires while its panel is open'),
+    exp(`(() => { const t = document.querySelector('#hud .panel:not([hidden]) .jstrip')?.textContent || ''; return /stays open while you work here/.test(t) && 'the strip in the panel: ' + t.match(/Its window closed[^:]*/)?.[0]; })()`, 'the strip in the panel says the job is held open'),
     shot('rq-c-02-held'),
     ...esc(), W(-14, 0, 0.5), adv(0.3),
     exp(`(() => { const t = [...document.querySelectorAll('.ljobs .job-soon.is-held:not([hidden])')].map((x) => x.textContent); return t.length && 'chip: ' + t.join(' | '); })()`, 'the card: "held open while you work · N farm min after"'),

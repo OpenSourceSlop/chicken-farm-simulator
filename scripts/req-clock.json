@@ -29,6 +29,7 @@
   {"expect":"__game.env.timeScale === __game.config.LEVEL1.clock.panel && document.querySelector('.clock-rate').textContent === '¼ speed' && 'panel open, plate folded: ' + __game.env.timeScale + ' (¼ speed)'","label":"slower still with its panel open: 24"},
   {"advanceUntil":"__game.env.hour >= 12.08","max":60,"step":0.5},
   {"expect":"(() => { const j = __game.level.jobs.byKey('r-meter@1'); return j.status === 'open' && j.heldFrom != null && 'r-meter open at ' + __t() + ' (its window closed at ' + ((j.heldFrom % 1) * 24).toFixed(2) + ' h): held while the panel is open'; })()","label":"no job expires while its panel is open"},
+  {"expect":"(() => { const t = document.querySelector('#hud .panel:not([hidden]) .jstrip')?.textContent || ''; return /stays open while you work here/.test(t) && 'the strip in the panel: ' + t.match(/Its window closed[^:]*/)?.[0]; })()","label":"the strip in the panel says the job is held open"},
   {"shot":"rq-c-02-held"},
   {"press":"Escape"},
   {"advance":0.15},

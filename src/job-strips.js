@@ -295,7 +295,13 @@ export function pausedRows(c, inst, rows) {
 /** Every row a strip shows: its own rows (or the rule's parts), the next place, the pause line. */
 export function stripRows(S, c, inst, panelId) {
   const own = S ? S.rows({ ...c, inst }, inst) : partRows(c, inst);
-  return [...own, ...thenRows(c, inst, panelId), ...pausedRows(c, inst, own)];
+  return [...own, ...thenRows(c, inst, panelId), ...pausedRows(c, inst, own), ...heldRows(inst)];
+}
+/** PHASE4.md §15.2: a job held open past its window while the farmer does it says so (its close and the grace). */
+export function heldRows(inst) {
+  if (inst?.heldFrom == null || inst.status !== 'open') return [];
+  const m = Math.round((((inst.heldFrom % 1) + 1) % 1) * 1440) % 1440;
+  return [{ k: 'note', text: `Its window closed at ${hhmm(m / 60)}: it stays open while you work here, and about 20 farm minutes after you stop.` }];
 }
 
 /** Every strip to show at a panel: the open jobs whose strip (or spot) names it, the current job first. */
