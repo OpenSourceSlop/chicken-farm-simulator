@@ -234,6 +234,8 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .job-mark { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid currentColor; font: 700 11px/1 var(--font-display); }
 .job-mark .icon { font-size: 12px; }
 .job-title { margin: 1px 0 0; font-size: 13.5px; font-weight: 500; line-height: 1.3; }
+.job-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-right: 6px; padding: 0 3px; border-radius: 9px; border: 1px solid var(--accent); color: var(--accent); font: 700 12px/1 var(--font-display); vertical-align: 1px; } /* Phase 5: the job's number, as its marker on the farm map */
+.job.is-current .job-n { background: var(--accent); color: var(--accent-ink); }
 .job.is-current { background: var(--accent-soft); border-left-color: var(--accent); color: var(--ink); }
 .job.is-current .job-mark { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .job.is-current .job-title { font-weight: 600; }

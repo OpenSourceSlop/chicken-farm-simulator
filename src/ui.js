@@ -452,14 +452,16 @@ export function createUI(ctx, deps) {
 
   // ---- Phase 5 (PHASE5.md §4-§6): the game menu, settings, the guide, the saves, the farm map, the introduction ----
   const reg = (id, build, opts) => panels.register(id, build, opts);
-  const menu = createGameMenu({ register: reg, openPanel, closePanel, events, mode: () => mode, keys: K, isOpen: () => panels.openId === 'menu' });
+  const menu = createGameMenu({ register: reg, openPanel, closePanel, events, mode: () => mode, keys: K, isOpen: () => panels.openId === 'menu',
+    where: () => (mode === 'level' || mode === 'result' ? [ctx.level?.hudHooks?.dayText?.(), env.timeLabel, ctx.level?.def?.title, L.conditionName()].filter(Boolean).join(' · ') : mode === 'sandbox' ? 'The Phase 1 farm (sandbox)' : '') });
   const p5 = { register: reg, openPanel, closePanel, ctx, menu, title };
   let settingsUI = null, guideUI = null, map = null;
   try { settingsUI = registerSettingsPanel(p5); } catch (err) { console.error('settings panel failed to register', err); }
   try { guideUI = registerGuidePanel(p5); } catch (err) { console.error('guide panel failed to register', err); }
   try { registerSavesPanel(p5); } catch (err) { console.error('saves panel failed to register', err); }
   try { map = createMap(ctx, { register: reg, openPanel, closePanel, jobCard }); } catch (err) { console.error('map failed', err); }
-  const intro = createIntro(ctx, { root });
+  // the first-play pointers (PHASE5.md §6.1): their keys through claimKeys; they wait while a panel, the title or the busy card shows
+  const intro = createIntro(ctx, { root, claimKeys: (fn) => claimKeys(fn), busy: () => busy.open || title.open || narrow.open, mode: () => mode });
   menu.add({ id: 'resume', label: 'Back to the farm', icon: 'play', hint: 'menu', order: 0, onSelect: () => {} });
   menu.add({ id: 'map', label: 'Farm map', icon: 'map', hint: 'map', order: 20, onSelect: (via) => map?.open(via) });
   menu.add({ id: 'title', label: 'Back to the title card', icon: 'outside', order: 90, visible: (m) => m === 'level' || m === 'result', onSelect: () => ctx.level?.toTitle() });
@@ -724,7 +726,7 @@ export function createUI(ctx, deps) {
     else if (!alarm.hidden) { alarm.style.top = `${Math.round(y + 8)}px`; y = alarm.getBoundingClientRect().bottom - top; }
     watchCard.setTop(Math.round(y + 8));
   }
-  return {
+  const api = {
     update(dt) {
       rt += dt;
       hudAcc -= dt;
@@ -814,4 +816,8 @@ export function createUI(ctx, deps) {
     reset,
     L,
   };
+  // Phase 5 (PHASE5.md §8.9): the other packages reach the hubs as ctx.ui (ctx.ui.openSettings, captureNextKey, openSaves,
+  // intro.reset …); main.js keeps its own reference too
+  ctx.ui = api;
+  return api;
 }

@@ -11,17 +11,34 @@
 //                          menu closes itself after onSelect when it is still the open panel ("Back to the farm")
 //   menu.open(from)        'esc' | 'gear' | 'hook' (EV.MENU { open: true, from })
 //   menu.entries()         the entries shown now [{ id, label }] (tests)
-import { h, button, uniqueId } from './ui-dom.js';
+import { h, button, uniqueId, injectStyle, setText } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
 import { EV } from './events.js';
 
 export const MENU_ID = 'menu';
+// the menu's own look (PHASE5.md §8.11; the shared frame .menu-case / .menu-head is the template's)
+const MENU_CSS = `
+.menu { --p5-w: 440px; }
+.menu-head { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; padding-right: 92px; }
+.menu-head .icon { font-size: 26px; color: var(--accent); grid-row: span 2; }
+.menu-head h2 { margin: 0; }
+.menu-where { margin: 0; color: var(--ink-dim); font: 600 13px/1.35 var(--font-display); letter-spacing: 0.03em; }
+.menu-note { margin: 10px 0 12px; color: var(--ink-dim); font-size: 13px; line-height: 1.45; }
+.menu-list { gap: 6px; }
+.menu-item { width: 100%; justify-content: flex-start; min-height: 44px; }
+.menu-item .menu-label { flex: 1; text-align: left; }
+.menu-item .kbd { height: 22px; min-width: 22px; font-size: 12px; background: var(--panel-raised-hi); color: var(--ink); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3); }
+.menu-item[data-menu="resume"] { border-color: var(--accent); }
+.menu-item[data-menu="title"] { margin-top: 6px; }
+`;
 
 // isOpen(): the menu is the open panel now (ui.js: panels.openId === 'menu')
-export function createGameMenu({ register, openPanel, closePanel, events = null, mode = () => 'level', keys = null, isOpen = null }) {
+// where(): the farm's day, time and level in words for the menu's head ("Day 3 · 07:00 · Level 2 – The brooding week")
+export function createGameMenu({ register, openPanel, closePanel, events = null, mode = () => 'level', keys = null, isOpen = null, where = null }) {
+  injectStyle('menu-style', MENU_CSS);
   const items = [];
-  let list = null, lastFrom = 'hook', lastPick = null;
+  let list = null, lastFrom = 'hook', lastPick = null, menuWhere = () => {};
   const hintOf = (hint) => { if (!hint) return null; try { return keys?.label?.(hint) || hint; } catch { return hint; } };
   function render() {
     if (!list) return;
@@ -44,14 +61,17 @@ export function createGameMenu({ register, openPanel, closePanel, events = null,
     const titleId = uniqueId('menu-title');
     const { el, closeBtn } = dialogShell('menu', titleId, () => closePanel());
     list = h('ul', { class: 'menu-list' });
+    const whereLine = h('p', { class: 'menu-where' });
     el.append(h('div', { class: 'menu-case card' },
-      h('header', { class: 'menu-head' }, h('h2', { id: titleId }, 'Paused'), h('p', null, 'The farm clock stands still while this menu is open.')),
+      h('header', { class: 'menu-head' }, h('span', { html: ICONS.gear, 'aria-hidden': 'true' }), h('h2', { id: titleId }, 'Paused'), whereLine),
+      h('p', { class: 'menu-note' }, 'The farm clock stands still while this menu is open.'),
       list), closeBtn);
+    menuWhere = () => { let t = ''; try { t = where?.() || ''; } catch { t = ''; } setText(whereLine, t); whereLine.hidden = !t; };
     // the focus: the entry picked last (back from Settings: on Settings), else the first
     const focusEntry = () => (list?.querySelector(`[data-menu="${lastPick}"]`) || list?.querySelector('button'))?.focus({ preventScroll: true });
     return {
       el,
-      onOpen() { render(); events?.emit?.(EV.MENU, { open: true, from: lastFrom }); queueMicrotask?.(focusEntry); },
+      onOpen() { render(); menuWhere(); events?.emit?.(EV.MENU, { open: true, from: lastFrom }); queueMicrotask?.(focusEntry); },
       onClose() { events?.emit?.(EV.MENU, { open: false, from: lastFrom }); },
       // the ui.js key hook (§8.6): the up and down arrows move between the entries
       onKey(e) {

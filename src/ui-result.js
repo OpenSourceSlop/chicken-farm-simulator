@@ -178,6 +178,8 @@ export function buildResultPanel(L) {
         : [button({ class: 'btn btn--accent', onclick: () => L.level()?.replay() }, `Replay ${shortIn(def)}`)]),
       prev ? button({ class: 'btn', onclick: () => (L.replayLevel ? L.replayLevel(prev.id, prev.day) : run()?.replay(prev.id, { day: prev.day })) }, prev.label) : null,
       button({ class: 'btn', onclick: () => L.openPanel('skilltree') }, h('span', { html: ICONS.tree, 'aria-hidden': 'true' }), 'Skill tree'),
+      // Phase 5 (PHASE5.md §3.3, §8.9): the saves panel over the result (a parent: closing it shows the result again)
+      L.ctx?.ui?.openSaves ? button({ class: 'btn', 'data-result-key': 'saves', onclick: () => L.ctx.ui.openSaves() }, h('span', { html: ICONS.save, 'aria-hidden': 'true' }), 'Save or load') : null,
       button({ class: 'btn', onclick: () => L.level()?.toTitle() }, 'Back to the title'));
     // the record lines the previous level carried into this one, as plain facts under its button
     const carried = prev && prev.carried?.length ? h('p', { class: 'result-carried' }, h('b', null, `From ${shortIn(levelById(prev.id))}: `), prev.carried.join(' · ')) : null;
