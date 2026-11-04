@@ -334,7 +334,9 @@ export function createUI(ctx, deps) {
   // Phase 4 panels (package "panels"; PHASE4.md §12.3), the same api
   try {
     registerCondPanels({
-      register: (id, build, opts) => panels.register(id, build, opts),
+      // the condition jobs' strips (job-strips-cond.js) at the top of each panel's working plate (a panel that mounts its
+      // own .jstrip keeps it: withJobStrip leaves it alone)
+      register: (id, build, opts) => panels.register(id, withJobStrip(L, id, build), opts),
       L, boards: (id) => boardsForDay(env.dayNumber, farm?.condition ?? null)[id] || null, sourceLabel,
       plate: (id, opts) => buildPlate(id, opts), openPanel: (id) => openPanel(id),
     });

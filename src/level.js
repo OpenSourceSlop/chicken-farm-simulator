@@ -464,9 +464,10 @@ export function createLevel(ctx, deps = {}) {
   }
 
   // ---------------- env for a fresh start (the prep day, or the planning day) ----------------
-  function prepEnv(d = LEVEL1) {
+  function prepEnv(d = LEVEL1, condition = null) {
     env.reset();
-    env.setWeather(d.weather);
+    // the level's weather as the condition has it (config conditionLevel: the hot season's planning day is hot too)
+    env.setWeather(conditionLevel(d, condition).weather || d.weather);
     env.setDay(d.startDay);
     env.setHour(d.startHour);
     env.forceHouseTemp(null);
@@ -649,13 +650,14 @@ export function createLevel(ctx, deps = {}) {
       def = d;
       if (!inRun) save?.clear?.();
       ui?.closePanel?.();
-      prepEnv(d);
+      const cond = opts.condition && CONDITIONS[opts.condition] ? opts.condition : null;
+      prepEnv(d, cond);
       records?.reset?.();
       props?.reset?.();
       flock?.resetLevel?.();
       ui?.newRun?.();
       // Phase 4: the condition goes on the farm here and only here (null = the normal season, PHASE4.md §3.1)
-      farm.start(d, { seed, condition: opts.condition && CONDITIONS[opts.condition] ? opts.condition : null });
+      farm.start(d, { seed, condition: cond });
       startAt = env.day;
       reached.add(`${d.id}@${d.startDay}`);
       engine.start(d.startDay, d);
@@ -730,6 +732,9 @@ export function createLevel(ctx, deps = {}) {
       if (e.padWorking != null) env.padWorking = e.padWorking;
       if (e.fanStages !== undefined) env.setFanStages?.(e.fanStages);
       if (e.broodersUp != null) { if (env.setBroodersUp) env.setBroodersUp(!!e.broodersUp); else env.broodersUp = !!e.broodersUp; }
+      // Phase 4: optional (a Phase 3 save has neither); farm.restore puts the farm's power state back after this
+      if (e.powerOn != null) env.setPower?.(!!e.powerOn);
+      if (e.targetShift != null) env.setTargetShift?.(e.targetShift);
       farm.restore(data.farm);
       if (farm.mode !== 'level') { farm.mode = 'level'; farm.level = d; }
       records?.restore?.(data.records);
@@ -882,7 +887,9 @@ export function createLevel(ctx, deps = {}) {
           ventTimer: env.ventTimer, lightProgram: env.lightProgram,  // weatherEvents: rebuilt by the farm
           // Phase 3 (PHASE3.md §11)
           maxDay: env.maxDay, curtain: env.curtainForced ?? null, cycleClimate: !!env.cycleClimate, fansBroken: [...(env.fansBroken || [])],
-          padWorking: env.padWorking ?? 1, fanStages: env.fanStages ?? null, broodersUp: !!env.broodersUp },
+          padWorking: env.padWorking ?? 1, fanStages: env.fanStages ?? null, broodersUp: !!env.broodersUp,
+          // Phase 4 (PHASE4.md §11.1; the sim's env fields once it has them): the house's power and a weak batch's +1 °C
+          ...(env.powerOn != null ? { powerOn: !!env.powerOn } : {}), ...((env.targetShiftC ?? env.targetShift) != null ? { targetShift: env.targetShiftC ?? env.targetShift } : {}) },
         farm: farm?.serialize() ?? null,
         records: records?.serialize() ?? null,
         props: props?.serialize() ?? null,

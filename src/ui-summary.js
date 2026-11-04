@@ -6,6 +6,7 @@
 // after a finished cycle, offers the Harder flocks (ui-run.js createHarderCards).
 import { SKILL_BRANCHES, weightAt, feedStdGAt, flockAgeAt, conditionLabel, levelById } from './config.js';
 import { createHarderCards } from './ui-run.js';
+import { condIn } from './content.js';
 import { h, button, uniqueId, nodes } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
@@ -121,7 +122,7 @@ export function buildSummaryPanel(L) {
     const cond = s.condition ?? run?.state()?.runCondition ?? null, cname = cond ? conditionLabel(cond) : '';
     const fs = new Set(s.fromStandard || []), cmpd = s.compare || null;
     const fsNames = [...fs].map((id) => levelById(id)?.n).filter(Boolean);
-    const fsNote = fs.size ? `Levels ${Math.min(...fsNames)}–${Math.max(...fsNames)} ${s.standardNote || 'from a standard start'}: the ideal farmer played them${cname ? ` ${cname.toLowerCase()}` : ''}.` : null;
+    const fsNote = fs.size ? `Levels ${Math.min(...fsNames)}–${Math.max(...fsNames)} ${s.standardNote || 'from a standard start'}: the ideal farmer played them${cond ? ` ${condIn(cond)}` : ''}.` : null;
     const was = (v, f) => (cmpd && v != null ? `last normal-season cycle: ${f(v)}` : null);
     const dblRows = dbl.map((d) => {
       const c = cmpd && !fs.has(d.id ?? d.level) ? deathsByLevelRows(cmpd.deathsByLevel).find((x) => x.name === d.name) : null;
@@ -143,7 +144,8 @@ export function buildSummaryPanel(L) {
       h('div', { class: 'bigs bigs--4' },
         big('Birds sold', s.sold != null ? int(s.sold) : '—', [`of ${int(s.placed)} chicks placed`, was(cmpd?.sold, int)].filter(Boolean).join(' · ')),
         big('Mean live weight', s.meanLiveG != null ? `${int(s.meanLiveG)} g` : '—', [s.liveKg != null ? `${int(s.liveKg)} kg live in all` : null, was(cmpd?.meanLiveG, (v) => `${int(v)} g`)].filter(Boolean).join(' · ') || null),
-        big('FCR', s.fcr != null ? two(s.fcr) : '—', [s.epef != null ? `production efficiency ${int(s.epef)}` : null, was(cmpd?.fcr, two), was(cmpd?.epef, (v) => `efficiency ${int(v)}`)].filter(Boolean).join(' · ') || null),
+        big('FCR', s.fcr != null ? two(s.fcr) : '—', [s.epef != null ? `production efficiency ${int(s.epef)}` : null,
+          cmpd && cmpd.fcr != null ? `last normal-season cycle: ${two(cmpd.fcr)}${cmpd.epef != null ? `, efficiency ${int(cmpd.epef)}` : ''}` : null].filter(Boolean).join(' · ') || null),
         big('Deaths, culls, dead on arrival', s.mortalityPct != null ? `${two(s.mortalityPct)} %` : '—', ['of the chicks placed', was(cmpd?.mortalityPct, (v) => `${two(v)} %`)].filter(Boolean).join(' · '))),
       btns,
       fsNote ? h('p', { class: 'result-note' }, fsNote) : null,
