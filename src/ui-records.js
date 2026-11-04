@@ -44,9 +44,15 @@ const TODAY_LINES = [
   [['fans', 'fans.read'], 'Fan panel'],
   [['gas', 'gas.meter'], 'Gas tank'],
   [['weigh', 'sample.weigh'], 'Birds weighed'],
+  // Phase 4: the conditions' readings (shown on a day that has them)
+  [['tank', 'water.tank'], 'Water tank and pump'],
+  [['water.test'], 'Water test'],
+  [['generator', 'gen.test', 'gen.start', 'gen.stop', 'gen.switch'], 'Generator'],
+  [['chicks.grade'], 'Chicks graded'],
   [['look'], 'Look notes'],
 ];
-const OPTIONAL = new Set(['Filter gauges', 'Vent temperatures', 'Crop check', 'Birds weighed', 'Nipple heights', 'Light at bird level', 'Air at bird height', 'Birds in the hand', 'Fan panel', 'Gas tank']);
+const OPTIONAL = new Set(['Filter gauges', 'Vent temperatures', 'Crop check', 'Birds weighed', 'Nipple heights', 'Light at bird level', 'Air at bird height', 'Birds in the hand', 'Fan panel', 'Gas tank',
+  'Water tank and pump', 'Water test', 'Generator', 'Chicks graded']);
 const RECORD_JOBS = new Set(['r-record', 'prep-record', 'pl-record']);
 
 // The week tables of the cycle: one per level, weeks 4 and 5 as two (PHASE3.md §1 Level 5)

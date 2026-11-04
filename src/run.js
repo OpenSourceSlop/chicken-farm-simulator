@@ -115,7 +115,8 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   // Phase 4 (PHASE4.md §3.1): farm.condition is the only holder; `condition` is its mirror in the run save
   let condition = null;
   let runCond = null;               // the condition the run was started under (conditionsDone counts it)
-  let startedAt = null;             // the first level the farmer played in this run (the levels before: a standard start)
+  let startedAt = null;             // the first level the farmer played in this run
+  let standard = false;             // the levels before startedAt came from a standard start (the ideal farmer's trace)
   let mixed = false;                // farm.condition was not the run's at a level start or end (a harness's setCondition)
   let counted = false;              // this run has raised cyclesDone
   let lastNormal = null;            // { compare } of the last finished normal-season cycle (the summary's compare column)
@@ -131,14 +132,14 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   function serialize() {
     condition = mirror();
     return { v: 1, seed, levelId, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], condition, lastCycle: clone(lastCycle),
-      runCond, startedAt, mixed, counted, lastNormal: clone(lastNormal) };
+      runCond, startedAt, standard, mixed, counted, lastNormal: clone(lastNormal) };
   }
   function adopt(d) {
     if (!d) return;
     seed = d.seed ?? 1; levelId = d.levelId ?? null; plan = clone(d.plan) ?? null; summary = clone(d.summary) ?? null; conditions = [...(d.conditions || [])]; condition = validCond(d.condition);
     // a Phase 3 run save: no condition, started at its plan (or the brooding week when it has none)
     runCond = 'runCond' in d ? validCond(d.runCond) : condition; startedAt = d.startedAt ?? (d.plan ? PLAN_LEVEL.id : LEVEL1.id);
-    mixed = !!d.mixed; counted = !!d.counted;
+    mixed = !!d.mixed; counted = !!d.counted; standard = !!d.standard;
     lastCycle = clone(d.lastCycle) ?? lastCycle;
     lastNormal = clone(d.lastNormal) ?? lastNormal;
     for (const k of Object.keys(levels)) delete levels[k];
@@ -190,7 +191,7 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   }
 
   /** The levels before the one the farmer started this run at: played by the ideal farmer (a standard start). */
-  const fromStandardIds = () => (startedAt && startedAt !== PLAN_LEVEL.id ? RUN_ORDER.slice(0, RUN_ORDER.indexOf(startedAt)) : []);
+  const fromStandardIds = () => (standard && startedAt && startedAt !== PLAN_LEVEL.id ? RUN_ORDER.slice(0, RUN_ORDER.indexOf(startedAt)) : []);
   /** The cycle summary (records.cycleSummary) with the run's condition, the compare column and the standard-start marks. */
   function cycleSummary() {
     const compare = runCond && lastNormal?.compare ? clone(lastNormal.compare) : null;
@@ -260,7 +261,7 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   function standardStart(id, s) {
     const target = levelById(id);
     const snap = level.profile?.snapshot?.();
-    startedAt = id;                    // the levels before it are the ideal farmer's (saved with every start of the trace)
+    startedAt = id; standard = true;   // the levels before it are the ideal farmer's (saved with every start of the trace)
     // the player's own entries of the levels before (attempts, keys): the ideal farmer's play does not replace them
     const before = Object.fromEntries(RUN_ORDER.slice(0, Math.max(0, RUN_ORDER.indexOf(id))).filter((k) => levels[k]).map((k) => [k, clone(levels[k])]));
     try {
@@ -286,17 +287,20 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
    *  the last cycles (lastCycle, lastNormal) and the skill profile stay. */
   function newRun({ seed: sd, condition: c, at }) {
     seed = sd ?? seed ?? 1; plan = null; summary = null; conditions = []; levelId = null;
-    runCond = condition = validCond(c); startedAt = at; mixed = false; counted = false;
+    runCond = condition = validCond(c); startedAt = at; standard = false; mixed = false; counted = false;
     clearStarts(RUN_ORDER[0]);
     for (const k of Object.keys(levels)) delete levels[k];
     emit({ phase: 'start', level: at, condition: runCond });
   }
   /** The harder flocks open after the first full cycle (skill profile cyclesDone; a Phase 3 profile without it: 1 if a
    *  finished cycle is stored). */
+  let storedCycle;                  // a finished cycle in the stored run save (read once: the save is large)
   function cyclesDone() {
     const v = level.profile?.cycles?.()?.cyclesDone;
     if (Number.isFinite(v)) return v;
-    return lastCycle || store.load?.()?.run?.lastCycle ? 1 : 0;
+    if (lastCycle) return 1;
+    if (storedCycle === undefined) { try { storedCycle = !!store.load?.()?.run?.lastCycle; } catch { storedCycle = false; } }
+    return storedCycle ? 1 : 0;
   }
   const run = {
     stub: false,
@@ -320,8 +324,8 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       const def = levelById(id);
       if (!def) throw new Error(`unknown level ${id}`);
       if ('condition' in opts && validCond(opts.condition) !== runCond) newRun({ seed, condition: opts.condition, at: id });
-      if (def.id === PLAN_LEVEL.id) { startedAt = id; level.start({ def: PLAN_LEVEL, seed, run: true, condition: runCond }); return started(def); }
-      if (def.id === LEVEL1.id) { if (!startedAt || before(id, startedAt) || !plan) startedAt = id; level.start({ seed, run: true, condition: runCond }); return started(def); }
+      if (def.id === PLAN_LEVEL.id) { startedAt = id; standard = false; level.start({ def: PLAN_LEVEL, seed, run: true, condition: runCond }); return started(def); }
+      if (def.id === LEVEL1.id) { if (!startedAt || before(id, startedAt) || !plan) { startedAt = id; standard = false; } level.start({ seed, run: true, condition: runCond }); return started(def); }
       if (opts.from !== 'standard' && run.replay(id, { day: opts.day })) return true;
       return standardStart(id, seed);
     },
