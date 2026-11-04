@@ -5,6 +5,7 @@
 import { EQUIP, FEEDER_LINES_Z, LEVEL1 } from './config.js';
 import { BOARDS } from './content-signs.js';
 import { BOARDS_CYCLE } from './content-signs-cycle.js';
+import { BOARDS_COND } from './content-signs-cond.js';
 import { h, button, setText, uniqueId, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
@@ -29,8 +30,9 @@ export function equipShell({ cls = '', icon, title, sub, plates = [], onClose, s
   const plateEls = plates.map((id) => buildPlate(id));
   /** The job strip at the top of the working plate (ui-jobstrip.js): the panel mounts it with its id. */
   // Phase 3: a link may name a board of the full cycle (content-signs-cycle.js BOARDS_CYCLE)
-  const board = (id) => BOARDS[id] || BOARDS_CYCLE[id];
-  const links = signLinks.length ? h('p', { class: 'equip-links' }, h('span', { html: ICONS.facts, 'aria-hidden': 'true' }),
+  // Phase 4: or a board of a condition (content-signs-cond.js BOARDS_COND: the power cut sign by the generator)
+  const board = (id) => BOARDS[id] || BOARDS_CYCLE[id] || BOARDS_COND[id];
+  const links = signLinks.some(board) ? h('p', { class: 'equip-links' }, h('span', { html: ICONS.facts, 'aria-hidden': 'true' }),
     `Facts also on: ${signLinks.filter(board).map((id) => `${board(id).title} (${board(id).where.toLowerCase()})`).join('; ')}`) : null;
   const side = plateEls.length ? h('div', { class: 'equip-side' }, plateEls.map((p) => p.el), links) : null;
   if (!plateEls.length && links) { links.classList.add('equip-links--below'); }
