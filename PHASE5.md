@@ -57,8 +57,9 @@ the buttons: *New here? Start a new flock: the first morning points out the job 
 
 He presses *Start a new flock*. Outside the gate on the planning day the first pointer card appears beside the **job
 card** (*Your jobs for today…*), the farm clock standing still while it shows. *Next* moves the card to the **gate
-sign** in view (*Signs stand where you use their facts…*), then to the **time bar** (*The farm clock… Esc opens the menu;
-Tab opens the farm map*). *Got it* ends it; *Skip the introduction* ends it at any card. On the morning of day 0, when the
+sign** in view (*Signs stand where you use their facts…*), then to the **time bar** (*The farm clock: pause (P), 1× and 4×
+(1, 4). Next job (J)… Esc opens the menu; O opens the farm map* — the keys as bound now). *Got it* ends it; *Skip the
+introduction* ends it at any card. On the morning of day 0, when the
 flock watch first shows, one more card points at it (*The flock watch measures the birds every farm hour…*). None of
 the cards comes back unless the guide's *Show the introduction again* is pressed.
 
@@ -71,15 +72,18 @@ pressure washer whines; on the office porch a desk fan hums and the phone rings 
 captions (*[Thunder, far off]*, *[Alarm in the house]*, *[Chicks peeping loudly]*) can be switched on for a player who
 plays without sound.
 
-**Tab** (with the farm in view) or the **map key** on the time bar opens the **farm map**: the farm from above in the
+**O** (overview; any rebound key shows instead) or the **map key** on the time bar opens the **farm map**: the farm from above in the
 game's flat colours, the house with its lines, brooders, pad and fans, the buildings, every sign, the farmer's arrow, the
 open jobs' places with their orange markers, the dead birds on the floor, the bucket where he set it down, and the
 flock's spread inside the house (each drawn bird a dot). A **House** tab shows the house alone, larger. Hovering a
 place names it with its walk ("Feed silos · about 64 m, 16 s walking"); a click closes the map and walks him there by
-the route finder (round the end walls, in at the door). The clock stands still while the map is open.
+the route finder (round the end walls, in at the door). The clock stands still while the map is open. **Tab** stays the
+browser's focus key everywhere: with the keyboard alone the farmer reaches every key on the screen, and **P** (pause),
+**1** and **4** (the clock's speed) and **J** (Next job) work from the farm view.
 
 **Esc** with no panel open (or the **gear key** on the time bar) opens the **game menu** with the clock stopped: *Back to
-the farm*, *Farm map*, *Save or load*, *Settings*, *How to play*, *Back to the title card*.
+the farm*, *Farm map*, *Save or load*, *Settings*, *How to play*, *Back to the title card*. What the menu opens comes back
+to the menu when it closes (Esc in Settings shows the menu again, on *Settings*); a second Esc returns to the farm.
 
 ### 1.3 Saving, loading, backups
 The game still saves by itself (the autosave of Phase 3, every level start kept for a replay). *Save or load* shows the
@@ -87,9 +91,12 @@ autosave and three slots, each named by condition, level, day and time — *Hot 
 14:20* — with the date it was saved. *Save here* keeps the farm as it is now in a slot (asking inside the panel before
 it replaces a slot that holds a farm); *Load* puts a slot's farm in play (asking first, naming the farm now in play that
 the autosave holds); *Delete* asks inside the panel (*Delete Slot 2 (Week 2 · Day 12, 08:40)? This cannot be undone.*).
-*Back up* copies the slot (or the autosave) as text to the clipboard inside the click — where the browser refuses, the
-text shows selected in a box with *Press Ctrl+C (⌘C) to copy*; *Restore* takes a pasted backup into a slot. A slot that
-cannot be read says so on its row and offers only *Delete*. **Continue** on the title card always resumes the newest
+*Back up* opens a box under the row with the backup ready: *The whole run* (every level start, for every Replay: about
+210,000 characters at the end of a cycle) or *This farm only* (the farm as it is now, no level starts: about a quarter
+of that); a long backup comes in numbered **parts** of at most 9,000 characters each (*Part 2 of 24*), each with its own
+*Copy* key, so each fits one chat message or note. *Copy* puts the text on the clipboard inside the click — where the
+browser refuses, the text shows selected in a box with *Press Ctrl+C (⌘C) to copy*. *Restore* takes the pasted parts, in
+any order, into a slot. A slot that cannot be read says so on its row and offers only *Delete*. **Continue** on the title card always resumes the newest
 readable save (the autosave or a slot, by the time it was saved).
 
 ### 1.4 Settings
@@ -108,9 +115,10 @@ A slot or backup saved by this build keeps loading in later builds (versioned en
 formats, §3.6); a backup made by a newer build says so instead of failing.
 
 ### 1.6 Harder flocks
-Nothing in the conditions changes except the hot season's appetite (§6.8.4): in April–May heat even a well-cooled flock
-eats a little less in the hot hours and finishes 2–5 % lighter than the normal season's (the heat sign's hot-season line
-says so, general practice). The water condition's flock watch no longer shows its Supply row amber on day 33 with a full
+Nothing in the conditions changes except the hot season's appetite (§6.8.4): in April–May heat the house air behind the
+pads still stands above 28 °C through the hot hours, and birds of three weeks and older eat a little less then, so even a
+well-cooled flock finishes 2–5 % lighter than the normal season's (the heat sign's hot-season line says so, general
+practice; the normal season does not change at all). The water condition's flock watch no longer shows its Supply row amber on day 33 with a full
 tank (§6.8.1); a bad batch's fail line names 24:00 of day 0 when the hatchery claim closed then (§6.8.2).
 
 ## 2. Sound polish (package "sound")
@@ -122,8 +130,8 @@ sound captions. Levels are dBFS at the default volume (slider 0.7), measured off
 ### 2.1 What is new, situation by situation
 | Situation (state the sound reads) | What plays | Where it is heard | Level (RMS while it plays) | Rules |
 | --- | --- | --- | --- | --- |
-| **Rain** (`farm.weatherNow.rain` 0..1, as now) | the roof drum (exists) scaled with the rain; **drips** off the eaves for 20 farm minutes after the rain stops (`world.weather.wet` > 0.3, rain 0) | drum inside and on the apron; drips outside within 6 m of a wall | drum −36 (exists); drips −48 each, 0.3–1 a second, falling with the wetness | drips Poisson, 4 variants, never the same twice |
-| **Storm** (`stormOf(farm)`: rain with `weatherNow.storm` or rain ≥ 0.5) | **thunder** after each lightning flash (`world.weather.flashes` rises): delay = distance / 343 m/s, distance 0.5–2.7 km at random (1.5–7.9 s), a 3–7 s rumble; stronger gusts in the breeze (+4 dB, gust rate × 2) | outside; inside −6 dB and low-passed at 400 Hz (the roof) | rumble −38 ± 3 over its first 2 s, peak ≤ −20 (near), far ones −44 | at most 3 a real minute; under reduced motion (no flashes) on its own 30–50 s Poisson timer while the storm lasts |
+| **Rain** (`farm.weatherNow.rain` 0..1, as now) | the roof drum (exists) scaled with the rain; **drips** off the eaves for 20 farm minutes after the rain stops (`world.weather.wet` > 0.3, rain 0) | drum inside and on the apron; drips outside within 6 m of a wall | drum −36 (exists); drips −48 each, 0.2–0.6 a second (12–36 a minute, under the cap of 40), falling with the wetness | drips Poisson, 4 variants, never the same twice |
+| **Storm** (`stormOf(farm)`: rain with `weatherNow.storm` or rain ≥ 0.5) | **thunder** after each lightning flash (`world.weather.flashes` rises): delay = distance / 343 m/s, distance 0.5–2.7 km at random (1.5–7.9 s), a 3–7 s rumble; stronger gusts in the breeze (+4 dB, gust rate × 2) | outside; inside −6 dB and low-passed at 400 Hz (the roof) | rumble −38 ± 3 over its first 2 s, peak ≤ −20 (near), far ones −44 | **flash-driven**: one rumble per flash (world-rain's flashes come on their own 30–50 s timer), at most 3 a real minute; under reduced motion (no flashes) on its own **exponential** timer, mean 40 s with a 20 s floor, while the storm lasts |
 | **Power cut** (`farm.power.on === false`) | the controller's alarm (exists): two-tone beeps every 6 s for the first 120 real seconds of a dark house, then every 15 s; the fans run down (exists: `env.fansOn`) | the house and the apron (fainter with distance, exists) | loudest 100 ms −38 | the gap grows, the alarm never stops while dark; the caption names it once |
 | **Generator** (`farm.generator.running`; `gen.start` / `gen.stop` / `gen.switch` / `gen.test` actions) | a diesel bed: a 24–30 Hz firing thrum and a 600–1,800 Hz mechanical rattle band, slow ±1.5 dB wander; **start**: the starter cranks 1.2 s, catches; **stop**: runs down 2 s; the transfer switch: one heavy clunk | at `FARM.generator`, fading `exp(−d / 20)`; inside the house −8 dB | −36 at 4 m outside, −44 inside the house | the bed only while running; start / stop / clunk cues rate-limited (2 s) |
 | **Hot season by day** (`farm.condition === 'hot'`, 10:00–16:00) | a **cicada chorus** swelling and fading in waves of 20–60 s, peaking about 13:00; the dusk swell (exists) +2 dB | outside (through the walls as the other outdoor beds) | −42 at the peak | its own bed (not the dusk one), off in every other condition |
@@ -133,11 +141,19 @@ sound captions. Levels are dBFS at the default volume (slider 0.7), measured off
 | **Machines of Phase 3–4** (the pad pump, the curtain winch, the feeder valves, the gas tank, the tank pump) | the existing cues (valves, winch, augers); the **well pump** hums while it runs (`farm.waterTank` pump on, the water condition) | at `SPOTS4.waterTank` | −44 at 3 m | only in the water condition |
 
 Every new bed is built at start-up with the others (the node count is fixed after start-up: at most 230 nodes in all,
-test-audio counts them); every new cue is a recipe on the pooled voices.
+test-audio counts them; **177 today** on the fake context). Ten new beds at 4–9 nodes each would reach the ceiling, so
+the beds share: **one noise source** feeds every new noise band (drips, the murmur, the spray hiss, the desk fan, the
+gusts) through its own filter and gain; **one machine bed** (an oscillator pair, a noise band, a gain, a panner) plays
+the generator, the pressure washer, the well pump and the idling truck, which never sound at the same time (the
+generator runs only in a cut, the washer only at the wash bay in the clean-out, the well pump only in the water
+condition's days, the truck only on the catching night; when two would overlap the nearer one takes the bed). Expected
+total about 205 nodes; every new cue is a recipe on the pooled voices.
 
 ### 2.2 Nothing loud or repetitive over an hour
 - Every repeating event source is a Poisson process with variants (`pick()`: never the same twice in a row); no cue is
-  heard on a fixed beat except the alarm, whose gap grows (§2.1).
+  heard on a fixed beat except the alarm, whose gap grows (§2.1). **Thunder is flash-driven**, not Poisson: one rumble per
+  lightning flash after its distance delay (the flashes' own timer is world-rain's), so the hour check checks its delays
+  (1.5–7.9 s after each flash) and its cap instead of a CV.
 - **Caps per real minute** (rate limits on the audio clock; a burst of game steps in one task cannot stack sounds): job tick
   6 · key click 30 · paper 12 · alarm 10 (4 after its first 2 minutes) · thunder 3 · crate clack 30 · drip 40 · phone ring 2 ·
   generator start / stop / clunk 6 · truck 3.
@@ -148,9 +164,10 @@ test-audio counts them); every new cue is a recipe on the pooled voices.
 - A **long-session check** in node (`scripts/test-audio-hour.mjs`, §10.1) drives the scheduler and the cue limiter
   through a scripted hour (yard by day 10 min, the house with six fans 10 min, a storm 8 min, a power cut with the
   generator 6 min, the catching night 10 min, the wash bay 6 min, the office 4 min, a 4× skip 6 min) on the fake context and
-  checks the caps, that the gaps between events of every Poisson source have a coefficient of variation ≥ 0.6, that no
-  variant repeats back to back, that nothing is created after start-up, and that the sum of the level table's loudest
-  layers in any second stays under the checked bound.
+  checks the caps, that the gaps between events of every Poisson source (thunder excepted: flash-driven, its delays and
+  its 3-a-minute cap are checked; under reduced motion its exponential timer is Poisson and checked) have a coefficient
+  of variation ≥ 0.6, that no variant repeats back to back, that nothing is created after start-up, and that the sum of
+  the level table's loudest layers in any second stays under the checked bound.
 
 ### 2.3 Sound captions (accessibility)
 With *Interface → Sound captions* on, a meaningful sound shows as a short caption in brackets (ui.js shows it when no
@@ -164,8 +181,10 @@ use (farm-problems `observe`); no caption is a verdict. Each key at most once pe
 8 real seconds (audio-captions.js).
 
 ### 2.4 Levels and checks (expected numbers)
-`scripts/p5-sound.json` (updated by the sound package: the volume now lives in Settings → Sound; still every Phase 4 check,
-44 or more PASS) and the new `scripts/p5-sound-scenes.json` render each new scene offline with `debug.measure` and assert:
+`scripts/p5-sound.json` (updated by the sound package: the volume now lives in Settings → Sound, reached through
+`__game.ui.openSettings('sound')` and `settings.set('sound.volume', 0.4)`, plus one DOM step on the frozen hook
+`[data-setting="sound.volume"] input` (§8.10: its value is the stored 0..1 value); still every Phase 4 check, 44 or more
+PASS) and the new `scripts/p5-sound-scenes.json` render each new scene offline with `debug.measure` and assert:
 storm with thunder in the yard — RMS −30..−37, peak ≤ −18; thunder from inside the house — peak ≤ −24; generator at 4 m —
 RMS −34..−39; the generator from inside the house — RMS of its layer −42..−48; catching night at the door — RMS −32..−38;
 wash bay at 2 m with the washer running — −33..−38; the office desk by day — the fan's layer −42..−48; hot season 13:00 in
@@ -222,52 +241,87 @@ has no CompressionStream). `crc` is the CRC-32 (IEEE) of the encoded bytes befor
   <hh:mm>` — *Normal season · Level 3 – Week 2 · Day 12, 08:40*, *Hot season · Level 1 – Plan the farm · Planning day,
   07:00*, *Rainy season · Level 7 – Clean-out and rest · Rest day 5, 06:00*. The row adds *saved 4 Nov, 15:02* (the
   browser's date, en-GB short form) and the stored size (*168 KB*).
-- **Save here** (in a level, or on its result screen; on the title card it copies the autosave): `run.exportSave()` writes
+- **Save here** (in a level, or on its result screen — the result panel gets a *Save or load* key (experience, ui-result.js)
+  that opens the saves panel over it; the result is always a parent (§8.6), so closing the saves panel shows the result
+  again with its Replay and Next level keys; on the title card it copies the autosave): `run.exportSave()` writes
   the autosave first, then returns `{ run, blob, starts }`; wrap (`makeEnvelope`), encode, write. A slot
   holding a farm is replaced only after the in-panel question *Save over Slot 2 (Week 2 · Day 12, 08:40)?* [Save over it]
   [Keep it]. The sandbox has no slots (its keys are hidden).
 - **Load**: the in-panel question *Load Slot 2 (…)? The farm in play now (Day 30, 14:20) stays only if it is saved in a
   slot.* [Load it] [Cancel] (on the title card with no game in play, no question). Then decode → migrate → `checkEnvelope`
-  → `run.importSave(envelope)` writes the run key and every start into the live keys (memory and storage) and resumes it
-  (`continueSave`). The skill profile is not touched.
+  → `run.importSave(envelope)`, which **(a)** clears every live level start of the run in play (memory and storage, from
+  `plan` on: no start of the replaced run may answer `loadStart` / `hasStart` / `store.info().starts` afterwards, the
+  `def.starts` fallback included), **(b)** writes the envelope's starts and its run key, **(c)** stamps the run key's
+  `savedAt` with now (so Continue, which takes the newest save, resumes the farm just loaded and not an older slot), and
+  **(d)** resumes it (`continueSave`). An envelope with `run: null` (a Phase 2 save: `migrate` sets its
+  `blob.level.levelId` to `'level1'`, in code) resumes as `continueSave`'s Phase 2 branch does (a run at the brooding
+  week, `joinRun`, no plan). The skill profile is not touched.
 - **Delete**: *Delete Slot 2 (…)? This cannot be undone.* [Delete] [Keep it] — never `confirm()` (test: the steps file
   replaces `window.confirm` by a function that throws).
 - A slot whose key does not parse, whose crc does not match or whose format is newer shows on its row the message of its
   code (§3.7) with *Delete* only; the other slots and the autosave are unaffected.
 
 ### 3.4 Continue
-`saves.latest()` = the readable entry with the largest `savedAt` among the autosave and the slots. Continue (title card)
+`saves.latest()` = the readable entry with the largest `savedAt` among the autosave and the slots (after a load the
+autosave holds the loaded farm with `savedAt` now, §3.3). The autosave row's own *Continue* resumes the autosave itself
+(`saves.continueAuto()`, in code), never a slot. Continue (title card)
 resumes it: the autosave directly; a slot by loading it into the autosave first (no question: nothing is in play on the
 title card). The Continue line names it: *Continue — Week 2, day 12, 08:40* (the autosave, as now) or *Continue — Slot 2:
 Week 2, day 12, 08:40*. With no readable save the key is hidden, as now.
 
 ### 3.5 Backup as text and restore
-- **Back up** (any slot or the autosave): `exportText` → the text below. The click handler calls
-  `navigator.clipboard.writeText(text)` **inside the click** (a user activation); when that is missing or rejects (the
-  artifact viewer's iframe may not allow clipboard writes) the panel shows the text in a read-only `<textarea>`, focused and
-  selected, with *Press Ctrl+C (⌘C on a Mac) to copy, then keep it somewhere safe* (and tries `document.execCommand('copy')`
-  once). No download, no `window.open`.
+- **What a backup holds**: *The whole run* (the envelope with every level start and the skill profile: every *Replay* of
+  the run card works after a restore; about 210 K characters at day 67) or *This farm only* (the envelope with `starts: []`
+  and the profile: the farm as it is now; after a restore a *Replay* of an earlier level of that run starts from that
+  level's standard start, as `run.startLevel` does for a level with no saved start since Phase 3 (the cycle summary then
+  marks the levels before it as from a standard start); the box says so in words; about a quarter of the size, ≈ 50 K characters
+  at day 67 — the saves package measures both and puts them in its report).
+- **The text** (save-codec.js, **complete in code**, review round): two header lines for the player, a marker line, the
+  base64 payload wrapped at 76 characters, `END`:
   ```
   CHICKEN FARM SAVE · format 5
   Hot season · Level 5 – Weeks 4 and 5 · Day 30, 14:20 · saved 2026-11-04 15:02
-  CF5.gz64.1a2b3c4d.H4sIAAAAAAAAA+y9a3PbyJIo+FcQ...            (wrapped at 76 characters)
+  CF5.gz64.1a2b3c4d.214532.
+  H4sIAAAAAAAAA+y9a3PbyJIo+FcQ...            (wrapped at 76 characters)
   ...
   END
   ```
-  The payload of a backup holds the envelope **with** the skill profile.
-- **Restore**: a `<textarea>` *Paste a backup here*, a slot choice (an empty slot first) and [Restore]. `parseText`
-  finds the `CF<n>.` line anywhere in the paste (the header lines may be missing; whitespace inside the payload is
-  ignored), checks the crc, decodes, migrates (§3.6) and checks the envelope; then the slot is written (asking first if it
-  holds a farm). When the backup carries a skill profile with more points than this browser's, *Also bring its skill points
-  (the larger of each)* is offered (`mergeProfiles`, in code).
+  The marker `CF5.<enc>.<crc>.<chars>.` carries the payload's **length**: `parseText` finds every marker anywhere in the
+  paste and **counts** that many base64 characters after it, skipping whitespace and line breaks — it never looks for END
+  (the letters E N D occur in random base64 about once in 262 K characters, which cut 56 % of whole-run backups in the
+  design round's reader). Fewer characters than the marker says → `incomplete`; the crc decides the rest.
+- **Parts**: a backup longer than `SAVE_SLOTS.partChars` (**9,000** characters, in code: a LINE message or a note holds
+  about 10,000) comes as numbered parts (`composeParts`, in code): each part has the header line *CHICKEN FARM SAVE · format 5
+  · part 2 of 24 (paste all 24 parts, in any order)*, the name line, the marker `CF5.<enc>.<crc>.<chars>.p2of24.` and its
+  slice of the payload, at most 9,000 characters in all. Restore accepts every part pasted together, **in any order**, or
+  the whole text; a part missing → `missing-parts` (the panel names which: *parts 3, 5 of 24*), parts of two different
+  backups → `mixed`. The whole run at day 67 is about 24 parts, the farm alone about 6.
+- **Back up** (any slot or the autosave) opens the backup box under the row and **builds the text then** (the async gzip
+  runs when the box opens, with *Preparing the backup…*), shows the two choices (*The whole run* / *This farm only*), the
+  length in plain words (*About 214,000 characters: 24 parts of up to 9,000 characters each*) and one *Copy part k* key
+  per part (or one *Copy* key). Each Copy key calls `navigator.clipboard.writeText(text)` **synchronously inside its
+  click** with the text already built (Safari refuses a write after an `await`); when that is missing or rejects (the
+  artifact viewer's iframe may not allow clipboard writes) the part's text shows in a read-only `<textarea>`, focused and
+  selected, with *Press Ctrl+C (⌘C on a Mac) to copy, then keep it somewhere safe* (and tries `document.execCommand('copy')`
+  once). No download, no `window.open`.
+- **Restore**: a `<textarea>` *Paste a backup here (every part, in any order)*, a slot choice (an empty slot first) and
+  [Restore]. `parseText` reads the markers (the header lines may be missing; whitespace inside the payload is ignored),
+  checks the crc, decodes, migrates (§3.6) and checks the envelope; then the slot is written (asking first if it holds a
+  farm). When the backup carries a skill profile with more points than this browser's, *Also bring its skill points (the
+  larger of each)* is offered (`mergeProfiles`, in code). **With storage blocked** (no slot can be written) the restore box
+  offers *Restore and play now* instead: the envelope goes into the run's memory copies (`run.importSave(envelope, {
+  memoryOnly: true })`) and plays, with the `blocked` message saying it is gone when the page closes.
 - A pasted **raw JSON** of the Phase 3–4 run key (`{"version":3,…}`) or of the Phase 2 level save (`{"version":1,…}`) is
-  accepted too (a player who copied his localStorage by hand), as a format-3 / format-1 save (§3.6).
+  accepted too (a player who copied his localStorage by hand), as a format-3 / format-1 save (§3.6): `importText` tries
+  `JSON.parse` of the trimmed paste first when it starts with `{`.
 
 ### 3.6 Formats and migrations (a republish of the page)
 `SAVE_SLOTS.known`: **1** — Phase 2's brooding-week level save (`{ version: 1, level, env, farm, records, props, flock,
 player }`); **3** — Phase 3–4's run save (`{ version: 3, savedAt, run, blob }`); **5** — the Phase 5 envelope.
-`migrate(obj)` turns each into a format-5 envelope: v1 → `{ run: null, blob, starts: [], meta: metaOf }` (Continue makes it
-a run at the brooding week, as `run.continueSave` does since Phase 3); v3 → `{ run, blob, starts: [] }`; 5 → itself. A
+`migrate(obj)` (in code, review round) turns each into a format-5 envelope: v1 → `{ run: null, blob, starts: [], meta }`
+with `blob.level.levelId` set to `'level1'` (Phase 2's `level.serialize()` had no level id, so `checkEnvelope` would
+refuse it; `run.importSave` makes it a run at the brooding week, as `run.continueSave` does since Phase 3); v3 → `{ run,
+blob, starts: [] }`; 5 → itself. A
 format above `SAVE_SLOTS.version` is refused with **newer**. The blob inside keeps its own Phase 2–4 fields: every restore
 reads an absent field as null / 0 (as since Phase 3), so a Phase 3 blob loads in Phase 5 (test-saves plays one). The
 live keys are never renamed and never rewritten by a migration (a republish keeps every autosave and slot; the artifact's
@@ -277,19 +331,27 @@ keeps every earlier one.
 ### 3.7 Errors and messages (save-codec.js `SAVE_MESSAGES`, in code; no verdict words)
 | Code | When | The panel says |
 | --- | --- | --- |
-| `not-a-save` | a paste with no `CF<n>.` line and no JSON save | *This text is not a Chicken Farm save. Copy the whole backup, from its first line to END.* |
-| `incomplete` | the crc does not match, the base64 is cut, no END line | *Part of the save is missing. Copy the whole backup again, from its first line to END, and paste all of it.* |
+| `not-a-save` | a paste with no `CF<n>.` marker and no JSON save | *This text is not a Chicken Farm save. Copy the whole backup, from its first line to END.* |
+| `incomplete` | the crc does not match, or fewer payload characters than the marker says | *Part of the save is missing. Copy the whole backup again, from its first line to END, and paste all of it.* |
+| `missing-parts` | a backup in parts with a part not pasted (the panel adds which: *parts 3, 5 of 24*) | *Some parts of this backup are missing. A backup in parts says “part 2 of 6” on its first line: paste every part, in any order, into the box.* |
+| `mixed` | markers of two different backups in one paste | *These parts come from different backups. Paste the parts of one backup only.* |
 | `damaged` | the bytes decode but do not unpack or parse | *This save is damaged and cannot be read.* |
 | `newer` | format above 5 | *This save was made by a newer version of the game. Reload the page to get the newest version, then try again.* |
 | `invalid` | `checkEnvelope`: no level / env / farm, an unknown level id, a day outside −2..71 | *This save does not hold a farm this version can load.* |
 | `full` | a write threw (quota) or the slot would pass `SAVE_SLOTS.maxSlotChars` | *The browser's storage for this game is full. Delete a slot (back it up first if you want to keep it), then save again.* The old slot is kept as it was. |
-| `blocked` | storage missing or throwing | *Saving is off in this browser (site storage is blocked or this is a private window). Back up your game as text instead.* (slots drawn disabled; Back up of the game in play still works) |
+| `blocked` | storage missing or throwing | *Saving is off in this browser (site storage is blocked or this is a private window). Back up your game as text instead.* (slots drawn disabled; Back up of the game in play still works; Restore offers *Restore and play now*, §3.5) |
 | `load-failed` | `level.resume` threw or returned false | *This save could not be loaded. The farm you had is unchanged; the save is kept as it is.* |
 
 A **load that fails after the resume began** (an exception inside `level.resume`) goes back to the title card
-(`level.toTitle()`) with the message on the title card's save note; nothing is deleted. The autosave that fails to write
-(quota) raises EV.SAVE `{ kind: 'auto-failed' }` once per level: a HUD caption *The game could not save just now: the
-browser's storage is full. Open Save or load to make room.*
+(`level.toTitle()`) with the message in the title card's note (`title.note(text)`, in code: a `role="status"` line under the
+title's keys); nothing is deleted. The autosave that fails to write (quota) raises EV.SAVE `{ kind: 'auto-failed',
+message }` once per level (saves.js decides; `run.saveRun`'s false is its signal): **ui.js shows it** (in code) as a HUD
+caption, or at the top of the open panel — *The game could not save just now: the browser's storage is full. Open Save
+or load to make room.* (add the code `auto-failed` to `SAVE_MESSAGES`). Any other EV.SAVE with `ok: false` and a message
+shows the same way when the saves panel is not open (the panel shows its own). **The autosave row** whose key exists but
+does not read (unparsable JSON, another version) gets the error code (`damaged` / `newer`) on its row like a slot, with
+its message and *Delete*; the title card's Continue then skips it and the title's note says *The autosave could not be
+read: Continue uses your newest slot.* when a slot is readable.
 
 ### 3.8 Sizes and quota (measured at the design round, node, the ideal cycle, seed 1)
 The run key 72 KB after the brooding week, 190 KB at day 35, 171 KB at day 67; the starts 12 (level1) · 53 (week2) · 77
@@ -302,7 +364,9 @@ backup text of it ≤ 300 K characters.
 Four rows: *Autosave* (the game in play, or the last one) and *Slot 1–3*; each row: the name, the saved date and size, its
 keys (Continue on the autosave; Save here · Load · Delete · Back up · Restore on a slot; disabled keys say why in their
 title). The in-panel question replaces the row's keys with the question and its two answers, the first answer focused; Esc
-answers the safe one (*Keep it* / *Cancel*). The backup box and the restore box open under the row. At 960 × 600 the panel
+answers the safe one (*Keep it* / *Cancel*) through the panel's `onKey(e)` (§8.6, in code: the panel host offers the open
+panel every key before ui.js closes it on Esc or E), so the panel stays open. The backup box and the restore box open
+under the row; their styles are the package's own (`injectStyle('saves-style', …)`, in code). At 960 × 600 the panel
 fits without a scroll (four rows, one open box scrolls inside the panel). Every key is a `<button>` in the tab order; the
 messages are `role="status"`.
 
@@ -311,7 +375,7 @@ messages are `role="status"`.
 ### 4.1 Every setting (`settings.js SETTINGS_SCHEMA`, in code; every one applied live through `settings.subscribe`)
 | Path | Values (default **bold**) | Applied by | How |
 | --- | --- | --- | --- |
-| `sound.volume` | 0..1 (**0.7**) | sound (audio.js) | master gain `volumeToGain` (as Phase 4) |
+| `sound.volume` | 0..1 (**0.7**) | sound (audio.js) | master gain `volumeToGain` (as Phase 4); the slider's `value` is the stored 0..1 value, its `<output>` shows the percent (*40 %*) |
 | `sound.muted` | **false** / true | sound | the context sleeps 0.4 s after (as Phase 4) |
 | `sound.background` / `sound.flock` / `sound.cues` | 0..1 (**1**) | sound | layer gains × value² (§2.6) |
 | `time.defaultSpeed` | **1x** / 4x | experience (level.js) | the clock a level starts and resumes at (`fast`); the 1× / 4× keys still change it |
@@ -320,7 +384,7 @@ messages are `role="status"`.
 | `time.holdJobs` | **true** / false | experience (level.js `setHold`) | false: a job closes at its window even while he works at it (the farmer's request stays the default) |
 | `graphics.quality` | **auto** / high / medium / low / custom | settings (ui-settings.js) | a preset of the three below: high = 1.5 · high · full; medium = 1 · low · full; low = 0.85 · off · reduced; auto = auto · auto · auto; changing one of the three by hand reads *custom* |
 | `graphics.pixelRatio` | **auto** / 1.5 / 1.25 / 1 / 0.85 | settings (gfx-quality.js) | the cap of `min(devicePixelRatio, cap)`; auto: 1.5 and the governor |
-| `graphics.shadows` | **auto** / high / low / off | settings (gfx-quality.js) | high: 2048 PCF soft; low: 1024 PCF; off: `renderer.shadowMap.enabled = false` |
+| `graphics.shadows` | **auto** / high / low / off | settings (gfx-quality.js, in code) | high: 2048 PCF soft; low: 1024, the same soft filter; off: a 256 map drawn once with no caster and then never again (`shadowMap.autoUpdate = false`). `renderer.shadowMap.enabled` and `.type` never change (three 0.160 keys every program on both: a change would compile every lit material in the middle of play) |
 | `graphics.flockDetail` | **auto** / full / reduced | settings (flock-render.js `setDetail`) | reduced: the low bird mesh (§4.4) |
 | `graphics.showFps` | **false** / true | settings | a small *NN fps* readout on the time bar (perf.fps) |
 | `camera.rotateSpeed` | 0.5..2 (**1**) | settings (player.js) | × `ORBIT_PER_PX` and `KEY_TURN` |
@@ -343,20 +407,28 @@ without throwing; the Phase 4 sound key is read once when no settings are stored
 ### 4.2 The menu
 A panel (`settings`, kind 'paused': the clock stands still) with six tabs (`role="tablist"`, arrow keys move between
 tabs), each a list of labelled native controls (range with its value shown, check box, select). Opened from: the title
-card (*Settings*), the game menu (*Settings*), the gear key on the time bar (the menu, then Settings), the speaker key's
-*Sound settings* (the Sound tab), and `ui.openSettings(tab)`. A *Reset this tab* key per tab. At 960 × 600 every tab fits
+card (*Settings*), the game menu (*Settings*: opened with `{ returnTo: 'menu' }`, so Esc in Settings shows the menu again,
+§8.6), the gear key on the time bar (the menu, then Settings), the speaker key's *Sound settings* (the Sound tab), and
+`ui.openSettings(tab, via?)`. A *Reset this tab* key per tab. At 960 × 600 every tab fits
 without a scroll except Keys (it scrolls inside the panel, never sideways). Settings hold for every mode (title, sandbox,
 level). A short line under each tab says what it changes in plain words; nothing in it is a farming fact.
 
 ### 4.3 Keys and rebinding (keys.js, in code)
-`KEY_ACTIONS` names every key with its default (the Phase 1–4 keys exactly; `map` Tab and `menu` Esc are new). In the
-Keys tab each action shows its key(s); *Change* waits for the next key press (*Press a key for Squeeze a handful of
-litter… Esc cancels*). `keys.rebind(id, code)`: a key another action uses **swaps** with it (both rows show it at once);
-`run` (Shift), `useDead` (Shift+E: follows `use`) and `menu` (Esc) are fixed; reserved codes (Esc, the modifiers, Caps
-Lock, F5, F11, F12, Print Screen) are refused with *That key belongs to the browser*. *Reset all keys* gives the
-defaults. Every key check moves onto `keys.matches(e, id)`: **ui.js** (experience: use, useDead, bucket, squeeze, probe,
-lux, air, notebook, skills, floorView, comfortView, moistureView, help, map, menu), **player-input.js** (settings:
-forward, back, left, right, run, turnLeft, turnRight, zoomIn, zoomOut), **audio.js** (sound: sound). The controls legend
+`KEY_ACTIONS` names every key with its default (the Phase 1–4 keys exactly; new: `map` **O** (overview), `pause` **P**,
+`speed1` **1**, `speed4` **4**, `nextJob` **J** — review round: Tab stays the browser's focus key, so a keyboard player
+reaches every HUD key, and the time bar's keys have keys of their own; `menu` Esc). In the Keys tab each action shows
+its key(s); *Change* calls `ui.captureNextKey(fn)` (§8.6, in code) and waits for the next key press (*Press a key for
+Squeeze a handful of litter… Esc cancels*): the capture comes before every other key listener, so W, E, the arrows and
+Esc reach it (fn sees Escape and cancels). `keys.rebind(id, code)`: a key held by another action's **main** key **swaps**
+with this action's main key (both rows show it at once); an action's **alternates** (zoomIn's Numpad +, the Numpad digits)
+stay unless another action's main key takes one; `run` (Shift), `useDead` (Shift+E: follows `use`) and `menu` (Esc) are
+fixed; reserved codes (Esc, the modifiers, Caps Lock, F5, F11, F12, Print Screen) are refused with *That key belongs to
+the browser* and **Tab, Enter, Numpad Enter and Space** with *Tab, Enter and Space move through and press the game's
+buttons* (`UI_CODES`, `REBIND_WORDS`, in code). `actionOf` checks the actions with a Shift rule first (Shift+E is
+`useDead`, plain E is `use`). *Reset all keys* gives the defaults. Every key check moves onto `keys.matches(e, id)`:
+**ui.js** (experience: use, useDead, bucket, squeeze, probe, lux, air, notebook, skills, floorView, comfortView,
+moistureView, help, menu; map, pause, speed1, speed4 and nextJob are in code), **player-input.js** (settings: forward,
+back, left, right, run, turnLeft, turnRight, zoomIn, zoomOut), **audio.js** (sound: sound). The controls legend
 (ui-help.js), the guide (§6.2), the title card's key line and the prompt pills read `keys.labels(id)`, so a rebound key
 shows everywhere (test: Q → B; B squeezes, Q does nothing, the legend reads *B Squeeze a handful of litter*).
 
@@ -364,11 +436,16 @@ shows everywhere (test: Q → B; B squeezes, Q does nothing, the legend reads *B
 `gfx-quality.js` (in code) holds Phase 1's governor unchanged for **auto**: every 2 s the median frame; over 36 ms (about
 28 fps) one step down, 3 s apart: (1) a high-DPI screen to pixel ratio 1.0; (2) the simple shadow (1024 PCF); (3) under
 20 fps (50 ms) the 0.85 render scale. Phase 5 adds two steps at the end, only for settings left on auto: (4) flock detail
-reduced; (5) shadows off; then it stops. A setting set by hand pins that part (the governor skips its steps); setting one
+reduced; (5) shadows off; then it stops. Review round (in code): step 2 keeps the soft filter on a 1024 map and step 5 keeps
+`shadowMap.enabled` (an empty map, no longer drawn) — Phase 1's step 2 switched PCF soft to PCF, which compiled every lit
+material again mid-play on exactly the slow machines the governor serves; three 0.160's program key holds
+`shadowMapEnabled` and `shadowMapType`, so neither ever changes after the warm-up. A setting set by hand pins that part (the governor skips its steps); setting one
 back to auto starts that part from the top (`restart`). Under automation the governor stays off (`navigator.webdriver`),
 as since Phase 1; `quality.debug.feed(dt, n)` drives it in tests.
 **Flock detail reduced** (flock-render.js `setDetail('reduced')`): the same instances, the same colours and poses, a bird
-mesh with at least 40 % fewer triangles (the body a lower-segment shape, no separate wing tips), and the pose update of birds
+mesh with at least 40 % fewer triangles than the 113 of `buildBirdGeometry`'s LOD 0 (the body a lower-segment shape, no
+separate wing tips; measured on the flock's own meshes: index count ÷ 3 × drawn instances of `flock.meshes`, not the
+view's total, of which the birds are only about 200 K of 312–553 K), and the pose update of birds
 more than 25 m from the camera every second frame. At the default zoom its look matches full detail (p5-gfx's screenshot
 pair); the flock's metrics and behaviour do not change (they are not drawn).
 
@@ -397,7 +474,11 @@ follow, the pitch and the zoom limits (6–45 m) are unchanged. Under reduced mo
   positions) with the count beside the house (*3 dead birds*, the farm's `deadOnFloor`); the **bucket** set down
   (`props.bucketDown`) with its count; the **flock's spread** — every drawn bird as a 2 px (Farm) or 3 px (House) dot in its
   colour (chick yellow to broiler white), so a huddle under the brooders, birds along the walls or an empty end read at a
-  glance; a power cut — the house drawn dark with *No power* on it; rain — a soft blue wash with *Raining*.
+  glance (`flock.positions()`, in code: `{ n, x, z, size, morph }`, read-only views of the flock's arrays, read when the map
+  opens); a power cut — the house drawn dark with *No power* on it; rain — a soft blue wash with *Raining*; **the house
+  resting** (`farm.house.closed`, the rest days: props' `doorShut` collider makes every inside place unreachable) — the
+  house drawn shut with *The house is shut while it rests* on it, its inside places faint and not walkable (their tags
+  say the same words; a click does nothing but show them).
 - **Signs** as small numbered posts; their names on hover and focus, and in the side list.
 
 ### 5.2 Places (`map-plan.js MAP_PLACES`, in code: 44 places)
@@ -413,16 +494,21 @@ places (generator, water tank, power sign) are drawn in every run (the buildings
 is not on the farm now (the chick boxes after placement, the catching panels before day 41) is drawn faint and still walks.
 
 ### 5.3 Using it
-- **Open**: Tab while the farm view (the canvas) has focus and no panel is open, in a level and in the sandbox; the map key
-  on the time bar; the menu's *Farm map*. Tab with focus on a HUD control moves focus as usual (accessibility, §6.6).
-- **Close**: Esc, the close key, Tab again (from inside the map), or a click on a place.
+- **Open**: **O** (keys.js `map`, rebindable; in code) with no panel open and the focus outside a text box, in a level and
+  in the sandbox; the map key on the time bar; the menu's *Farm map* (with `{ returnTo: 'menu' }`: Esc on the map shows the
+  menu again). Tab always moves the focus (accessibility, §6.6).
+- **Close**: Esc or the close key (back to the menu when it was opened from there), or a place picked (the whole chain
+  closes and he walks: `closePanel({ all: true })`, in code).
 - **Names**: hover or focus a place → a tag with its name and the walk: *Feed silos · about 64 m · 16 s walking (about
   24 farm minutes at 1×)* — the route's length from `findPath` (player-path.js; the farmer's radius 0.35 m, the colliders,
   `FARM.walk`), walking at 4 m/s, farm minutes at `LEVEL1.clock.work`. An open job's marker tags its job (*1 · Read the
   water meter · the water supply*).
 - **Walk**: click (or Enter / Space on a focused place, or a click on open ground inside the fence in the Farm view, or on
   the floor in the House view) → the map closes, then `player.walkTo(stand.x, stand.z)` (a double click or Shift runs). The
-  route is the 3D game's own: round the house, in at the door; the target ring shows where he goes.
+  route is the 3D game's own: round the house, in at the door; the target ring shows where he goes. **In the Farm view the
+  house is one target**: its inside places are about 5 px apart there (the water supply and drinker line 4 less), so a
+  click on the house opens the House view (the inside places are picked there, or from the side list); the *Chicken
+  house* place (its stand point is the door, `SPOTS.houseDoor`) in the side list walks him to the door.
 - **Keyboard**: the side list holds *Jobs now* (each open job's place, nearest first) and *Places* (grouped: buildings,
   machines outside, signs outside, inside the house); Tab / Shift+Tab move through the view tabs, the list and the close
   key; arrow keys move within the list; the focused place is outlined on the map.
@@ -433,7 +519,9 @@ Readable at **1280 × 800** and **960 × 600** (the harness sizes): the panel us
 map box at 960 × 600 is at least 600 × 380 px (Farm: about 5.2 px a metre; House: about 13 px a metre), the side list 220
 px (under 860 px wide it goes under the map). Labels are 12 px Chakra Petch at least (`MAP.minLabelPx`) with a dark halo;
 the always-shown labels never overlap (map-plan.js places each label north, south, east or west of its building, chosen
-so the boxes are clear at both sizes; test-map checks it with the font's measured widths). Colours: the game palette
+so the boxes are clear at both sizes; test-map checks it with the font's measured widths, at the map boxes of 1280 × 800,
+960 × 600 and a **600 px** wide box, the smallest the layout allows — *Feed silos* and *Water tank* are the pair that
+overlaps first). Colours: the game palette
 (config `COLORS`, index.template.html variables); the markers orange as in 3D; the farmer's arrow orange with a dark edge;
 every state also in words (the tag, the side list), never colour alone.
 
@@ -449,8 +537,10 @@ every state also in words (the tag, the side list), never colour alone.
   its anchor's on-screen box: **jobs** (the job card, at the first level start), **signs** (the nearest sign interactable
   within 25 m that is on screen; on the planning day the gate sign, in the brooding week the chick arrival sign),
   **time** (the time bar), **watch** (the flock watch card, the first time it shows). Keys: *Next* (*Got it* on the last
-  of a group), *Skip the introduction*; Enter and Esc work on the focused card. While a card shows, `ui.panelKind` reads
-  'paused' (in code), the farmer can still turn the view. Remembered in `intro.seen` / `intro.done`; reset by the guide's
+  of a group), *Skip the introduction*; Enter and Esc work on the focused card: while a card shows the intro holds
+  `ui.claimKeys(fn)` (§8.6, in code), so Enter and Esc reach the card first and Esc never opens the menu behind it. The
+  cards' words name the keys as `{key:<id>}` tokens (in code), filled with the live bindings by `fillGuide`. While a card
+  shows, `ui.panelKind` reads 'paused' (in code), the farmer can still turn the view. Remembered in `intro.seen` / `intro.done`; reset by the guide's
   *Show the introduction again*. A player who opened any panel before the first card skips nothing: the card waits until
   no panel is open. No card on a replay, a Continue or a standard start once `intro.done`.
 - **Under automation** (`navigator.webdriver`, as `level.boot` keeps the sandbox there since Phase 2) the introduction never
@@ -463,16 +553,24 @@ reading the flock, records, levels, skill tree, time, saving, sound and settings
 the controls legend (*Full guide* link) and `ui.openGuide(section)`. It says how the **game** works; every farming fact
 stays on the signs (test-contracts: no verdict word, no farming figure). The package writes the final words (short,
 plain English a Thai farmer reads easily: one idea a sentence, the HUD's own names in bold), adds a small labelled picture
-of the HUD (the cards' positions as boxes with their names) and *Show the introduction again*.
+of the HUD (the cards' positions as boxes with their names) and *Show the introduction again*. Review round (in code):
+the words name keys and the Time settings by tokens — `{key:squeeze}` is `keys.label('squeeze')` (*B* after a rebind),
+`{time:signs}` / `{time:atJob}` / `{time:hold}` the sentence for the Time setting now — filled by `fillGuide(text, { keys,
+settings })` each time the guide opens; the clock's sentence says signs **stop** the clock (the default); the skill tree's
+says *Points come from what happens on your farm when you do a branch's jobs in play* (no praise).
 
 ### 6.3 Loading and error messages (package "experience": boot-screen.js, index.template.html; main.js wiring in code)
 - The loading card names its step (in code: `await bootScreen.step('Building the farm')`, *Bringing in the flock*,
   *Warming up the graphics*; each step lets the page paint). The bar keeps moving (no bar animation under reduced motion:
   the steps' words carry it).
-- `BOOT_ERRORS` (in code): **webgl** (no WebGL), **library** (three.js did not load within 20 s: the template's inline
-  script), **load** (start threw), **stopped** (three thrown frames in a row), **context-lost** (`webglcontextlost`: the game
-  saves now — `level.saveNow()` to expose, experience — and says *The graphics stopped… reload the page and press
-  Continue*). Each message: what happened and what to do, 16 px, centred, a *Reload the page* key where reloading helps
+- `BOOT_ERRORS` (in code): **webgl** (no WebGL), **library** (three.js never loaded: the module script's `onerror`, or the
+  template's 20 s timer while `window.__bootStarted` is unset — main.js sets it as the module starts), **slow** (the 20 s
+  timer while the module runs: the farm is still building on a slow connection or computer — *Still loading… a slow
+  connection or computer can take a minute.* goes under the step words and the card stays, review round, in code),
+  **load** (start threw), **stopped** (three thrown frames in a row), **context-lost** (`webglcontextlost`: the game
+  saves now — `level.saveNow()` to expose, experience — and the words follow its answer, in code: saved → *The graphics
+  stopped… The game was saved just now: reload the page and press Continue*; not saved (the title card, the sandbox, a
+  result) → *…Reload the page; Continue goes on from the last time the game saved*). Each message: what happened and what to do, 16 px, centred, a *Reload the page* key where reloading helps
   (a `<button>` calling `location.reload()`).
 - The saves' messages (§3.7) and the autosave-failed caption.
 
@@ -484,24 +582,33 @@ weeks 4–5 day 30 (heat wave) · the rainy day 33 storm and the power cut (dark
 tab · the water condition's tank panel · the catching night · the wash bay and the clean house · a rest day · each result
 screen and the cycle summary · the menu, settings (every tab), saves (with a question open), map (both views), guide.
 Checklist: **(a)** HUD cards in one style (the feed-sack card, stitched seam), one type scale (labels 11 px caps, values
-the display face), aligned to the 16 px gutter at both sizes, no card covering another (the job card, the flock watch, the
+the display face, running text 12 px or more: §6.6's floors), aligned to the 16 px gutter at both sizes, no card covering another (the job card, the flock watch, the
 alarm, the captions, the prompt, the dead-bird chip, the intro card); **(b)** every panel's close key in the same place and
 style, headings in the display face, the same paddings; **(c)** no clipped or cut text anywhere (the flock watch's warning,
 §6.8.3; long condition names in the clock card; the job titles); **(d)** 3D: no z-fighting or flicker on the boards, the
 house's cut-away clean in every condition, the rain hidden over the cut-away house, the night readable, the power cut dark
 but the farmer and the generator path visible, the catching crew and crates fading where they block the farmer; **(e)** no
-console warning or error in any view.
+console warning or error in any view. **Who fixes what** (review round): the HUD and the experience package's panels —
+experience; the **3D items of (d)** — package **settings**, which owns `world*`, `house*`, `props*` for the performance
+pass (experience's p5-look shots list them in its report, settings fixes them); the look of the settings, guide, saves
+screens — their packages, in their own injected styles; the **cross-panel look and a11y pass** over every screen together
+(one type scale, the close keys, the focus rings across ui-settings, ui-saves, ui-guide, ui-map) — the **integrator,
+after all four merges**, with p5-look and p5-a11y's checklist results in the report.
 
 ### 6.5 Performance on real GPUs (package "settings": gfx-quality.js and the 3D files it owns; scripts/p5-gfx.json)
 - **Budgets** (config `GFX.budget`, checked by `__game.renderInfo()` at named views, 960 × 600, pixel ratio 1): draw calls
   ≤ **110** and triangles ≤ **650 K** in every view of p5-gfx.json (the yard by day and night, inside at days 3 / 30 / 41, the
   apron, zoom 45, the rainy storm, the power cut, the catching night with the crew and crates, the wash bay, the map and the
-  settings open); **shader programs**: no program compiled after the warm-up — `renderInfo().programs` the same (66 on main
-  at the design run) after visiting every view and condition, so nothing compiles in the middle of play on a real GPU.
+  settings open); **shader programs**: no program compiled after the warm-up — counted by `renderInfo().linked` (in code:
+  main.js wraps `gl.linkProgram`; `renderInfo().programs` cannot see a recompile, a replaced program is released and the
+  count stays 66) — **zero links after the warm-up** across every view and condition, the governor's steps
+  (`quality.debug.feed`) and the *Low* and *High* presets, so nothing compiles in the middle of play on a real GPU (the
+  design stubs check the four shadow settings: 66 linked before and after).
   Measured at the design run: draw calls 66 (sandbox spawn) · 76 (day 3 yard) · 87 (day 3 inside) · 70 (day 30 inside) · 90
   (day 30 apron, 14:00 and 22:00) · 93 (day 30 yard at zoom 45, 22:00); triangles 312–553 K; 66 programs.
-- **The flock's cost**: reduced detail −40 % triangles or more (above); `flock.update` at 1,800 drawn birds stays at a
-  median ≤ **4 ms** over 300 frames (p5-gfx times it with `performance.now()`; measured at the design run in headless
+- **The flock's cost**: reduced detail −40 % of **the flock meshes' own** triangles or more (index count ÷ 3 × drawn
+  instances, summed over `flock.meshes`; the view's total stays under `GFX.budget` as its own check); `flock.update` at
+  1,800 drawn birds stays at a median ≤ **4 ms** over 300 frames (p5-gfx times it with `performance.now()`; measured at the design run in headless
   Chrome on this machine: 1.8 ms on day 3, 2.6 ms on day 30, p90 6.1 / 3.6 ms).
 - **The governor's steps** (§4.4) with `quality.debug.feed`: frames of 60 ms → the simple shadow, then 0.85, then reduced
   flock, then shadows off, 3 s apart; frames of 30 ms → no step; a manual setting pins its part.
@@ -513,11 +620,20 @@ console warning or error in any view.
   select or link in a logical tab order (title: Continue, Start, Start at the brooding week, the quiet keys, the run card;
   HUD: the job card, the time bar; panels: their content top to bottom, the close key last); Tab stays inside an open panel
   (exists); Esc closes it and the focus returns to what opened it (exists); tab lists move with the arrow keys; the map's
-  places with Tab and the arrows. A player can play a whole day with the keyboard alone: walking (WASD), E, the panels,
-  Next job, the menu (Esc), the map (Tab) — p5-a11y plays the prep day's first job and a sign read without the mouse.
+  places with Tab and the arrows. **Tab is the focus key everywhere** (review round: the map is on O). A player can play a
+  whole day with the keyboard alone: walking (WASD), E, the panels, the clock (**P** pause, **1** / **4** the speed, **J**
+  Next job — keys.js, wired in ui.js in code: each presses the time bar's own key), the menu (Esc), the map (**O**), or
+  Tab to any HUD key and Enter — p5-a11y plays the prep day's first job and a sign read without the mouse, and presses
+  Next job and the map by key. **A mouse click leaves no focus on a time-bar key** (in code: ui-hud.js blurs a key after a
+  pointer click, `e.detail > 0`, as audio-ui.js does), so the farm's keys keep working after a click.
 - **Visible focus**: every focusable element shows a 2 px `--focus` (#ffd447) outline offset 2 px (`:focus-visible`), never
   removed; checked by p5-a11y on every focusable element of the title, menu, settings, saves, map and one machine panel.
-- **Readable sizes**: no HUD or panel text under 12 px at the default HUD size (computed font size, p5-a11y); the HUD size
+- **Readable sizes** (review round: two floors, as the template's type scale has them): **11 px** for uppercase labels
+  (`.label`, the card kickers, the watch's row names) and the sign **source lines** (`.src`: the approved rules want them
+  small), each with a contrast of at least **4.5 : 1** against its background; **12 px** for every other (running) text in
+  the HUD and the panels, at the default HUD size (computed font size; p5-a11y checks the two classes separately). The
+  template has about 60 rules at 10–11.5 px today: the ones under the floors go up (the job card and the 288 px watch card
+  keep their width at 960 × 600: their running text wraps, never clips — §6.8.3); larger text comes from the HUD size
   setting (§4.1); captions and messages stay `interface.captionTime` × their time.
 - **Colour plus text**: every state shown by colour also shows a word or a shape: the flock watch dots (their row's word:
   steady / watch / alert, `aria-label`), the fan pips (*6 / 6*), the brooder flame (*On* / *Off*), the lit switch keys (their
@@ -543,7 +659,12 @@ title card, the menu and the settings are usable at that width (one column).
    days, leaving out any hour of the heat-wave lift, the withdrawal, a cut or the main valve shut (as now). **Test**
    (test-watch, new case): the water condition's ideal on day 33 at 12:00 and 15:00 reads Supply **green** with the tank ≥ 90
    %; `waterPumpUnfixed` still warns on day 30 about 6.8 farm hours (≥ 6) before the tank is under 20 %; the ideal's warning
-   list (test-watch's allow-list) is unchanged.
+   list (test-watch's allow-list) is unchanged. **The iron filter still shows** (review round: with the meter alone no longer
+   raising the Supply row, a clogged filter — day 24 04:00, flow × 0.6, the tank full, the pump at its plate — reaches the
+   watch only through the intake row): a second new case runs `waterFilterLate` (the filter left until its flow test on
+   day 24 is skipped) and asserts a warning on the intake or the Supply row whose cause names the filter (*the water
+   supply's filter*, its plate and place) within the same farm hours of day 24–25 as on main before the change (the
+   package measures main's hours first and writes both in its report).
 2. **A bad batch's fail line says "day 1" for the claim closed at 24:00 of day 0** (package "experience": level.js
    `claimClosedCheck`, `computeResult`). The env stepper that ends the level at the claim's close runs just after midnight,
    so `env.dayNumber` is 1 and the result reads *deaths and culls reached 2.6 % on day 1* and *ended day 1, 00:00*. **Fix**:
@@ -559,21 +680,37 @@ title card, the menu and the settings are usable at that width (one column).
    the notebook keeps the whole text (as now). **Test** (`scripts/p5-hud.json`): at 960 × 600 and 1280 × 800 the water
    condition's supply warning (the longest, about 520 characters) — its last word is visible after scrolling the box
    (`scrollHeight − clientHeight ≤ 1` or the box scrolls to its end), the card never overlaps the time bar or the job card.
-4. **The hot season's ideal loses no weight** (package "saves": farm-tuning.js, farm-flock.js, content-signs-cond.js,
-   test-cond / test-cycle). Thai April–May heat costs a flock appetite even when the pads and fans keep it out of panting:
-   the birds eat less in the hot hours and do not fully make it up at night. Now the intake falls only above the panting
-   reference (`heatIntakeP4`: 4 % a °C over `hotFrom`), which a well-cooled flock never reaches, so the hot ideal ended at
-   2,873 g against the normal 2,882 g. **Fix** (model, every season, from day 15): an appetite term per floor cell
-   `appetiteP5(e, age) = max(0.85, 1 − 0.025 × max(0, e − (pantFrom(age) − 2.5)))` (e = felt − target), the intake factor
-   `min(heatIntakeP4, appetiteP5)`; constants **model**, tuned so that: the **hot season's ideal** finishes **2–5 % lighter**
-   than the normal season's ideal of the same seed (2,738–2,824 g against 2,882), FCR ≤ 1.62, EPEF ≥ 390, every level still
-   passes (weeks 4–5's day-35 weight ≥ 95 % of the target) and reaches level 2 in every branch; the **normal season's ideal**
-   moves ≤ 1 % (harvest 2,853–2,911 g; every test-cycle band unchanged; test-sim byte-identical: the brooding week is not
-   touched, age < 15); the hot season's named mistakes fail as before. The heat sign's hot-season line (content-signs-cond.js,
-   **general practice**): *In April–May heat the birds eat less in the hot hours even when the pads and fans keep them
-   comfortable: a hot-season flock often finishes a little lighter, about 2–5 % (general practice).* — its figure is what
-   test-cond measures (the hot ideal against the normal ideal). The watch's intake row may read amber on hot afternoons; the
-   hot ideal raises no new red warning (test-watch's allow-list unchanged).
+4. **The hot season's ideal loses no weight** (package "saves": farm-tuning.js, farm-cycle-step.js, flock-watch.js,
+   content-signs-cond.js, test-cond / test-cycle / test-watch). Thai April–May heat costs a flock appetite even when the
+   pads and fans keep it out of panting: the air behind the pads still stands above 28 °C through the hot hours, the
+   birds eat less then and do not fully make it up at night. Now the intake falls only above the panting reference
+   (`heatIntakeP4`: 4 % a °C over `hotFrom`), which a well-cooled flock never reaches, so the hot ideal ended at 2,875 g
+   against the normal 2,887 g (0.4 % lighter; finish `liveG`, seed 1, measured at the review round).
+   **Why not a comfort term** (review round): the design round's `appetiteP5(e, age)` keyed on e = felt − target cut the
+   normal season as much as the hot one (mean factor 0.966 against 0.957 over days 15–35 of the two ideals): both seasons
+   run the same e when they are well managed. What differs in April is the **absolute air** behind the pads: the hot
+   ideal's house mean is 28.9–30.0 °C over days 21–41 (daily highs 32.8–33.0 °C), the normal ideal's 26.8–29.4 °C.
+   **Fix** (model, the hot season only): one more intake factor in `cycleFactors` (farm-cycle-step.js, beside `fHeat`),
+   `fx.fHot = appetiteHot(farm.condition, env.houseTemp, age)` with
+   `appetiteHot = condition === 'hot' && age ≥ 21 ? max(0.85, 1 − 0.025 × max(0, houseC − 28)) : 1` (farm-tuning.js
+   `TUNING.hotAppetite { fromAge: 21, aboveC: 28, perC: 0.025, floor: 0.85 }`, constants **model**), and
+   `fx.f = fSpace × fForm × fHeat × fHot × fHealth × shock × lame`. **Measured at the review round** (the term patched into a
+   scratch copy, `runCycle('hot:ideal')` against `runCycle('ideal')`, to `finish`): the hot ideal **2,788 g against 2,887 g:
+   3.4 % lighter** (seeds 2 and 3: 3.4 % too), FCR 1.569, EPEF 416, weeks 4–5 passed (day-35 2,230 g), the harvest passed;
+   the slope's range: 0.02 → 2.8 %, 0.03 → 4.0 %, 0.04 → 5.1 %, and 27 °C at 0.03 → 5.8 %. **Bands** (test-cond, test-cycle):
+   the hot ideal **2–5 % lighter** than the normal ideal of the same seed, FCR ≤ 1.62, EPEF ≥ 390, every level passes
+   (weeks 4–5's day-35 weight ≥ 95 % of the target), every branch reaches level 2; the hot season's named mistakes fail as
+   before; **the normal season does not change at all** (the term is 1 outside the hot season: test-cycle's ideal digest and
+   every band byte-identical — a new normal-season digest check in test-cycle compares the ideal's day-42 row with main's;
+   test-sim byte-identical; the Phase 3 play-throughs unchanged). The heat sign's hot-season line (content-signs-cond.js,
+   **general practice**): *In April–May heat the birds eat less in the hottest hours, even with the pads and fans running:
+   a hot-season flock often finishes a little lighter, about 2–5 % (general practice).* — its figure is what test-cond
+   measures (the hot ideal against the normal ideal). **The flock watch** (flock-watch.js): the intake row's standard is
+   the expected intake — each sample keeps `hotK` (the hour's `farm.cyc.fx.fHot`, 1 outside the hot season) and the row's
+   `want` is multiplied by it — so the expected dip of a hot afternoon reads green and sends no amber *likely cause: heat*
+   that would send the farmer to add fans to well-cooled birds; the row's detail adds *(hot season: the birds eat a little
+   less in the hottest hours)* while `hotK` < 1; an intake under even that expectation warns as before. test-watch: the hot
+   ideal's warning list (the allow-list) unchanged and no intake amber on days 21–41 caused by `fHot` alone.
 
 ### 6.9 Docs
 ARCHITECTURE.md gets a **Phase 5 — as integrated** section at the merge (the integrator) and each package's notes in its

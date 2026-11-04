@@ -4,16 +4,27 @@
 // game menu ("Save or load"). Owner after the design round: package "saves". This is the design round's STUB: the rows
 // and Continue work on Phase 4's autosave; the slot keys are drawn disabled.
 //
-//   registerSavesPanel({ register, openPanel, closePanel, ctx, menu, title }) -> { id: 'saves', open() }
-import { h, button, uniqueId, setText } from './ui-dom.js';
+//   registerSavesPanel({ register, openPanel, closePanel, ctx, menu, title }) -> { id: 'saves', open(via?) }
+//   (via: { returnTo: 'menu' | 'result' }: closing the panel comes back there, PHASE5.md §8.6; the in-panel question takes
+//   Esc through the panel's onKey: Esc answers its safe answer and the panel stays open)
+import { h, button, uniqueId, setText, injectStyle } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
 import { slotName } from './save-slots.js';
 
 export const SAVES_ID = 'saves';
+// the saves screen's own rules (PHASE5.md §8.6: each package styles its own screens; the frame is the template's)
+const SAVES_CSS = `
+.saves-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.saves-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 6px; background: var(--panel-sunk); }
+.saves-k { margin: 0; } .saves-name { margin: 2px 0 0; font-size: 14px; color: var(--ink); } .saves-when { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-faint); }
+.saves-keys { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.saves-note { margin: 6px 0 0; color: var(--ink-faint); font-size: 13px; }
+`;
 
 export function registerSavesPanel({ register, openPanel, closePanel, ctx, menu = null, title = null }) {
   const saves = () => ctx.saves || null;
+  injectStyle('saves-style', SAVES_CSS);
   register(SAVES_ID, () => {
     const titleId = uniqueId('saves-title');
     const { el, closeBtn } = dialogShell('saves', titleId, () => closePanel());
@@ -32,7 +43,8 @@ export function registerSavesPanel({ register, openPanel, closePanel, ctx, menu 
         const keys = [];
         if (r.slot === 'auto' && !r.empty) {
           const c = button({ class: 'btn btn--accent' }, 'Continue');
-          c.addEventListener('click', () => { closePanel(); s?.continueLatest?.(); });
+          // the autosave row resumes the autosave itself (Continue on the title card takes the newest of every save)
+          c.addEventListener('click', () => { closePanel({ all: true }); s?.continueAuto ? s.continueAuto() : s?.continueLatest?.(); });
           keys.push(c);
         } else if (r.slot !== 'auto') {
           for (const t of ['Save here', 'Load', 'Delete', 'Back up', 'Restore']) keys.push(button({ class: 'btn', disabled: '' }, t));
@@ -46,7 +58,7 @@ export function registerSavesPanel({ register, openPanel, closePanel, ctx, menu 
     }
     return { el, onOpen: render, update() {} };
   }, { kind: 'paused' });
-  menu?.add?.({ id: 'saves', label: 'Save or load', icon: 'save', order: 30, onSelect: () => openPanel(SAVES_ID) });
+  menu?.add?.({ id: 'saves', label: 'Save or load', icon: 'save', order: 30, onSelect: (via) => openPanel(SAVES_ID, via) });
   title?.addAction?.({ id: 'saves', label: 'Load a saved farm', icon: 'save', order: 10, onClick: () => openPanel(SAVES_ID) });
-  return { id: SAVES_ID, open: () => openPanel(SAVES_ID) };
+  return { id: SAVES_ID, open: (via) => openPanel(SAVES_ID, via) };
 }

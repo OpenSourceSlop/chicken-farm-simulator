@@ -7,6 +7,12 @@ import { ICONS } from './ui-icons.js';
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 // One dialog at a time. While a panel is open the farmer does not take keyboard input.
+// Phase 5 (PHASE5.md §8.6, review round): a return path. open(id, { returnTo }) with returnTo the open panel's id keeps that
+// panel as the parent: closing the child (Esc, its close key, E, the scrim) opens the parent again with the focus on the key
+// that opened the child (the game menu -> Settings -> Esc -> the menu). A panel registered with { parent: true } (the
+// result, the cycle summary) is the parent of whatever opens over it. close(false) and closeAll() close the whole chain
+// (a mode change, a place picked on the map, "Back to the farm"). A built panel may have onKey(e): the ui.js key listener
+// offers it every key first while the panel is open (true: the key is used, nothing else sees it).
 export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
   const scrim = h('div', { class: 'scrim', hidden: true });
   parent.appendChild(scrim);
@@ -22,7 +28,9 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
   // opts.kind: 'sign' (the clock stands still), 'paused' (records, notebook, skill tree, result),
   // 'panel' (equipment and inspection: the slow panel clock). A built panel may set its own .kind.
   const kinds = new Map();
-  function register(id, factory, opts = {}) { factories.set(id, factory); kinds.set(id, opts.kind || 'panel'); }
+  const parents = new Set();     // panels that are always a parent (the result, the summary)
+  const stack = [];              // the parents to go back to: [{ id, returnFocus }]
+  function register(id, factory, opts = {}) { factories.set(id, factory); kinds.set(id, opts.kind || 'panel'); if (opts.parent) parents.add(id); }
   // Forget every built panel (a mode change: sandbox and level panels share ids).
   function clearBuilt() {
     if (current) close(false);
@@ -31,9 +39,14 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
     built.clear();
   }
 
-  function open(id) {
+  function open(id, opts = {}) {
     if (!factories.has(id)) return false;
+    // the open panel stays as the parent when asked (returnTo) or when it is always one (result, summary)
+    const keep = current && current.id !== id && (opts.returnTo === current.id || parents.has(current.id)) ? { id: current.id, returnFocus: current.returnFocus } : null;
+    const active0 = document.activeElement;
+    const below = keep ? [...stack, keep] : opts.keepStack ? [...stack] : [];
     if (current) close(false);
+    stack.splice(0, stack.length, ...below);
     let panel = built.get(id);
     if (!panel) {
       panel = factories.get(id)();
@@ -42,7 +55,7 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
       parent.appendChild(panel.el);
       built.set(id, panel);
     }
-    const active = document.activeElement;
+    const active = opts.returnFocus || (keep ? active0 : document.activeElement);
     current = { id, panel, returnFocus: active && active !== document.body ? active : null };
     player.inputEnabled = false;
     scrim.hidden = false;
@@ -58,16 +71,33 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
     if (!current) return;
     const { panel, returnFocus } = current;
     current = null;
+    // a user close with a parent below: the parent opens again, the focus on the key that opened this panel
+    const back = restoreFocus && stack.length ? stack.pop() : null;
+    if (!restoreFocus) stack.length = 0;
     panel.onClose?.();
     if (panel.busy?.()) background.add(panel);
     panel.el.hidden = true;
     scrim.hidden = true;
     player.inputEnabled = true;
+    if (back) {
+      onClose?.();
+      open(back.id, { keepStack: true, returnFocus: back.returnFocus });
+      if (returnFocus && document.contains(returnFocus) && returnFocus.offsetParent !== null) returnFocus.focus({ preventScroll: true });
+      return;
+    }
     if (restoreFocus) {
       const target = returnFocus && document.contains(returnFocus) ? returnFocus : canvas;
       target?.focus?.({ preventScroll: true });
     }
     onClose?.();
+  }
+  /** Close the open panel and every parent below it (focus back on the farm view). */
+  function closeAll() {
+    if (!current) { stack.length = 0; return; }
+    const rf = stack.length ? stack[0].returnFocus : current.returnFocus;
+    close(false);
+    const target = rf && document.contains(rf) ? rf : canvas;
+    target?.focus?.({ preventScroll: true });
   }
 
   // Keep Tab inside the open dialog.
@@ -86,6 +116,9 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
     clearBuilt,
     open,
     close,
+    closeAll,
+    /** The parents waiting under the open panel (ids, the nearest last). */
+    get parentIds() { return stack.map((x) => x.id); },
     has: (id) => factories.has(id),
     get openId() { return current ? current.id : null; },
     /** 'sign' | 'paused' | 'panel' | null for the open panel; an open plate inside makes it 'sign'. */

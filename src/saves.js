@@ -10,6 +10,7 @@
 //   latest()                      the newest readable entry of list() (Continue), or null
 //   latestInfo()                  the title card's Continue line: run.info()'s shape plus { slot } (null: no save)
 //   continueLatest()              resume the newest save: true when a level runs after it (a slot is loaded into the autosave first)
+//   continueAuto()                resume the autosave itself (the autosave row's Continue), whatever the slots hold
 //   async saveSlot(n)             the game now (or the autosave from the title card) into slot n: { ok, code?, message?, meta }
 //   async loadSlot(n)             slot n into the autosave, then resume it: { ok, code?, message? }
 //   deleteSlot(n)                 { ok }
@@ -41,6 +42,7 @@ export function createSaves({ run, level, save, events } = {}) {
     latest() { const a = autoEntry(); return a.empty ? null : a; },
     latestInfo() { const i = run?.info?.(); return i ? { ...i, slot: 'auto' } : null; },
     continueLatest() { return run ? run.continueSave() : !!level?.continueSave?.(); },
+    continueAuto() { return run ? run.continueSave() : !!level?.continueSave?.(); },
     async saveSlot(n) { emit({ kind: 'slot', slot: n, ok: false, message: NOT_BUILT.message }); return { ...NOT_BUILT }; },
     async loadSlot(n) { emit({ kind: 'load', slot: n, ok: false, message: NOT_BUILT.message }); return { ...NOT_BUILT }; },
     deleteSlot(n) { emit({ kind: 'delete', slot: n, ok: false, message: NOT_BUILT.message }); return { ...NOT_BUILT }; },

@@ -4,8 +4,11 @@
 // settings adds Settings and How to play (ui-settings.js, ui-guide.js). Owner after the design round: package
 // "experience" (look, focus order); add() and the entry shape are the frozen contract.
 //
-//   const menu = createGameMenu({ register, openPanel, closePanel, events, mode })
-//   menu.add({ id, label, icon?, hint?, order, onSelect(), visible?(mode) })   hint: the key shown beside it ('Tab')
+//   const menu = createGameMenu({ register, openPanel, closePanel, events, mode, keys })
+//   menu.add({ id, label, icon?, hint?, order, onSelect(via), visible?(mode) })   hint: an action id of keys.js ('map') or a
+//                          key's words; via = { returnTo: 'menu' }: an entry that opens a panel passes it on
+//                          (openPanel(id, via)), so closing that panel comes back to the menu (review round, §8.6); the
+//                          menu closes itself after onSelect when it is still the open panel ("Back to the farm")
 //   menu.open(from)        'esc' | 'gear' | 'hook' (EV.MENU { open: true, from })
 //   menu.entries()         the entries shown now [{ id, label }] (tests)
 import { h, button, uniqueId } from './ui-dom.js';
@@ -15,9 +18,11 @@ import { EV } from './events.js';
 
 export const MENU_ID = 'menu';
 
-export function createGameMenu({ register, openPanel, closePanel, events = null, mode = () => 'level' }) {
+// isOpen(): the menu is the open panel now (ui.js: panels.openId === 'menu')
+export function createGameMenu({ register, openPanel, closePanel, events = null, mode = () => 'level', keys = null, isOpen = null }) {
   const items = [];
-  let list = null, lastFrom = 'hook';
+  let list = null, lastFrom = 'hook', lastPick = null;
+  const hintOf = (hint) => { if (!hint) return null; try { return keys?.label?.(hint) || hint; } catch { return hint; } };
   function render() {
     if (!list) return;
     const m = mode();
@@ -26,8 +31,12 @@ export function createGameMenu({ register, openPanel, closePanel, events = null,
       const b = button({ class: 'btn btn--big menu-item', 'data-menu': it.id },
         it.icon && ICONS[it.icon] ? h('span', { html: ICONS[it.icon], 'aria-hidden': 'true' }) : null,
         h('span', { class: 'menu-label' }, it.label),
-        it.hint ? h('kbd', { class: 'kbd' }, it.hint) : null);
-      b.addEventListener('click', () => { closePanel(); try { it.onSelect(); } catch (err) { console.error(`menu ${it.id} failed`, err); } });
+        it.hint ? h('kbd', { class: 'kbd' }, hintOf(it.hint)) : null);
+      b.addEventListener('click', () => {
+        lastPick = it.id;
+        try { it.onSelect({ returnTo: MENU_ID }); } catch (err) { console.error(`menu ${it.id} failed`, err); }
+        if (isOpen?.()) closePanel({ all: true });
+      });
       return h('li', null, b);
     }));
   }
@@ -38,10 +47,22 @@ export function createGameMenu({ register, openPanel, closePanel, events = null,
     el.append(h('div', { class: 'menu-case card' },
       h('header', { class: 'menu-head' }, h('h2', { id: titleId }, 'Paused'), h('p', null, 'The farm clock stands still while this menu is open.')),
       list), closeBtn);
+    // the focus: the entry picked last (back from Settings: on Settings), else the first
+    const focusEntry = () => (list?.querySelector(`[data-menu="${lastPick}"]`) || list?.querySelector('button'))?.focus({ preventScroll: true });
     return {
       el,
-      onOpen() { render(); events?.emit?.(EV.MENU, { open: true, from: lastFrom }); queueMicrotask?.(() => list?.querySelector('button')?.focus({ preventScroll: true })); },
+      onOpen() { render(); events?.emit?.(EV.MENU, { open: true, from: lastFrom }); queueMicrotask?.(focusEntry); },
       onClose() { events?.emit?.(EV.MENU, { open: false, from: lastFrom }); },
+      // the ui.js key hook (§8.6): the up and down arrows move between the entries
+      onKey(e) {
+        if (e.code !== 'ArrowDown' && e.code !== 'ArrowUp') return false;
+        const bs = [...(list?.querySelectorAll('button') || [])];
+        if (!bs.length) return false;
+        const i = bs.indexOf(document.activeElement), d = e.code === 'ArrowDown' ? 1 : -1;
+        bs[(i < 0 ? 0 : i + d + bs.length) % bs.length].focus({ preventScroll: true });
+        e.preventDefault();
+        return true;
+      },
     };
   }, { kind: 'paused' });
   return {
@@ -53,7 +74,7 @@ export function createGameMenu({ register, openPanel, closePanel, events = null,
       render();
       return () => { const j = items.indexOf(it); if (j >= 0) items.splice(j, 1); render(); };
     },
-    open(from = 'hook') { lastFrom = from; return openPanel(MENU_ID); },
+    open(from = 'hook') { lastFrom = from; lastPick = null; return openPanel(MENU_ID); },
     entries() { const m = mode(); return items.filter((it) => !it.visible || it.visible(m)).sort((a, b) => a.order - b.order).map((it) => ({ id: it.id, label: it.label })); },
   };
 }

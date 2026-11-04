@@ -4,6 +4,11 @@
 // high-DPI screens to a 1.0 pixel ratio first, then the cheaper sun shadow, and only below about 20 fps a 0.85 render
 // scale; it only steps down, waits 3 s between steps, and is off under automation (the harness renders in software).
 // Owner after the design round: package "settings" (it adds the flock and shadow-off steps, PHASE5.md §4.4).
+// Review round: no quality change compiles a shader. three 0.160 keys every program on shadowMap.enabled and
+// shadowMap.type (WebGLPrograms), so both stay as main.js set them (on, PCF soft) for the whole session: the simple shadow
+// is the same soft filter on a 1024 map (Phase 1's step 2 switched to PCF: a recompile of every lit material on exactly
+// the slow machines the governor serves), and 'off' is a 256 map rendered once with no caster (every fragment lit) and
+// then never again (shadowMap.autoUpdate false): the shadow pass costs nothing, the lit shaders stay the same programs.
 //
 //   const quality = createQuality({ THREE, renderer, scene, world, perf, settings, flock, onResize })
 //   quality.pixelRatio()   what main.js's resize() renders at (min(devicePixelRatio, the cap))
@@ -20,20 +25,25 @@ export function createQuality({ THREE, renderer, scene, world, perf = {}, settin
   const get = (k, d) => { try { return settings ? settings.get(`graphics.${k}`) : d; } catch { return d; } };
   const autoOf = () => ({ ratio: get('pixelRatio', 'auto') === 'auto', shadows: get('shadows', 'auto') === 'auto', flock: get('flockDetail', 'auto') === 'auto' });
 
+  let casters = null;   // the casters switched off for the one empty shadow pass of 'off' (back after that frame)
+  function restoreCasters() { if (casters) { for (const o of casters) o.castShadow = true; casters = null; } }
   function setShadows(mode) {
     if (mode === st.shadows) return;
-    const sun = world?.sun;
-    const wasOn = renderer.shadowMap.enabled;
-    renderer.shadowMap.enabled = mode !== 'off';
-    if (mode !== 'off' && sun) {
-      const size = mode === 'high' ? GFX.shadowHigh : GFX.shadowLow;
-      renderer.shadowMap.type = mode === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
-      if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
-      perf.shadowMap = size;
-    } else perf.shadowMap = 0;
+    const sun = world?.sun, sm = renderer.shadowMap;
+    void THREE;
+    const size = mode === 'high' ? GFX.shadowHigh : mode === 'low' ? GFX.shadowLow : GFX.shadowOff;
+    if (sun && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
+    if (mode === 'off') {
+      casters = casters || [];
+      // meshes only: a light's castShadow is in the program key (numDirLightShadows), so the sun keeps its own
+      scene.traverse((o) => { if (o.castShadow && !o.isLight) { o.castShadow = false; casters.push(o); } });
+      sm.autoUpdate = false; sm.needsUpdate = true;
+    } else {
+      restoreCasters();
+      sm.autoUpdate = true; sm.needsUpdate = true;
+    }
+    perf.shadowMap = mode === 'off' ? 0 : size;
     st.shadows = mode;
-    // a shadow type or the shadow map on / off changes the programs: every material compiles again (once)
-    if (wasOn !== renderer.shadowMap.enabled || mode !== 'off') scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
   }
   function setFlock(level) { if (level === st.flockDetail) return; st.flockDetail = level; try { flock?.setDetail?.(level); } catch (err) { console.error('flock detail', err); } }
 
@@ -87,6 +97,8 @@ export function createQuality({ THREE, renderer, scene, world, perf = {}, settin
   const api = {
     pixelRatio: () => Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, st.ratioCap),
     frame(rawDt) {
+      // after the frame that drew the empty shadow map (three clears needsUpdate when it has): the casters back
+      if (casters && !renderer.shadowMap.needsUpdate) restoreCasters();
       perf.fps = (perf.fps || 0) + (1 / Math.max(rawDt, 1e-3) - (perf.fps || 0)) * 0.05;
       sample(rawDt);
     },

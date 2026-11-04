@@ -3,7 +3,9 @@
 // Next / Got it moves on, "Skip the introduction" ends it. No lesson, no question: each card only says where something is
 // and what it shows. The farm clock stands still while a card shows. Remembered in settings intro.done / intro.seen;
 // the guide's "Show the introduction again" clears them. Owner after the design round: package "experience". STUB now:
-// it never shows a card (start() answers false).
+// it never shows a card (start() answers false). A card's text names keys as {key:<action id>} tokens: content-guide.js
+// fillGuide(text, { keys, settings }) fills them with the live bindings. While a card shows, the intro takes its keys
+// through ui.claimKeys(fn) (§8.6: Enter and Esc work on the card, Esc never opens the menu behind it).
 //
 //   const intro = createIntro(ctx, { root })
 //   intro.start(reason)     'level-start' | 'watch-shown' | 'again': show the next unseen card for it; true when one shows
@@ -17,7 +19,7 @@
 export const INTRO_CARDS = [
   { id: 'jobs', when: 'level-start', anchor: '.hud-tr--level .ljobs', text: 'Your jobs for today. The top one is the job to do now: the orange marker on the farm shows its place, and the job says which sign holds its facts.' },
   { id: 'signs', when: 'level-start', anchor: 'sign', text: 'Signs stand where you use their facts. Walk up to one and press E to read it; the small line under each fact names its source.' },
-  { id: 'time', when: 'level-start', anchor: '.hud-bl .timebar', text: 'The farm clock: pause, 1× and 4×. Next job skips to the next job. Esc opens the menu (saves, settings, how to play); Tab opens the farm map.' },
+  { id: 'time', when: 'level-start', anchor: '.hud-bl .timebar', text: 'The farm clock: pause ({key:pause}), 1× and 4× ({key:speed1}, {key:speed4}). Next job ({key:nextJob}) skips to the next job. {key:menu} opens the menu (saves, settings, how to play); {key:map} opens the farm map.' },
   { id: 'watch', when: 'watch-shown', anchor: '.fw', text: 'The flock watch measures the birds every farm hour (weight, deaths, comfort, intake) beside this level’s line, and warns in words when a row turns red.' },
 ];
 

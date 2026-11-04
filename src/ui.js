@@ -132,6 +132,7 @@ export function createUI(ctx, deps) {
     player,
     canvas,
     onOpen: (id) => {
+      lastOpen = id;
       tasks.notify(`open:${id}`); prompt.show(null); root.classList.add('has-panel');
       // review round: a notice raised just before the panel opened (the bucket set down for the chick in hand) shows in it
       if (pendingNote && rt - pendingNote.at < 1.5) { const t = pendingNote.text; pendingNote = null; panelNotice(t); } else pendingNote = null;
@@ -162,8 +163,10 @@ export function createUI(ctx, deps) {
     setText(pnote, text); pnote.hidden = false; host.prepend(pnote); pnoteFor = panels.openId;
     return true;
   }
-  const closePanel = () => panels.close();
-  const openPanel = (id) => { const ok = panels.open(id); if (ok) lastOpen = id; return ok; };
+  // Phase 5 (PHASE5.md §8.6, review round): openPanel(id, { returnTo }) keeps the open panel as the parent (closing the child
+  // opens it again); closePanel() closes the open panel (back to its parent), closePanel({ all: true }) the whole chain
+  const closePanel = (o) => (o?.all ? panels.closeAll() : panels.close());
+  const openPanel = (id, o) => panels.open(id, o || {});
 
   // top right in a level: the job card; captions and the floating reading
   const trL = h('div', { class: 'hud-tr hud-tr--level', hidden: true });
@@ -378,8 +381,9 @@ export function createUI(ctx, deps) {
   panels.register('office-desk', () => buildRecordsPanel(L), { kind: 'paused' });
   panels.register('notebook', () => buildNotebookPanel(L), { kind: 'paused' });
   panels.register('skilltree', () => buildSkillTreePanel(L), { kind: 'paused' });
-  panels.register('result', () => buildResultPanel(L), { kind: 'paused' });
-  panels.register('summary', () => buildSummaryPanel(L), { kind: 'paused' });
+  // the result and the cycle summary are always a parent (PHASE5.md §8.6): a panel opened over them comes back to them
+  panels.register('result', () => buildResultPanel(L), { kind: 'paused', parent: true });
+  panels.register('summary', () => buildSummaryPanel(L), { kind: 'paused', parent: true });
   // Phase 3 panels (package "panels"; placeholders until it builds them)
   try {
     setPlateDay(() => env.dayNumber);
@@ -436,7 +440,7 @@ export function createUI(ctx, deps) {
 
   // ---- Phase 5 (PHASE5.md §4-§6): the game menu, settings, the guide, the saves, the farm map, the introduction ----
   const reg = (id, build, opts) => panels.register(id, build, opts);
-  const menu = createGameMenu({ register: reg, openPanel, closePanel, events, mode: () => mode });
+  const menu = createGameMenu({ register: reg, openPanel, closePanel, events, mode: () => mode, keys: ctx.keys, isOpen: () => panels.openId === 'menu' });
   const p5 = { register: reg, openPanel, closePanel, ctx, menu, title };
   let settingsUI = null, guideUI = null, map = null;
   try { settingsUI = registerSettingsPanel(p5); } catch (err) { console.error('settings panel failed to register', err); }
@@ -444,11 +448,12 @@ export function createUI(ctx, deps) {
   try { registerSavesPanel(p5); } catch (err) { console.error('saves panel failed to register', err); }
   try { map = createMap(ctx, { register: reg, openPanel, closePanel }); } catch (err) { console.error('map failed', err); }
   const intro = createIntro(ctx, { root });
-  menu.add({ id: 'resume', label: 'Back to the farm', icon: 'play', hint: 'Esc', order: 0, onSelect: () => {} });
-  menu.add({ id: 'map', label: 'Farm map', icon: 'map', hint: 'Tab', order: 20, onSelect: () => map?.open() });
+  menu.add({ id: 'resume', label: 'Back to the farm', icon: 'play', hint: 'menu', order: 0, onSelect: () => {} });
+  menu.add({ id: 'map', label: 'Farm map', icon: 'map', hint: 'map', order: 20, onSelect: (via) => map?.open(via) });
   menu.add({ id: 'title', label: 'Back to the title card', icon: 'outside', order: 90, visible: (m) => m === 'level' || m === 'result', onSelect: () => ctx.level?.toTitle() });
   // the time bar: the farm map and the settings gear (the speaker key of audio-ui.js mounts after them)
-  const mapBtn = button({ class: 'btn btn--icon', title: 'Farm map (Tab)', 'aria-label': 'Open the farm map (Tab)' });
+  const keyWord = (id, d) => { try { return ctx.keys?.label(id) || d; } catch { return d; } };
+  const mapBtn = button({ class: 'btn btn--icon', title: `Farm map (${keyWord('map', 'O')})`, 'aria-label': `Open the farm map (${keyWord('map', 'O')})` });
   mapBtn.innerHTML = ICONS.map;
   mapBtn.addEventListener('click', () => map?.open());
   const gearBtn = button({ class: 'btn btn--icon', title: 'Menu and settings (Esc)', 'aria-label': 'Open the menu: saves, settings and how to play (Esc)' });
@@ -466,6 +471,24 @@ export function createUI(ctx, deps) {
     try { on = !!ctx.settings?.get('interface.soundCaptions'); } catch { on = false; }
     if (on && p?.text && mode !== 'title') caption.show(`[${p.text}]`, 3.5, { ifFree: true });
   });
+  // the saves' messages (PHASE5.md §3.7, review round): the autosave that could not write says so as a caption (once per
+  // level, saves.js decides); any other save message shows here when the saves panel is not open to show it itself
+  events.on(EV.SAVE, (p) => {
+    if (!p?.message || mode === 'title') return;
+    if (p.kind === 'auto-failed' || (!p.ok && panels.openId !== 'saves')) { if (panels.openId) panelNotice(p.message); else caption.show(p.message, 9); }
+  });
+  // keys before everything (PHASE5.md §8.6, review round): captureNextKey(fn) gives the next key press to fn (the Keys tab's
+  // Change: W, E, Esc and the arrows too); claimKeys(fn) offers every key press to fn first while it is claimed (the intro
+  // card: true = used); an open panel's onKey(e) comes next (true = used: a saves question's Esc, the menu's arrows)
+  let keyCapture = null;
+  const keyClaims = [];
+  function captureNextKey(fn) { keyCapture = fn; return () => { if (keyCapture === fn) keyCapture = null; }; }
+  function claimKeys(fn) { keyClaims.push(fn); return () => { const i = keyClaims.indexOf(fn); if (i >= 0) keyClaims.splice(i, 1); }; }
+  /** The time keys press the time bar's own keys (pause, 1×, 4×) and the Next job key. */
+  function timeKey(id) {
+    if (id === 'nextJob') { if (mode === 'level' && !nextBar.hidden) nextBar.click(); return; }
+    hud.buttons?.[id]?.click();
+  }
 
   // ---- E, Q, T ----
   const accept = (it) => !!it.use || panels.has(it.id);
@@ -569,8 +592,22 @@ export function createUI(ctx, deps) {
   // Capture phase on window, so this runs before the farmer's own key listeners.
   window.addEventListener('keydown', (e) => {
     const k = (e.key || '').toLowerCase();
+    if (keyCapture) {
+      const fn = keyCapture; keyCapture = null;
+      e.preventDefault(); e.stopImmediatePropagation();
+      try { fn(e); } catch (err) { console.error('key capture failed', err); }
+      return;
+    }
+    for (let i = keyClaims.length - 1; i >= 0; i--) {
+      let used = false;
+      try { used = keyClaims[i](e) === true; } catch (err) { console.error('key claim failed', err); }
+      if (used) { e.stopImmediatePropagation(); return; }
+    }
     if (narrow.open) return;
     if (panels.openId) {
+      let used = false;
+      try { used = panels.openPanel?.onKey?.(e) === true; } catch (err) { console.error('panel key failed', err); }
+      if (used) { e.stopImmediatePropagation(); return; }
       if (MOVE_CODES.has(e.code) || MOVE_KEYS.has(k)) e.stopImmediatePropagation(); // typed WASD must not walk the farmer
       if (k === 'escape') { e.preventDefault(); if (panels.openId !== 'result') panels.close(); }
       else if (isKeyE(e, k) && !e.repeat && !typingInControl(e.target) && panels.openId !== 'result') { e.preventDefault(); panels.close(); }
@@ -595,8 +632,11 @@ export function createUI(ctx, deps) {
       (mode === 'sandbox' ? help : lhelp).hide();
     } else if (k === 'escape' && mode === 'level' && !e.repeat && stepClock.now() - lastPanelClose > ESC_GUARD_MS) {
       e.preventDefault(); menu.open('esc');
-    } else if (e.code === 'Tab' && !e.shiftKey && !e.repeat && (mode === 'level' || mode === 'sandbox') && (e.target === canvas || e.target === document.body || e.target === document.documentElement)) {
+    } else if (!e.repeat && (mode === 'level' || mode === 'sandbox') && ctx.keys?.matches(e, 'map')) {
+      // review round: the map on its own key (O), wherever the focus is outside a text box; Tab stays the focus key
       e.preventDefault(); map?.open();
+    } else if (!e.repeat && (mode === 'level' || mode === 'sandbox') && ctx.keys?.actionOf(e, ['pause', 'speed1', 'speed4', 'nextJob'])) {
+      e.preventDefault(); timeKey(ctx.keys.actionOf(e, ['pause', 'speed1', 'speed4', 'nextJob']));
     } else if (mode === 'level' && !e.repeat) {
       if (isCode(e, k, 'KeyQ', 'q')) { e.preventDefault(); squeeze(); }
       else if (isCode(e, k, 'KeyT', 't')) { e.preventDefault(); probe(); }
@@ -724,9 +764,14 @@ export function createUI(ctx, deps) {
     title,
     map,
     intro,
-    openSettings: (tab) => (settingsUI ? settingsUI.open(tab) : false),
-    openGuide: (section) => (guideUI ? guideUI.open(section) : false),
-    openSaves: () => openPanel('saves'),
+    // via: { returnTo } (PHASE5.md §8.6): the result's Save or load key passes { returnTo: 'result' }
+    openSettings: (tab, via) => (settingsUI ? settingsUI.open(tab, via) : false),
+    openGuide: (section, via) => (guideUI ? guideUI.open(section, via) : false),
+    openSaves: (via) => openPanel('saves', via),
+    /** The parents waiting under the open panel (the menu under Settings), nearest last. */
+    get parentPanels() { return panels.parentIds; },
+    captureNextKey,
+    claimKeys,
     /** The panels whose machine job runs now (open or in the background): the sound of the wash bay's washer. */
     busyPanels: () => panels.busyIds?.() || [],
     /** PHASE4.md §15.3: the keys of the prompt's extra pills now ('Shift+E', 'G'), for the harness. */

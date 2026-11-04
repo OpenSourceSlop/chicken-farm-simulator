@@ -80,6 +80,10 @@ export function createHud(parent, env) {
     playBtn, h('div', { class: 'seg', role: 'group', 'aria-label': 'Clock speed' }, speedBtns),
     h('div', { class: 'timebar-sep', 'aria-hidden': 'true' }), skipBtn, morningBtn);
 
+  // Phase 5 (PHASE5.md §6.6, review round): a mouse click leaves no focus on a time-bar key, so the keys go back to the farm
+  // (the keyboard's own presses keep their focus: detail 0)
+  timebar.addEventListener('click', (e) => { const b = e.target.closest?.('button'); if (b && e.detail > 0) b.blur(); });
+
   parent.appendChild(tl);
 
   let lastPaused = null;
@@ -161,7 +165,8 @@ export function createHud(parent, env) {
     refresh();
   }
 
-  return { timebar, refresh, setLevel };
+  // the time keys (keys.js pause, speed1, speed4) press these, so a key does exactly what the click does
+  return { timebar, refresh, setLevel, buttons: { pause: playBtn, speed1: speedBtns[0], speed4: speedBtns[1] } };
 }
 
 // Number plus a smaller unit, written only when it changed.

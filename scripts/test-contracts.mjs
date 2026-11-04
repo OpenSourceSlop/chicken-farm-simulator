@@ -440,7 +440,8 @@ test('phase 5 keys: the defaults are the Phase 1-4 keys; rebinding swaps; Esc an
   const { createKeys, KEY_ACTIONS } = await import('../src/keys.js');
   const { createSettings } = await import('../src/settings.js');
   const s = createSettings({ storage: memStorage() }), k = createKeys(s);
-  const want = { use: 'E', bucket: 'G', squeeze: 'Q', probe: 'T', lux: 'L', air: 'V', notebook: 'N', skills: 'K', floorView: 'F', comfortView: 'C', moistureView: 'M', help: 'H', sound: 'U', map: 'Tab', menu: 'Esc', forward: 'W' };
+  const want = { use: 'E', bucket: 'G', squeeze: 'Q', probe: 'T', lux: 'L', air: 'V', notebook: 'N', skills: 'K', floorView: 'F', comfortView: 'C', moistureView: 'M', help: 'H', sound: 'U', map: 'O', menu: 'Esc', forward: 'W',
+    pause: 'P', speed1: '1', speed4: '4', nextJob: 'J' };
   for (const [id, l] of Object.entries(want)) assert(k.label(id) === l, `${id} on ${k.label(id)}`);
   for (const r of LEVEL_HELP_KEYS) for (const key of r.keys) if (/^[A-Z]$/.test(key)) assert(KEY_ACTIONS.some((a) => a.codes.includes(`Key${key}`)), `legend key ${key} in the table`);
   const ev = (code, o = {}) => ({ code, key: code.replace('Key', '').toLowerCase(), shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...o });
@@ -452,13 +453,28 @@ test('phase 5 keys: the defaults are the Phase 1-4 keys; rebinding swaps; Esc an
   assert(!k.rebind('menu', 'KeyP').ok && !k.rebind('squeeze', 'Escape').ok, 'Esc is fixed and reserved');
   k.reset();
   assert(k.label('squeeze') === 'Q' && k.label('bucket') === 'G', 'reset');
+  // review round: Shift+E is useDead before it is use; Tab, Enter and Space stay the buttons' keys; alternates survive a swap
+  assert(k.actionOf(ev('KeyE', { shiftKey: true })) === 'useDead' && k.actionOf(ev('KeyE')) === 'use', 'Shift+E picks up the dead bird');
+  for (const c of ['Tab', 'Enter', 'NumpadEnter', 'Space']) assert(k.rebind('squeeze', c).reason === 'ui', `${c} refused as a game key`);
+  assert(k.rebind('squeeze', 'Equal').ok && k.codes('zoomIn').join() === 'KeyQ,NumpadAdd' && k.codes('squeeze').join() === 'Equal', `a swap keeps zoomIn's Numpad +: ${k.codes('zoomIn')}`);
+  k.reset();
+  assert(k.rebind('zoomOut', 'NumpadAdd').ok && k.codes('zoomIn').join() === 'Equal' && k.codes('zoomOut').join() === 'NumpadAdd,NumpadSubtract', 'an alternate taken by another action drops from its old one only');
+  k.reset();
+  // the Keys tab's targets the ui.js capture hook must pass (§8.6): W, E and ArrowUp, then back
+  for (const [c, other] of [['KeyW', 'forward'], ['KeyE', 'use'], ['ArrowUp', null]]) {
+    const r2 = k.rebind('squeeze', c);
+    assert(r2.ok && k.matches(ev(c, { key: c === 'ArrowUp' ? 'ArrowUp' : c.slice(3).toLowerCase() }), 'squeeze') && (r2.swapped || null) === other, `squeeze on ${c}: ${JSON.stringify(r2)}`);
+    k.reset();
+  }
+  assert(k.labels('useDead').join('+') === 'Shift+E' && k.codes('forward').join() === 'KeyW', 'back to the defaults');
   const codes = KEY_ACTIONS.filter((a) => !a.follows).flatMap((a) => a.codes);
   assert(new Set(codes).size === codes.length, 'no default key twice');
   for (const a of KEY_ACTIONS) assert(!VERDICT.test(a.what), `verdict word: ${a.what}`);
 });
 
 test('phase 5 save codec and slot names: round trip, crc, the error codes; names from condition, level, day and time', async () => {
-  const { encodePayload, decodePayload, composeText, parseText, crc32, hex8, SAVE_MESSAGES } = await import('../src/save-codec.js');
+  const { encodePayload, decodePayload, composeText, composeParts, parseText, crc32, hex8, SAVE_MESSAGES } = await import('../src/save-codec.js');
+  const { SAVE_SLOTS } = await import('../src/config.js');
   const { metaOf, slotName, migrate, checkEnvelope, makeEnvelope } = await import('../src/save-slots.js');
   assert(hex8(crc32('123456789')) === 'cbf43926', 'crc32 (IEEE)');
   const obj = { run: { levelId: 'weeks45' }, blob: { level: { levelId: 'weeks45' }, env: { day: 30 + 14.33 / 24, hour: 14.33 }, farm: { cond: { condition: 'hot' } } } };
@@ -467,6 +483,35 @@ test('phase 5 save codec and slot names: round trip, crc, the error codes; names
   const code = async (t) => { try { await decodePayload(parseText(t)); return 'ok'; } catch (e) { return e.code; } };
   assert(await code('hello') === 'not-a-save' && await code(text.slice(0, -30)) === 'incomplete' && await code(text.replace('CF5', 'CF6')) === 'newer', 'not a save, cut short, newer');
   for (const m of Object.values(SAVE_MESSAGES)) assert(!VERDICT.test(m), `verdict word: ${m}`);
+  // review round: the reader counts the payload's characters, so END inside the base64 cannot cut it (300 whole-run-sized
+  // backups of 50-250 K characters, END planted at line starts and mid-line, parts pasted in any order)
+  const { randomBytes } = await import('node:crypto');
+  let rnd = 7; const R = () => ((rnd = (rnd * 1103515245 + 12345) >>> 0) / 4294967296);
+  let bad = 0, partsChecked = 0;
+  for (let t = 0; t < 300; t++) {
+    const want = 50000 + Math.floor(R() * 200000), o = { t, s: randomBytes(Math.floor(want * 0.75 * 0.74)).toString('base64') };
+    const enc = await encodePayload(o);
+    let data = enc.data;
+    if (t % 3 === 0) { const at = SAVE_SLOTS.wrap * (1 + Math.floor(R() * 50)); data = data.slice(0, at) + 'END' + data.slice(at + 3); }
+    if (t % 3 === 1) { const at = SAVE_SLOTS.wrap * (1 + Math.floor(R() * 50)) + 30; data = data.slice(0, at) + 'END' + data.slice(at + 3); }
+    const p = { meta: { name: 'x', savedAt: 0 }, enc: enc.enc, crc: data === enc.data ? enc.crc : hex8(crc32(new Uint8Array(Buffer.from(data, 'base64')))), data };
+    const back = parseText(composeText(p));
+    if (back.data !== data || back.crc !== p.crc) bad++;
+    else if (data === enc.data && JSON.stringify(await decodePayload(back)) !== JSON.stringify(o)) bad++;
+    if (t % 10 === 0) {
+      const parts = composeParts(p);
+      const mixedUp = parts.map((x, i) => [x, (i * 7919) % parts.length]).sort((a, b) => a[1] - b[1]).map((x) => x[0]).join('\n\n');
+      if (parts.some((x) => x.length > SAVE_SLOTS.partChars) || parseText(mixedUp).data !== data) bad++;
+      partsChecked++;
+    }
+  }
+  assert(bad === 0, `${bad} of 300 backups did not read back byte-identical`);
+  const big = { meta: { name: 'x', savedAt: 0 }, ...(await encodePayload({ s: randomBytes(150000).toString('base64') })) };
+  const parts = composeParts(big);
+  assert(parts.length > 1 && /part 2 of/.test(parts[1]) && await code(parts.slice(1).join('\n')) === 'missing-parts', `a part missing: ${parts.length} parts`);
+  const other = composeParts({ ...big, ...(await encodePayload({ s: randomBytes(150000).toString('base64') })) });
+  assert(await code(parts[0] + '\n' + other[1]) === 'mixed' && await code(composeText(big).slice(0, -500)) === 'incomplete', 'mixed backups, a text cut short');
+  void partsChecked;
   const m = metaOf(obj);
   assert(m.name === 'Hot season · Level 5 – Weeks 4 and 5 · Day 30, 14:20', `name: ${m.name}`);
   assert(slotName(metaOf({ blob: { level: { levelId: 'plan' }, env: { day: -2 + 7 / 24, hour: 7 }, farm: {} } })) === 'Normal season · Level 1 – Plan the farm · Planning day, 07:00', 'the planning day');
@@ -474,11 +519,17 @@ test('phase 5 save codec and slot names: round trip, crc, the error codes; names
   assert(env.format === 'chicken-farm-save' && env.v === 5 && env.meta.name === m.name && checkEnvelope(env) === null, 'a v3 run save in the envelope, named, resumable');
   assert(checkEnvelope(makeEnvelope({ run: obj.run, blob: { level: obj.blob.level, env: obj.blob.env } })) === 'invalid', 'a blob without its farm is not resumed');
   assert(checkEnvelope(makeEnvelope({ run: obj.run, blob: { ...obj.blob, level: { levelId: 'week9' } } })) === 'invalid', 'an unknown level is not resumed');
+  // a Phase 2 save (level.serialize() had no levelId) is the brooding week, with no run
+  const v1 = migrate({ version: 1, savedAt: 9, level: { v: 1, mode: 'level', seed: 1 }, env: { day: 3 + 8 / 24, hour: 8 }, farm: {}, records: {}, props: {}, flock: {}, player: {} });
+  assert(v1.run === null && v1.blob.level.levelId === 'level1' && checkEnvelope(v1) === null && /Level 2 – The brooding week|brooding week/i.test(v1.meta.name) && v1.savedAt === 9, `a v1 save: ${v1.meta.name}`);
 });
 
 test('phase 5 guide, menu, map plan and motion: neutral words, no farming figures, every place resolvable', async () => {
-  const { GUIDE } = await import('../src/content-guide.js');
-  for (const sec of GUIDE.sections) for (const t of [sec.head, ...sec.text]) {
+  const { GUIDE, fillGuide } = await import('../src/content-guide.js');
+  const filled = GUIDE.sections.flatMap((sec) => sec.text.map((t) => fillGuide(t)));
+  assert(filled.every((t) => !/[{}]/.test(t)) && filled.some((t) => /The clock stops while you read a sign/.test(t)) && filled.some((t) => /\bO opens the farm map/.test(t)), 'the guide names the live keys and Time settings');
+  assert(!filled.some((t) => /done well/i.test(t)), 'no praise in the guide');
+  for (const sec of GUIDE.sections) for (const t of [sec.head, ...sec.text.map((x) => fillGuide(x))]) {
     assert(!VERDICT.test(t), `guide verdict word: ${t}`);
     assert(!/°C|L\/kg|m\/s|lux|ppm|\bp\.\s*\d/.test(t), `the guide holds no farming figure (signs do): ${t}`);
   }
@@ -507,12 +558,14 @@ test('phase 5 graphics quality: the governor steps down in Phase 1\'s order; man
   assert(st.shadows === 'low' && sun.shadow.mapSize.x === 1024, `first step: the simple shadow (${JSON.stringify(st)})`);
   st = q.debug.feed(0.06, 80);
   assert(st.ratioCap === 0.85, `then the 0.85 render scale (${JSON.stringify(st)})`);
+  assert(r.shadowMap.type === 2, 'the simple shadow keeps the soft filter (the type is in three\'s program key)');
   s.set('graphics.shadows', 'off');
-  assert(r.shadowMap.enabled === false && q.state().shadows === 'off', 'shadows off by hand');
+  assert(r.shadowMap.enabled === true && r.shadowMap.type === 2 && r.shadowMap.autoUpdate === false && q.state().shadows === 'off' && sun.shadow.mapSize.x === 256,
+    'shadows off by hand: an empty map no longer drawn, shadowMap.enabled and the type unchanged (no shader compiles)');
   s.set('graphics.pixelRatio', '1.25');
   assert(q.state().ratioCap === 1.25, 'a pixel ratio by hand');
   s.set('graphics.shadows', 'auto');
-  assert(r.shadowMap.enabled === true && q.state().shadows === 'high', 'back to automatic: the soft shadow again');
+  assert(r.shadowMap.enabled === true && r.shadowMap.autoUpdate === true && q.state().shadows === 'high' && sun.shadow.mapSize.x === 2048, 'back to automatic: the soft shadow again');
 });
 
 let failed = 0;

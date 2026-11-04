@@ -255,6 +255,10 @@ export function createFlock(ctx, { house } = {}) {
     meshes: render.meshes,
     renderStats: render.stats,
     setCulling: render.setCulling,
+    /** Phase 5 (PHASE5.md §8.9, the farm map): every drawn bird's floor position, read-only views of the flock's own
+     *  arrays (do not write; read them when the map opens): { n, x, z, size (the ±8 % spread), morph (0 chick .. 1 broiler,
+     *  the whole flock's shape and colour) }. Dead birds are flock.dead's. */
+    positions() { return { n: S.n, x: S.px.subarray(0, S.n), z: S.pz.subarray(0, S.n), size: S.size.subarray(0, S.n), morph: S.morph }; },
     update,
     metrics() {
       if (!built) { grid.build(S.px, S.pz, S.n, S.maxR, S.perM2, S.bounds.zMax - S.bounds.zMin); built = true; }

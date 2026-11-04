@@ -126,6 +126,7 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .boot-mark { grid-row: span 2; width: 64px; height: 48px; }
 .boot-title { font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: 0.02em; margin: 0; }
 .boot-sub { margin: 0; color: var(--ink-dim); font-size: 15px; }
+.boot-slow { grid-column: 1 / -1; margin: 8px 0 0; color: var(--ink-faint); font-size: 14px; }
 .boot-bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; margin-top: 10px; background: var(--panel-sunk); overflow: hidden; }
 .boot-bar::before { content: ""; display: block; height: 100%; width: 40%; border-radius: 3px; background: var(--accent); animation: boot-slide 1.6s ease-in-out infinite alternate; }
 @keyframes boot-slide { from { transform: translateX(-10%); } to { transform: translateX(160%); } }
@@ -434,6 +435,7 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .btn--quiet { background: transparent; border-color: var(--panel-edge); color: var(--ink-dim); }
 .title-save { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-faint); }
 .title-save.is-off { color: var(--sign-yellow); }
+.title-note { margin: 10px 0 0; font-size: 14px; line-height: 1.45; color: var(--sign-yellow); }
 .title-more { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--panel-edge); }
 .title-keys { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 14px 0 0; font-size: 12.5px; color: var(--ink-dim); }
 .title-keys .kbd { min-width: 22px; height: 22px; font-size: 11.5px; }
@@ -1004,8 +1006,9 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
   .ctrl-row { grid-template-columns: 12px minmax(0, 1fr); }
   .ctrl-keys { grid-column: 1 / -1; justify-content: flex-end; }
 }
-/* ---------- Phase 5 (PHASE5.md §3-§6): the game menu, settings, saves, how to play, the farm map (design-round look;
-   package experience polishes it) ---------- */
+/* ---------- Phase 5 (PHASE5.md §3-§6): the shared frame of the game menu, settings, saves, how to play and the farm map
+   (package experience); the settings, saves and guide screens add their own rules from their modules (ui-dom.js
+   injectStyle: #settings-style, #saves-style, #guide-style) ---------- */
 .menu, .settings, .saves, .guide, .map { width: min(var(--p5-w, 560px), calc(100% - 2 * var(--gutter))); }
 .settings { --p5-w: 640px; } .guide { --p5-w: 720px; } .map { --p5-w: 1100px; }
 .menu-case, .settings-case, .saves-case, .guide-case, .map-case { padding: 20px 22px 18px; }
@@ -1015,16 +1018,6 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .settings-head .icon, .saves-head .icon, .guide-head .icon, .map-head .icon { font-size: 26px; color: var(--accent); }
 .menu-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .menu-item { width: 100%; justify-content: flex-start; } .menu-item .menu-label { flex: 1; text-align: left; }
-.set-sec { display: grid; gap: 10px; padding: 12px 2px 4px; }
-.set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 14px; color: var(--ink); }
-.set-row--range { grid-template-columns: minmax(0, 1fr) 180px 40px; } .set-row--bool { grid-template-columns: auto 1fr; }
-.set-row select { max-width: 280px; font: inherit; } .set-row input[type=range] { accent-color: var(--accent); }
-.set-note, .saves-note { margin: 6px 0 0; color: var(--ink-faint); font-size: 13px; }
-.saves-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.saves-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 6px; background: var(--panel-sunk); }
-.saves-k { margin: 0; } .saves-name { margin: 2px 0 0; font-size: 14px; color: var(--ink); } .saves-when { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-faint); }
-.saves-keys { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
-.guide-sec h3 { margin: 14px 0 4px; font: 600 15px/1.3 var(--font-display); color: var(--ink); } .guide-sec p { margin: 0 0 6px; font-size: 14px; line-height: 1.5; color: var(--ink-dim); }
 .map-body { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 12px; align-items: start; }
 .map-svg { width: 100%; height: auto; background: #3f6b3a; border-radius: 6px; }
 .map-fence { fill: #4f7e45; stroke: #c9c1aa; stroke-width: 1; } .map-road { fill: none; stroke: #9c8f76; stroke-linejoin: round; stroke-linecap: round; }
@@ -1033,7 +1026,7 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .map-me circle, .map-me path { fill: var(--accent); stroke: #1e1305; stroke-width: 1.2; }
 .map-places { list-style: none; margin: 0; padding: 0; max-height: 460px; overflow: auto; display: grid; gap: 2px; }
 .map-place { width: 100%; justify-content: flex-start; min-height: 30px; padding: 4px 8px; font-size: 13px; }
-@media (max-width: 860px) { .map-body { grid-template-columns: minmax(0, 1fr); } .map-places { max-height: 200px; } .set-row--range { grid-template-columns: minmax(0, 1fr) 120px 36px; } }
+@media (max-width: 860px) { .map-body { grid-template-columns: minmax(0, 1fr); } .map-places { max-height: 200px; } }
 /* Level 1 panels on mid-size and small screens */
 @media (max-width: 1100px) {
   .tree-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1102,15 +1095,21 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 // If three.js cannot load (no network, filtered CDN) the module below never runs: say so instead
 // of showing "Opening the farm gate" forever.
 (function () {
-  function fail() {
+  function fail(late) {
     if (window.__game) return;
     var b = document.getElementById('boot');
     if (!b || b.hidden || b.classList.contains('boot--error')) return;
+    // the game module runs (three.js loaded): the farm is still building on a slow connection or computer: say so under
+    // the step words and keep the card (PHASE5.md §6.3, review round)
+    if (late === true && window.__bootStarted) {
+      if (!b.querySelector('.boot-slow')) { var p = document.createElement('p'); p.className = 'boot-slow'; p.textContent = 'Still loading\u2026 a slow connection or computer can take a minute.'; (b.querySelector('.boot-card') || b).appendChild(p); }
+      return;
+    }
     b.classList.add('boot--error');
     b.textContent = 'Could not load the 3D library (cdn.jsdelivr.net). Check the internet connection and reload the page.';
   }
   window.__bootFail = fail;
-  setTimeout(fail, 20000);
+  setTimeout(function () { fail(true); }, 20000);
 })();
 </script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>

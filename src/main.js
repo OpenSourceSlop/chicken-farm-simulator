@@ -42,6 +42,9 @@ function webglAvailable() {
 
 // The loading card and its messages (boot-screen.js; the highest pixel ratio is config GFX.maxPixelRatio, 1.5: it keeps
 // 4K panels and 150 % Windows scaling sharp enough without paying for 4x the pixels)
+// Review round (PHASE5.md §6.3): the module runs, so three.js loaded: the template's 20 s timer now says "still loading"
+// (a slow connection or computer) instead of blaming the 3D library
+window.__bootStarted = true;
 const bootScreen = createBootScreen();
 
 async function start(saved = {}) {
@@ -53,6 +56,10 @@ async function start(saved = {}) {
   const keys = createKeys(settings);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  // every shader program linked since start (PHASE5.md §6.5, review round: p5-gfx checks that none links after the warm-up;
+  // renderer.info.programs cannot show it, a replaced program is released and the count stays the same)
+  let linked = 0;
+  try { const gl = renderer.getContext(), link = gl.linkProgram.bind(gl); gl.linkProgram = (p) => { linked++; return link(p); }; } catch { /* no count */ }
   // the pixel ratio and the sun's shadow: gfx-quality.js (the settings' graphics group, or the frame-time governor)
   let quality = null;
   const pixelRatio = () => (quality ? quality.pixelRatio() : Math.min(window.devicePixelRatio || 1, config.GFX.maxPixelRatio));
@@ -198,7 +205,7 @@ async function start(saved = {}) {
       player.update(0); renderer.render(scene, camera);
       const i = renderer.info;
       return { calls: i.render.calls, triangles: i.render.triangles, programs: i.programs ? i.programs.length : null, geometries: i.memory.geometries, textures: i.memory.textures,
-        pixelRatio: renderer.getPixelRatio(), shadows: renderer.shadowMap.enabled ? perf.shadowMap : 0 };
+        pixelRatio: renderer.getPixelRatio(), shadows: renderer.shadowMap.enabled ? perf.shadowMap : 0, linked };
     },
     startRun(opts = {}) { return run.startRun(opts); },
     startLevel(opts = {}) { return opts.level && opts.level !== 'level1' ? run.startLevel(opts.level, opts) : level.start(opts); },
@@ -324,9 +331,11 @@ async function start(saved = {}) {
   // Phase 5 (PHASE5.md §6.3): the graphics card reset (a driver update, a sleeping laptop): save now and say so
   canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
-    try { level.saveNow?.(); } catch (err) { console.error('save on context loss failed', err); }
+    let saved = false;
+    try { saved = level.saveNow?.() === true; } catch (err) { console.error('save on context loss failed', err); }
     running = false;
-    bootScreen.error('context-lost');
+    // the words depend on the save (none on the title card, in the sandbox or on a result: Continue has the last autosave)
+    bootScreen.error('context-lost', { saved });
   });
 
   bootScreen.hide();

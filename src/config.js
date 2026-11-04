@@ -881,10 +881,13 @@ export const BUILD = { phase: 5, id: 'phase5' };
 // keeps every Phase 3-4 autosave); a slot is one localStorage key holding a whole run (the run key and every level start)
 // under the versioned envelope `format` / `version`. textMarker opens a backup's payload line ("CF5.gz64.<crc>.<base64>").
 // maxSlotChars: a slot that would store more than this is refused with the "full" message (the JSON fallback of a whole
-// cycle is about 0.9 M characters, gzip + base64 about 0.21 M).
+// cycle is about 0.9 M characters, gzip + base64 about 0.21 M). A backup's payload line is
+// "CF5.<enc>.<crc>.<chars>." (the payload's length in characters: the reader counts them, PHASE5.md §3.5) and a backup
+// longer than partChars is split into numbered parts ("CF5.<enc>.<crc>.<chars>.p2of6.", "Part 2 of 6"), each part's
+// whole text at most partChars characters (a chat message or a note holds about 10,000), pasted back in any order.
 export const SAVE_SLOTS = {
   count: 3, keyPrefix: 'chickenFarm.slot.v5.', format: 'chicken-farm-save', version: 5, textMarker: 'CF5',
-  maxSlotChars: 1600000, wrap: 76,
+  maxSlotChars: 1600000, wrap: 76, partChars: 9000,
   // the formats a slot, a backup or the live keys may hold, oldest first (PHASE5.md §3.6): migrations go up this list
   known: [{ v: 1, what: 'Phase 2 brooding-week save (chickenFarm.level1.v1)' }, { v: 3, what: 'Phase 3-4 run save (chickenFarm.run.v3)' }, { v: 5, what: 'Phase 5 save envelope' }],
 };
@@ -899,7 +902,9 @@ export const SETTINGS_STORE = { key: 'chickenFarm.settings.v1', legacySoundKey: 
 export const GFX = {
   maxPixelRatio: 1.5,
   governor: { windowSec: 2, holdSec: 3, firstHoldSec: 4, slowSec: 0.036, verySlowSec: 0.05 },
-  shadowHigh: 2048, shadowLow: 1024,
+  // the sun's shadow map: high 2048, low 1024, off 256 kept empty (PHASE5.md §4.4, review round: the shadow type and
+  // renderer.shadowMap.enabled never change, both are in three's program key, so no setting compiles a shader mid-play)
+  shadowHigh: 2048, shadowLow: 1024, shadowOff: 256,
   budget: { calls: 110, triangles: 650000, programs: 66 },
 };
 

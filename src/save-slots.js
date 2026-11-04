@@ -7,6 +7,7 @@
 //   slotName(meta)                   -> "Hot season · Level 5 – Weeks 4 and 5 · Day 30, 14:20"
 //   makeEnvelope({ run, blob, starts, profile? }) -> { format, v, build, savedAt, meta, run, blob, starts, profile }
 //   migrate(obj)                     -> an envelope (v 5) from a v1 level save, a v3 run save or an envelope; throws SaveError
+//                                       (a v1 save gets level.levelId 'level1' and run null)
 //   checkEnvelope(env)               -> null when it can be resumed, else the SaveError code ('invalid')
 //   createSlotStore({ storage })     -> { available, list(), read(n), write(n, stored), remove(n), keyOf(n) }   (stub)
 //   mergeProfiles(a, b)              -> the skill profile with the larger of each (a backup's skill points brought in)
@@ -51,8 +52,10 @@ export function makeEnvelope({ run, blob, starts = [], profile = null, savedAt =
 }
 
 /**
- * Any saved game this build knows, as an envelope (PHASE5.md §3.6). STUB: the envelope itself and the v3 run save
- * ({ version: 3, savedAt, run, blob }); the saves package adds v1 (the Phase 2 level save) and its checks.
+ * Any saved game this build knows, as an envelope (PHASE5.md §3.6): the envelope itself, the v3 run save ({ version: 3,
+ * savedAt, run, blob }) and the v1 Phase 2 level save ({ version: 1, savedAt, level, env, farm, records, props, flock,
+ * player }: Phase 2's level.serialize() has no levelId, so it is set to 'level1'; run null: run.importSave continues it as a
+ * run at the brooding week, as run.continueSave does since Phase 3). The saves package adds the later checks.
  */
 export function migrate(obj) {
   if (!obj || typeof obj !== 'object') throw new SaveError('not-a-save');
@@ -61,6 +64,12 @@ export function migrate(obj) {
     return obj;
   }
   if (obj.version === 3 && obj.blob) return makeEnvelope({ run: obj.run ?? null, blob: obj.blob, starts: [], savedAt: obj.savedAt ?? Date.now() });
+  if (obj.version === 1 && obj.level && obj.env) {
+    const { version, savedAt, ...blob } = obj;
+    void version;
+    blob.level = { ...blob.level, levelId: blob.level.levelId || 'level1' };
+    return makeEnvelope({ run: null, blob, starts: [], savedAt: savedAt ?? Date.now() });
+  }
   throw new SaveError('not-a-save');
 }
 

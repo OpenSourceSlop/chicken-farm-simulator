@@ -1,11 +1,13 @@
-// The farm overview map (PHASE5.md §5): Tab (from the farm view) or the map key on the time bar. The farm from above in the
+// The farm overview map (PHASE5.md §5): O (keys.js 'map') or the map key on the time bar. The farm from above in the
 // game's flat colours: the house with its equipment, the buildings, signs, the farmer and his facing, the open jobs'
 // places and markers, dead birds, the set-down bucket and the flock's spread; a click on a place walks him there.
 // The farm clock stands still while it is open (panel kind 'paused'). Owner after the design round: package
 // "experience". This is the design round's working STUB: the fence, the road, the buildings and the farmer as SVG, and
 // every place as a key in a list that walks him there (player.walkTo; the route finder of player-path.js).
 //
-//   createMap(ctx, { register, openPanel, closePanel }) -> { id: 'map', open(view?), places() }
+//   createMap(ctx, { register, openPanel, closePanel }) -> { id: 'map', open(via?), places(), walkTo(id) }
+//   (via: { returnTo: 'menu' } from the game menu: Esc on the map comes back to the menu; a place picked closes the whole
+//   chain and walks, PHASE5.md §8.6)
 import { h, button, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
@@ -20,7 +22,7 @@ export function createMap(ctx, { register, openPanel, closePanel }) {
   const player = ctx.player;
   function walkTo(p) {
     const s = standOf(p);
-    closePanel();
+    closePanel({ all: true });
     // the panel gave the farmer his input back on close: walk there by the route finder (around the walls, in at the door)
     player?.walkTo?.(s.x, s.z, false);
   }
@@ -61,5 +63,5 @@ export function createMap(ctx, { register, openPanel, closePanel }) {
       },
     };
   }, { kind: 'paused' });
-  return { id: MAP_ID, open: () => openPanel(MAP_ID), places: () => MAP_PLACES.map((p) => ({ id: p.id, name: p.name, stand: standOf(p) })), walkTo: (id) => { const p = MAP_PLACES.find((x) => x.id === id); if (p) walkTo(p); return !!p; } };
+  return { id: MAP_ID, open: (via) => openPanel(MAP_ID, via || undefined), places: () => MAP_PLACES.map((p) => ({ id: p.id, name: p.name, stand: standOf(p) })), walkTo: (id) => { const p = MAP_PLACES.find((x) => x.id === id); if (p) walkTo(p); return !!p; } };
 }

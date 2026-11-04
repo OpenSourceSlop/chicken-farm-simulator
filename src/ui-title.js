@@ -24,6 +24,9 @@ export function createTitle(root, o) {
   // 960 x 600 they are below its fold: this key scrolls them into view (integrator, Phase 4 merge)
   const harderKey = button({ class: 'btn btn--quiet', hidden: true }, h('span', { html: ICONS.play, 'aria-hidden': 'true' }), 'Harder flocks');
   const saveNote = h('p', { class: 'title-save' });
+  // Phase 5 (PHASE5.md §3.7, review round): a message about the saves on the title card (a load that failed, a corrupt
+  // autosave), shown until the next note or a start: title.note(text) / title.note(null)
+  const loadNote = h('p', { class: 'title-note', role: 'status', hidden: true });
   // Phase 5 (PHASE5.md §6.1): more title keys from the packages (Load a saved farm, Settings, How to play), after the
   // sandbox, the skill tree and Harder flocks, in `order`
   const more = h('div', { class: 'title-more' }, sandbox, skills, harderKey);
@@ -38,6 +41,7 @@ export function createTitle(root, o) {
       h('h1', { id: titleId, class: 'title-h' }, LEVEL_TEXT.title),
       h('p', { class: 'title-line' }, LEVEL_TEXT.line),
       h('div', { class: 'title-btns' }, cont, start, brooding),
+      loadNote,
       saveNote,
       more,
       keys),
@@ -106,6 +110,8 @@ export function createTitle(root, o) {
   return {
     el,
     addAction,
+    /** A message about the saves under the title's keys (null hides it). */
+    note(text) { setText(loadNote, text || ''); loadNote.hidden = !text; },
     /** Refresh the Continue line, the save note and the run card (a slot saved, loaded or deleted). */
     refresh: () => { if (!el.hidden) sync(); },
     get open() { return !el.hidden; },

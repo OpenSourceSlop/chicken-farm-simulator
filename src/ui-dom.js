@@ -49,6 +49,20 @@ export function setAttr(el, name, value) {
 let uid = 0;
 export const uniqueId = (prefix) => `${prefix}-${++uid}`;
 
+/**
+ * Phase 5 (PHASE5.md §8.6, review round): a module's own stylesheet, added once to <head> as <style id="…">. Each package
+ * styles its own screens this way under its own class names (settings: .set-*, saves: .saves-*, the guide: .guide-*,
+ * sound: .sound-*), so no package edits another's CSS; index.template.html keeps the shared look (variables, cards,
+ * buttons, the panel frame). Returns the element (null without a document: node tests).
+ */
+export function injectStyle(id, css) {
+  if (typeof document === 'undefined') return null;
+  let el = document.getElementById(id);
+  if (!el) { el = document.createElement('style'); el.id = id; document.head.appendChild(el); }
+  if (el.textContent !== css) el.textContent = css;
+  return el;
+}
+
 // Phase 5: one answer for the whole game (motion.js: the system setting or the settings menu's "Reduce motion")
 export { reducedMotion } from './motion.js';
 

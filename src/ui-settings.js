@@ -3,13 +3,23 @@
 // key (its Sound tab). Owner after the design round: package "settings". This is the design round's working STUB: one
 // generic control per setting drawn from SETTINGS_SCHEMA (a slider, a check box or a list), the Keys tab read-only.
 //
-//   registerSettingsPanel({ register, openPanel, closePanel, ctx, menu, title }) -> { id: 'settings', open(tab?) }
+//   registerSettingsPanel({ register, openPanel, closePanel, ctx, menu, title }) -> { id: 'settings', open(tab?, via?) }
+//   (via: { returnTo } from the game menu: closing the settings comes back to the menu, PHASE5.md §8.6)
 //   (ctx.settings: settings.js; ctx.keys: keys.js)
-import { h, button, uniqueId } from './ui-dom.js';
+import { h, button, uniqueId, injectStyle } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
 
 export const SETTINGS_ID = 'settings';
+// the settings screen's own rules (PHASE5.md §8.6: each package styles its own screens; the frame is the template's)
+const SETTINGS_CSS = `
+.set-sec { display: grid; gap: 10px; padding: 12px 2px 4px; }
+.set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 14px; color: var(--ink); }
+.set-row--range { grid-template-columns: minmax(0, 1fr) 180px 40px; } .set-row--bool { grid-template-columns: auto 1fr; }
+.set-row select { max-width: 280px; font: inherit; } .set-row input[type=range] { accent-color: var(--accent); }
+.set-note { margin: 6px 0 0; color: var(--ink-faint); font-size: 13px; }
+@media (max-width: 860px) { .set-row--range { grid-template-columns: minmax(0, 1fr) 120px 36px; } }
+`;
 
 /** One control for one schema item; onChange(value). Returns { el, sync(value) }. */
 export function settingControl(path, it, value, onChange) {
@@ -38,6 +48,7 @@ export function settingControl(path, it, value, onChange) {
 
 export function registerSettingsPanel({ register, openPanel, closePanel, ctx, menu = null, title = null }) {
   let wantTab = null, api = null;
+  injectStyle('settings-style', SETTINGS_CSS);
   register(SETTINGS_ID, () => {
     const S = ctx.settings;
     const titleId = uniqueId('settings-title');
@@ -73,8 +84,8 @@ export function registerSettingsPanel({ register, openPanel, closePanel, ctx, me
       onOpen() { const i = wantTab ? groups.findIndex(([g]) => g === wantTab) : -1; if (i >= 0) show(i); wantTab = null; },
     };
   }, { kind: 'paused' });
-  api = { id: SETTINGS_ID, open(tab = null) { wantTab = tab; return openPanel(SETTINGS_ID); } };
-  menu?.add?.({ id: 'settings', label: 'Settings', icon: 'gear', order: 40, onSelect: () => api.open() });
+  api = { id: SETTINGS_ID, open(tab = null, via = null) { wantTab = tab; return openPanel(SETTINGS_ID, via || undefined); } };
+  menu?.add?.({ id: 'settings', label: 'Settings', icon: 'gear', order: 40, onSelect: (via) => api.open(null, via) });
   title?.addAction?.({ id: 'settings', label: 'Settings', icon: 'gear', order: 20, onClick: () => api.open() });
   return api;
 }
