@@ -55,7 +55,7 @@ export const STRIPS_COND = {
   'p-power': { panels: { generator: null, controller: 'top' }, title: 'The power is off: start the generator',
     rows(c, inst) {
       const cut = (c.farm.problems || []).find((p) => p.id === 'power-cut'), since = cut?.startedAt != null ? Math.max(0, (c.env.day - cut.startedAt) * 1440) : null;
-      return [line(genLine(c)), ...(since != null ? [line(`The power went off at ${hhmm((cut.startedAt % 1) * 24)}: ${int(since)} farm minutes ago. The clock runs at the carrying speed while the house is dark.`)] : []),
+      return [line(genLine(c)), ...(since != null ? [line(`The power went off at ${hhmm((cut.startedAt % 1) * 24)}: ${int(since)} farm minute${Math.round(since) === 1 ? '' : 's'} ago. The clock runs at the carrying speed while the house is dark.`)] : []),
         fuelRow(c), ...partRows(c, inst), note('Power cut sign: start the generator (about 2 minutes to full power), then switch the house over to it.')];
     } },
   'p-power-back': { panels: { generator: null }, title: 'The mains is back: switch over and stop the generator',
