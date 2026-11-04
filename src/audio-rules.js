@@ -100,7 +100,7 @@ export function dripRate(S) {
 export const SOUND_KMS = 0.343;
 /** One flash's thunder: a distance 0.5-2.7 km (or kmFixed), its delay (1.5-7.9 s), a 3-7 s rumble; near under 1.2 km. */
 export function thunderOf(rng, kmFixed = NaN, out = {}) {
-  const km = Number.isFinite(kmFixed) ? clamp(kmFixed, 0.5, 2.7) : 0.5 + 2.2 * rng();
+  const km = Number.isFinite(kmFixed) ? clamp(kmFixed, 0.515, 2.7) : 0.515 + 2.185 * rng(); // 1.50-7.87 s
   out.km = km; out.delay = km / SOUND_KMS; out.len = 3 + 4 * rng(); out.near = km < 1.2;
   return out;
 }

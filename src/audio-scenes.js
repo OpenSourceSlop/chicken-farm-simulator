@@ -141,14 +141,14 @@ export function createScenes({ pools, machines, S, rng, pan, lim }) {
       }
       // the controller's alarm in a dark house: every 6 s for the first two minutes, then every 15 s, never stopping
       if (S.powerOff) {
-        if (darkAt < 0) { darkAt = now; alarmAt = now; }
-        if (now >= alarmAt) {
-          const dark = now - darkAt;
-          alarmAt = now + alarmGap(dark);
+        if (darkAt < 0) { darkAt = t; alarmAt = t; }
+        if (t + 0.04 >= alarmAt) { // on its own times (not the frames'): exactly 6 s, then 15 s apart
+          const at0 = Math.max(alarmAt, t), dark = at0 - darkAt;
+          alarmAt = at0 + alarmGap(dark);
           const P = PLACES.controller, d = Math.hypot(S.x - P.x, S.z - P.z);
-          if (on.cues && d < 30 && lim.allow('alarm', t, dark >= ALARM.lateAfter + 60)) {
+          if (on.cues && d < 30 && lim.allow('alarm', at0, dark >= ALARM.lateAfter + 60)) {
             const g = peak('alarm') / (1 + d / 6);
-            if (C.alarm2(pools.cues, t, g, at(P))) lim.note('alarm', t, -1, gainToDb(g / peak('alarm')), dark);
+            if (C.alarm2(pools.cues, at0, g, at(P))) lim.note('alarm', at0, -1, gainToDb(g / peak('alarm')), dark);
           }
         }
       } else darkAt = -1;

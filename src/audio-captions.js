@@ -35,7 +35,14 @@ export const CAPTION_WORDS = {
 const PRIORITY = { alarm: 0, phone: 1, genStop: 2, genStart: 2, thunderNear: 3, peeping: 4, peepingBirds: 4, snicks: 4, panting: 4,
   quiet: 5, crew: 5, washer: 6, genRunning: 6, truckIn: 6, truckOut: 6, rain: 7, thunderFar: 7 };
 export const CAPTION_GAP = 8;   // real seconds between two captions
-const STALE = 12;               // a caption still waiting after this is dropped (the sound is over)
+const STALE = 16;               // an event's caption still waiting after this (two turns) is dropped: the sound is over
+const STATE_STALE = 40;         // a state's caption waits while its state holds, at most this long
+// the state keys: still true when their caption's turn comes? (else it is dropped)
+const HOLDS = {
+  alarm: (G) => G.powerOff, rain: (G) => (G.rain || 0) > 0, crew: (G) => G.catching, washer: (G) => !!G.washer,
+  genRunning: (G) => G.genRun && G.genNear, quiet: (G) => G.inside && G.flock === 'quiet', peeping: (G) => G.inside && G.flock === 'peeping',
+  peepingBirds: (G) => G.inside && G.flock === 'peepingBirds', panting: (G) => G.inside && G.flock === 'panting', snicks: (G) => G.inside && G.flock === 'snicks',
+};
 
 /** The flock as a farmer hears it (flockVoice output, the lights): a caption key or null. */
 export function flockKey(snd, dark, present, day) {
@@ -62,13 +69,15 @@ export function createCaptions({ emit, now = () => Date.now() / 1000, gap = CAPT
   }
   function flush(G) {
     const t = now();
-    for (let i = queue.length - 1; i >= 0; i--) if (t - queue[i].at > STALE) queue.splice(i, 1);
+    for (let i = queue.length - 1; i >= 0; i--) {
+      const c = queue[i], hold = HOLDS[c.key];
+      if (t - c.at > (hold ? STATE_STALE : STALE) || (hold && G && !hold(G))) queue.splice(i, 1); // over, or its state ended
+    }
     if (t - lastAt < gap) return;
     let best = -1;
     for (let i = 0; i < queue.length; i++) {
       const c = queue[i];
       if (c.at > t) continue;
-      if (c.key === 'alarm' && G && !G.powerOff) { queue.splice(i--, 1); continue; } // the power came back first
       if (best < 0 || PRIORITY[c.key] < PRIORITY[queue[best].key] || (PRIORITY[c.key] === PRIORITY[queue[best].key] && c.at < queue[best].at)) best = i;
     }
     if (best < 0) return;
