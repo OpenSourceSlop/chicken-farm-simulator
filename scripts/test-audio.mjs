@@ -14,6 +14,14 @@ import * as V from '../src/audio-voices.js';
 import { FakeAudioContext } from './fake-audio.mjs';
 import { HOUSE, FARM, HEATERS } from '../src/config.js';
 import { createSim } from '../src/sim.js';
+// Phase 5 (PHASE5.md §10.1)
+import { createThunderPlanner } from '../src/audio-scenes.js';
+import { createCaptions, CAPTION_WORDS, CAPTION_GAP } from '../src/audio-captions.js';
+import { genTarget, machineOwner, MACHINES, dayCicadas, washerOf, deskFanOn, crewTarget, layerGain, PLACES, alarmGap } from '../src/audio-rules.js';
+import { VARIANTS } from '../src/audio-cues.js';
+import * as C from '../src/audio-cues.js';
+import { createSettings, soundView } from '../src/settings.js';
+import { createEvents, EV } from '../src/events.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -266,10 +274,10 @@ function rig(o = {}) {
 }
 const voicesOf = (pool, kind, t) => pool.voices.filter((v) => v.kind === kind && v.busy > t).length;
 
-test('engine: builds once on a context, under 200 nodes', () => {
+test('engine: builds once on a context, at most 230 nodes (PHASE5.md §2.1: one shared noise source and machine bed)', () => {
   const { ac, frame } = rig();
   const n = ac.nodes;
-  assert(n > 50 && n < 200, `${n} nodes`);
+  assert(n > 50 && n <= 230, `${n} nodes`);
   for (let i = 0; i < 600; i++) frame();
   assert(ac.nodes === n, `no node made after start-up (${ac.nodes - n} more)`);
 });
@@ -355,6 +363,219 @@ test('engine: footfalls by the walk cycle, spaced, on every surface', () => {
     assert(starts >= 25 && starts <= 34, `${x},${z}: ${starts} footfalls in 10 s`);
   }
 });
+
+// ---- Phase 5: every new situation, the captions, the layer sliders, the shared beds ----
+const VERDICT = /correct|wrong|well done|good job|great job|mistake|perfect|excellent|match(es)? the/i;
+function phase5Tests() {
+  const rig = (S = {}, opts = {}) => {
+    const ac = new FakeAudioContext(), eng = createEngine(ac, { seed: 5, lookahead: 0.02, log: 50000, ...opts });
+    Object.assign(eng.S, { x: -30, z: 30, inside: false, hour: 10, weather: 'normal', day: 20, pickBird: () => false }, S);
+    const frame = (dt = 1 / 30) => { eng.update(dt); eng.S.teleport = false; eng.S.jump = false; ac.advance(dt); };
+    const run = (sec, dt = 1 / 30) => { for (let i = 0; i < sec / dt; i++) frame(dt); };
+    return { ac, eng, frame, run, rows: (k) => eng.lim.events().filter((r) => r.kind === k) };
+  };
+
+  test('p5: the generator bed is 0 unless it runs; at 20 m 0.37 of its value at the generator; -8 dB inside', () => {
+    const G = PLACES.generator, at = (d, o = {}) => genTarget({ x: G.x + d, z: G.z, inside: false, genRun: true, ...o });
+    assert(genTarget({ x: G.x, z: G.z, genRun: false }) === 0 && at(0, { genRun: false }) === 0, 'not running: 0');
+    const r = at(20) / at(0);
+    assert(Math.abs(r - 0.37) <= 0.02, `20 m: ${r.toFixed(3)} of its value at the generator`);
+    assert(Math.abs(20 * Math.log10(at(4, { inside: true }) / at(4)) + 8) < 1e-9, 'inside the house -8 dB');
+    const { eng, run } = rig({ x: G.x + 4, z: G.z });
+    run(2);
+    assert(eng.scenes.T.machine.owner === -1, 'no machine on the bed while the generator stands');
+    eng.S.genRun = true; run(4);
+    assert(MACHINES[eng.scenes.T.machine.owner] === 'generator' && eng.counts.genStart === 1, 'running: the generator takes the bed; the starter cranked once');
+    eng.S.genRun = false; run(3);
+    assert(eng.counts.genStop === 1 && eng.machines.genState === 'off' && eng.scenes.T.machine.owner === -1, 'stopped: it ran down and left the bed');
+  });
+
+  test('p5: 200 flashes -> every rumble 1.5-7.9 s after its flash, at most 3 in any real minute, one per flash otherwise', () => {
+    const planner = createThunderPlanner(makeRng(2)), { eng, run } = rig({ storm: true, rain: 1 });
+    let flashes = 0, t = 0;
+    const flashAt = [];
+    for (let k = 0; k < 200; k++) {
+      const gap = k < 100 ? 4 + 8 * Math.random() : 25 + 25 * Math.random(); // 100 in a burst (forced flashes), 100 on world-rain's timer
+      for (let s = 0; s < gap; s += 1 / 30) { const p = planner.update(1 / 30, { flashes, storm: true }); if (p) eng.thunder(p); run(1 / 30); t += 1 / 30; }
+      flashes++; flashAt.push(t);
+    }
+    run(10);
+    const th = eng.lim.events().filter((r) => r.kind === 'thunder');
+    assert(th.length >= 60 && th.length <= 200, `${th.length} rumbles for 200 flashes`);
+    assert(th.every((r) => r.aux >= 1.5 - 1e-6 && r.aux <= 7.9 + 1e-6), `delays ${Math.min(...th.map((r) => r.aux)).toFixed(2)}..${Math.max(...th.map((r) => r.aux)).toFixed(2)} s`);
+    const ts = th.map((r) => r.t);
+    let most = 0;
+    for (let i = 0, j = 0; i < ts.length; i++) { while (ts[i] - ts[j] >= 60) j++; most = Math.max(most, i - j + 1); }
+    assert(most <= 3, `${most} rumbles in a real minute`);
+    const late = th.filter((r) => r.t > flashAt[100] + 8).length;
+    assert(late >= 85, `on world-rain's 25-50 s timer every flash has its rumble: ${late} of 100`);
+    const vs = th.map((r) => r.variant);
+    assert(vs.every((v, i) => i === 0 || v !== vs[i - 1]) && new Set(vs).size === VARIANTS.thunder, 'four rumble shapes, never twice in a row');
+  });
+
+  test('p5: the alarm every 6 s for the first 120 s of a dark house, then every 15 s; none while the power is on', () => {
+    const { eng, run, rows } = rig({ x: -12, z: 0, inside: true });
+    run(60);
+    assert(rows('alarm').length === 0, 'power on: no alarm');
+    eng.S.powerOff = true; run(300);
+    const ts = rows('alarm').map((r) => r.t), gaps = ts.slice(1).map((x, i) => +(x - ts[i]).toFixed(2));
+    const early = gaps.filter((g, i) => ts[i + 1] - ts[0] <= 120 + 1e-6), later = gaps.slice(early.length);
+    assert(early.length === 20 && early.every((g) => Math.abs(g - 6) < 0.05), `first two minutes: ${early.join(' ')}`);
+    assert(later.length >= 10 && later.every((g) => Math.abs(g - 15) < 0.05), `then: ${later.join(' ')}`);
+    assert(alarmGap(0) === 6 && alarmGap(119) === 6 && alarmGap(120) === 15, 'the rule');
+    eng.S.powerOff = false; const n = ts.length; run(60);
+    assert(rows('alarm').length === n, 'power back: the alarm stops');
+  });
+
+  test('p5: the day cicadas only in the hot season, 10:00-16:00, highest at 13:00', () => {
+    for (const c of [null, 'normal', 'rainy', 'bad', 'water']) for (let h = 0; h < 24; h += 0.25) assert(dayCicadas(h, c) === 0, `${c} ${h}`);
+    for (const h of [0, 6, 9.9, 10, 16, 16.1, 20]) assert(dayCicadas(h, 'hot') === 0, `hot ${h}`);
+    let best = -1, at = 0;
+    for (let h = 10; h <= 16; h += 0.05) { const v = dayCicadas(h, 'hot'); if (v > best) { best = v; at = h; } }
+    assert(Math.abs(at - 13) < 0.06 && best > 0.99, `peak ${best.toFixed(2)} at ${at.toFixed(2)}`);
+    const { eng, run } = rig({ hour: 13, cond: 'hot' });
+    run(1);
+    assert(eng.scenes.T.dayCic > 0.9, 'outside at 13:00 in the hot season');
+    eng.S.cond = 'rainy'; run(1);
+    assert(eng.scenes.T.dayCic === 0, 'off in the rainy season');
+  });
+
+  test('p5: the crew (murmur, crates, the idling truck) only from the catch start to its end', () => {
+    const { eng, run, rows } = rig({ x: -12, z: 5, inside: true, hour: 22, crewX: -11, crewZ: 2 });
+    run(30);
+    assert(eng.scenes.T.crew === 0 && rows('crate').length === 0 && eng.scenes.T.machine.gains[MACHINES.indexOf('truck')] === 0, 'before the start: nothing');
+    eng.S.catching = true; run(60);
+    assert(eng.scenes.T.crew > 0.2 && rows('crate').length >= 8 && eng.scenes.T.machine.gains[MACHINES.indexOf('truck')] > 0.2, `catching: murmur ${eng.scenes.T.crew.toFixed(2)}, ${rows('crate').length} crates`);
+    const n = rows('crate').length;
+    eng.S.catching = false; run(30);
+    assert(eng.scenes.T.crew === 0 && rows('crate').length === n && eng.scenes.T.machine.gains[MACHINES.indexOf('truck')] === 0, 'after the end: nothing');
+    assert(crewTarget({ catching: true, x: 0, z: 30, crewX: 0, crewZ: 0 }) === 0, 'beyond 15 m: not heard');
+  });
+
+  test('p5: the washer only while the wash-bay job runs or in his hands inside; the desk fan by the desk 06:00-19:00', () => {
+    assert(washerOf([], 'washer', false).washer === 0 && washerOf(['wash-bay'], null, false).washer === 1 && washerOf([], 'washer', true).washer === 2, 'washer');
+    assert(washerOf(['controller'], null, false).washer === 0 && washerOf([], 'sprayer', true).sprayer && !washerOf([], 'sprayer', false).sprayer, 'sprayer inside only');
+    const W = PLACES.washBay;
+    const m = (o) => machineOwner({ x: W.x + 1, z: W.z + 1, inside: false, ...o });
+    assert(m({ washer: 0 }).owner === -1 && MACHINES[m({ washer: 1 }).owner] === 'washer' && MACHINES[m({ x: 0, z: 0, inside: true, washer: 2 }).owner] === 'washer', 'the bed');
+    const D = PLACES.desk;
+    for (const [x, z, h, on] of [[D.x, D.z, 10, true], [D.x + 5.5, D.z, 7, true], [D.x + 6.5, D.z, 10, false], [D.x, D.z, 5.5, false], [D.x, D.z, 19.2, false], [D.x, D.z, 18.9, true]]) {
+      assert(deskFanOn({ x, z, hour: h }) === on, `desk fan at ${(x - D.x).toFixed(1)} m, ${h}:00`);
+    }
+  });
+
+  test('p5: the layer sliders: gains value² (0.5 -> 0.25); a layer at 0 schedules none of its events', () => {
+    assert(layerGain(0.5) === 0.25 && layerGain(1) === 1 && layerGain(0) === 0 && layerGain(7) === 1, 'squared');
+    const { eng, run, rows } = rig({ x: -14, z: 0, inside: true, day: 3, speed: 4, flockW: 1500, snd: { distress: 1, contented: 0 },
+      pickBird: (rng, o) => { o.x = -14 + rng() * 4; o.z = rng() * 3; return true; }, catching: true, crewX: -13, crewZ: 1 });
+    const lv = eng.setLayers({ background: 0.5, flock: 0.7, cues: 0.3 });
+    assert(lv.outside === 0.25 && lv.house === 0.25 && Math.abs(lv.flock - 0.49) < 1e-12 && Math.abs(lv.cues - 0.09) < 1e-12, JSON.stringify(lv));
+    const ev = eng.layer.flock.gain.events.slice(-1)[0];
+    assert(ev[0] === 'target' && Math.abs(ev[1] - 0.49) < 1e-12, 'set with setTargetAtTime');
+    run(20);
+    const before = { flock: rows('distress').length, cues: rows('crate').length + rows('step').length };
+    assert(before.flock > 20 && before.cues > 10, `playing: ${JSON.stringify(before)}`);
+    eng.setLayers({ flock: 0, cues: 0 });
+    for (let i = 0; i < 20; i++) eng.cue('tick');
+    run(30);
+    assert(rows('distress').length === before.flock && rows('crate').length + rows('step').length === before.cues && rows('tick').length === 0, 'silent layers: no events');
+    eng.setLayers({ flock: 1, cues: 1 }); run(10);
+    assert(rows('distress').length > before.flock, 'back on');
+  });
+
+  test('p5: captions: each key once per change, at most one in 8 s, the alarm within a second; raised with the sound off', () => {
+    for (const [k, w] of Object.entries(CAPTION_WORDS)) assert(w && !VERDICT.test(w) && !/[[\]]/.test(w), `${k}: "${w}"`);
+    let t = 100;
+    const got = [], caps = createCaptions({ emit: (p) => got.push([t, p.key]), now: () => t });
+    const G = { powerOff: false, rain: 0, inside: false };
+    const tick = (sec, o = {}) => { Object.assign(G, o); for (let i = 0; i < sec * 10; i++) { caps.update(G); t += 0.1; } };
+    tick(5);
+    tick(1, { powerOff: true });
+    assert(got.length === 1 && got[0][1] === 'alarm' && got[0][0] - 105 < 1, `the cut: ${JSON.stringify(got)}`);
+    tick(3, { rain: 1 }); caps.raise('thunderNear'); caps.raise('truckIn');
+    tick(30);
+    const gaps = got.slice(1).map((g, i) => g[0] - got[i][0]);
+    assert(got.length === 4 && gaps.every((g) => g >= CAPTION_GAP - 1e-6), `one per 8 s: ${JSON.stringify(got)}`);
+    tick(10, { rain: 0.5 }); tick(10, { rain: 0.7 });
+    assert(got.filter((g) => g[1] === 'rain').length === 1, 'the same shower: rain once');
+    tick(110);
+    assert(got.filter((g) => g[1] === 'alarm').length === 2, 'the alarm again when its gap grows (after 2 minutes)');
+    tick(10, { inside: true, flock: 'peeping' }); tick(10, { flock: 'peeping' }); tick(10, { flock: 'panting' });
+    const fl = got.filter((g) => ['peeping', 'panting'].includes(g[1])).map((g) => g[1]);
+    assert(fl.join() === 'peeping,panting', `the flock on entering and on a change: ${fl}`);
+  });
+
+  test('p5: captions come from the game, not the audio graph: raised with the sound off and no AudioContext', async () => {
+    const { createAudio } = await import('../src/audio.js');
+    const store = new Map(), storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+    const settings = createSettings({ storage });
+    settings.set('sound.muted', true);
+    const events = createEvents(), seen = [];
+    events.on(EV.SOUND_CAPTION, (p) => seen.push(p));
+    const farm = { mode: 'level', power: { on: true }, generator: { running: false }, weatherNow: { rain: 0 }, harvest: { started: false }, condition: 'rainy', flock: { alive: 0 } };
+    const env = { day: 33.7, hour: 17, dayNumber: 33, lightsOn: true };
+    const audio = createAudio({ env }, { player: { position: { x: -12, z: 0 }, isInside: true }, flock: { _state: { n: 0 } }, events, farm,
+      ui: { openPanelId: null, busyPanels: () => [] }, props: { carrying: null }, world: { weather: { flashes: 0, wet: 0 } }, settings: soundView(settings) });
+    for (let i = 0; i < 10; i++) audio.update(0.05);
+    farm.power.on = false;
+    for (let i = 0; i < 5; i++) audio.update(0.05);
+    assert(!audio.state().started && audio.state().muted, 'no sound, no context');
+    assert(seen.some((p) => p.key === 'alarm' && p.text === 'Alarm in the house') && audio.captions()[0].key === 'alarm', `captions ${JSON.stringify(seen)}`);
+    // EV.POWER raises it at once, before any frame (a slow frame on a software renderer must not delay it)
+    farm.power.on = true; for (let i = 0; i < 5; i++) audio.update(0.05);
+    const n = seen.length;
+    await new Promise((r) => setTimeout(r, CAPTION_GAP * 1000 + 100));
+    farm.power.on = false; events.emit(EV.POWER, { on: false, source: null, mains: false });
+    assert(seen.length === n + 1 && seen[n].key === 'alarm', `the cut's caption with no frame between: ${JSON.stringify(seen.slice(n))}`);
+    for (let i = 0; i < 5; i++) audio.update(0.05);
+    assert(seen.length === n + 1, 'the next frames do not raise it twice');
+  });
+
+  test('p5: the node count stays at most 230 and unchanged after ten minutes of fake play through every situation', () => {
+    const { ac, eng, run } = rig();
+    const n = ac.nodes;
+    for (const o of [{ genRun: true, x: -30, z: 8 }, { genRun: false, storm: true, rain: 1 }, { storm: false, rain: 0, wet: 1, dryMin: 0, x: -10, z: 7 },
+      { catching: true, x: -12, z: 5, inside: true }, { catching: false, washer: 1, x: -27, z: 12, inside: false }, { washer: 2, x: 0, z: 0, inside: true, speed: 3 },
+      { washer: 0, sprayer: true }, { sprayer: false, scraper: true }, { scraper: false, pump: true, cond: 'water', x: -32, z: -10, inside: false, speed: 0 },
+      { pump: false, cond: 'hot', hour: 13, x: -34, z: 25 }]) { Object.assign(eng.S, o); run(60); }
+    assert(n <= 230 && ac.nodes === n, `${n} nodes at start-up, ${ac.nodes} after`);
+  });
+
+  test('p5: the shared machine bed: the generator, the washer, the well pump and the truck never two at once; the nearer takes it', () => {
+    const all = { genRun: true, washer: 1, pump: true, catching: true, inside: false };
+    for (const [name, P] of [['generator', PLACES.generator], ['washer', PLACES.washBay], ['pump', PLACES.pump], ['truck', PLACES.loadingBay]]) {
+      const o = machineOwner({ ...all, x: P.x + 0.5, z: P.z + 0.5 });
+      assert(MACHINES[o.owner] === name, `beside the ${name}: ${MACHINES[o.owner]}`);
+    }
+    const { eng, run } = rig({ ...all, x: PLACES.generator.x + 2, z: PLACES.generator.z + 2 });
+    const seen = new Set();
+    for (const P of [PLACES.washBay, PLACES.pump, PLACES.loadingBay, PLACES.generator]) {
+      eng.S.x = P.x + 1; eng.S.z = P.z + 1; run(3);
+      seen.add(MACHINES[eng.scenes.T.machine.owner]);
+    }
+    assert(seen.size === 4, `one at a time, the nearest: ${[...seen]}`);
+  });
+
+  test('p5: every new one-shot ends inside the time its voice is held', () => {
+    const ac = new FakeAudioContext(), rng = makeRng(4), src = ac.createBufferSource();
+    const P = voicePool(ac, ac.destination, { tones: 3, noises: 4, waves: makeWaves(ac), sources: [src] });
+    const recipes = { ring: (t) => C.ring(P, t, 0.1, 0), dial: (t) => C.dial(P, t, 0.1, rng), pen: (t) => C.pen(P, t, 0.1, rng), scrape: (t) => C.scrape(P, t, 0.1, rng),
+      crank: (t) => C.crank(P, t, 0.1, rng), genStop: (t) => C.genStop(P, t, 0.1, rng), clunk: (t) => C.clunk(P, t, 0.1, rng), alarm2: (t) => C.alarm2(P, t, 0.1, 0) };
+    for (let v = 0; v < 4; v++) { recipes[`drip ${v}`] = (t) => C.drip(P, t, 0.1, 0, v, rng); recipes[`crate ${v}`] = (t) => C.crate(P, t, 0.1, 0, v, rng); }
+    let t = 1;
+    for (let k = 0; k < 40; k++) for (const [name, play] of Object.entries(recipes)) {
+      t += 5;
+      assert(play(t), `${name} found a voice`);
+      for (const v of P.voices) {
+        if (v.busy <= t) continue;
+        const end = Math.max(...v.g.events.map((e) => e[2]));
+        assert(end <= v.busy - 0.01 + 1e-9, `${name}: its last gain change at +${(end - t).toFixed(3)} s, the voice held to +${(v.busy - 0.01 - t).toFixed(3)} s`);
+      }
+    }
+  });
+}
+
+phase5Tests();
 
 let failed = 0;
 for (const t of tests) {
