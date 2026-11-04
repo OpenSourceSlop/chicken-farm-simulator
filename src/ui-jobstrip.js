@@ -41,6 +41,14 @@ const CSS = `
 .js-band { position: absolute; top: -2px; bottom: -2px; border: 1px solid var(--key-ink); border-radius: 2px; background: rgba(255, 255, 255, 0.1); opacity: 0.75; }
 .js-bar--over::after { content: '▶'; position: absolute; right: -11px; top: -5px; font-size: 9px; color: var(--sign-yellow); }
 .js-more { margin: 5px 0 0; font-size: 12px; color: var(--key-sub); }
+/* on the records book's paper (the Phone page's jobs): ledger ink, not the machine panels' light ink (integrator) */
+.book-paper .jstrip { color: var(--ledger-ink, #2b2a24); background: rgba(231, 182, 70, 0.16); box-shadow: inset 0 0 0 1px rgba(160, 112, 20, 0.55); }
+.book-paper .js-mark, .book-paper .js-dot { color: rgba(43, 42, 36, 0.7); box-shadow: inset 0 0 0 1.5px rgba(43, 42, 36, 0.55); }
+.book-paper .js-dot { background: rgba(43, 42, 36, 0.55); box-shadow: none; }
+.book-paper .js-step.is-done .js-text, .book-paper .js-more, .book-paper .js-sign b, .book-paper .js-yours b { color: rgba(43, 42, 36, 0.68); }
+.book-paper .js-sign, .book-paper .js-yours { background: rgba(43, 42, 36, 0.08); }
+.book-paper .js-note .js-text, .book-paper .js-time .js-text { color: #7a4e00; }
+.book-paper .js-bar { background: rgba(43, 42, 36, 0.2); }
 /* machine rows: the state word beside the title, keys that name their action, the pans' fill as a number */
 .ctrl-label > .ctrl-state { display: block; margin-top: 3px; font: 600 12px/1.25 var(--font-display); letter-spacing: 0.02em; text-transform: none; color: var(--sign-yellow); }
 .ctrl-label > .ctrl-state[hidden] { display: none; }

@@ -692,6 +692,8 @@ before (test-sim byte-identical); the tuned model runs from Week 2 in every run 
 - **The ideal's week 3**: when abnormal deaths are found on days 19–21 and no cause is seen yet, the ideal checks the
   droppings of ten birds again (blood: the vet and the medicine on the next round). The day-19 check can come before
   blood shows on a dry floor (it did in the water condition's standard start through level.js: week 3 failed at 1.13 %).
+- **Job strips on the records book's paper** (the Phone page: the hatchery call, the orders, the vet) use the ledger's
+  dark ink (`.book-paper .jstrip`); the machine panels' light ink was unreadable on the paper.
 - **Steps files updated for the integrated model**: `p4-design-stubs` (a cut keeps `fansManual`, `fansEffective` 0; the
   generator's 2-minute bar; the switches on), `p4-panels-cond` (the same cut), `p4-scene-events` (the tuned signs off at its
   start; the bad batch's truck at 10:00), `p4-run-power` (the start bar), `p3-panels-heat` (Birds feel always shown),
