@@ -60,7 +60,7 @@ export const SETUP = ev(`__game.stop(), (() => {
 export const SEGMENTS = {};
 
 // ---------------- routes (the farm's paths, config SPOTS / SPOTS2 / SPOTS3) ----------------
-const DOOR_IN = [W(-14, 7.6, 0.5), W(-14, 6.9, 0.3), W(-14, 4.6, 0.5)];
+export const DOOR_IN = [W(-14, 7.6, 0.5), W(-14, 6.9, 0.3), W(-14, 4.6, 0.5)];
 export const gateToHouse = () => [W(-40, 36.9, 0.3), W(-38, 26, 0.6), W(-38, 14, 0.6), W(-14, 12, 0.6), ...DOOR_IN];
 export const gateToOffice = () => [W(-40, 36.9, 0.3), W(-38, 26, 0.6), W(-34.1, 28.0, 0.4)];
 export const officeToHouse = () => [W(-38, 26, 0.6), W(-38, 14, 0.6), W(-14, 12, 0.6), ...DOOR_IN];
@@ -71,7 +71,7 @@ export const toSilo = () => [W(-27, 8, 0.6), W(-27, -8.5, 0.6), W(-18.25, -7.0, 
 export const siloToBin = () => [W(-27, -8.5, 0.6), W(-27, 8, 0.6), W(-10.4, 9.3, 0.4)];
 export const toBin = () => [W(-10.4, 9.3, 0.4)];
 /** A bird that died while he was on the round: back in, pick it up, to the bin (every step skips when none lies there). */
-const ifDead = (x, z, tol = 0.5) => ({ walkToExpr: `__game.farm.flock.deadOnFloor > 0 || __game.props.carrying === 'bucket' ? [${x}, ${z}] : null`, tol, max: 60, label: 'only while a dead bird lies on the floor' });
+export const ifDead = (x, z, tol = 0.5) => ({ walkToExpr: `__game.farm.flock.deadOnFloor > 0 || __game.props.carrying === 'bucket' ? [${x}, ${z}] : null`, tol, max: 60, label: 'only while a dead bird lies on the floor' });
 export const deadSweep = () => [ifDead(-14, 8.2), ifDead(-14, 7.6), ifDead(-14, 6.9, 0.3), ifDead(-14, 4.6),
   ...deadPick(4), ifDead(-14, 4.6), ifDead(-14, 8.2), ifDead(-10.4, 9.3, 0.4), ...binCount()];
 
@@ -296,11 +296,11 @@ export function birdChecks(n, btn, key, at = CHECK_AT) {
   }
   return out;
 }
-const fansAll = (pad) => [click('All six'), adv(0.2), ...(pad ? [{ pressIf: 'Escape', if: 'false' }, ev(`__game.env.padOn ? 'pad already on' : ([...document.querySelectorAll('#hud .panel:not([hidden]) button')].find((b) => /(Start|Stop) the pad pump/.test(b.textContent))?.click(), 'pad pump ' + (__game.env.padOn ? 'on' : 'off'))`)] : [])];
+export const fansAll = (pad) => [click('All six'), adv(0.2), ...(pad ? [{ pressIf: 'Escape', if: 'false' }, ev(`__game.env.padOn ? 'pad already on' : ([...document.querySelectorAll('#hud .panel:not([hidden]) button')].find((b) => /(Start|Stop) the pad pump/.test(b.textContent))?.click(), 'pad pump ' + (__game.env.padOn ? 'on' : 'off'))`)] : [])];
 /** The fan panel at the east end (fans.read after 2 s), with what to switch. */
-const atFans = (extra, label) => [W(22.4, -4.6, 0.35), ...E('fan-panel', label || 'E opens the fan panel'), adv(2.4), ...extra, ...esc()];
+export const atFans = (extra, label) => [W(22.4, -4.6, 0.35), ...E('fan-panel', label || 'E opens the fan panel'), adv(2.4), ...extra, ...esc()];
 /** The night ventilation at the controller by the door (r-vent-night): its tunnel fan keys to n fans. */
-const nightAtController = (n, label) => [W(-12, -4.6, 0.3), ...E('controller', label || 'E opens the controller for the night'), adv(2.4), click('Ventilation'), adv(0.1),
+export const nightAtController = (n, label) => [W(-12, -4.6, 0.3), ...E('controller', label || 'E opens the controller for the night'), adv(2.4), click('Ventilation'), adv(0.1),
   clickUntil('One tunnel fan fewer', `__game.env.fansManual <= ${n}`, 8), clickUntil('One tunnel fan more', `__game.env.fansManual >= ${n}`, 8),
   ev(`'fans for the night at the controller: ' + __game.env.fansManual`), ...esc()];
 
@@ -322,7 +322,7 @@ SEGMENTS.week3 = () => [
       job('w3-droppings@16', 'droppings checked on five birds from three parts of the house')] }),
   exp(`'panting share ' + __game.farm.comfort.pantShare.toFixed(2) + ' at ' + __t() + ', fans ' + __game.env.fansOn + ', pad ' + __game.env.padOn`, 'six fans in the warm afternoon'),
   job('p-heat3@16', 'Birds panting in the afternoon: handled at the fan panel'),
-  ...nightThenRecord(16, 1),
+  ...nightThenRecord(16, 2),   // two fans: 16-day-olds in a 31 °C house at 18:00 (one fan keeps a third of them panting into the evening)
   ev(`__timerEnd('day 16')`), ev(`'not done on day 16: ' + (__missed(16) || 'none')`), exp(`__missed(16) === '' && 'every job of day 16 done'`, 'day 16 played by real input: every job done'),
   ...autoTo(21, 21), passed('week3'), shot('p3c-15-week3-result'),
 ];
@@ -437,8 +437,8 @@ export function replay() {
 
 // ---------------- writing the files ----------------
 // the loop stops before anything runs in real time: a run from the same steps draws the same flock (review)
-const START = [{ eval: "__game.stop(), 'stopped at boot'" }, { clearStorage: true }, SETUP];
-function write(path, steps) { writeFileSync(path, `[\n${steps.map((s) => `  ${JSON.stringify(s)}`).join(',\n')}\n]\n`); console.log(`${path}: ${steps.length} steps`); }
+export const START = [{ eval: "__game.stop(), 'stopped at boot'" }, { clearStorage: true }, SETUP];
+export function write(path, steps) { writeFileSync(path, `[\n${steps.map((s) => `  ${JSON.stringify(s)}`).join(',\n')}\n]\n`); console.log(`${path}: ${steps.length} steps`); }
 if (process.argv[1] && process.argv[1].endsWith('p3-cycle-steps.mjs')) {
   const dev = process.argv.indexOf('--dev');
   if (dev >= 0) {

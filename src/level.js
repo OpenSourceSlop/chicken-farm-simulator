@@ -99,6 +99,7 @@ export function createLevel(ctx, deps = {}) {
   const details = new Map();        // milestone -> measured detail (profile)
   let free = null;                  // { def, off } while debug.freeRun runs the farm (tools)
   let alarms = 0;                   // EV.POWER { on: false } and alarm symptoms so far (a Next job skip stops at a new one)
+  let pinStops = 0;                 // pinned condition jobs opened so far (a minute-by-minute skip stops at a new one too)
   let bad = { gradedOut: 0, looked: 0, weak: 0, called: null };  // a bad batch: the grading at the table, the hatchery call (env.day)
 
   /** The level as the farm's condition plays it (config conditionLevel: problems, target, fail, delivery, …). */
@@ -147,6 +148,8 @@ export function createLevel(ctx, deps = {}) {
     // Phase 4: every power cut and every alarm stops a Next job skip (skip() watches the count)
     events.on(EV.POWER, (p) => { if (p && p.on === false) alarms++; });
     events.on(EV.FARM_PROBLEM, (p) => { if (p && p.phase === 'symptom' && p.alarm) alarms++; });
+    // a pinned condition job that opens (the mains back while the generator carries the house) stops it too (integrator)
+    events.on(EV.JOB_OPEN, (p) => { if (p && farm.condition && engine?.byKey?.(p.key)?.def?.pin) pinStops++; });
     // farm.setCondition on a running farm (a harness, __game.setCondition): the jobs again for the new condition
     events.on(EV.LEVEL, (p) => { if (p && p.phase === 'condition' && level.mode === 'level' && !ended && !free) level.rebuildJobs(); });
     events.on(EV.JOB_DONE, () => { if (inLevel()) scheduleSave(2); });
@@ -400,18 +403,19 @@ export function createLevel(ctx, deps = {}) {
   function advance(h, stop) {
     if (!(h > 0)) return true;
     if (!stop || !canCut()) { env.skipHours(h); flock?.afterSkip?.(h); return true; }
-    const a0 = alarms, t0 = env.day, target = env.day + h / 24;
-    while (target - env.day > 0.5 / 1440 && alarms === a0) {
+    const a0 = alarms, p0 = pinStops, t0 = env.day, target = env.day + h / 24;
+    while (target - env.day > 0.5 / 1440 && alarms === a0 && pinStops === p0) {
       const before = env.day;
       env.skipHours(Math.min(1 / 60, (target - env.day) * 24));
       if (env.day <= before + 1e-12) break;
     }
     const done = (env.day - t0) * 24;
     if (done > 0) flock?.afterSkip?.(done); // the drawn flock spread over the skipped time
-    return alarms === a0;
+    if (alarms === a0 && pinStops !== p0) pinStopAt = env.day;
+    return alarms === a0 && pinStops === p0;
   }
   /** The last Next job skip an alarm stopped: { at, alarms } (the ui says why the clock stopped there). */
-  let stoppedAt = null;
+  let stoppedAt = null, pinStopAt = null;
   function skip(hours, { stopOnAlarm = false } = {}) {
     if (hours <= 0) return;
     engine.tick(); // a state met just before the skip still counts (its window may close during it)
@@ -845,7 +849,7 @@ export function createLevel(ctx, deps = {}) {
       if (hrs > 24 && ui?.busy?.run) { ui.busy.run(skipText(target), () => skip(hrs, { stopOnAlarm: true })); return { skipped: hrs }; }
       skip(hrs, { stopOnAlarm: true });
       const went = (env.day - t0) * 24;
-      return went < hrs - 1 / 60 && stoppedAt ? { skipped: went, stopped: 'alarm' } : { skipped: hrs };
+      return went < hrs - 1 / 60 && stoppedAt ? { skipped: went, stopped: pinStopAt === env.day ? 'job' : 'alarm' } : { skipped: hrs };
     },
     nextLabel,
     /** A bad batch's grading at the table so far ({ gradedOut, looked, weak, called }; the records book's hatchery call). */

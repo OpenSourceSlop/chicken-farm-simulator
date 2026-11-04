@@ -28,8 +28,10 @@ export function createCycleTools(ctx, { props, pool, yard, lv }) {
     use() { farm()?.act('bio.change', {}); pose('crouch', 1.0); } });
   const panelAt = (id, s, radius, extra = {}) => reg({ id, label: s.label, x: s.x, z: s.z, radius, inside: s.inside, verb: 'Use the', ...extra });
   panelAt('curtain-winch', SPOTS3.curtainWinch, 1.5, { enabled: () => lv() && day() >= 8 });
-  panelAt('fan-panel', SPOTS3.fanPanel, 1.6, { enabled: () => lv() && day() >= 8 });
-  panelAt('pad-pump', SPOTS3.padPump, 1.6, { enabled: () => lv() && day() >= 8 });
+  // from week 2; in the hot season from the brooding week too (its afternoon pad with one tunnel fan: h-brood-air)
+  const fansOpen = () => lv() && (day() >= 8 || farm()?.condition === 'hot');
+  panelAt('fan-panel', SPOTS3.fanPanel, 1.6, { enabled: fansOpen });
+  panelAt('pad-pump', SPOTS3.padPump, 1.6, { enabled: fansOpen });
   panelAt('gas-tank', SPOTS3.gasTank, 2.0, { verb: 'Read the' });
   panelAt('wash-bay', SPOTS3.washBay, 2.0, { enabled: () => lv() && clean() });
   panelAt('loading-bay', SPOTS3.loadingBay, 1.8, { verb: 'Read the', enabled: () => lv() && day() >= 41 && !!(farm()?.harvest?.started) });

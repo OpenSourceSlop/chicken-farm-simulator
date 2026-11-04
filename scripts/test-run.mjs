@@ -346,6 +346,10 @@ chain('Phase 4: a standard start of weeks45 in the rainy season reaches day 22 0
   assert(pw && pw.status === 'open' && R.level.engine.groups().pinned.includes(pw), 'p-power open and pinned');
   meetCut(R); R.level.update(0.6);
   assert(R.farm.power.on && pw.status === 'done', `the generator brings the power back: ${pw.status}`);
+  // integrator: with the house on the generator a Next job skip stops when the pinned 'mains is back' job opens (18:10)
+  guard = 0;
+  while (!R.level.jobs.list().some((i) => i.id === 'p-power-back' && i.status === 'open') && R.env.day < 33 + 23 * H && guard++ < 40) { R.level.nextJob(); R.level.nextJob(); }
+  assert(R.farm.power.mains && R.env.day < 33 + (18 + 20 / 60) * H, `the skip stopped at the mains' return: ${where(R)}`);
 });
 
 chain('Phase 4: a condition from a normal run\'s level row is a new run: the earlier levels a standard start, conditionsDone at its end', (R) => {

@@ -19,6 +19,7 @@
   {"advance": 0.3},
   {"shot": "p4-run-power-02-generator-panel"},
   {"clickText": "Start the generator", "in": ".panel"},
+  {"advanceUntil": "__game.farm.generator.running", "max": 20, "step": 0.25},
   {"clickText": "House on the generator", "in": ".panel"},
   {"advance": 0.3},
   {"expect": "(() => { const j = __game.level.jobs.list().find((i) => i.id === 'p-power'); return __game.farm.power.on && j && j.status === 'done' && 'power ' + __game.farm.power.source + ', p-power ' + j.status; })()", "label": "the generator on the transfer switch: the power back, p-power done"},

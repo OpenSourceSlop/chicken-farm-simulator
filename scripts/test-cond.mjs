@@ -29,7 +29,7 @@ export const COND_TARGETS = {
       earned: ['hot-brood-air'], eBrood15: band('hot-brood-pad1').at, eYoung: ['hot-d12-15-young', 'hot-d14-15-young', 'hot-d18-15-young'] },
   },
   hotNoBroodAir: { level1: { pass: false }, snaps: { deathsL1: [2.0, Infinity], ratioUnderIdeal: [0.2, 0.5], notEarned: ['hot-brood-air'], eBrood15: band('hot-brood-sign').at } },
-  hotYoungAsNormal: { week2: { pass: false }, snaps: { heatW2Pct: [3, Infinity] } },
+  hotYoungAsNormal: { week2: { pass: false }, snaps: { heatW2Pct: [1, Infinity] } },   // integrator: the level ends on its deaths (1 %) the day they pass it; the dropped rainy spell no longer adds its 92 % air
   hotNoPad: { weeks45: { pass: false, endDay: [22, 25] }, snaps: { heatW45Pct: [2, Infinity] } },
   hotNight3: { weeks45: { pass: false, endDay: [28, 31] }, snaps: { heatW45Pct: [2, Infinity] } },
   hotPadsTo21: { weeks45: { pass: true }, snaps: { pantW45VsIdeal: [1.5, 4], heatW45Pct: [0, 0.1], pointsOf: { 'hot-nights': [0, 2] } } },

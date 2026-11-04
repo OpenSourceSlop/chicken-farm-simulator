@@ -2,7 +2,7 @@
   {"wait": 800},
   {"clearStorage": true},
   {"eval": "__game.stop(), 'stopped: Phase 4 design check of the contract stubs (PHASE4.md §10)'"},
-  {"expect": "typeof __game.conditions === 'function' && typeof __game.setCondition === 'function' && __game.conditions().length === 4 && __game.conditions().every((c) => c.available === false) && 'four conditions, none available yet'", "label": "the Phase 4 hooks exist; the conditions wait for the run merge"},
+  {"expect": "typeof __game.conditions === 'function' && typeof __game.setCondition === 'function' && __game.conditions().length === 4 && __game.conditions().every((c) => c.available === true) && 'four conditions, all available (switched on at the Phase 4 merge)'", "label": "the Phase 4 hooks exist; the conditions are available"},
   {"eval": "__game.startLevel({ seed: 1 }), 'brooding week start: day ' + __game.env.dayNumber + ', condition ' + __game.farm.condition"},
   {"expect": "__game.env.dayNumber === -1 && __game.farm.condition === null && __game.farm.power.on === true && 'Phase 2 prep day, no condition, power on'", "label": "startLevel({ seed }) is still Phase 2's prep day"},
   {"eval": "__game.cycleAt(33, 15), __game.env.setFans(6), __game.setCondition('rainy'), 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ', ' + __game.farm.condition + ', fans ' + __game.env.fansManual"},
@@ -23,7 +23,7 @@
   {"expect": "__game.farm.condition === null && 'normal season again'", "label": "setCondition(null)"},
   {"eval": "__game.startLevel({ seed: 1 }), __game.cycleAt(3, 14), __game.setCondition('hot'), 'day ' + __game.env.dayNumber + ', ' + __game.farm.condition + ', weather ' + __game.env.weather"},
   {"expect": "__game.env.weather === 'hot' && __game.env.weatherEvents.some((e) => /^sun-/.test(e.id)) && __game.env.dayNumber === 3 && (__game.farm.problems.find((p) => p.id === 'warm-afternoon') || {}).phase === 'ended' && 'hot: the sun on, the warm afternoon dropped'", "label": "setCondition installs the condition's weather, sun and problems"},
-  {"expect": "__game.config.PHASE4.tunedSigns === false && __game.config.CONDITIONS.hot.sun.perH === 1.5 && 'tuned sign lines off until the sim merge'", "label": "the tuned sign lines wait for the sim merge"},
+  {"expect": "__game.config.PHASE4.tunedSigns === true && __game.config.CONDITIONS.hot.sun.perH === 1.5 && 'the tuned sign lines on (switched on with the tuned model at the Phase 4 merge)'", "label": "the tuned sign lines are on with the tuned model"},
   {"eval": "__game.setCondition(null), 'condition cleared'"},
   {"expect": "__game.farm.condition === null && !__game.env.weatherEvents.some((e) => /^sun-/.test(e.id)) && (__game.farm.problems.find((p) => p.id === 'warm-afternoon') || {}).phase === 'pending' && __game.env.weatherEvents.some((e) => e.id === 'warm-afternoon') && 'normal season: no sun, the warm afternoon of day 6 back'", "label": "setCondition(null) takes the sun off and gives back the dropped problem"}
 ]

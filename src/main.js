@@ -19,7 +19,7 @@ import { createSkills } from './skills.js';
 import { createSaveStore } from './save.js';
 import { buildProps } from './props.js';
 import { createLevel } from './level.js';
-// Phase 3 (PHASE3.md): the run of seven levels on one flock (a stub until package "run" builds it)
+// Phase 3 (PHASE3.md): the run of seven levels on one flock
 import { createRun } from './run.js';
 import { createAudio } from './audio.js'; // Phase 5: the sound layer (src/audio*.js)
 
@@ -209,8 +209,8 @@ function start(saved = {}) {
     config,                       // the config module (steps files read the signs' numbers from it)
     // Phase 2 (PHASE2.md "Test hooks")
     events, farm, records, skills, save, props, interact, level,
-    // Phase 3 (PHASE3.md §15): the run; startLevel({ level }) for a later level is a standard start
-    // (stub: level.debug.freeRun to its start); cycleAt(day, hour) = a level-mode farm at any age
+    // Phase 3 (PHASE3.md §15): the run; startLevel({ level }) for a later level is a standard start (or its saved
+    // start with from: 'saved'); cycleAt(day, hour) = a level-mode farm at any age (level.debug.freeRun: no jobs, no end)
     run,
     condScene,                    // Phase 4: the conditions' scene (rain, the power cut, the machines; its debug hooks)
     audio,                        // Phase 5: settings, state(), debug.measure(opts) (audio-measure.js)
@@ -220,10 +220,10 @@ function start(saved = {}) {
     // Phase 4 (PHASE4.md §11): the harder conditions. startRun({ condition }) / startLevel({ level, from, condition })
     // carry it (run package); setCondition(id) puts it on the running farm (farm.setCondition: the merged problems,
     // weather and sun of this level) and makes the level's jobs again with it (level.rebuildJobs, run package).
-    conditions() { return run.conditionsAvailable ? run.conditionsAvailable() : []; },
+    conditions() { return run.conditionsAvailable(); },
     setCondition(id) {
-      const c = farm.setCondition ? farm.setCondition(id) : (farm.condition = id && config.CONDITIONS[id] ? id : null);
-      try { level.rebuildJobs?.(); } catch (err) { console.error('rebuildJobs failed', err); }
+      const c = farm.setCondition(id);
+      try { level.rebuildJobs(); } catch (err) { console.error('rebuildJobs failed', err); }
       return c;
     },
     nextJob() { return level.nextJob(); },

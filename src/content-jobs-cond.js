@@ -17,6 +17,9 @@ const ANY = (...ids) => ({ type: 'any', of: ids.map((i) => A(i)) });
 const ALL = (...of) => ({ type: 'all', of });
 const ST = (test, extra) => ({ type: 'state', test, ...(extra || {}) });
 const L = (label, rule) => ({ ...rule, label });
+/** The hot season's afternoon pad (integrator, Phase 4 merge): a change of the pad or the fans, or the fan panel read with
+ *  the pad on (the sign puts the pad on from about 11:00, before the 14:00 job opens: the job is not left waiting on a press). */
+const PAD_SET = { type: 'any', of: [A('vent.pad'), A('vent.fans'), A('fans.read', { pad: true })] };
 const LIVE = (label, test, extra) => ({ type: 'state', test, live: true, label, ...(extra || {}) });
 void EV;
 
@@ -47,10 +50,11 @@ export const JOBS_COND = [
   // days 1-7: from 14:00 the closed house runs 3-6 °C over the row (tuning-refs-cond BROOD_REFS_P4); the pad with one
   // tunnel fan brings the chicks to -1.3..-1.0 °C. Inside the afternoon round, from 14:00 (the hottest hours).
   R('h-brood-air', [1, 7], 'pm', 'Keep the chicks’ afternoon heat down', { condition: 'hot', window: [14, 18], spot: 'padPump', signs: ['sign-brooder', 'pad-pump', 'sign-vent'], branch: 'comfort',
-    done: ALL(L('The pad on with one tunnel fan (pad pump, then the fan panel)', ANY('vent.pad', 'vent.fans')), L('The chicks feel near their row for 30 farm minutes', ST('house-near-target'))) }),
+    // the pad set from about 11:00 by the sign (before this job opens) counts by a reading at the fan panel with the pad on
+    done: ALL(L('The pad on with one tunnel fan (pad pump, then the fan panel)', PAD_SET), L('The chicks feel near their row for 30 farm minutes', ST('house-near-target'))) }),
   // days 8-20: the young birds' afternoons (the pad with one to three fans; tuning-refs-cond hot-week2-young / week3-young)
   R('h-young-heat', [8, 20], 'pm', 'Keep the young birds’ afternoon heat down', { condition: 'hot', spot: 'fanPanel', signs: ['sign-heat', 'pad-pump', 'fan-panel'], branch: 'ventilation',
-    done: ALL(L('The pad on with one or two tunnel fans (three in week 3)', ANY('vent.pad', 'vent.fans')), L('Few birds panting, none chilled, for 30 farm minutes', ST('heat-handled'))) }),
+    done: ALL(L('The pad on with one or two tunnel fans (three in week 3)', PAD_SET), L('Few birds panting, none chilled, for 30 farm minutes', ST('heat-handled'))) }),
   // every other afternoon from day 22 (even days), 13:00-15:00: the water supply shows each line's water °C
   R('h-flush', [22, 40], 'pm', 'Flush the warm water out of the drinker lines', { condition: 'hot', onDays: [22, 24, 26, 28, 30, 32, 34, 36, 38, 40], window: [13, 15], spot: 'waterSupply', signs: ['drinker', 'water-supply'], branch: 'water',
     done: ALL(L('Each line’s flush valve opened', { type: 'each', id: 'water.flush', key: 'line', values: [0, 1, 2, 3], match: { on: true } }), LIVE('The water in every line at 30 °C or under', 'lines-cool')) }),

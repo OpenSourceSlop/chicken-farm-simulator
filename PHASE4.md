@@ -421,6 +421,42 @@ rainy day 21 964 g, the cut 0.05 % (10 min), harvest 2,868 g, EPEF 422; bad batc
 never under 90.6 %, the pump 2.40 / 2.11 bar at 06:15 on days 26 / 27, harvest 2,876 g. Speed (node, alone): a whole
 cycle 2.5–3.1 s in every condition, a 24 h skip 62–91 ms, `farm.step` 0.02–0.07 ms.
 
+### 2.8 The audit as integrated (main after the Phase 4 merge)
+`npm run audit` on the merged model (the normal ideal, seed 1), the conditions from `scripts/test-cond.mjs` and the env
+references of `scripts/tuning-refs*.mjs`. Sources: a guide name for the facts of PHASE2.md §6.1 / PHASE3.md §5.1, else
+general broiler practice for Ross / Cobb-type broilers in a Thai EVAP house (ranges, no page numbers). The integrator
+agrees every band move of §2.7 (each is a measured value of the tuned model the sign lines describe).
+
+| # | Quantity | The game (Phase 4, by age) | Reference (source) | Verdict |
+| --- | --- | --- | --- | --- |
+| 1 | Body weight | 200 / 498 / 985 / 1,625 / 2,307 / 2,919 g on days 7 / 14 / 21 / 28 / 35 / 41 (1.03–1.057 × the table); day 7 4.87 × chick weight | the target table 190 / 480 / 950 / 1,550 / 2,200 / 2,850 g (general); day 7 4–5 × chick weight (Week 1 guide) | OK |
+| 2 | FCR (cumulative) | 0.87 / 1.12 / 1.26 / 1.36 / 1.45 / 1.54; harvest 1.585 (paid kg) | about 0.85–0.9 / 1.05–1.15 / 1.25–1.3 / 1.4 / 1.5–1.55; 1.6–1.75 at 42 days (general) | OK |
+| 3 | Feed intake | 37 / 70 / 120 / 152 / 177 / 194 g a bird a day = 96–98 % of the feed sign's figure for the age | the feed sign's table (general) | OK |
+| 4 | Water : feed | 1.87 / 1.88 / 1.96 / 2.08 / 2.01 / 2.02 on the weigh rows; the hot day's row 1.99 well cooled, 2.10 with fans and no pads; the hot season's ideal 1.8–2.0 | about 1.8 while comfortable (drinker plate, general); 2–2.5 hot and panting, up to about 3 in a heat wave without cooling (general) | OK (follows the birds' heat, `waterPerKgP4`) |
+| 5 | Target temperature | 34 °C day 1 → 20 °C day 35, the brooder sign's row; a bad batch's row + 1 °C on days 0–3 | the ends (Week 1 guide / Broiler Ventilation); +1 °C for small chicks (general) | OK |
+| 6 | Panting (felt °C) | first birds / all: 24 / 28 °C at 5 weeks; about 26 / 30 °C at 4 weeks; about 27 / 31 °C at 3 weeks; about 29 / 33 °C at 2 weeks | about 24–26 °C for 5–6 week birds (the heat sign's 24 / 28 °C, general); 28–29 °C at 3 weeks and about 31 °C at 2 weeks (general) | OK for big birds (the sign's figures); **1.5–2 °C low at 2–3 weeks: kept** (the week-3 warm afternoon's problem, job and references rest on it; a raised threshold hides the panting the listen finds; open question 14.1) |
+| 7 | Wind chill at 2.5 m/s | 7.5 / 7.0 / 6.5 / 6.0 / 5.5 °C on days 7 / 14 / 21 / 28 / 35 (30 °C air); 4.3 / 4.0 / 3.7 / 3.5 / 3.2 °C at 1.25 m/s; × 0.33 at 39 °C | 5–7 °C for market-age birds, more for young ones, little near 40 °C (general; the heat sign: 5–6 °C at 5 weeks, about 7 °C at 2 weeks) | OK (the sign's figures are the model's) |
+| 8 | Temperature + humidity | the pads off over 90 % house RH; felt + about 1 / 2 / 4 °C at 87 / 90 / 95 % | the plan's limit; general | OK |
+| 9 | Pad cooling | 0.69–0.82 of the rule; 3.8 °C at 30 °C 69 % (rainy) | about 1 °C per 5 % RH the air can still take up (Broiler Ventilation); most of it, never all (general) | OK |
+| 10 | Minimum ventilation | 0.155 → 3.65 m³/h a bird (42 g → 3 kg); 3.7 → 1.2 m³/h per kg | the vent sign's table (Broiler Ventilation; numbers general) | OK |
+| 11 | Litter moisture | 21.9 / 24.2 / 26.4 / 26.6 / 29.8 / 31.0 % on days 7–41; rainy day 21 about 33 %, the south strip 46 % with the flaps open | at or under 30 % (Broiler Ventilation) | OK (at the line on day 41 after the evening pads; no cake); the rainy season's wetter litter is its cost |
+| 12 | Ammonia | at most 7.2 ppm (normal); rainy NH3 ≤ 18 ppm on the nights of week 3, `rainyNoStep` ≥ 25 | under 20–25 ppm, 5–15 in a well-run house (general) | OK |
+| 13 | Deaths by level | 0.63 / 0.25 / 0.44 / 0.57 / 0.39 %; cycle 2.27 %; DOA 0.10 % | 2–4 % to 42 days, week 1 0.5–1.2 %, DOA 0.1–0.3 % (general) | OK |
+| 14 | Dehydration at the catch | none (6 h without water before it counts, from day 21) | big birds do not die of thirst while the lines are up for the crew (general) | OK |
+| 15 | Cold of older birds | 16-day-olds under the pad and six fans: a few deaths and a huddle (`padWeek3` 1–15 cold deaths) | chilled birds huddle and eat less before they die (general) | OK |
+| 16 | Uniformity (±10 %) | 73 / 70 / 72 / 70 / 72 % on days 7–35, 68 % at the day-40 weighing; a bad batch 42–54 % on day 7 | 70–80 % as hatched with good care, lower at the end (general) | OK (low end) |
+| 17 | Sudden death, legs | SDS 0.07 / 0.08 / 0.15 / 0.08 % by level with 4–6 h dark; leg culls 0.08–0.29 % | SDS 0.5–1.5 % without a dark period, much less with one; leg culls under 1 % (general) | OK |
+| 18 | Harvest | 2,883 g live, FCR 1.585, mortality 2.27 %, EPEF 426, withdrawal 10.9 h; hot 2,875 g / 428; rainy 2,868 g / 422; bad batch 2,884 g / 425; water 2,876 g | Thai EVAP at 42 days: 2.6–3.0 kg, FCR 1.6–1.75, mortality 2–4 %, EPEF 350–450, the pans empty 8–12 h before the catch (general) | OK |
+| 19 | The flock's own heat | a closed house of 5-week birds 28.8 °C at 05:00 on day 41 (minimum ventilation), the tunnel-air ideal 25.2 °C | about 5–6 W per kg of sensible heat at 2–3 kg (general) | OK |
+| 20 | Gas to day 21 | 207 kg (normal); the hot season's brooding week about 60 % of the normal's | the gas plate's 200–300 kg (general) | OK |
+| 21 | Day 37 evening | 3 fans 96 / 78 / 53 / 27 % panting at 19 / 20 / 21 / 22:00; 6 fans 37 % at 19:00, none by 21:00; 6 fans and the pads none (the ideal) | §2.4 | **Fixed**: the model (wind chill, ramp, flock heat) and the job (`night-comfort`: a quarter panting at most, or every fan and the pad while the outside is over 29.5 °C) with the heat sign's evening line |
+| 22 | Heat-wave mistakes | fans without pads 20 % dead over the heat wave; minimum ventilation 59 % (env) | without evaporative cooling a 39 °C heat wave kills many big birds (general) | OK |
+| 23 | Young birds, hot afternoon | day 16: the pad with one fan e +0.46 (handled), the pad with six fans e −5.3 (chilled, not handled) | as few fans as the heat allows; the pad with few fans (general) | OK |
+| 24 | Hot season, brooding | the house 33.6 / 33.0 / 32.2 °C at 15:00 on days 1 / 3 / 6 under the pad and one fan (38 °C outside); the sign's timer alone 37.4–38.4 °C; ratio 4.83 | the chicks' row (the brooder sign); general | OK |
+| 25 | Rainy season, the cut | 0.10 / 0.42 / 1.60 % dead after 10 / 30 / 120 min without fans in the storm (env); the ideal (10 min) 0.05 %; the play-through's walk from the fan panel inside the 11 farm minutes | the power sign's figures (general) | OK |
+| 26 | Water problem, the tank | the pads 934 / 1,141 L an hour at 15:00 (days 25 / 31), the birds 110–131; the pump 2.40 / 2.11 bar at 06:15 on days 26 / 27; repaired: the tank never under 90 % | the water-tank plate's 700–1,200 / 100–150 L/h and 2.4 bar, 6 A (general) | OK |
+| 27 | Bad batch | 36 g chicks, 4.5 % weak; graded and claimed: deaths + floor culls 0.58 %, ratio 5.11 × the measured weight; ungraded about 3.5 % | small chicks start slower; weak chicks left in the flock die and take others with them (general) | OK |
+
 ## 3. The conditions system
 
 ### 3.1 Offering and choosing (package "run")

@@ -723,7 +723,9 @@ export const CONDITIONS = {
     summary: 'April–May: afternoons of 37–38 °C with the sun on the roof, nights hardly under 28 °C, a heat wave to about 41 °C in week 5. The cooling pads decide, from the first day.',
     levels: {
       level1: { drop: ['warm-afternoon'] },           // every afternoon is warm: the routine h-brood-air instead
-      week2: { routineDays: { 'r-fans-pm': [8, 41], 'r-vent-night': [8, 41] } },
+      // April-May is the dry hot season: no rainy spell in week 2 (92 % in 36 °C air is no Thai April afternoon; the pad
+      // could not cool it and 10-day-olds panted all day; integrator, Phase 4 merge)
+      week2: { drop: ['rainy-spell'], routineDays: { 'r-fans-pm': [8, 41], 'r-vent-night': [8, 41] } },
       // the daily sun carries the afternoons: the events' own sun off (the heat wave keeps a little)
       week3: { replace: { 'warm-afternoon3': { outsideRise: 2.5, sunPerH: 0 } } },          // about 40 °C on day 16
       weeks45: {

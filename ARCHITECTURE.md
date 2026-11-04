@@ -1,4 +1,4 @@
-# Chicken Farm — architecture (Phases 1, 2 and 3)
+# Chicken Farm — architecture (Phases 1 to 4)
 
 A browser game that teaches broiler farming by running a farm through a flock cycle.
 **Phase 1** was the look-and-feel test: one chicken house, the farm around it, a walking farmer and
@@ -96,7 +96,8 @@ game starts on day 1 at 08:00 = 1.333), getter `dayNumber` (the whole flock day 
 thermostat asks for), `heaterLevel` (0..1 actual output, follows the demand within a few game
 minutes; drives heat, glow and radiant), `fansOn` (0..6), `padOn`,
 `airSpeed` (m/s), `lightsOn`, `targetTemp` (= `targetTempAt(dayNumber)`, so day 1 is 34 °C all day,
-as on the brooder sign), `windChill`, `feelsLike`, `bodyWeight` (g),
+as on the brooder sign; Phase 4: + `targetShiftC` on days 0–3 of a bad batch), `windChill` (Phase 4: `windChillP4` from
+Week 2 once the farm sets `setWindChillP4`), `powerOn` (Phase 4: false while the house has no power), `feelsLike`, `bodyWeight` (g),
 `broodCurtain` (bool), getters `isNight`, `timeLabel`.
 Methods: `localTemp(x,z)` (°C a chick feels there: house air + brooder radiant − wind chill,
 slightly cooler at side walls), `comfort(x,z)` (= localTemp − targetTemp; negative = cold),
@@ -554,8 +555,8 @@ anywhere still holds (test-contracts and test-jobs check the words), and every n
   minutes so far: close the panel and let the clock run"), bars for the states that had none (dead birds, lame birds, the
   catch, the vaccine), the readings of the measuring jobs (T, L, V, vent temperatures), and the c-brush / raise / f-lines
   markers point to the next part or line not done. T, L, V and the chick in the hand show the sign's figure beside the value.
-- Not done: the sandbox tutorial's thermostat target (Phase 1's rule keeps the target on the brooder sign only); w3-change /
-  w45-change still complete on the pans' feed (the strip shows the feed sign's 24 h half-and-half, the rule does not log it).
+- Not done: the sandbox tutorial's thermostat target (Phase 1's rule keeps the target on the brooder sign only). (Phase 4:
+  w3-change / w45-change now need the half-and-half period, `blend-24h`.)
 
 ### The steps hotfix (the farmer stuck on the day 0 drinker job)
 The farmer pressed *Flow test* with the HUD clock paused: the test waits one farm minute, so it never finished, and
@@ -621,11 +622,102 @@ on to the next regulator. Fixed for every job:
 - **Phase 4:** the harder replay conditions (`config.CONDITIONS`, `available: false`) and the model tuning to the
   guides' numbers; **Phase 5:** sound, settings, save slots, the farm overview map.
 
-## Phase 4 — design (contracts in code; packages not merged yet)
-`PHASE4.md` is the spec: the tuning audit (§2), the four harder conditions (§3–§5), the clarity leftovers (§6), the
-contracts (§10) and the four packages `sim`, `run`, `panels`, `scene` (§12). In code now, with every Phase 1–3 number
-unchanged (`npm test` passes; the live farm still runs Phase 3's model; with no condition and
-`config.PHASE4.tunedSigns` false every board reads as Phase 3):
+## Phase 4 (simulation tuning and the harder conditions) — as integrated
+`PHASE4.md` is the spec: the tuning audit (§2, with the as-integrated table in §2.8 and the tuning log in §2.7), the four
+harder conditions (§3–§5), the clarity leftovers (§6), the contracts (§10) and the four packages `sim`, `run`, `panels`,
+`scene` (§12). They were merged in that order with `--no-ff` (no file touched by two packages; `package.json` merged with
+the sound layer's `test-audio`), then wired. With no condition every Phase 1–3 view and the Phase 2 brooding week are as
+before (test-sim byte-identical); the tuned model runs from Week 2 in every run and its sign lines are on.
+- **Tuning** (`src/farm-tuning.js`, wired by the sim package): wind chill by age, speed and air temperature from Week 2
+  (`env.setWindChillP4`), a 4 °C panting ramp, heat and cold deaths of older birds, the flock's sensible heat × 2.5,
+  water : feed from the birds' comfort, 6 dry hours before dehydration, the CV growth after day 14 × 0.5;
+  `farm.comfort.feltMean / pantFrom / pantAll`. The ideal follows the heat sign's evening line (every fan and the pads
+  18:00–21:00 from day 28 while the outside is ≥ 29.5 °C); `night-comfort` is re-defined (a quarter panting at most and
+  none chilled, or every working fan with the pad in that warm air). The env-only references (`scripts/tuning-refs*.mjs`)
+  and the sign figures (`config.SIGN_FIGURES`) are checked by test-tuning; `config.PHASE4.tunedSigns` is **true**.
+- **Conditions** (`config.CONDITIONS[id].available` **true**): `farm.condition` is the only holder (`farm.start(def,
+  { condition })`, `farm.setCondition(id)`; `run.state().condition` mirrors it). `config.conditionLevel(def, id)` merges
+  a level's problems, weather, target / fail, routine days, cycle climate and a bad batch's delivery. The model is
+  `src/farm-cond.js` + `farm-cond-core / -power / -water / -chicks / -stats.js` (the hot season's roof sun and line water,
+  storms and the rain-in strip, the storm flaps, `env.powerOn` and the generator, the tank and the well pump, iron, a bad
+  batch's delivery, grading, the day-0 claim, yolk-sac infection, trays, the warmer row). Records notes:
+  `records-cond.js`; condition milestones: `skills-cond.js` / `skills-rules-cond.js` (`ALL_MILESTONES_P4`,
+  `needsProblem`); profiles: `farm-profiles-cond.js` (each condition's ideal and named mistakes, `cycleStops(…, condition)`,
+  `broodStopsCond`).
+- **Run and UI**: the Harder flocks cards (title run card and cycle summary) and each reached level row's flock choice
+  (another condition = a new run from that level, the levels before from the condition ideal's standard start); the HUD
+  tag, records header, result titles and the summary (with the last normal-season cycle as a compare column) name the
+  condition; `JOBS_COND`, the `DONE_P4` clarity rules and the ten Phase 4 state tests in the job engine; every
+  `EV.POWER { on: false }` and alarm symptom stops a Next job skip; while the house is dark the clock runs at
+  `LEVEL1.clock[GENERATOR.clockWhileDark]` and Next job does not skip.
+- **Panels**: generator (2-minute start bar, transfer switch as one lit switch pair, test run, fuel), water tank (sight
+  gauge with the low marker, pressure / current dials, the 2-hour repair), chick grading (the chick table's *Grade the
+  stacks* tab, the cull box, the claim); the storm flaps, feed trays, the iron test and each line's water in the existing
+  panels; the clarity items (lit switches, the vent need line beside the keys, the strip bar's band, Done only over ticked
+  steps, *Birds feel* = `farm.comfort.feltMean`).
+- **Scene**: rain, storms and lightning, the season looks, the power cut in the house (fans run down, pad and lights off,
+  LCD blank, alarm lamp), the generator set and switch box, the tank's gauges and the pump, storm flaps, rust on line 4, a
+  bad batch's open boxes, trays and cull box, the flock crowding the lines when water is short, the 3D board faces
+  repainted from `boardsForDay(day, farm.condition)`.
+
+### Wiring and contracts settled at the merge
+- **main.js**: `__game.condScene` (the conditions' scene and its debug hooks); `__game.conditions()` /
+  `setCondition(id)` call `run.conditionsAvailable()` / `farm.setCondition` + `level.rebuildJobs()` without stub fallbacks.
+- **The brooding week's condition rounds in goto(auto)** (level.js): the sim's `broodStopsCond(farm.condition,
+  farm.delivery).stops` (the hot season's 11:00 pad and its 18:00 end, the storms' flaps, the water test, a bad batch's
+  crops at 48 h and warmer thermostat) are merged into `autoStopsL1` after Phase 2's rounds of the same minute and played by
+  `applyRound` with the condition's Phase 2 profile (`profileOf('ideal')` + `p2ProfileFor(cycleProfileOf('ideal',
+  { condition }))`, as the sim's `playBrooding`); a normal run keeps `applyRound(…, 'ideal')`. Without it the hot
+  season's standard starts played the brooding week without the pad. test-run now plays every condition's whole run
+  through level.js goto(auto) (what its standard starts do).
+- **One cycle counter**: `skills.profile` is the live `{ cyclesDone, conditionsDone }` object (it was a copy): level.js
+  keeps its counters in it, `skills.serialize()` and the profile store save it, a harness sets
+  `__game.skills.profile.cyclesDone = 1`. A profile that never counted reads 0; run.js then falls back to a stored
+  `lastCycle` (a Phase 3 player) and `raiseCycle(condition, base)` counts from `base`.
+- **sign-power**: `ui.js` registers the `BOARDS_COND` sign boards as sign panels; `buildBoardPanel` and the `sign.read`
+  check fall back to `BOARDS_COND`.
+- **Milestones**: level.js (result lines) and the skill tree read `ALL_MILESTONES_P4`.
+- **Birds feel is always shown** on the fan panel (the heat sign's panting line reads it); the wind chill unlock
+  (Heat & Ventilation level 1) is the line under it: the degrees the moving air takes off, the damp, the floor.
+- **The hot season**: the fan panel and the pad pump are usable from the brooding week in the hot season
+  (props-tools.js: Phase 2's brooding week of a normal run unchanged); `h-brood-air` / `h-young-heat` count a fan panel
+  reading with the pad on as their first part (the sign puts the pad on from about 11:00, before the 14:00 job opens);
+  the week-2 rainy spell is dropped in the hot season (`CONDITIONS.hot.levels.week2.drop`: 92 % air at 36 °C is no Thai
+  April afternoon; the pad could not cool it and 10-day-olds panted all day).
+- **Skips**: a pinned condition job that opens during a minute-by-minute Next job skip stops it too (the mains back at
+  18:10 while the generator carries the house: without it the skip ran on to 22:00 on the generator).
+- **The farm keeps what the panels showed**: the transfer switch position (`farm.power.switch`, read by the generator
+  panel before `source`), each graded stack's answer (`flock.stacks[i].gradedR`: the grading table survives a reload),
+  the well pump's run hours (`farm.waterTank.pumpHours`).
+- **The ideal's week 3**: when abnormal deaths are found on days 19–21 and no cause is seen yet, the ideal checks the
+  droppings of ten birds again (blood: the vet and the medicine on the next round). The day-19 check can come before
+  blood shows on a dry floor (it did in the water condition's standard start through level.js: week 3 failed at 1.13 %).
+- **Steps files updated for the integrated model**: `p4-design-stubs` (a cut keeps `fansManual`, `fansEffective` 0; the
+  generator's 2-minute bar; the switches on), `p4-panels-cond` (the same cut), `p4-scene-events` (the tuned signs off at its
+  start; the bad batch's truck at 10:00), `p4-run-power` (the start bar), `p3-panels-heat` (Birds feel always shown),
+  `p3-panels-harvest` (the ticket's crop-fill deduction after a short withdrawal: `data-gut`).
+
+### Tests and harness
+- `npm test` = test-contracts, test-sim (Phase 2 unchanged), test-jobs, test-level, test-cycle (the Phase 4 references
+  and bands), test-run (+ every condition's run through level.js, the skip stopped at the mains' return), test-tuning,
+  `test-cond --quick`, test-audio. `node scripts/test-cond.mjs` (full) plays every condition profile of PHASE4.md §4.
+  `npm run perf` (alone) adds each condition's whole cycle (about 3–4 s, budget 15 s) and a weeks 4–5 24 h skip under it
+  (48–74 ms, budget 200).
+- **Integrator play-throughs** (generated by `node scripts/p4-cycle-steps.mjs` on the helpers of `p3-cycle-steps.mjs`;
+  `--dev <part,...> <file>` writes one part): `p4-hot.json` (the run card's *Start a new flock in the hot season* after
+  a cycle, the planning day in the heat, day 3's pad with one fan by real input, day 10's young birds' pad, day 30's heat
+  wave at the fan panel and the pad pump, the flush of the warm line water, the evening rule, then goto(auto) to the cycle
+  summary named "Hot season"), `p4-rainy.json` (weeks 4–5 standard start; day 33: the storm flaps at the controller, the
+  15:10 cut stopping a skip, the alarm and the dark-house clock, the walk from the fan panel to the generator, start and
+  switch inside 11 farm minutes, the mains back, switched over and stopped; the result), `p4-bad.json` (the prep day's
+  trays, the late truck, the box weighed and the sample graded, four stacks graded, the hatchery called, the thermostat at
+  row + 1 °C, the result against the measured weight), `p4-water.json` (weeks 4–5: the tank and pump read on days 22, 26,
+  27; day 27's 2.1 bar, the repair by real clicks, done once it ended; the result) and `p4-clarity.json` (§6 at
+  960 × 600). `p3-cycle.json`'s day-37 night round sets every fan and the pads at the fan panel at 18:00 (the evening rule),
+  day 16's night two fans.
+
+### The design round's contracts (still the shape of the code)
+The contracts of the design round (in code before the packages; all of them hold as merged, the stubs replaced):
 - **Tuning contract**: `src/farm-tuning.js` (wind chill by age, speed and air temperature; a 4 °C panting ramp; heat and
   cold deaths of older birds; the flock's sensible heat × 2.5 from Week 2; water : feed from the birds' comfort; dry
   hours before dehydration; the CV growth after day 14) with its env-only references `scripts/tuning-refs.mjs` and the

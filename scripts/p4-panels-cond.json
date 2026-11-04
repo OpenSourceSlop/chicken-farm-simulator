@@ -4,7 +4,7 @@
   {"eval": "__game.stop(), window.__acts = [], __game.events.on('action', (p) => window.__acts.push({ id: p.id, to: p.to, stack: p.stack, result: p.result, t: __game.env.day })), window.__open = () => document.querySelector('#hud .panel:not([hidden])'), window.__txt = () => (__open()?.textContent || '').replace(/\\s+/g, ' '), 'stopped: the condition panels (PHASE4.md §12.3 p4-panels-cond)'"},
   {"eval": "(() => { const t = performance.now(); __game.cycleAt(33, 15); __game.env.setFans(5); __game.env.setPad(false); __game.setCondition('rainy'); return 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ' in ' + Math.round(performance.now() - t) + ' ms, ' + __game.farm.condition + ', fans ' + __game.env.fansManual; })()"},
   {"eval": "JSON.stringify(__game.farm.debug.power(false)) + ' · fans ' + __game.env.fansManual"},
-  {"expect": "__game.farm.power.on === false && __game.env.fansManual === 0 && 'the power is off: no fans'", "label": "the cut (farm.debug.power(false)) stops the fans"},
+  {"expect": "__game.farm.power.on === false && __game.env.fansEffective === 0 && __game.env.fansManual === 5 && 'the power is off: no fans turn (the setting of five stays)'", "label": "the cut (farm.debug.power(false)) stops the fans"},
   {"eval": "__game.ui.openPanel('generator')"},
   {"advance": 0.3},
   {"expect": "(() => { const t = __txt(); return /The house is dark: no power/.test(t) && /h of fuel at full load/.test(t) && /Mains: off/.test(t) && 'dark house, hours of fuel shown, mains lamp off: ' + __open().querySelector('.cond-gauge small').textContent; })()", "label": "the generator panel: the dark house, the hours of fuel left, the mains' state"},

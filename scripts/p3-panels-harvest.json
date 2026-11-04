@@ -24,7 +24,7 @@
   {"clickText": "Read the ticket of truck 2", "in": ".panel:not([hidden])"},
   {"advance": 0.3},
   {"expect": "__acts.filter((a) => a.id === 'load.ticket').map((a) => a.truck).join(',') === '0,1' && 'load.ticket { truck: 0 }, { truck: 1 }'", "label": "each ticket read is load.ticket { truck }"},
-  {"expect": "(() => { const t = [...__open().querySelectorAll('.cyc-ticket')].map((x) => x.dataset); return t.length === 2 && t.every((d) => d.gross && +d.net > 0 && +d.tare === 12000 && +d.net === +d.gross - 12000) && 'tickets: ' + t.map((d) => d.birds + ' birds, gross ' + d.gross + ' − 12,000 = net ' + d.net + ' kg').join(' · '); })()", "label": "05:30: two tickets with net = gross − 12,000"},
+  {"expect": "(() => { const t = [...__open().querySelectorAll('.cyc-ticket')].map((x) => x.dataset); return t.length === 2 && t.every((d) => d.gross && +d.net > 0 && +d.tare === 12000 && +d.net === +d.gross - 12000 - (+d.gut || 0)) && 'tickets: ' + t.map((d) => d.birds + ' birds, gross ' + d.gross + ' − 12,000' + (+d.gut ? ' − ' + d.gut + ' crop fill' : '') + ' = net ' + d.net + ' kg').join(' · '); })()", "label": "05:30: two tickets with net = gross − 12,000"},
   {"expect": "__open().textContent.includes('The house is empty') && __open().scrollWidth <= __open().clientWidth + 1 && 'house empty, no sideways scroll'", "label": "after the catch the bay says the house is empty"},
   {"shot": "p3-panels-bay-tickets"},
   {"eval": "__game.ui.closePanel(), __game.level.start({ seed: 1 }), 'back to the prep day'"}

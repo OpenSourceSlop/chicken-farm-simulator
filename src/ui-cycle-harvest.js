@@ -46,7 +46,7 @@ export function buildLoadingBay(api) {
 
   function drawTicket(t) {
     const r = t.read;
-    t.el.dataset.gross = String(r.grossKg); t.el.dataset.tare = String(r.tareKg); t.el.dataset.net = String(r.netKg); t.el.dataset.birds = String(r.birds);
+    t.el.dataset.gross = String(r.grossKg); t.el.dataset.tare = String(r.tareKg); t.el.dataset.net = String(r.netKg); t.el.dataset.gut = String(r.gutKg || 0); t.el.dataset.birds = String(r.birds);
     const row = (k, v) => [h('dt', null, k), h('dd', null, v)];
     t.body.replaceChildren(h('dl', null, row('Crates', int(r.crates)), row('Birds loaded', int(r.birds)), row('Gross', `${int(r.grossKg)} kg`),
       row('Empty truck', `${int(r.tareKg)} kg`), r.gutKg > 0 ? row('Deducted: feed in the crops', `${int(r.gutKg)} kg`) : [], row('Net paid', `${int(r.netKg)} kg`),

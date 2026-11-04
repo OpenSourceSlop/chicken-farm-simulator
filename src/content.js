@@ -108,7 +108,6 @@ export const RUN_CARD = {
   },
   states: { 'not reached': 'not reached', playing: 'playing', reached: 'reached', passed: 'passed', 'not passed': 'not passed' },
   confirm: (short, d) => `Replay ${short} — your run goes back to ${d <= -2 ? 'the planning day' : d === -1 ? 'the prep day' : `day ${d}`}`,
-  harder: 'Harder flocks (hot season, rainy season, a bad batch of chicks, a water problem) come in the next build.',
   noStorage: 'Saving is off in this browser: replays start from a standard flock.',
   // Phase 4 (PHASE4.md §1.2, §3.1): the harder flocks and the level rows' condition choice
   standard: (d, cond) => `Getting the flock to day ${d}${cond ? ` ${condIn(cond)}` : ''} …`,
