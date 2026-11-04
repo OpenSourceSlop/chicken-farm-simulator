@@ -202,7 +202,7 @@ export function flockMix(snd, F, day, out = {}) {
   out.chirp = f * c * (1 - d) * quiet * lerp(6.5, 1.6, age);
   out.distress = f * d * lerp(15, 6, age);
   out.chorus = f * smooth(0.15, 0.8, d);
-  out.murmur = f * age * (0.35 + 0.65 * c) * (1 - 0.5 * d);
+  out.murmur = f * age * (0.35 + 0.65 * c) * (1 - 0.5 * d) * (1 - 0.65 * pant); // panting birds hardly murmur
   out.pant = f * pant;
   out.flutter = f * pant * 0.45;
   out.snick = f * sn * 1.1;
@@ -217,12 +217,14 @@ const crossed = (a, b, q) => (a < q && b >= q) || (a > b && (a < q || b >= q));
 export function createStepTracker() {
   const st = { phase: 0, move: 0, run: 0 };
   return {
-    /** dt real s, speed m/s (player.speed). Returns 0, or 1 / 2 on the frame the left / right boot lands. */
-    update(dt, speed) {
+    /** dt s, speed m/s (player.speed), dist m moved this frame (default speed * dt; the game passes the real
+     *  distance, so a slow machine's long frames keep the steps with the boots). Returns 0, or 1 / 2 on the
+     *  frame the left / right boot lands. */
+    update(dt, speed, dist = speed * dt) {
       st.move = damp(st.move, smooth(0.05, 1.2, speed), 9, dt);
       st.run = damp(st.run, smooth(4.4, 6.1, speed), 6, dt);
       const prev = st.phase;
-      if (speed > 0.01) st.phase = (st.phase + (dt * speed) / lerp(WALK_CYCLE, RUN_CYCLE, st.run)) % 1;
+      if (speed > 0.01 && dist > 0) st.phase = (st.phase + dist / lerp(WALK_CYCLE, RUN_CYCLE, st.run)) % 1;
       if (!(st.move > 0.4 && dt > 0)) return 0;
       return crossed(prev, st.phase, 0.25) ? 1 : crossed(prev, st.phase, 0.75) ? 2 : 0;
     },

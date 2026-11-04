@@ -82,7 +82,7 @@ export function createSoundUI(settings, { unlock } = {}) {
     bar.parentElement?.insertBefore(pop, bar);
     for (const list of document.querySelectorAll('#hud .help-list')) {
       if (list.querySelector('.sound-help')) continue;
-      list.append(el('dt', { class: 'sound-help' }, el('kbd', { class: 'kbd' }, SOUND_KEY.label)), el('dd', { class: 'sound-help' }, 'Sound on or off (the speaker button sets the volume)'));
+      list.append(el('dt', { class: 'sound-help' }, el('kbd', { class: 'kbd' }, SOUND_KEY.label)), el('dd', { class: 'sound-help' }, 'Sound on or off'));
     }
   }
   mount();

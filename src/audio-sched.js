@@ -9,7 +9,7 @@ import * as V from './audio-voices.js';
 // Peak level of one event over its layer's LEVELS (dB): calibrated with scripts/p5-sound.json so the
 // layers' RMS land on LEVELS at the default volume.
 export const EVENT_DB = {
-  chirp: 14, distress: 5.5, cluck: 9, snick: 22, rattle: 12, flutter: 14, burst: 7,
+  chirp: 14, distress: 5.5, cluck: 9, snick: 24, rattle: 12, flutter: 14, burst: 7,
   twitter: 7, dove: 6, bulbul: 6, frog: 2, gecko: 2, dog: 4, moto: 6, truck: 9,
 };
 const peak = (kind, layer) => dbToGain(LEVELS[layer] + EVENT_DB[kind]);

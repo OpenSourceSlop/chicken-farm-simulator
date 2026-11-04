@@ -70,13 +70,18 @@ export function createAudio(ctx, deps = {}) {
 
   const trickle = { on: false, t0: 0, real: 0 };
   const voice = {}; // flockVoice's output, reused
-  let lastX = NaN, lastZ = NaN, lastDay = NaN, slowAcc = 0, flockAcc = 0, lastPanel = null;
+  let lastX = NaN, lastZ = NaN, lastDay = NaN, lastNow = 0, slowAcc = 0, flockAcc = 0, lastPanel = null;
   /** The game into S (engine.S, or an offline engine's for audio-measure). live: the frame's jumps, the panels. */
   function fill(S, dt, live) {
     const p = player.position;
-    S.teleport = live && !(Math.hypot(p.x - lastX, p.z - lastZ) < 2.5);
-    S.jump = live && Number.isFinite(lastDay) && env.day - lastDay > 10 * GAME_MIN;
-    if (live) { lastX = p.x; lastZ = p.z; lastDay = env.day; }
+    if (live) {
+      // a teleport (a level start, the morning spawn, the harness) is a jump no run covers in the frame's real time
+      const now = performance.now(), real = Math.min(2, Math.max(dt, (now - lastNow) / 1000)), moved = Math.hypot(p.x - lastX, p.z - lastZ);
+      S.teleport = !(moved < 2.5 + 8 * real);
+      S.dist = S.teleport ? 0 : moved;
+      S.jump = Number.isFinite(lastDay) && env.day - lastDay > 10 * GAME_MIN;
+      lastX = p.x; lastZ = p.z; lastDay = env.day; lastNow = now;
+    } else { S.teleport = false; S.jump = false; S.dist = -1; }
     S.x = p.x; S.z = p.z; S.inside = player.isInside; S.speed = player.speed || 0; S.camYaw = player.cameraYaw || 0;
     S.hour = env.hour; S.weather = env.weather; S.day = env.day; S.heaterLevel = env.heaterLevel || 0;
     S.fanSpin = (env.fansOn || 0) / FAN_COUNT; S.padOn = !!env.padOn && env.padWorking !== false;
@@ -128,6 +133,8 @@ export function createAudio(ctx, deps = {}) {
     return !!engine;
   }
   const onGesture = () => unlock();
+  // a cue only while the sound plays: nothing raised while it was off or hidden bursts out when it comes back
+  const cue = (name, x, z) => { if (engine && ac.state === 'running') engine.cue(name, x, z); };
   if (typeof window !== 'undefined') {
     for (const t of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(t, onGesture, { capture: true, passive: true });
     document.addEventListener('visibilitychange', () => {
@@ -143,8 +150,8 @@ export function createAudio(ctx, deps = {}) {
     document.addEventListener('click', (e) => {
       const b = e.target?.closest?.('button');
       if (!b || !engine || !b.closest('#hud')) return;
-      if (b.classList.contains('plate-head')) { if (!b.closest('.plate')?.classList.contains('is-open')) engine.cue('paper'); return; }
-      if (b.matches('.key, .btn--machine')) engine.cue('click');
+      if (b.classList.contains('plate-head')) { if (!b.closest('.plate')?.classList.contains('is-open')) cue('paper'); return; }
+      if (b.matches('.key, .btn--machine')) cue('click');
       if (/^Flow test/.test(b.textContent.trim()) && !trickle.on) { trickle.on = true; trickle.t0 = env.day; trickle.real = 0; }
     }, true);
   }
@@ -155,14 +162,14 @@ export function createAudio(ctx, deps = {}) {
     events.on(EV.ACTION, (p) => {
       if (!engine || !p) return;
       if (p.id === 'water.flowtest') { trickle.on = false; return; }
-      if (p.id === 'feed.line' && p.heightCm != null) { engine.cue('winch'); return; }
+      if (p.id === 'feed.line' && p.heightCm != null) { cue('winch'); return; }
       const c = ACTION_CUES[p.id];
-      if (c) engine.cue(c);
+      if (c) cue(c);
     });
-    events.on(EV.BOX_TIP, (p) => engine?.cue('box', +p?.x, +p?.z));
-    events.on(EV.JOB_DONE, () => engine?.cue('tick'));
-    events.on(EV.DEAD_DROP, () => engine?.cue('bin'));
-    events.on(EV.FARM_DELIVERY, (p) => { if (p?.phase === 'arrive' || p?.phase === 'leave') engine?.cue('truck'); });
+    events.on(EV.BOX_TIP, (p) => cue('box', +p?.x, +p?.z));
+    events.on(EV.JOB_DONE, () => cue('tick'));
+    events.on(EV.DEAD_DROP, () => cue('bin'));
+    events.on(EV.FARM_DELIVERY, (p) => { if (p?.phase === 'arrive' || p?.phase === 'leave') cue('truck'); });
   }
 
   const soundUI = typeof document !== 'undefined' ? createSoundUI(settings, { unlock }) : null;
@@ -183,7 +190,8 @@ export function createAudio(ctx, deps = {}) {
     state() {
       const p = player.position;
       return { started: !!engine, ctx: ac?.state ?? null, muted: settings.muted, volume: settings.volume,
-        voices: engine ? engine.voicesAt() : 0, k: engine?.S.k ?? null, surface: surfaceAt(p.x, p.z) };
+        voices: engine ? engine.voicesAt() : 0, k: engine?.S.k ?? null, surface: surfaceAt(p.x, p.z), trickle: trickle.on,
+        played: engine ? { ...engine.counts } : null };
     },
     debug: {
       /** render a few seconds of the current scene offline: per-layer peak and RMS (audio-measure.js) */

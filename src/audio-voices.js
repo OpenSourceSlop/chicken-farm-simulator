@@ -51,9 +51,9 @@ export function snick(P, t, g, pan, rng) {
   if (!v) return false;
   panAt(v, t, pan);
   v.q.setValueAtTime(2.4, t);
-  glide(v.f, t, range(rng, 3600, 4600), t + 0.02, 2100);
-  grain(v.g, t, g, 0.022, 0.0012);
-  if (rng() < 0.45) grain(v.g, t + 0.032, g * 0.45, 0.016);
+  glide(v.f, t, range(rng, 3600, 4600), t + 0.025, 2100);
+  grain(v.g, t, g, 0.03, 0.002);
+  if (rng() < 0.45) grain(v.g, t + 0.04, g * 0.45, 0.018, 0.002);
   return true;
 }
 /** A wet rattle in the breathing (rales): a few low, quick pulses. */

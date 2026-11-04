@@ -11,6 +11,7 @@ import { noiseBuffers, noiseSource, roomImpulse, clipperCurve, makeWaves, voiceP
 import { buildBeds } from './audio-beds.js';
 import { createScheduler } from './audio-sched.js';
 import * as V from './audio-voices.js';
+import { HOUSE } from './config.js';
 
 export const LAYERS = ['outside', 'house', 'flock', 'cues'];
 // Each cue: [its layer level in LEVELS, the recipe's gain over that level (dB), the shortest gap between
@@ -73,7 +74,7 @@ export function createEngine(ac, opts = {}) {
 
   // ---- state the game fills every frame (audio.js) ----
   const S = {
-    x: 0, z: 0, inside: false, speed: 0, camYaw: 0, teleport: false, jump: false,
+    x: 0, z: 0, inside: false, speed: 0, dist: -1, camYaw: 0, teleport: false, jump: false,
     hour: 10, weather: 'normal', rain: 0, fanSpin: 0, heaterLevel: 0, padOn: false, day: 1,
     snd: null, flockW: 0, pickBird: null, auger: 0, augerPan: 0, trickle: -1, powerOff: false, k: 0,
   };
@@ -92,6 +93,9 @@ export function createEngine(ac, opts = {}) {
   const QN = 32, qName = new Int16Array(QN), qX = new Float32Array(QN), qZ = new Float32Array(QN);
   let qHead = 0, qLen = 0;
   const lastAt = new Float64Array(CUE_NAMES.length).fill(-1e9);
+  // what has played (tests and the steps files: a real key press, click or walk made its sound)
+  const counts = { steps: 0 };
+  for (const n of CUE_NAMES) counts[n] = 0;
   function cue(name, x = NaN, z = NaN) {
     const i = CUE_NAMES.indexOf(name);
     if (i < 0 || qLen >= QN) return false;
@@ -121,7 +125,7 @@ export function createEngine(ac, opts = {}) {
       case 'alarm': ok = V.alarm(P, t, g); break;
       case 'truck': ok = sched.truck(t); break;
     }
-    if (ok) lastAt[i] = t;
+    if (ok) { lastAt[i] = t; counts[name]++; }
   }
 
   /** calibration (audio-measure opts.calibrate): every bed silent but `name`, which plays at gain 1 */
@@ -131,6 +135,8 @@ export function createEngine(ac, opts = {}) {
     A.outCut = 14000; A.flockCut = 16000; A.flockAtten = 1; A.fanCut = 820; A.rainCut = 4000;
     S.auger = name === 'auger' ? 1 : 0; S.augerPan = 0; S.trickle = name === 'trickle' ? 0.5 : -1;
   }
+  const atDoor = (x, z) => Math.abs(x - HOUSE.door.x) < 2.2 && Math.abs(z - HOUSE.door.z) < 4.5;
+  let lastX = NaN, lastZ = NaN;
   let bedAcc = 0, bedNow = -1, lastInside = null, walkT = 0, lastStepAt = -1e9, alarmAt = 0;
   const lastBus = new Float64Array(4).fill(-1);
   function update(dtIn) {
@@ -156,25 +162,27 @@ export function createEngine(ac, opts = {}) {
     sched.update(dt, t, M, A);
     // footfalls, landing with the walk cycle; the house door when he passes it
     if (S.teleport) { steps.reset(); walkT = 0; sched.clear(); }
-    const st = steps.update(dt, S.speed);
+    const st = steps.update(dt, S.speed, S.dist >= 0 ? S.dist : S.speed * dt);
     walkT = S.speed > 0.5 ? walkT + dt : Math.max(0, walkT - 3 * dt);
     if (st && t >= lastStepAt + 0.14) {
       const surf = surfaceAt(S.x, S.z);
       const g = dbToGain(LEVELS.steps + STEP_DB[surf]) * stepHabituation(walkT);
-      if (V.footstep(pools.cues, t, g, st === 1 ? -0.07 : 0.07, surf, steps.run, rng)) lastStepAt = t;
+      if (V.footstep(pools.cues, t, g, st === 1 ? -0.07 : 0.07, surf, steps.run, rng)) { lastStepAt = t; counts.steps++; counts.surface = surf; }
     }
-    if (lastInside !== null && S.inside !== lastInside && !S.teleport) play(CUE_NAMES.indexOf('door'), NaN, NaN, now);
-    lastInside = S.inside;
+    // through the door: in or out, with both this frame's and the last frame's place at the door (a teleport
+    // between the yard and the house, or a long frame on a slow machine elsewhere, is no door)
+    if (lastInside !== null && S.inside !== lastInside && !S.teleport && atDoor(S.x, S.z) && atDoor(lastX, lastZ)) play(CUE_NAMES.indexOf('door'), NaN, NaN, now);
+    lastInside = S.inside; lastX = S.x; lastZ = S.z;
     // the controller's alarm while the house has no power (Phase 4): heard in the house and on the apron
     if (S.powerOff && now >= alarmAt) {
       alarmAt = now + 6;
       const d = Math.hypot(S.x - CONTROLLER.x, S.z - CONTROLLER.z);
-      if (d < 30) { const i = CUE_NAMES.indexOf('alarm'); play(i, S.inside ? CONTROLLER.x : NaN, CONTROLLER.z, now); }
+      if (d < 30) play(CUE_NAMES.indexOf('alarm'), CONTROLLER.x, CONTROLLER.z, now); // fainter with distance
     }
   }
 
   return {
-    ac, S, master, layer, pools, cue, update,
+    ac, S, master, layer, pools, cue, update, counts,
     /** the master gain (the settings' volume over the default's, so the default is 1) */
     setVolume(g, tau = 0.06) { master.gain.setTargetAtTime(g, ac.currentTime, tau); },
     /** voices sounding at the context time t (tests: at most a handful) */

@@ -54,7 +54,7 @@ export async function measure(readState, opts = {}) {
     if (opts.state) Object.assign(eng.S, opts.state);
     let ci = 0, voices = 0;
     const tick = () => {
-      if (opts.walk != null) eng.S.speed = opts.walk;
+      if (opts.walk != null) { eng.S.speed = opts.walk; eng.S.dist = opts.walk * STEP; }
       while (ci < cues.length && cues[ci][1] <= ac.currentTime + 1e-6) { const c = cues[ci++]; eng.cue(c[0], c[2], c[3]); }
       eng.update(STEP);
       eng.S.teleport = false;
