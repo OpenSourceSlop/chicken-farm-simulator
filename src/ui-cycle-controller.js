@@ -51,7 +51,7 @@ export function cycleControllerParts(L, { draft, lp, refresh }) {
   // Phase 4, the rainy season (PHASE4.md §4.2): the storm flaps on the south side-wall inlets (inlets.storm { closed }),
   // a lit switch; while it storms with them open the rain drives in along the south wall
   const flapsShut = () => !!farm.house?.flapsClosed;
-  const flaps = toggleKey('Open the storm flaps', 'Close the storm flaps', () => { L.act('inlets.storm', { closed: !flapsShut() }); sync(); refresh(); });
+  const flaps = toggleKey('Open the storm flaps', 'Close the storm flaps', () => { L.act('inlets.storm', { closed: !flapsShut() }); sync(); refresh(); }, 'Storm flaps · closed');
   const flapRow = machineRow('Storm flaps on the south inlets', '', flaps.el);
   flapRow.led.classList.add('led--pad');
   flapRow.el.hidden = true;

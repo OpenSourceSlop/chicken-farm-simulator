@@ -76,6 +76,9 @@ export function condNotes(day, { extras, farm, env }) {
     if (has('heat-wave', day + 15 / 24)) out.push(`Heat wave: ${Math.round(env.outsideAt(day + 15 / 24))} °C at 15:00`);
     if (has('hot-spell', day + 23 / 24)) out.push(`Hot night: ${r1(env.outsideAt(day + 23 / 24))} °C at 23:00`);
     if (c.lineC) out.push(`Water in the lines ${r1(c.lineC[1])} °C before the flush at ${hm(c.lineC[0])}`);
+    // review round: what decided the hot afternoons: the house at 15:00 beside the row, the pad and the tunnel fans
+    const pm = S && S.pm15 ? S.pm15[day] : null;
+    if (pm) out.push(`Afternoon: house ${r1(pm[0])} °C at 15:00 (${day < 21 ? 'row' : 'target'} ${r1(pm[1])} °C), pad ${pm[2] ? 'on' : 'off'}, ${pm[3]} tunnel fan${pm[3] === 1 ? '' : 's'}`);
   }
   if (c.grade) {
     const w = farm.stats && farm.stats.chickWeightMeasuredG, told = farm.condX && farm.condX.hatcheryAt != null;

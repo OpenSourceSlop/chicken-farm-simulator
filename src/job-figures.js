@@ -36,6 +36,11 @@ export function timerAirM3h(t) {
   return (t.fans * EQUIP.fanM3h * t.onSec) / Math.max(1, t.cycleSec || 300);
 }
 
+/** Review round: the air the timer brings in through the side inlets (the storm flaps closed let in env.inletShare, 0.7). */
+export const inletAirM3h = (env, t) => timerAirM3h(t) * (env?.inletShare ?? 1);
+/** "storm flaps closed: the inlets give 70 %" while they are shut, else ''. */
+export const flapsWords = (env) => ((env?.inletShare ?? 1) < 0.999 ? `storm flaps closed: the inlets give ${Math.round((env.inletShare ?? 1) * 100)} %` : '');
+
 /** Birds the farmer knows are alive: placed less the dead he counted at the bin and his culls (farm-act knownAlive). */
 export function knownAliveOf(fl) {
   return Math.max(0, (fl.placed || 0) - (fl.countedDead || 0) - ((fl.culls || 0) - (fl.cullsInBoxes || 0)));
@@ -60,7 +65,7 @@ export function ventNeed(env, farm, timer = env.ventTimer) {
   const f = knownFlock(env, farm);
   const per1000 = minVentM3hPer1000(f.weightG);
   const need = (per1000 * f.birds) / 1000;
-  const air = timerAirM3h(timer);
+  const air = inletAirM3h(env, timer);   // (review round: what the inlets let in, the storm flaps closed 70 %)
   return { ...f, per1000, need, air, share: need > 0 ? air / need : 0 };
 }
 export const ventInBand = (env, farm, timer = env.ventTimer) => { const v = ventNeed(env, farm, timer); return v.need > 0 && v.share >= VENT_BAND[0] - 1e-9 && v.share <= VENT_BAND[1] + 1e-9; };

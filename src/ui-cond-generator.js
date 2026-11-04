@@ -55,7 +55,8 @@ export function buildGenerator(api) {
 
   // ---- the transfer switch: one lit switch pair, House on: mains | generator ----
   const leverKey = (to, text) => {
-    const b = button({ class: 'key key--wide key--act', 'aria-pressed': 'false', 'aria-label': `House on the ${to}` }, text);
+    // review round: the thrown side carries a lever mark; its lamp lights only while that source is live (key--throw)
+    const b = button({ class: 'key key--wide key--act key--throw', 'aria-pressed': 'false', 'aria-label': `House on the ${to}` }, text);
     b.addEventListener('click', () => { lever = to; L.act('gen.switch', { to }); refresh(); });
     return b;
   };
@@ -84,7 +85,11 @@ export function buildGenerator(api) {
   const fuel = machineRow('Fuel tank', `${fmt0(GENERATOR.fuelL)} L when full`, fillBtn);
 
   const state = h('p', { class: 'cond-state', role: 'status' });
-  shell.main.append(top, state, shell.timeNote.el, h('div', { class: 'ctrl-rows' }, engine.el, sw.el, test.el, fuel.el));
+  // review round: in a cut the engine and the transfer switch come straight under the display, above the job strip
+  // (at 960 x 600 they were below the fold); the test run and the fuel after
+  const urgent = h('div', { class: 'ctrl-rows' }, engine.el, sw.el);
+  shell.main.append(top, state, urgent, shell.timeNote.el, h('div', { class: 'ctrl-rows' }, test.el, fuel.el));
+  const stripBelow = () => { const js = shell.main.querySelector(':scope > .jstrip'); if (js && urgent.nextElementSibling !== js) urgent.after(js); };
 
   function leverNow() {
     // the farm's transfer switch position (farm.power.switch: what the switch feeds the house from, kept in the save)
@@ -114,6 +119,7 @@ export function buildGenerator(api) {
     startKey.el.hidden = !!g.running;
     // the lever: the pressed key is where it stands (lit), the lamp says whether the house has power
     toMains.setAttribute('aria-pressed', String(lv === 'mains')); toGen.setAttribute('aria-pressed', String(lv === 'generator'));
+    toMains.classList.toggle('is-live', lv === 'mains' && !!p.mains); toGen.classList.toggle('is-live', lv === 'generator' && !!g.running);
     sw.led.classList.toggle('is-on', !!p.on);
     sw.setState(`House on the ${lv}: ${p.on ? 'the house has power' : 'no power to the house'}`);
     mainsLamp.set(!!p.mains, `Mains: ${p.mains ? 'on' : 'off'}`);
@@ -132,7 +138,7 @@ export function buildGenerator(api) {
   let acc = 0;
   return {
     el: shell.el,
-    onOpen() { isOpen = true; shell.refreshPlates(); },
+    onOpen() { isOpen = true; stripBelow(); shell.refreshPlates(); },
     onClose() { isOpen = false; },
     /** A start or a test run still on its bar finishes with the panel closed (the panel host keeps updating it). */
     busy: () => startKey.running || testKey.running,

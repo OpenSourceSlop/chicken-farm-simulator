@@ -77,8 +77,9 @@ export function createUI(ctx, deps) {
   const tr = h('div', { class: 'hud-tr' });
   root.appendChild(tr);
   // HUD elements the edge pointer keeps clear of: the cards, the E prompt and the captions
-  const avoid = () => [tr, trL, root.querySelector('.hud-tl'), root.querySelector('.hud-bl'), root.querySelector('.hud-br'),
-    root.querySelector('.hud-bc .prompt'), root.querySelector('.caption'), root.querySelector('.fw')].filter((e) => e && !e.hidden);
+  // (review round: the visible clock and gauge cards, not the .hud-tl row, which is wider than its cards when it wraps)
+  const avoid = () => [tr, trL, root.querySelector('.hud-tl .clock'), root.querySelector('.hud-tl .gauges'), root.querySelector('.hud-bl'), root.querySelector('.hud-br'),
+    root.querySelector('.hud-bc .prompt'), root.querySelector('.caption'), root.querySelector('.fw'), root.querySelector('.alarm')].filter((e) => e && !e.hidden);
   const tasks = createTasks(tr, ctx, { player, root, avoid });
   const p1Marker = ctx.scene.getObjectByName('task-marker');
   const p1Pointer = root.querySelector('.edge-pointer');
@@ -123,6 +124,8 @@ export function createUI(ctx, deps) {
     canvas,
     onOpen: (id) => {
       tasks.notify(`open:${id}`); prompt.show(null); root.classList.add('has-panel');
+      // review round: a notice raised just before the panel opened (the bucket set down for the chick in hand) shows in it
+      if (pendingNote && rt - pendingNote.at < 1.5) { const t = pendingNote.text; pendingNote = null; panelNotice(t); } else pendingNote = null;
       // PHASE4.md §15.3 (c): grading chicks at the table needs both hands: the bucket goes down at his feet first
       if (mode === 'level' && props?.carrying === 'bucket' && TWO_HANDS_PANELS.has(id)) props.setBucketDown({ auto: true });
       if (mode !== 'sandbox') {
@@ -132,10 +135,24 @@ export function createUI(ctx, deps) {
     },
     onClose: () => {
       root.classList.remove('has-panel');
+      pnote.hidden = true; pnoteFor = null;
+      // a flock watch warning raised while the panel was open: its caption now, with its full time
+      if (queuedWatch && mode === 'level') { caption.show(queuedWatch, 9, { soft: true }); queuedWatch = null; }
       if (mode !== 'sandbox' && lastOpen) events.emit(EV.PANEL_CLOSE, { id: lastOpen });
     },
   });
   let lastOpen = null;
+  // review round: the HUD's captions sit under the panel scrim: a notice raised while a panel is open (or as it opens) is
+  // written at the top of the panel itself (the bucket set down for a two-handed job, a flock watch warning)
+  const pnote = h('p', { class: 'pnotice', role: 'status', hidden: true });
+  let pnoteFor = null, pendingNote = null, queuedWatch = null, rt = 0;
+  function panelNotice(text) {
+    const P = panels.openPanel;
+    if (!panels.openId || !P?.el) { pendingNote = { text, at: rt }; return false; }
+    const host = P.el.querySelector('.equip-main') || P.el.querySelector('.sign-body') || P.el;
+    setText(pnote, text); pnote.hidden = false; host.prepend(pnote); pnoteFor = panels.openId;
+    return true;
+  }
   const closePanel = () => panels.close();
   const openPanel = (id) => { const ok = panels.open(id); if (ok) lastOpen = id; return ok; };
 
@@ -296,7 +313,11 @@ export function createUI(ctx, deps) {
     const n = (x) => `${int(x)} dead bird${x === 1 ? '' : 's'}`;
     const now = { now: true };
     if (p.into) caption.show(`Dead bird into the bucket you set down (${n(p.n)} in it).`, 4.5, now);
-    else if (p.down) caption.show(p.auto ? `Bucket set down here (${n(p.n)}): both hands for this job. E picks it up again.` : `Bucket set down here (${n(p.n)}). E picks it up again.`, 4.5, now);
+    else if (p.down) {
+      caption.show(p.auto ? `Bucket set down here (${n(p.n)}): both hands for this job. E picks it up again.` : `Bucket set down here (${n(p.n)}). E picks it up again.`, 4.5, now);
+      // a two-handed job opens its panel at once: the same notice at the top of that panel
+      if (p.auto) panelNotice(`Bucket set down at your feet (${n(p.n)}): both hands for this job. E picks it up again there.`);
+    }
     else caption.show(`Bucket picked up (${n(p.n)}). Count them into the bin by the door.`, 4.5, now);
   });
   // PHASE4.md §15.2: the soft cue of a job 30 farm minutes from its close (the card's chip pulses; a quiet click sounds)
@@ -396,7 +417,11 @@ export function createUI(ctx, deps) {
   const deadMarks = createDeadMarks(ctx, root, { avoid, jobPointer: () => jobCard.pointerEl });
   const watchCard = createWatchCard(root, ctx);
   // PHASE4.md §15.1: the flock watch's early warning as a caption (the notebook line comes from the watch itself)
-  events.on(EV.WATCH, (p) => { if (mode === 'level' && p?.text) caption.show(p.text, 9, { soft: true }); });
+  events.on(EV.WATCH, (p) => {
+    if (mode !== 'level' || !p?.text) return;
+    // a panel open: the warning at the top of the panel now, its caption when the panel closes (review round)
+    if (panels.openId) { panelNotice(`Flock watch: ${p.text}`); queuedWatch = p.text; } else caption.show(p.text, 9, { soft: true });
+  });
   const togglePanel = (id) => { if (panels.openId === id) closePanel(); else openPanel(id); };
 
   // ---- E, Q, T ----
@@ -573,11 +598,25 @@ export function createUI(ctx, deps) {
   }
 
   let hudAcc = 0, fitAcc = 0;
+  // review round: the left column stacks under the real bottom of the clock and gauge row (it wraps under the longer
+  // condition labels at 960 px): the alarm banner under the gauges, the flock watch card under both
+  const tlEl = root.querySelector('.hud-tl');
+  function layoutLeft() {
+    if (!tlEl) return;
+    const top = root.getBoundingClientRect().top;
+    let y = tlEl.getBoundingClientRect().bottom - top;
+    if (window.innerWidth < 700) alarm.style.top = '';
+    else if (!alarm.hidden) { alarm.style.top = `${Math.round(y + 8)}px`; y = alarm.getBoundingClientRect().bottom - top; }
+    watchCard.setTop(Math.round(y + 8));
+  }
   return {
     update(dt) {
+      rt += dt;
       hudAcc -= dt;
       const tick = hudAcc <= 0;
       hud.refresh(tick);
+      if (tick && mode !== 'sandbox') layoutLeft();
+      if (pnoteFor && pnoteFor !== panels.openId) { pnote.hidden = true; pnoteFor = null; }
       if (tick) { hudAcc = 0.1; if (mode === 'sandbox' && tools.open && (fitAcc = (fitAcc + 1) % 5) === 0) fitTools(); }
       if (mode === 'sandbox') {
         deadMarks.hide(); watchCard.hide();
@@ -603,6 +642,8 @@ export function createUI(ctx, deps) {
       floatRead.update(dt);
       // the alarm banner: while the house is dark, and a while after an alarm symptom
       const dark = mode === 'level' && farm?.power && farm.power.on === false;
+      // review round: a reload (Continue, the hot reload) inside a cut brings the banner back (its event came before the save)
+      if (dark && !alarmMsg) alarmMsg = farm.power.mains === false ? ALARM['power-cut'] : ALARM['gen-dry'];
       alarmT = Math.max(0, alarmT - dt);
       const show = mode === 'level' && (dark || alarmT > 0) && !!alarmMsg;
       if (alarm.hidden === show) alarm.hidden = !show;

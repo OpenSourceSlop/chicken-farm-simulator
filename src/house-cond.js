@@ -13,7 +13,10 @@ import { condOf, problemOn } from './world-cond.js';
 const { xMin, xMax, zMax } = HOUSE_BOUNDS;
 const INLET = { w: 0.9, h: 0.22, y: 2.03 };         // the inlet opening at the top of the curtain band (under
 const FLAP = { w: 1.04, h: 0.34, hinge: 2.2 };      // the eave's shadow line: in view from the yard); the plate, hinged at its top edge
-const OPEN = -0.8;                                   // open: swung out about 46 degrees (a hood over the inlet)
+const OPEN = -1.1;                                   // open: swung out about 63 degrees (a hood over the dark inlet gap)
+// review round: open and closed differ in shape and value from the yard: open, a galvanised hood over the dark gap with a
+// wet stain under it while it rains; closed, a flat plate in a light painted colour over the slot
+const FLAP_OPEN_C = new THREE.Color(0x9fa9b0), FLAP_SHUT_C = new THREE.Color(0xe9e4cf);
 const PIPE_Y = 0.085;                                // drinker pipe centre above the nipple tip (house-drinkers.js)
 const RUST_LINE = 3;                                 // line 4 (PHASE4.md §4.4 iron-nipples, config line 3)
 
@@ -41,13 +44,18 @@ export function buildCondHouse(kit, southWall, lineHeights) {
   // ---- flaps: instanced, hinged at the top edge ----
   const flapGeo = new THREE.BoxGeometry(FLAP.w, FLAP.h, 0.014);
   flapGeo.translate(0, -FLAP.h / 2, 0.007);
-  const flapMat = new THREE.MeshLambertMaterial({ color: 0xb9c1c6, flatShading: true });
+  const flapMat = new THREE.MeshLambertMaterial({ color: FLAP_OPEN_C.clone(), flatShading: true });
   const flaps = new THREE.InstancedMesh(flapGeo, flapMat, xs.length);
   flaps.name = 'house-storm-flaps';
   flaps.castShadow = true;
+  // the wet stain under each open inlet while it rains (one merged mesh)
+  const wb = new Batch();
+  for (const x of xs) wb.box(INLET.w * 0.9, 0.55, 0.004, x, INLET.y - INLET.h / 2 - 0.3, face + 0.002, 0x1f2a2e);
+  const stains = wb.mesh(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false }), { cast: false, receive: false });
+  stains.name = 'house-storm-stains'; stains.visible = false;
   const group = new THREE.Group();
   group.name = 'house-storm';
-  group.add(frames, flaps);
+  group.add(frames, flaps, stains);
   group.visible = false;
   southWall.add(group);
   const M = new THREE.Matrix4();
@@ -60,13 +68,14 @@ export function buildCondHouse(kit, southWall, lineHeights) {
   place();
 
   // ---- rust stains on line 4: a brown blob on each nipple and a streak on the pipe under it ----
+  // (review round: readable at zoom 14: a 16 cm rust sleeve on the pipe at each nipple, the drip cups tinted brown)
   const rb = new Batch();
-  rb.add(new THREE.IcosahedronGeometry(0.017, 0), 0x8a4a22, mat(0, 0.03, 0, 0, 0, 0, 1, 1.4, 1));
-  rb.box(0.09, 0.008, 0.05, 0, PIPE_Y - 0.02, 0, 0x7a3c1a);                                    // stain under the pipe
-  rb.box(0.012, 0.04, 0.008, 0.01, PIPE_Y - 0.04, 0.021, 0x93512a);                            // a rusty drip
-  rb.add(new THREE.CylinderGeometry(0.025, 0.017, 0.012, 7), 0x7f4320, mat(0, -0.012, 0.04));   // the drip cup rust-brown
+  rb.add(new THREE.IcosahedronGeometry(0.02, 0), 0x8a4a22, mat(0, 0.03, 0, 0, 0, 0, 1, 1.4, 1));
+  rb.box(0.16, 0.05, 0.05, 0, PIPE_Y, 0, 0x8c4720);                                             // the rust sleeve on the pipe
+  rb.box(0.012, 0.05, 0.008, 0.01, PIPE_Y - 0.045, 0.021, 0x93512a);                            // a rusty drip
+  rb.add(new THREE.CylinderGeometry(0.029, 0.02, 0.022, 7), 0x7a3f1d, mat(0, -0.016, 0.04));    // the drip cup rust-brown
   const rustMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-  const rust = new THREE.InstancedMesh(rb.geometry(), rustMat, NIPPLE_X.length);
+  const rust = new THREE.InstancedMesh(rb.geometry(), rustMat, NIPPLE_X.length + 1);   // + the band by the regulator
   rust.name = 'house-rust-line4';
   rust.visible = false;
   const rz = DRINKER_LINES_Z[RUST_LINE];
@@ -85,7 +94,8 @@ export function buildCondHouse(kit, southWall, lineHeights) {
         const want = farm.house && farm.house.flapsClosed ? 0 : OPEN;
         angle = dt > 0 ? smooth(angle, want, 4, dt) : want;
         if (Math.abs(angle - want) < 1e-3) angle = want;
-        if (angle !== placed) place();
+        if (angle !== placed) { place(); flapMat.color.copy(FLAP_OPEN_C).lerp(FLAP_SHUT_C, 1 - angle / OPEN); }
+        stains.visible = angle < OPEN * 0.5 && (farm.weatherNow?.rain ?? 0) > 0.05;
       }
       // rust on line 4's nipples: the water problem, while the iron clogs them
       const on = cond === 'water' && problemOn(farm, 'iron-nipples');
@@ -95,6 +105,7 @@ export function buildCondHouse(kit, southWall, lineHeights) {
         if (!(Math.abs(y - rustY) <= 1e-4)) {
           rustY = y;
           NIPPLE_X.forEach((x, i) => rust.setMatrixAt(i, M.makeTranslation(x, y, rz)));
+          rust.setMatrixAt(NIPPLE_X.length, M.makeTranslation(NIPPLE_X[0] - 0.22, y, rz));   // the pipe by the regulator
           rust.instanceMatrix.needsUpdate = true;
         }
       }

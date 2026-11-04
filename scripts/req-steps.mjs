@@ -21,6 +21,8 @@ const ventOpen = () => [
 const layDeadAhead = (d = 0.35) => ev(`(() => { const P = __game.player, y = P.yaw; const at = __game.flock.dead.layAt(P.position.x - Math.sin(y) * ${d}, P.position.z - Math.cos(y) * ${d}); __game.farm.flock.deadOnFloor++; __game.farm.flock.deadTotal++; return 'dead bird laid at ' + at.x.toFixed(2) + ',' + at.z.toFixed(2) + ', farmer at ' + P.position.x.toFixed(2) + ',' + P.position.z.toFixed(2); })()`);
 const nearestChickM = `(() => { const S = __game.flock._state, p = __game.player.position; let bd = 1e9; for (let i = 0; i < S.n; i++) { if (S.pen[i] || S.spawnT[i] > 0) continue; const d = Math.hypot(S.px[i] - p.x, S.pz[i] - p.z); if (d < bd) bd = d; } return bd; })()`;
 const nearestDeadM = `(() => { const p = __game.player.position, d = __game.flock.dead.near(p.x, p.z, 80); return d.length ? Math.hypot(d[0].x - p.x, d[0].z - p.z) : 1e9; })()`;
+/** Review round: the element at the centre of `sel` is inside it (seen, not covered by a panel or a card). */
+const seenAt = (sel) => `(() => { const e = document.querySelector('${sel}'); if (!e || e.hidden || !e.offsetParent) return false; const r = e.getBoundingClientRect(); const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!at && e.contains(at) && e.textContent.replace(/\\s+/g, ' ').trim(); })()`;
 const captionHas = (re) => `(document.querySelector('#hud .caption:not([hidden]) .caption-text')?.textContent || '').match(${re})`;
 
 // ---------------- req-bucket.json (request 3) ----------------
@@ -49,6 +51,8 @@ export function bucket() {
     // (c) carrying the bucket, E on a chick: the bucket goes down at his feet with its caption, the chick in his hand
     pressKey('e'), adv(0.25),
     exp(`(() => { const b = __game.props.bucketDown, p = __game.player.position; const c = ${captionHas('/Bucket set down here/')}; return __game.props.carrying === 'chick' && b && b.n === 1 && Math.hypot(b.x - p.x, b.z - p.z) < 0.7 && c && 'bucket set down ' + Math.hypot(b.x - p.x, b.z - p.z).toFixed(2) + ' m from him with ' + b.n + '; caption "' + c[0] + '"'; })()`, '(c) a vent sample with the bucket: the bucket set down at his feet, the caption, the chick in hand'),
+    // review round: the notice is seen inside the chick-in-hand panel (the HUD caption sits under the panel's scrim)
+    exp(`(() => { const t = ${seenAt('#hud .panel:not([hidden]) .pnotice')}; return t && /Bucket set down at your feet/.test(t) && 'seen in the panel: ' + t; })()`, '(c) the set-down notice is seen at the top of the panel that opened'),
     shot('rq-b-02-auto-down'),
     click('Take vent temperature'), adv(0.25), click('Put back'), adv(0.25), ...esc(),
     exp(`__game.scene.getObjectByName('bucket-mark')?.visible && __game.scene.getObjectByName('props-bucket-down')?.visible && 'the bucket on the floor with its marker'`, '(b) a marker shows where the bucket stands'),
@@ -120,6 +124,8 @@ export function watchSteps() {
     exp(`(() => { const w = __game.level.watch.warnings.find((x) => x.kind === 'cold'); return w && /felt cold/.test(w.text) && /brooder sign/.test(w.text) && /thermostat/.test(w.text) && 'warning ' + ((w.t - window.__wt0) * 24).toFixed(1) + ' farm h after the change: ' + w.text; })()`, 'the early warning: what (cold hours), why, where (the brooder sign, the thermostat)'),
     adv(0.3),
     exp(`(() => { const c = ${captionHas('/felt cold/')}; return c && 'caption: ' + c.input.slice(0, 90); })()`, 'the warning as a caption'),
+    exp(`(() => { const t = ${seenAt('#hud .caption:not([hidden]) .caption-text')}; return t && /felt cold/.test(t) && 'the caption is seen (elementFromPoint at its centre)'; })()`, 'the warning caption is seen, not covered'),
+    exp(`(() => { const w = document.querySelector('#hud .fw-warn'); return w && !w.hidden && /See the brooder sign/.test(w.textContent) && 'the card shows the warning at once, where to look first: ' + w.textContent.slice(0, 70); })()`, 'the card shows the new warning at once'),
     exp(`${card('comfort')} === 'red' && /Cold/.test(${row('comfort')}.value) && 'card comfort ' + ${card('comfort')} + ': ' + ${row('comfort')}.value`, 'the card’s comfort row red'),
     exp(`(() => { const n = __game.records.notebook.filter((x) => x.kind === 'watch'); return n.length && 'notebook: ' + n.length + ' flock watch line(s)'; })()`, 'the warning in the notebook'),
     exp(`(() => { const d = __game.level.levelDeaths(); return __game.level.mode === 'level' && !__game.level.result && d.pct < 2 && 'the level runs: deaths ' + d.pct.toFixed(2) + ' % of the 2 % limit, ' + __t(); })()`, 'the warning comes while the level runs, well before a fail'),

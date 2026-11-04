@@ -168,6 +168,7 @@ export function buildWaterSupplyPanel(L) {
       if (on) shell.needTime(`line ${i + 1} runs clear in about 10 farm minutes with its valve open; close the valve once the tube shows clear water`);
       L.act('water.flush', { line: i, on }); refresh();
     });
+    t.stateText('Flush valve · open');
     const row = machineRow(`Line ${i + 1}`, h('small', null, tube, h('span', { class: 'tube-text' })), t.el);
     return { row, t, tube };
   });

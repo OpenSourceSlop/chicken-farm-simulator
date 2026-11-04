@@ -44,22 +44,49 @@ export function refShare(age) {
 }
 export const refWeight = (age) => weightAt(age) * refShare(age);
 
-// The sign and the place for each likely cause (the young-bird and the grown-bird versions).
+// The sign and the place for each likely cause (the young-bird and the grown-bird versions), and the farm's state at the
+// warning (review round: the condition and the house's state decide where to look: the hot season's sun on the roof, the
+// rainy season's damp air and its power cut, the water condition's tank and pump, a bad batch's first two days).
 const SIGN = { brooder: 'the brooder sign', heat: 'the heat and tunnel fans sign', water: 'the water lines sign', feeder: 'the feeder lines plate on the feeder box',
   light: 'the light program sign', lightPlate: 'the light program plate on the controller', vent: 'the minimum ventilation sign', air: 'the air quality sign',
-  legs: 'the legs and feathers sign', droppings: 'the droppings sign', chicks: 'the chick arrival sign', health: 'the flock health sign' };
-export function causeOf(kind, age) {
-  const young = age < 8, brooding = age < 21;
+  legs: 'the legs and feathers sign', droppings: 'the droppings sign', chicks: 'the chick arrival sign', health: 'the flock health sign',
+  power: 'the power cut sign by the generator', tank: 'the water tank plate at the tank tower', grading: 'the chick grading plate at the chick table' };
+/** The farm's state the causes read (watchState(env, farm); every field optional). */
+export function watchState(env, farm) {
+  const T = farm?.waterTank;
+  return { condition: farm?.condition ?? null, sun: env?.sunHeatPerH ?? 0, powerOff: farm?.power?.on === false,
+    tankLow: !!T && farm?.condition === 'water' && ((T.levelPct ?? 100) < 30 || (T.pumpShare ?? 1) < 0.9 || !!T.fixing),
+    windChill: env?.windChill ?? 0, airSpeed: env?.airSpeed ?? 0, fans: env?.fansEffective ?? 0, houseRH: env?.houseRH ?? 60 };
+}
+const POWER = { why: 'the power is off: the fans, the pad pump, the lights and the augers stand still', sign: 'sign-power', signName: SIGN.power, place: 'generator', check: 'the generator and its transfer switch at the generator house' };
+const TANK = { why: 'the water tank runs low: the drinker lines and the pads get too little water', sign: 'water-tank', signName: SIGN.tank, place: 'water-tank', check: 'the tank’s gauge and the well pump at the tank tower' };
+export function causeOf(kind, age, st = {}) {
+  const young = age < 8, brooding = age < 21, damp = (st.houseRH ?? 0) > 85;
+  // the house's state first: a power cut stops everything; the water condition's low tank starves the lines and the pads
+  if (st.powerOff && ['cold', 'heat', 'water', 'feed', 'air', null, undefined].includes(kind)) return POWER;
+  if (st.tankLow && (kind === 'water' || kind === 'heat')) return TANK;
   switch (kind) {
-    case 'cold': return brooding ? { why: young ? 'the chicks are cold: the house or the brooders run under the brooder sign’s row' : 'the birds are cold: the house runs under its target', sign: 'sign-brooder', signName: SIGN.brooder, place: 'controller', check: 'the thermostat at the climate controller' }
-      : { why: 'the birds are cold: moving air or a cool night chills them', sign: 'sign-heat', signName: SIGN.heat, place: 'fan-panel', check: 'the tunnel fans at the fan panel' };
-    case 'heat': return young ? { why: 'the chicks are hot: the house runs over the brooder sign’s row', sign: 'sign-brooder', signName: SIGN.brooder, place: 'controller', check: 'the thermostat at the climate controller' }
-      : { why: 'the birds are hot for their age', sign: 'sign-heat', signName: SIGN.heat, place: 'fan-panel', check: 'the fan panel and the pad pump' };
+    case 'cold':
+      // moving air chills birds of any age (the wind chill of the tunnel fans)
+      if ((st.windChill ?? 0) > 1.5 || (st.airSpeed ?? 0) > 0.5) return { why: 'the birds are cold: the moving air of the tunnel fans chills them', sign: 'sign-heat', signName: SIGN.heat, place: 'fan-panel', check: 'the tunnel fans at the fan panel (fewer fans for their age)' };
+      return brooding ? { why: young ? 'the chicks are cold: the house or the brooders run under the brooder sign’s row' : 'the birds are cold: the house runs under its target', sign: 'sign-brooder', signName: SIGN.brooder, place: 'controller', check: 'the thermostat at the climate controller' }
+        : { why: 'the birds are cold: moving air or a cool night chills them', sign: 'sign-heat', signName: SIGN.heat, place: 'fan-panel', check: 'the tunnel fans at the fan panel' };
+    case 'heat': {
+      const hot = st.condition === 'hot' || (st.sun ?? 0) > 0;
+      if (young && st.condition === 'hot') return { why: 'the chicks are hot: the sun on the roof heats the closed house over the brooder sign’s row', sign: 'sign-brooder', signName: `${SIGN.brooder} (its hot-season line)`, place: 'pad-pump', check: 'the pad pump, then one tunnel fan at the fan panel' };
+      if (young && hot) return { why: 'the chicks are hot: the warm afternoon heats the closed house over the brooder sign’s row', sign: 'sign-brooder', signName: SIGN.brooder, place: 'controller', check: 'the thermostat and the minimum ventilation timer at the climate controller' };
+      if (young) return { why: 'the chicks are hot: the house runs over the brooder sign’s row', sign: 'sign-brooder', signName: SIGN.brooder, place: 'controller', check: 'the thermostat at the climate controller' };
+      if (damp) return { why: 'the birds are hot: in air this damp they cannot lose their heat', sign: 'sign-heat', signName: SIGN.heat, place: 'fan-panel', check: `the tunnel fans at the fan panel (${brooding ? 'one or two for young birds' : 'as many as Birds feel needs'}; in air this damp the pad gives little cooling)` };
+      if (brooding) return { why: 'the young birds are hot for their age', sign: 'sign-heat', signName: `${SIGN.heat} (its young-birds line)`, place: 'pad-pump', check: 'the pad pump with one or two tunnel fans at the fan panel (three in week 3)' };
+      return { why: 'the birds are hot for their age', sign: 'sign-heat', signName: SIGN.heat, place: 'fan-panel', check: 'the fan panel and the pad pump' };
+    }
     case 'water': return { why: 'water reaches few birds (the flow, the nipple height or the filter)', sign: 'sign-water', signName: SIGN.water, place: 'drinker-0', check: 'a flow test at the drinker line regulators and the water supply’s filter' };
     case 'feed': return { why: 'feed is out of reach or the pans run empty', sign: 'feeder-box', signName: SIGN.feeder, place: 'feeder-box', check: 'the pans’ height and the feed in them at the feeder box' };
     case 'light': return { why: 'the light program cuts their eating time', sign: young ? 'controller-lights' : 'sign-light', signName: young ? SIGN.lightPlate : SIGN.light, place: 'controller', check: 'the lights at the climate controller' };
     case 'air': return { why: 'ammonia in the air: too little fresh air', sign: young ? 'sign-vent' : 'sign-air', signName: young ? SIGN.vent : SIGN.air, place: 'controller', check: 'the minimum ventilation timer at the climate controller' };
-    case 'weak': return { why: 'weak chicks and chicks that never found feed die first', sign: 'sign-chicks', signName: SIGN.chicks, place: 'feeder-box', check: 'feed and water in reach of every chick' };
+    case 'weak':
+      if (st.condition === 'badChicks' && age < 2) return { why: 'weak chicks of this batch die first (open navels, small and slow chicks)', sign: 'chick-grading', signName: SIGN.grading, place: 'chick-table', check: 'the stacks graded at the chick table and the weak chicks culled' };
+      return { why: 'weak chicks and chicks that never found feed die first', sign: 'sign-chicks', signName: SIGN.chicks, place: 'feeder-box', check: 'feed and water in reach of every chick' };
     case 'legs': return { why: 'birds with bad legs cannot reach feed and water', sign: 'sign-legs', signName: SIGN.legs, place: 'bird-scale', check: 'how they walk, and the cull of lame birds' };
     case 'disease': return { why: 'a disease in the flock', sign: 'sign-droppings', signName: SIGN.droppings, place: 'bird-check', check: 'the droppings of a few birds in the hand and the company vet by phone' };
     case 'claim': return { why: 'the chicks graded out at the table count as culls until the hatchery is told the same day', sign: 'sign-chicks', signName: SIGN.chicks, place: 'office-desk', check: 'the phone in the records book at the office desk' };
@@ -67,6 +94,8 @@ export function causeOf(kind, age) {
     default: return { why: 'more deaths than usual', sign: 'sign-health', signName: SIGN.health, place: 'office-desk', check: 'the dead birds’ causes and the records book' };
   }
 }
+/** Death causes that name their own place (a deaths warning keeps them over the birds' comfort). */
+const OWN_DEATH = new Set(['disease', 'sds', 'legs', 'water', 'air', 'claim']);
 const DEATH_KIND = { cold: 'cold', heat: 'heat', dehydration: 'water', weak: 'weak', starveout: 'weak', box: 'weak', sds: 'sds', legs: 'legs', disease: 'disease', respiratory: 'air' };
 const CAUSE_WORD = { cold: 'cold', heat: 'heat', water: 'thirst', weak: 'weak chicks', sds: 'sudden death', legs: 'legs', disease: 'disease', air: 'breathing', claim: 'culls at the chick table' };
 
@@ -88,6 +117,22 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
   let mem = {};                 // kind -> { active, lastAt, clearSince }
   let warnings = [];
   let status = { on: false, rows: {}, last: null };
+  let quiet = 0, live = { base: null, key: '', st: null };
+
+  function liveStatus() {
+    const r = status.on && status.rows.comfort;
+    if (!r || !(farm.flock?.alive > 0)) return status;
+    const C = farm.comfort || {}, hc = hourComfort(C, farm.age ?? 0);
+    const felt = C.feltMean ?? (C.meanOver ?? 0) + env.targetTemp, now = hc.cold ? 'cold' : hc.hot ? 'hot' : 'right';
+    const key = `${now}|${one(felt)}`;
+    if (live.base === status && live.key === key) return live.st;
+    const n = Math.max(r.cold, r.hot), feel = r.cold >= r.hot ? 'Cold' : 'Hot';
+    const comfort = { ...r, now, felt, state: r.state === 'green' && now !== 'right' ? 'amber' : r.state,
+      value: n ? `${feel} ${n} of the last ${r.hours} h · ${now} now` : now === 'right' ? `Right for the last ${r.hours} h` : `Right for the last ${r.hours} h · ${now} now`,
+      detail: `felt ${one(felt)} °C now` };
+    live = { base: status, key, st: { ...status, rows: { ...status.rows, comfort } } };
+    return live.st;
+  }
 
   function sample(L) {
     const fl = farm.flock, C = farm.comfort || {}, age = farm.age;
@@ -187,22 +232,23 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
   const weightClause = (rows) => (rows.weight && rows.weight.state !== 'green' ? ` Weight is on course for ${int(rows.weight.P)} g at ${rows.weight.word} (line ${int(rows.weight.line)} g).` : '');
   const where = (c) => ` See ${c.signName}; check ${c.check}.`;
 
-  function textOf(kind, rows, s) {
+  function textOf(kind, rows, s, st = {}) {
     const who = s.age < 8 ? 'Chicks' : 'Birds';
     if (kind === 'cold' || kind === 'hot') {
-      const c = causeOf(kind === 'cold' ? 'cold' : 'heat', s.age), r = rows.comfort;
+      const c = causeOf(kind === 'cold' ? 'cold' : 'heat', s.age, st), r = rows.comfort;
       const row = s.age < 21 ? `, brooder sign row ${one(s.tgt)} °C` : `, target ${one(s.tgt)} °C`;
       const head = kind === 'cold' ? `${who} felt cold for ${r.cold} of the last ${r.hours} hours (felt ${one(s.felt)} °C${row}): they eat less, grow less and the weakest die.`
         : s.age < 8 ? `${who} felt hot for ${r.hot} of the last ${r.hours} hours (felt ${one(s.felt)} °C${row}): they eat less and pant.`
           : `${who} panted for ${r.hot} of the last ${r.hours} hours (felt ${one(s.felt)} °C): they eat less and the weakest die in the heat.`;
       return { text: head + weightClause(rows) + where(c), c };
     }
-    const k = likely(rows, s), c = causeOf(k, s.age);
+    const k = likely(rows, s), c = causeOf(k, s.age, st);
     const cause = k ? ` Likely cause: ${c.why}.` : '';
     if (kind === 'weight') { const r = rows.weight; return { text: `Weight is on course for ${int(r.P)} g at ${r.word}, under the line of ${int(r.line)} g (${int(s.w)} g now).${cause}${where(c)}`, c }; }
     if (kind === 'deaths') {
-      // the birds' comfort first (cold chicks die as weak chicks in the model), else the last day's main cause
-      const r = rows.deaths, dc = r.main === 'claim' ? causeOf('claim', s.age) : k === 'cold' || k === 'heat' || !r.main ? c : causeOf(r.main, s.age);
+      // a death cause with its own place (disease, sudden deaths, legs, thirst, breathing, the claim) names it; else the
+      // birds' comfort first (cold chicks die as weak chicks in the model), else the last day's main cause
+      const r = rows.deaths, dc = OWN_DEATH.has(r.main) ? causeOf(r.main, s.age, st) : k === 'cold' || k === 'heat' || !r.main ? c : causeOf(r.main, s.age, st);
       return { text: `Deaths and culls are on course for ${two(r.proj)} % by the end of this level (the limit is ${r.limit} %; ${two(r.pct)} % now, ${two(r.rate)} % in the last day${r.main ? `, mostly ${CAUSE_WORD[r.main]}` : ''}). Likely cause: ${dc.why}.${where(dc)}`, c: dc };
     }
     const r = rows.intake;
@@ -210,6 +256,7 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
   }
 
   function warnings_(rows, s) {
+    const st = watchState(env, farm);   // the house now (the warning is raised in the hour's own sample step)
     const red = { weight: rows.weight?.state === 'red' && (rows.weight.P != null), deaths: rows.deaths?.state === 'red',
       cold: (rows.comfort?.cold ?? 0) >= WATCH.comfortRed, hot: (rows.comfort?.hot ?? 0) >= WATCH.comfortRed, intake: rows.intake?.state === 'red' };
     for (const kind of ['cold', 'hot', 'weight', 'deaths', 'intake']) {
@@ -220,7 +267,9 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       // a comfort warning already names the weight: the weight warning waits while the comfort one is active
       if (kind === 'weight' && (mem.cold?.active || mem.hot?.active) && (s.t - (mem.cold?.lastAt ?? mem.hot?.lastAt ?? -9)) * 24 < WATCH.rewarnH) continue;
       m.active = true; m.lastAt = s.t;
-      const { text, c } = textOf(kind, rows, s);
+      // quiet (a standard start's auto play): the memory moves on, no notice reaches the records or the farmer
+      if (quiet > 0) continue;
+      const { text, c } = textOf(kind, rows, s, st);
       const day = Math.floor(s.t + 1e-9), hour = Math.round((s.t - day) * 24 * 100) / 100;
       const w = { kind, state: 'red', text, cause: c.why, sign: c.sign, place: c.place, day, hour, t: s.t };
       warnings.push(w);
@@ -243,17 +292,21 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       samples.push(sample(L));
       if (samples.length > WATCH.keepH) samples.splice(0, samples.length - WATCH.keepH);
       const rows = evaluate(L);
-      if (rows) warnings_(rows, samples[samples.length - 1]);
+      if (rows) { warnings_(rows, samples[samples.length - 1]); status.last = warnings[warnings.length - 1] || null; }  // the card shows a new warning at once
     },
-    status: () => status,
+    /** The card's rows: the hourly ones, with the comfort row's "now" and felt read live from the model (review round:
+     *  a sudden change shows at once, not at the next farm hour; a green window with the birds hot or cold now is amber). */
+    status: () => liveStatus(),
+    /** quiet(true / false): while > 0 (a standard start's auto play) warnings are kept in memory only. */
+    quiet(on) { quiet = Math.max(0, quiet + (on ? 1 : -1)); },
     get warnings() { return warnings; },
     get samples() { return samples; },
     /** A new level (start, enter, replay): the samples and the warning memory start again. */
-    reset() { samples = []; mem = {}; warnings = []; lastHour = null; status = { on: false, rows: {}, last: null }; },
+    reset() { samples = []; mem = {}; warnings = []; lastHour = null; status = { on: false, rows: {}, last: null }; live = { base: null, key: '', st: null }; },
     serialize() {
-      const r3 = (v) => Math.round(v * 1000) / 1000;
-      return { v: 1, mem: JSON.parse(JSON.stringify(mem)), warnings: warnings.slice(-6).map((w) => ({ ...w })),
-        samples: samples.map((x) => [r3(x.t), r3(x.age), x.w == null ? null : Math.round(x.w * 10) / 10, x.alive, x.lost, x.of, x.cold ? 1 : 0, x.hot ? 1 : 0, Math.round(x.felt * 100) / 100,
+      const r3 = (v) => Math.round(v * 1000) / 1000, r5 = (v) => Math.round(v * 1e5) / 1e5;
+      return { v: 1, mem: JSON.parse(JSON.stringify(mem)), warnings: warnings.slice(-6).map((w) => ({ ...w })), lastHour,
+        samples: samples.map((x) => [r5(x.t), r5(x.age), x.w == null ? null : Math.round(x.w * 10) / 10, x.alive, x.lost, x.of, x.cold ? 1 : 0, x.hot ? 1 : 0, Math.round(x.felt * 100) / 100,
           Math.round(x.tgt * 100) / 100, r3(x.e), Math.round(x.feedKg * 10) / 10, Math.round(x.waterL), x.lit ? 1 : 0, x.litH, x.excl ? 1 : 0,
           [x.f.fT, x.f.fL, x.f.fF, x.f.fW, x.f.fAir].map(r3), Object.values(x.causes), x.dead]),
         causeKeys: samples.length ? Object.keys(samples[0].causes) : [] };
@@ -266,7 +319,7 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       samples = (d.samples || []).map((a) => ({ t: a[0], age: a[1], w: a[2], alive: a[3], lost: a[4], of: a[5], cold: !!a[6], hot: !!a[7], felt: a[8], tgt: a[9], e: a[10],
         feedKg: a[11], waterL: a[12], lit: !!a[13], litH: a[14], excl: !!a[15], f: { fT: a[16][0], fL: a[16][1], fF: a[16][2], fW: a[16][3], fAir: a[16][4] },
         causes: Object.fromEntries(keys.map((k, i) => [k, a[17][i] || 0])), dead: a[18] ?? a[4] }));
-      lastHour = samples.length ? Math.floor(samples[samples.length - 1].t * 24 + 1e-6) : null;
+      lastHour = Number.isFinite(d.lastHour) ? d.lastHour : samples.length ? Math.floor(samples[samples.length - 1].t * 24 + 1e-6) : null;
       let L = null;
       try { L = ctxFn?.(); } catch { L = null; }
       if (L && L.active && samples.length) evaluate(L);

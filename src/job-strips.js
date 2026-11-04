@@ -18,7 +18,7 @@ import { EQUIP, LEVEL1, FAN_COUNT, MIN_VENT_PER_1000, CONDITIONS, flockAgeAt, fe
 import { FEED } from './farm-feed.js';
 import { int, one, hhmm } from './ui-format.js';
 import { ventNeed, ventTableRows, timerAirM3h, knownFlock, nippleCmToday, rimCmNow, nippleInBand, rimInBand, flowToday, brooderRowC, luxOfDimmer,
-  fansWorking, VENT_BAND, NIPPLE_DAY0_CM, PANS_ON_LITTER_CM, HEIGHT_BAND_CM, FLOW_BAND, CHICK_LUX } from './job-figures.js';
+  fansWorking, VENT_BAND, NIPPLE_DAY0_CM, PANS_ON_LITTER_CM, HEIGHT_BAND_CM, FLOW_BAND, CHICK_LUX, inletAirM3h, flapsWords } from './job-figures.js';
 // the steps hotfix: the next place of a job that spans several places, and the clock's pause
 import { jobPlaces, nextPlace, panelPlace, flowTodo } from './job-next.js';
 import { HELD_MIN } from './job-engine.js';
@@ -65,7 +65,7 @@ export function partRows(c, inst, { skip = [] } = {}) {
 }
 /** "The chicks feel near the target: 12 of 30 farm minutes so far: close the panel and let the clock run". */
 export function heldText(p) {
-  const m = Math.floor(p.held.min), of = p.held.of, what = (p.label || '').replace(/ for \d+ farm minutes.*$/, '');
+  const m = Math.floor(p.held.min), of = p.held.of, what = (p.label || '').replace(/,?\s+for \d+ farm minutes.*$/, '');
   return m <= 0 ? `${what}: not yet (it must hold for ${of} farm minutes)` : `${what}: ${m} of ${of} farm minutes so far: close the panel and let the clock run`;
 }
 
@@ -90,7 +90,9 @@ export function ventRows(c, { purpose = true, example = false } = {}) {
     out.push(line(`${int(v.need)} m³/h worked out: ${int(v.per1000)} per 1,000 at ${int(v.weightG)} g (the table’s ${int(MIN_VENT_PER_1000[0][1])} at ${int(MIN_VENT_PER_1000[0][0])} g, a little more at ${int(v.weightG)} g); 90–130 % is ${int(VENT_BAND[0] * v.need)}–${int(Math.round((VENT_BAND[1] * v.need) / 10) * 10)} m³/h.`));
   } else out.push(cmp(`Air your flock needs (vent sign table: ${tableText(v)})`, `${int(v.need)} m³/h`, `timer now ${timerText(c.env.ventTimer)} = ${int(v.air)} m³/h (${pct(v.share)})${ventBandWords(v.share)}`, ventBar(v.share)));
   const d = c.ventDraft;
-  if (d && timerText(d) !== timerText(c.env.ventTimer)) out.push(line(`This setting (not sent yet): ${timerText(d)} = ${int(timerAirM3h(d))} m³/h, ${pct(v.need ? timerAirM3h(d) / v.need : 0)} of the need.`));
+  if (d && timerText(d) !== timerText(c.env.ventTimer)) out.push(line(`This setting (not sent yet): ${timerText(d)} = ${int(inletAirM3h(c.env, d))} m³/h, ${pct(v.need ? inletAirM3h(c.env, d) / v.need : 0)} of the need.`));
+  // review round: the storm flaps shut cut the inlets' air; they open again once the storm has passed (litter sign)
+  if (flapsWords(c.env)) out.push(note(`The ${flapsWords(c.env)} of the timer air: open them again when the storm has passed (litter sign).`));
   if (example) out.push(note('Worked example on the sign: 6,000 chicks of 42 g need about 900 m³/h: 1 fan, 8 s on in every 300 s.'));
   return out;
 }
@@ -132,7 +134,7 @@ export function feederTodo(l, env, prep = false) {
 /** The minimum ventilation setting beside the band, and the keys that move it there (prep-vent, r-minvent). */
 function ventTodo(c) {
   const v = ventNeed(c.env, c.farm), d = c.ventDraft, unsent = d && timerText(d) !== timerText(c.env.ventTimer);
-  const air = unsent ? timerAirM3h(d) : v.air, share = v.need ? air / v.need : 0, what = unsent ? 'This setting' : 'The timer now';
+  const air = unsent ? inletAirM3h(c.env, d) : v.air, share = v.need ? air / v.need : 0, what = unsent ? 'This setting' : 'The timer now';
   if (share < VENT_BAND[0] - 1e-9) return step(`${what}: ${pct(share)} of the need, under 90 %. Press One second more (Shift: 10 s) until it gives 90–130 %, then Send this setting to the timer.`);
   if (share > VENT_BAND[1] + 1e-9) return step(`${what}: ${pct(share)} of the need, over 130 %. Press One second less (Shift: 10 s) until it gives 90–130 %, then Send this setting to the timer.`);
   return step(`${what}: ${pct(share)} of the need (90–130 %)${unsent ? ': press Send this setting to the timer' : ''}.`, !unsent);

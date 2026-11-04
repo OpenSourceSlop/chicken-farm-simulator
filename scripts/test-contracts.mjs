@@ -383,6 +383,26 @@ test('§15.3 keys: G and Shift+E in the help legend, verdict-free; G bound only 
   assert(binders.length === 1 && binders[0] === 'ui.js', `KeyG bound in ${binders.join(', ')}`);
 });
 
+test('review round: every lit toggle key shows a state with its lamp, never an action verb (the verb stays in its aria-label)', () => {
+  const files = readdirSync(new URL('../src/', import.meta.url)).filter((f) => /^ui-.*\.js$/.test(f));
+  let calls = 0; const labels = [];
+  for (const f of files) {
+    const src = readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8');
+    calls += (src.match(/[^n] toggleKey\(/g) || []).length;
+    for (const m of src.matchAll(/stateText\('([^']+)'\)|toggleKey\('[^']+', '[^']+', [^\n]*?, '([^']+)'\);/g)) labels.push(m[1] || m[2]);
+  }
+  assert(calls >= 10 && labels.length === calls, `toggle keys ${calls}, state labels ${labels.length}: ${labels.join(' | ')}`);
+  const VERB = /^(stop|start|open|close|shut|take|give|run|put|switch|turn)\b/i;
+  for (const t of labels) assert(!VERB.test(t) && / · /.test(t) && !VERDICT.test(t), `a lit key's state label: "${t}"`);
+});
+
+test('review round: the strips\' limits are the plates\' figures: the pans on the litter (days 0–3) at most PANS_ON_LITTER_CM on the feeder plate', async () => {
+  const { PANS_ON_LITTER_CM } = await import('../src/job-figures.js');
+  const { BOARD_P4_ITEMS } = await import('../src/content-signs-cond.js');
+  const plate = BOARD_P4_ITEMS['feeder-box'].add.map((x) => x.text).join(' ');
+  assert(plate.includes(`${PANS_ON_LITTER_CM} cm at most`) && /give or take 3 cm/.test(plate), `feeder plate: ${plate}`);
+});
+
 let failed = 0;
 for (const t of tests) {
   try { await t.fn(); console.log(`ok   ${t.name}`); } catch (e) { failed++; console.log(`FAIL ${t.name}: ${e.message}`); }

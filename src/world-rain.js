@@ -36,6 +36,13 @@ void main() {
   // under the house roof (cut away for the camera) no rain falls
   // (with the farmer inside, the roof and the walls are cut away for the camera: no streak over the house at any height)
   bool inHouse = p.x > uHouse.x && p.x < uHouse.y && p.z > uHouse.z && p.z < uHouse.w && (p.y < 4.3 || uInside > 0.5);
+  // review round: with the farmer inside, a streak in the yard between the camera and the house that the eye sees over
+  // the litter is culled too: the ray from the camera through it meets the floor (y = 0) inside the house footprint
+  if (uInside > 0.5 && p.y < uCam.y - 0.05) {
+    float t = uCam.y / (uCam.y - p.y);
+    vec2 hit = uCam.xz + (p.xz - uCam.xz) * t;
+    if (hit.x > uHouse.x && hit.x < uHouse.y && hit.y > uHouse.z && hit.y < uHouse.w) inHouse = true;
+  }
   // thin out the streaks right in front of the lens
   float dc = length(uCam - p);
   vA = (0.25 + 0.75 * position.y) * smoothstep(1.5, 5.0, dc);

@@ -86,10 +86,17 @@ export function stepper(label, unit, onStep, { bigStep = 0 } = {}) {
 /** A wide toggle key (aria-pressed) that names what pressing it does next: `whenOn` while the thing is on
  *  ("Stop auger"), `whenOff` while it is off ("Start auger"). The state itself is the row's lamp and its state
  *  word (machineRow setState), never the key's label. */
-export function toggleKey(whenOn, whenOff, onClick) {
+// Review round: a lit key that reads "STOP THE PAD PUMP" reads as "stop"; while it is on (lit) the key shows the state with
+// its lamp (`onText`, "Pad pump · running"), the action stays in its aria-label and title (what a press does next).
+export function toggleKey(whenOn, whenOff, onClick, onText = null) {
   const b = button({ class: 'key key--wide key--act', 'aria-pressed': 'false' });
   b.addEventListener('click', onClick);
-  return { el: b, set(on) { b.setAttribute('aria-pressed', String(on)); setText(b, on ? whenOn : whenOff); } };
+  return { el: b, stateText(t) { onText = t; return this; }, set(on) {
+    b.setAttribute('aria-pressed', String(on));
+    const act = on ? whenOn : whenOff;
+    setText(b, on && onText ? onText : act);
+    if (b.getAttribute('aria-label') !== act) { b.setAttribute('aria-label', act); b.title = act; }
+  } };
 }
 
 /** A small LCD readout box with a caption, for a reading the farmer took. */
@@ -111,8 +118,8 @@ export function buildFeederPanel(L) {
     // a running auger fills the pans over farm time: the plate folds so the clock runs
     // the steps hotfix: starting it runs a paused clock again, and the note under the rows says how long it takes
     const FILL = 'the auger fills the pans over farm time: about 25 farm minutes for flooded pans. Close the box and let the clock run (Next job works too)';
-    const run = toggleKey('Stop auger', 'Start auger', () => { const l = farm.feed.lines[i]; if (!l.running) shell.needTime(FILL); L.act('feed.line', { line: i, running: !l.running }); refresh(); });
-    const flood = toggleKey('Close flood windows', 'Open flood windows', () => { const l = farm.feed.lines[i]; if (!l.flood) shell.needTime(FILL); L.act('feed.line', { line: i, flood: !l.flood }); refresh(); });
+    const run = toggleKey('Stop auger', 'Start auger', () => { const l = farm.feed.lines[i]; if (!l.running) shell.needTime(FILL); L.act('feed.line', { line: i, running: !l.running }); refresh(); }, 'Auger · on');
+    const flood = toggleKey('Close flood windows', 'Open flood windows', () => { const l = farm.feed.lines[i]; if (!l.flood) shell.needTime(FILL); L.act('feed.line', { line: i, flood: !l.flood }); refresh(); }, 'Flood windows · open');
     const height = stepper(`Line ${i + 1} pan height`, 'cm', (d) => {
       const [lo, hi] = EQUIP.feederHeightCm;
       const cm = Math.max(lo, Math.min(hi, Math.round(farm.feed.lines[i].heightCm + d)));
@@ -141,7 +148,7 @@ export function buildFeederPanel(L) {
   const cyc = cycleFeederParts(L, { foldPlates: () => shell.foldPlates(), needTime: (t) => shell.needTime(t), timeNote: shell.timeNote });
   // Phase 4, a bad batch (PHASE4.md §4.3): feed trays and chick paper by the brooders on the prep day to day 3 (brood.trays)
   const traysOn = () => !!farm.brood?.trays;
-  const trays = toggleKey('Take the trays and paper away', 'Put out feed trays and chick paper', () => { L.act('brood.trays', { on: !traysOn() }); refresh(); });
+  const trays = toggleKey('Take the trays and paper away', 'Put out feed trays and chick paper', () => { L.act('brood.trays', { on: !traysOn() }); refresh(); }, 'Trays and paper · out');
   const trayRow = machineRow('Feed trays and chick paper', 'by the brooders, for small chicks to find feed from the first hour (chick arrival sign)', trays.el);
   trayRow.led.classList.add('led--run');
   trayRow.el.hidden = true;

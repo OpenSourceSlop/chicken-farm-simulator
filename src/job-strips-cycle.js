@@ -11,10 +11,17 @@ const cm = (v) => `${Math.round(v)} cm`;
 const list = (a) => a.map((v) => Math.round(v)).join(' · ');
 const ageOf = (env) => Math.max(0, Math.floor(flockAgeAt(env.day)));
 const fanLine = (c) => `Fans turning ${c.env.fansEffective ?? 0} of ${fansWorking(c.env)} · pad pump ${c.env.padOn ? 'on' : 'off'} · humidity ${int(c.env.houseRH)} % (pad plate: the pads help up to about ${HEAT.padOffAboveRH} %)`;
-const heatAge = (c) => (ageOf(c.env) < 21 ? `Birds ${ageOf(c.env)} days: as few tunnel fans as the heat allows; the pads are for big birds (heat sign, fan plate).`
-  : `Birds ${ageOf(c.env)} days: big birds in the heat want all six fans and the pads (heat sign).`);
+// the tuned heat sign (content-signs-cond BOARD_P4_ITEMS): young birds on a hot afternoon the pad with one or two tunnel
+// fans (three in week 3), six fans and the pad chill them; big birds every fan and the pads (review round: the Phase 3
+// 'the pads are for big birds' line contradicted it)
+const YOUNG_HEAT = 'young birds on a hot afternoon: the pad with one or two tunnel fans (three in week 3); six fans and the pad chill them';
+const BIG_HEAT = 'big birds in the heat want all six fans and the pads';
+export const heatSignLine = (age) => (age < 21 ? YOUNG_HEAT : BIG_HEAT);
+const heatAge = (c) => `Birds ${ageOf(c.env)} days: ${heatSignLine(ageOf(c.env))} (heat sign; pad plate: the pad only while the house reads under about ${HEAT.padOffAboveRH} %).`;
 const heatRows = (c, inst) => [line(`${birdsSeen(c)} | heat sign: panting, wings out, lying along the walls = heat stress.`), line(heatAge(c)), line(fanLine(c)),
-  step('Switch fans on at the fan switches 1–6 (as the line above says for their age; All six switches every fan on) and, for birds of 21 days and more, Start the pad pump. Then few birds may pant, and none huddle chilled, for 30 farm minutes with the clock running.', inst.status === 'done'),
+  step(ageOf(c.env) < 21
+    ? 'Start the pad pump, then switch on one or two tunnel fans at the fan switches (three in week 3), as the line above says for their age (in air over the pad plate’s humidity: tunnel fans only, as few as Birds feel allows). Then few birds may pant, and none huddle chilled, for 30 farm minutes with the clock running.'
+    : 'Switch every fan on at the fan switches (All six switches every fan on) and Start the pad pump, as the line above says for their age. Then few birds may pant, and none huddle chilled, for 30 farm minutes with the clock running.', inst.status === 'done'),
   ...partRows(c, inst)];
 const lastLook = (c) => (c.records?.notebook || []).filter((n) => n.kind === 'look' && n.day === c.env.dayNumber).pop();
 const darkRows = (c) => {
@@ -123,7 +130,7 @@ export const STRIPS_CYCLE = {
       const read = inst.status === 'done' || !!c.engine.parts(inst)[0]?.met;
       return [line(on ? `Every fan you switched on: ${on - broken} of ${on} vanes turning (fan plate: lamp on and the blade still = broken belt)`
         : 'No tunnel fans switched on (fan plate: a lamp on with the blade still = broken belt)'),
-        houseRow(c, ' (tunnel air makes the birds feel cooler)'), line(`${birdsSeen(c)} | heat sign: big birds in the heat want all six fans and the pads.`),
+        houseRow(c, ' (tunnel air makes the birds feel cooler)'), line(`${birdsSeen(c)} | heat sign: ${heatSignLine(ageOf(c.env))}.`),
         line(`Pad: ${pad ? `checked ${hhmm(pad.hour)} today` : 'not checked today (pad pump outside the west end)'}. The afternoon walk is its own job (Walk the house again).`),
         step(read ? 'Fan panel read into your notebook' : 'Keep the fan panel open a moment: it reads into your notebook', read)];
     } },

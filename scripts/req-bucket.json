@@ -46,6 +46,7 @@
   {"press":"e"},
   {"advance":0.25},
   {"expect":"(() => { const b = __game.props.bucketDown, p = __game.player.position; const c = (document.querySelector('#hud .caption:not([hidden]) .caption-text')?.textContent || '').match(/Bucket set down here/); return __game.props.carrying === 'chick' && b && b.n === 1 && Math.hypot(b.x - p.x, b.z - p.z) < 0.7 && c && 'bucket set down ' + Math.hypot(b.x - p.x, b.z - p.z).toFixed(2) + ' m from him with ' + b.n + '; caption \"' + c[0] + '\"'; })()","label":"(c) a vent sample with the bucket: the bucket set down at his feet, the caption, the chick in hand"},
+  {"expect":"(() => { const t = (() => { const e = document.querySelector('#hud .panel:not([hidden]) .pnotice'); if (!e || e.hidden || !e.offsetParent) return false; const r = e.getBoundingClientRect(); const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!at && e.contains(at) && e.textContent.replace(/\\s+/g, ' ').trim(); })(); return t && /Bucket set down at your feet/.test(t) && 'seen in the panel: ' + t; })()","label":"(c) the set-down notice is seen at the top of the panel that opened"},
   {"shot":"rq-b-02-auto-down"},
   {"clickText":"Take vent temperature","in":"#hud .panel:not([hidden])"},
   {"advance":0.25},

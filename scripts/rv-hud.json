@@ -1,0 +1,225 @@
+[
+ {
+  "eval": "__game.stop(), 'stopped'"
+ },
+ {
+  "clearStorage": true
+ },
+ {
+  "eval": "(window.__rects = () => { const R = (e) => e.getBoundingClientRect(); const q = (s) => [...document.querySelectorAll(s)].filter((e) => !e.hidden && e.offsetParent);\n  const f = (n, e) => { const r = R(e); return n + '[' + Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + ']'; };\n  return [...q('.hud-tl .clock'), ...q('.hud-tl .gauges'), ...q('.alarm'), ...q('.fw')].map((e) => f(e.classList[1] || e.classList[0], e)).join(' '); }, 'ok')"
+ },
+ {
+  "viewport": [
+   960,
+   600
+  ]
+ },
+ {
+  "eval": "(__game.skills.profile.cyclesDone = Math.max(1, __game.skills.profile.cyclesDone || 0), __game.startRun({ seed: 1, at: 'plan', condition: null }), __game.run.startLevel('week2', { from: 'standard', condition: null }), __game.level.debug.goto(10, 15.2, { auto: true }), 'normal day 10 ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power?.on))"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "expect": "(() => { const R = (e) => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;\n    const fw = document.querySelector('.fw'), al = document.querySelector('.alarm'), bad = [];\n    for (const g of document.querySelectorAll('.hud-tl .gauge')) for (const [n, e] of [['the flock watch', fw], ['the alarm', al]]) if (e && !e.hidden && e.offsetParent && hit(R(g), R(e))) bad.push(g.getAttribute('aria-label') + ' under ' + n);\n    return !bad.length && fw && !fw.hidden && ('normal-d10 960: ' + __rects()); })()",
+  "label": "normal-d10 960: no gauge under the flock watch or the alarm"
+ },
+ {
+  "shot": "rv-hud-01-normal-d10-960"
+ },
+ {
+  "eval": "(__game.skills.profile.cyclesDone = Math.max(1, __game.skills.profile.cyclesDone || 0), __game.startRun({ seed: 1, at: 'plan', condition: 'rainy' }), __game.run.startLevel('week2', { from: 'standard', condition: 'rainy' }), __game.level.debug.goto(10, 15.2, { auto: true }), 'rainy day 10 ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power?.on))"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "expect": "(() => { const R = (e) => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;\n    const fw = document.querySelector('.fw'), al = document.querySelector('.alarm'), bad = [];\n    for (const g of document.querySelectorAll('.hud-tl .gauge')) for (const [n, e] of [['the flock watch', fw], ['the alarm', al]]) if (e && !e.hidden && e.offsetParent && hit(R(g), R(e))) bad.push(g.getAttribute('aria-label') + ' under ' + n);\n    return !bad.length && fw && !fw.hidden && ('rainy-d10 960: ' + __rects()); })()",
+  "label": "rainy-d10 960: no gauge under the flock watch or the alarm"
+ },
+ {
+  "shot": "rv-hud-02-rainy-d10-960"
+ },
+ {
+  "eval": "(__game.skills.profile.cyclesDone = Math.max(1, __game.skills.profile.cyclesDone || 0), __game.startRun({ seed: 1, at: 'plan', condition: 'rainy' }), __game.run.startLevel('weeks45', { from: 'standard', condition: 'rainy' }), __game.level.debug.goto(26, 15, { auto: true }), 'rainy day 26 ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power?.on))"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "expect": "(() => { const R = (e) => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;\n    const fw = document.querySelector('.fw'), al = document.querySelector('.alarm'), bad = [];\n    for (const g of document.querySelectorAll('.hud-tl .gauge')) for (const [n, e] of [['the flock watch', fw], ['the alarm', al]]) if (e && !e.hidden && e.offsetParent && hit(R(g), R(e))) bad.push(g.getAttribute('aria-label') + ' under ' + n);\n    return !bad.length && fw && !fw.hidden && ('rainy-d26 960: ' + __rects()); })()",
+  "label": "rainy-d26 960: no gauge under the flock watch or the alarm"
+ },
+ {
+  "shot": "rv-hud-03-rainy-d26-960"
+ },
+ {
+  "eval": "(__game.skills.profile.cyclesDone = Math.max(1, __game.skills.profile.cyclesDone || 0), __game.startRun({ seed: 1, at: 'plan', condition: 'hot' }), __game.run.startLevel('weeks45', { from: 'standard', condition: 'hot' }), __game.level.debug.goto(30, 15.2, { auto: true }), 'hot day 30 ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power?.on))"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "expect": "(() => { const R = (e) => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;\n    const fw = document.querySelector('.fw'), al = document.querySelector('.alarm'), bad = [];\n    for (const g of document.querySelectorAll('.hud-tl .gauge')) for (const [n, e] of [['the flock watch', fw], ['the alarm', al]]) if (e && !e.hidden && e.offsetParent && hit(R(g), R(e))) bad.push(g.getAttribute('aria-label') + ' under ' + n);\n    return !bad.length && fw && !fw.hidden && ('hot-d30 960: ' + __rects()); })()",
+  "label": "hot-d30 960: no gauge under the flock watch or the alarm"
+ },
+ {
+  "shot": "rv-hud-04-hot-d30-960"
+ },
+ {
+  "eval": "(__game.skills.profile.cyclesDone = Math.max(1, __game.skills.profile.cyclesDone || 0), __game.startRun({ seed: 1, at: 'level1', condition: 'badChicks' }), __game.level.debug.goto(1, 15.2, { auto: true }), 'badChicks day 1 ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power?.on))"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "expect": "(() => { const R = (e) => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;\n    const fw = document.querySelector('.fw'), al = document.querySelector('.alarm'), bad = [];\n    for (const g of document.querySelectorAll('.hud-tl .gauge')) for (const [n, e] of [['the flock watch', fw], ['the alarm', al]]) if (e && !e.hidden && e.offsetParent && hit(R(g), R(e))) bad.push(g.getAttribute('aria-label') + ' under ' + n);\n    return !bad.length && fw && !fw.hidden && ('bad-d1 960: ' + __rects()); })()",
+  "label": "bad-d1 960: no gauge under the flock watch or the alarm"
+ },
+ {
+  "shot": "rv-hud-05-bad-d1-960"
+ },
+ {
+  "eval": "(__game.skills.profile.cyclesDone = Math.max(1, __game.skills.profile.cyclesDone || 0), __game.startRun({ seed: 1, at: 'plan', condition: 'water' }), __game.run.startLevel('weeks45', { from: 'standard', condition: 'water' }), __game.level.debug.goto(27, 14, { auto: true }), 'water day 27 ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power?.on))"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "expect": "(() => { const R = (e) => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;\n    const fw = document.querySelector('.fw'), al = document.querySelector('.alarm'), bad = [];\n    for (const g of document.querySelectorAll('.hud-tl .gauge')) for (const [n, e] of [['the flock watch', fw], ['the alarm', al]]) if (e && !e.hidden && e.offsetParent && hit(R(g), R(e))) bad.push(g.getAttribute('aria-label') + ' under ' + n);\n    return !bad.length && fw && !fw.hidden && ('water-d27 960: ' + __rects()); })()",
+  "label": "water-d27 960: no gauge under the flock watch or the alarm"
+ },
+ {
+  "shot": "rv-hud-06-water-d27-960"
+ },
+ {
+  "eval": "(__game.skills.profile.cyclesDone = Math.max(1, __game.skills.profile.cyclesDone || 0), __game.startRun({ seed: 1, at: 'plan', condition: 'rainy' }), __game.run.startLevel('weeks45', { from: 'standard', condition: 'rainy' }), __game.level.debug.goto(33, 15, { auto: true }), 'rainy day 33 ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power?.on))"
+ },
+ {
+  "eval": "(__game.level.debug.goto(33, 15.25), 'cut ' + JSON.stringify(__game.farm.power))"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "expect": "(() => { const a = document.querySelector('.alarm'); return __game.farm.power.on === false && a && !a.hidden && ('alarm: ' + a.innerText.slice(0, 60)); })()",
+  "label": "the cut 960: the alarm banner shows"
+ },
+ {
+  "expect": "(() => { const R = (e) => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;\n    const fw = document.querySelector('.fw'), al = document.querySelector('.alarm'), bad = [];\n    for (const g of document.querySelectorAll('.hud-tl .gauge')) for (const [n, e] of [['the flock watch', fw], ['the alarm', al]]) if (e && !e.hidden && e.offsetParent && hit(R(g), R(e))) bad.push(g.getAttribute('aria-label') + ' under ' + n);\n    return !bad.length && fw && !fw.hidden && ('power cut 960: ' + __rects()); })()",
+  "label": "power cut 960: no gauge under the flock watch or the alarm"
+ },
+ {
+  "shot": "rv-hud-07-powercut-960"
+ },
+ {
+  "viewport": [
+   1280,
+   800
+  ]
+ },
+ {
+  "eval": "(__game.skills.profile.cyclesDone = Math.max(1, __game.skills.profile.cyclesDone || 0), __game.startRun({ seed: 1, at: 'plan', condition: 'rainy' }), __game.run.startLevel('weeks45', { from: 'standard', condition: 'rainy' }), __game.level.debug.goto(26, 15, { auto: true }), 'rainy day 26 ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power?.on))"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "expect": "(() => { const R = (e) => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;\n    const fw = document.querySelector('.fw'), al = document.querySelector('.alarm'), bad = [];\n    for (const g of document.querySelectorAll('.hud-tl .gauge')) for (const [n, e] of [['the flock watch', fw], ['the alarm', al]]) if (e && !e.hidden && e.offsetParent && hit(R(g), R(e))) bad.push(g.getAttribute('aria-label') + ' under ' + n);\n    return !bad.length && fw && !fw.hidden && ('rainy-d26 1280: ' + __rects()); })()",
+  "label": "rainy-d26 1280: no gauge under the flock watch or the alarm"
+ },
+ {
+  "shot": "rv-hud-08-rainy-d26-1280"
+ },
+ {
+  "eval": "(__game.skills.profile.cyclesDone = Math.max(1, __game.skills.profile.cyclesDone || 0), __game.startRun({ seed: 1, at: 'level1', condition: 'badChicks' }), __game.level.debug.goto(1, 15.2, { auto: true }), 'badChicks day 1 ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power?.on))"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "expect": "(() => { const R = (e) => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;\n    const fw = document.querySelector('.fw'), al = document.querySelector('.alarm'), bad = [];\n    for (const g of document.querySelectorAll('.hud-tl .gauge')) for (const [n, e] of [['the flock watch', fw], ['the alarm', al]]) if (e && !e.hidden && e.offsetParent && hit(R(g), R(e))) bad.push(g.getAttribute('aria-label') + ' under ' + n);\n    return !bad.length && fw && !fw.hidden && ('bad-d1 1280: ' + __rects()); })()",
+  "label": "bad-d1 1280: no gauge under the flock watch or the alarm"
+ },
+ {
+  "shot": "rv-hud-09-bad-d1-1280"
+ },
+ {
+  "eval": "(__game.skills.profile.cyclesDone = Math.max(1, __game.skills.profile.cyclesDone || 0), __game.startRun({ seed: 1, at: 'plan', condition: 'rainy' }), __game.run.startLevel('weeks45', { from: 'standard', condition: 'rainy' }), __game.level.debug.goto(33, 15, { auto: true }), 'rainy day 33 ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power?.on))"
+ },
+ {
+  "eval": "(__game.level.debug.goto(33, 15.25), 'cut ' + JSON.stringify(__game.farm.power))"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "expect": "(() => { const a = document.querySelector('.alarm'); return __game.farm.power.on === false && a && !a.hidden && ('alarm: ' + a.innerText.slice(0, 60)); })()",
+  "label": "the cut 1280: the alarm banner shows"
+ },
+ {
+  "expect": "(() => { const R = (e) => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;\n    const fw = document.querySelector('.fw'), al = document.querySelector('.alarm'), bad = [];\n    for (const g of document.querySelectorAll('.hud-tl .gauge')) for (const [n, e] of [['the flock watch', fw], ['the alarm', al]]) if (e && !e.hidden && e.offsetParent && hit(R(g), R(e))) bad.push(g.getAttribute('aria-label') + ' under ' + n);\n    return !bad.length && fw && !fw.hidden && ('power cut 1280: ' + __rects()); })()",
+  "label": "power cut 1280: no gauge under the flock watch or the alarm"
+ },
+ {
+  "shot": "rv-hud-10-powercut-1280"
+ },
+ {
+  "viewport": [
+   960,
+   600
+  ]
+ },
+ {
+  "reload": true
+ },
+ {
+  "eval": "__game.stop(), 'after reload ' + __game.level.mode"
+ },
+ {
+  "eval": "(window.__rects = () => { const R = (e) => e.getBoundingClientRect(); const q = (s) => [...document.querySelectorAll(s)].filter((e) => !e.hidden && e.offsetParent);\n  const f = (n, e) => { const r = R(e); return n + '[' + Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + ']'; };\n  return [...q('.hud-tl .clock'), ...q('.hud-tl .gauges'), ...q('.alarm'), ...q('.fw')].map((e) => f(e.classList[1] || e.classList[0], e)).join(' '); }, 'ok')"
+ },
+ {
+  "eval": "(__game.run.continueSave(), 'continue at ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power))"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "expect": "(() => { const a = document.querySelector('.alarm'); return __game.farm.power.on === false && a && !a.hidden && /power is off/.test(a.innerText) && ('alarm after the reload: ' + a.innerText.slice(0, 70)); })()",
+  "label": "the alarm banner after a reload in the cut"
+ },
+ {
+  "expect": "(() => { const s = __game.level.watch.status(); return s.on && !document.querySelector('.fw').hidden && 'the watch card shows at once after Continue'; })()",
+  "label": "the flock watch after Continue"
+ },
+ {
+  "expect": "(() => { const R = (e) => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;\n    const fw = document.querySelector('.fw'), al = document.querySelector('.alarm'), bad = [];\n    for (const g of document.querySelectorAll('.hud-tl .gauge')) for (const [n, e] of [['the flock watch', fw], ['the alarm', al]]) if (e && !e.hidden && e.offsetParent && hit(R(g), R(e))) bad.push(g.getAttribute('aria-label') + ' under ' + n);\n    return !bad.length && fw && !fw.hidden && ('power cut after the reload 960: ' + __rects()); })()",
+  "label": "power cut after the reload 960: no gauge under the flock watch or the alarm"
+ },
+ {
+  "shot": "rv-hud-11-powercut-reload-960"
+ },
+ {
+  "eval": "(__game.skills.profile.cyclesDone = Math.max(1, __game.skills.profile.cyclesDone || 0), __game.startRun({ seed: 1, at: 'plan', condition: null }), __game.run.startLevel('week2', { from: 'standard', condition: null }), __game.level.debug.goto(10, 15.2, { auto: true }), 'normal day 10 ' + __game.env.timeLabel + ' power ' + JSON.stringify(__game.farm.power?.on))"
+ },
+ {
+  "advance": 0.6
+ },
+ {
+  "press": "h"
+ },
+ {
+  "advance": 0.4
+ },
+ {
+  "expect": "(() => { const dd = [...document.querySelectorAll('.help:not([hidden]) dd')].find((d) => /bucket down/i.test(d.textContent)); if (!dd) return false; const r = dd.getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!e && !!e.closest('.help') && ('the G row is on top: ' + dd.textContent.slice(0, 50)); })()",
+  "label": "the help legend over the flock watch (the G row)"
+ },
+ {
+  "shot": "rv-hud-12-help-960"
+ },
+ {
+  "press": "h"
+ }
+]

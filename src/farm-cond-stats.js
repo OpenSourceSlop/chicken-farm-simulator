@@ -19,6 +19,8 @@ export function stepCondStats(farm, env, hrs) {
     // the flush (h-flush): every line flushed 2 farm minutes or more between 13:00 and 15:00 on its day
     if (h >= 13 && h < 15) for (let i = 0; i < 4; i++) if ((X.flushMin[i] || 0) >= 2) { const f = S.flushed[d] || (S.flushed[d] = []); if (!f.includes(i)) f.push(i); }
   }
+  // review round: the hot season's afternoon as the house stood at 15:00 (the result's Afternoon column, the record's note)
+  if (farm.condition === 'hot' && fl.placed > 0 && h >= 15 && h < 16) { const P = S.pm15 || (S.pm15 = {}); if (P[d] == null) P[d] = [+env.houseTemp.toFixed(1), +env.targetTemp.toFixed(1), env.padOn ? 1 : 0, env.fansEffective ?? 0]; }
   if (farm.condition === 'rainy' && d >= 22 && d <= 35 && farm.weatherNow.storm) { S.stormH += hrs; if (farm.house.flapsClosed) S.stormClosedH += hrs; }
   if (farm.condition === 'water' && S.tankUnder30At == null && farm.waterTank.levelPct < 30) S.tankUnder30At = +env.day.toFixed(5);
   if (!farm.power.on) S.powerOff[d] = +((S.powerOff[d] || 0) + hrs * 60).toFixed(2);

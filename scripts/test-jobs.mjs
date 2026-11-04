@@ -8,12 +8,14 @@ import { createJobEngine, BROOD_CELLS, LEVEL_END_DAY, windowHours } from '../src
 import { JOBS } from '../src/content-jobs.js';
 import { BROOD_BOUNDS, HEATERS, LEVEL1, CYCLE, CLEAN, PLAN_LEVEL, WEEK2, WEEK3, WEEKS45, FINISH, CLEANOUT, HEAT_P4, levelOfDay, JOB_HOLD } from '../src/config.js';
 import { STATE_TEST_IDS_P4, JOBS_COND } from '../src/content-jobs-cond.js';
+import { heatHandled } from '../src/farm-cycle-problems.js';
+import { BOARD_P4_ITEMS } from '../src/content-signs-cond.js';
 import { nightComfortNow } from '../src/job-engine.js';
 import { flowToday, brooderRowC, VENT_BAND } from '../src/job-figures.js';
 import { JOBS_CYCLE, STATE_TEST_IDS_P3 } from '../src/content-jobs-cycle.js';
-import { STRIPS, partRows, stripRows } from '../src/job-strips.js';
+import { STRIPS, partRows, stripRows, heldText } from '../src/job-strips.js';
 import { jobPlaces, nextPlace } from '../src/job-next.js';
-import { STRIPS_CYCLE } from '../src/job-strips-cycle.js';
+import { STRIPS_CYCLE, heatSignLine } from '../src/job-strips-cycle.js';
 import { STRIPS_COND } from '../src/job-strips-cond.js';
 import { ventNeed } from '../src/job-figures.js';
 import { makeWorld } from '../src/farm-profiles-run.js';
@@ -460,8 +462,9 @@ test('every Phase 3 state test, on the farm stub with its fields set (held ones 
     ['pans-finisher', (L) => { L.farm.feed.panType = { starter: 0, grower: 0.05, finisher: 0.95 }; }, 0, (L) => { L.farm.feed.panType = { starter: 0, grower: 0.2, finisher: 0.8 }; }],
     ['caked-cleared', (L) => { L.farm.litter.cakedGrid.fill(0); }, 0, (L) => { L.farm.litter.cakedGrid.fill(0); for (let i = 0; i < 40; i++) L.farm.litter.cakedGrid[i * 7] = 1; }],
     ['air-clear', (L) => { L.farm.air.dustIndex = 0.6; L.farm.air.ammoniaPpm = 9; }, 120, (L) => { L.farm.air.dustIndex = 1.4; }],
-    // (day 20: birds under 21 days, every fan without the pad; the pad branch is for big birds, below)
-    ['heat-handled', (L) => { L.farm.comfort.pantShare = 0.5; L.farm.comfort.meanOver = 3; L.env.setFans(6); L.env.setPad(false); }, 30, (L) => { L.farm.comfort.pantShare = 0.5; L.env.setFans(4); L.env.setPad(false); }],
+    // (day 20: birds under 21 days, the pad with two fans and few panting; the every-fan routes below and in heatHandled's
+    // own cases)
+    ['heat-handled', (L) => { L.farm.comfort.pantShare = 0.05; L.farm.comfort.meanOver = 0.5; L.env.setFans(2); L.env.setPad(true); }, 30, (L) => { L.farm.comfort.pantShare = 0.5; L.env.setFans(4); L.env.setPad(false); }],
     ['pad-humid-ok', (L) => { L.env.setFans(6); L.env.setPad(false); }, 30, (L) => { L.env.setFans(3); L.env.setPad(false); }],
     ['house-empty', (L) => { L.farm.harvest.started = true; L.farm.flock.alive = 0; }, 0, (L) => { L.farm.harvest.started = false; L.farm.flock.alive = 0; }],
     ['litter-removed', (L) => g(L, 0.02), 0, (L) => g(L, 0.3)],
@@ -499,6 +502,23 @@ test('every Phase 3 state test, on the farm stub with its fields set (held ones 
   const young = () => { Y.env.setFans(6); Y.env.setPad(true); Y.farm.comfort.pantShare = 0.4; Y.farm.comfort.meanOver = 2; };
   young(); Y.at(16, 13.6); young(); Y.jobs.tick();
   assert(Y.st('t-hy@16') === 'open', `young birds: six fans and the pad do not handle the heat (${Y.st('t-hy@16')})`);
+  // heatHandled's routes on plain state (review round): young birds under every fan without the pad only while the pad
+  // cannot work and at most a quarter panting; big birds under every fan and the pad whatever the panting
+  const hh = (age, pant, fans, pad, rh, outRH, over = 2) => heatHandled({ age, comfort: { pantShare: pant, meanOver: over } }, { fansEffective: fans, fansBroken: [], padOn: pad, houseRH: rh, outsideRH: outRH });
+  assert(!hh(10, 0.8, 6, false, 55, 45), 'young, six fans, no pad, dry air, 80 % panting: not handled');
+  assert(!hh(10, 0.2, 6, false, 55, 45), 'young, six fans, no pad, dry air (the pad could work): not handled');
+  assert(hh(10, 0.2, 6, false, 93, 92), 'young, six fans, no pad, damp air over the pad plate: handled with a fifth panting');
+  assert(!hh(10, 0.4, 6, false, 93, 92), 'young, six fans in damp air with 40 % panting: not handled');
+  assert(hh(10, 0.05, 1, true, 70, 50), 'young, the pad with one fan, few panting: handled');
+  assert(!hh(10, 0.05, 6, true, 70, 50), 'young, the pad with six fans: not handled');
+  assert(hh(30, 0.45, 6, true, 80, 60) && !hh(30, 0.45, 6, false, 80, 60), 'big birds: every fan and the pad, whatever the panting; not without the pad');
+  assert(!hh(16, 0, 6, false, 60, 60, -4), 'chilled birds: never');
+  // review round: 10-day-olds of the hot season under six fans without the pad in dry air, 80 % panting: not handled (the
+  // heat sign's young-birds line is the pad with one or two fans)
+  const S6 = makeCycle(CLEANOUT, { day: 10, hour: 13, jobs: [T('t-h6', { type: 'state', test: 'heat-handled' }, { day: 10, round: 'pm' })] });
+  const six = () => { S6.env.setFans(6); S6.env.setPad(false); S6.env.houseRH = 55; S6.env.forceHouseRH = 55; S6.env.outsideRH = 45; S6.farm.comfort.pantShare = 0.8; S6.farm.comfort.meanOver = 3; };
+  six(); S6.at(10, 13.6); six(); S6.jobs.tick();
+  assert(S6.st('t-h6@10') === 'open', `young birds: six fans without the pad in dry air do not handle the heat (${S6.st('t-h6@10')})`);
   const K = makeCycle(CLEANOUT, { day: 16, hour: 13, jobs: [T('t-hk', { type: 'state', test: 'heat-handled' }, { day: 16, round: 'pm' })] });
   const chill = () => { K.env.setFans(6); K.env.setPad(false); K.farm.comfort.pantShare = 0; K.farm.comfort.meanOver = -4; };
   chill(); K.at(16, 13.6); chill(); K.jobs.tick();
@@ -735,6 +755,8 @@ test('Phase 4: every new state test (STATE_TEST_IDS_P4) on a farm with its field
     ['feed-withdrawn', {}, (L) => { L.farm.feed.withdrawn = true; }, 0, (L) => { L.farm.feed.withdrawn = false; }],
     ['pump-ok', {}, (L) => { Object.assign(L.farm.waterTank, { pumpShare: 1, fixing: false }); }, 0, (L) => { Object.assign(L.farm.waterTank, { pumpShare: 1, fixing: true, fixUntil: L.env.day + 2 * H }); }],
     ['lines-cool', {}, (L) => { L.farm.water.lineTempC = [28.5, 29.9, 30, 27]; }, 0, (L) => { L.farm.water.lineTempC = [28.5, 31.2, 30, 27]; }],
+    // review round: the hot season's young birds: the pad with one to three fans, not six without it
+    ['pad-few-fans', {}, (L) => { L.env.setFans(2); L.env.setPad(true); }, 0, (L) => { L.env.setFans(6); L.env.setPad(false); }],
   ];
   assert(CASES.length + 1 === STATE_TEST_IDS_P4.length && CASES.every(([t]) => STATE_TEST_IDS_P4.includes(t)), 'a case for every Phase 4 state test (night-comfort below)');
   for (const [test, extra, yes, mins, no] of CASES) {
@@ -936,6 +958,20 @@ test('Phase 4 strips: the feeder rows say when each line is finished; the done r
   const steps = rows.filter((r) => r.k === 'step');
   assert(steps.length >= 1 && steps.every((r) => r.done), `the done strip shows only ticked steps: ${JSON.stringify(steps)}`);
   assert(/No tunnel fans switched on/.test(rowText(rows)), 'no fans on: a plain line');
+  // review round: a held part's label loses its ' for N farm minutes' with the comma before it (no ',:')
+  for (const min of [0, 3]) assert(!/,:/.test(heldText({ label: 'Few birds panting, none chilled, for 30 farm minutes', held: { min, of: 30 } })), 'heldText leaves no ",:"');
+  // review round: the heat strips say the tuned heat sign's young-birds line under 21 days (the pad with one or two fans),
+  // never Phase 3's "the pads are for big birds"; the big birds' line from day 21 (both lines are on the heat sign)
+  const signText = BOARD_P4_ITEMS['sign-heat'].add.map((x) => x.text).join(' ').toLowerCase();
+  assert(signText.includes(heatSignLine(10).split(';')[0].replace(' (three in week 3)', '')), 'the young-birds line is the heat sign\'s');
+  for (const day of [10, 16, 30]) {
+    const H6 = makeCycle(day < 15 ? WEEK2 : day < 22 ? WEEK3 : WEEKS45, { day, hour: 14, condition: 'hot' });
+    H6.events.emit(EV.FARM_PROBLEM, { id: day < 22 ? 'warm-afternoon3' : 'hot-afternoon', phase: 'symptom' }); H6.jobs.tick();
+    const fp = H6.jobs.byKey(`r-fans-pm@${day}`), heat = H6.jobs.list().find((i) => i.id === 'p-heat3' || i.id === 'p-panting');
+    const txt = [fp && rowText(stripRows(STRIPS_CYCLE['r-fans-pm'], stripCtx(H6), fp, 'fan-panel')), heat && rowText(stripRows(STRIPS_CYCLE[heat.id], stripCtx(H6), heat, 'fan-panel'))].filter(Boolean).join('\n');
+    assert(txt && !/pads are for big birds|21 days and more/.test(txt), `day ${day}: no Phase 3 pad line: ${txt}`);
+    assert(day < 21 ? /pad with one or two tunnel fans/.test(txt) && !/big birds in the heat want all six/.test(txt) : /big birds in the heat want all six fans and the pads/.test(txt), `day ${day}: the heat sign's line for the age: ${txt}`);
+  }
 });
 
 test('Phase 4 strips: the half-and-half, the medicine day, f-withdraw; every condition job of every condition builds its rows, neutral words', () => {

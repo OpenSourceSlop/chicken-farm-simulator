@@ -67,8 +67,12 @@ export function installConditions(farm, env) {
     // the condition first: the cycle's syncEnv inside start reads it (the cycle climate of the hot and rainy seasons)
     farm.condition = opts.condition !== undefined ? (CONDITIONS[opts.condition] ? opts.condition : null) : opts.keepClock ? farm.condition : null;
     farm._lvCache = null;
+    farm.delivery = null;   // (a normal-season start after a bad batch: installCondition leaves the farm alone without a condition)
     start(level, opts);
     Object.assign(farm, fresh()); farm.condX = freshX(); farm.flock.claimed = 0; farm.house.flapsClosed = false;   // flock.gradedOut: once graded
+    // a bad batch's slow start and late starters stay with that flock (review round: a new run after an abandoned bad
+    // batch grew 12 % slower in its brooding week and failed week 2's weigh-in)
+    farm.gainK72 = undefined; farm.lateK = undefined; farm.traysReach = 0;
     setPowerEnv(farm, env, true);
     installCondition(farm, env, { enter: true });
   };
@@ -187,7 +191,8 @@ export function stepCond(farm, env, hrs) {
     startCond(farm, env, st, p);
   }
   if (farm.condition === 'rainy') stepRainy(farm, env, hrs);
-  if (farm.delivery) chicksPre(farm, env);
+  // (always: a new run after an abandoned bad batch must not keep its slow start, review round)
+  chicksPre(farm, env);
 }
 /** After the water lines' access (farm.js stepFarm): the line water, iron flushed out, the tank's pressure. */
 export function stepCondWater(farm, env, hrs) { if (farm.condition && farm.mode === 'level') stepWater(farm, env, hrs, false); }

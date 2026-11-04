@@ -686,6 +686,17 @@ export function createLevel(ctx, deps = {}) {
       dayText() { return dayLabel(env.dayNumber); },
       /** Phase 4: the condition's name under the day ("Hot season"); '' in the normal season (PHASE4.md §1.2). */
       conditionText() { return condNow() ? conditionLabel(condNow()) : ''; },
+      /** The hour's weather under a season condition (review round: the clock card named the season twice: its tag and
+       *  the weather line); null keeps the weather's own label (the normal season, a bad batch, a water problem). */
+      weatherText() {
+        const c = condNow();
+        if (c !== 'hot' && c !== 'rainy') return null;
+        const w = farm.weatherNow || {}, wave = (farm.problems || []).some((p) => p.id === 'heat-wave' && p.phase !== 'pending' && p.phase !== 'skipped') && env.day >= 30 + 10 * H && env.day < 32 + 19 * H;
+        if (w.storm) return 'Storm';
+        if ((w.rain ?? 0) > 0.05) return 'Rain';
+        if (wave) return 'Heat wave';
+        return c === 'hot' ? (env.isNight ? 'Warm night' : 'Hot sun') : env.isNight ? 'Damp night' : 'Damp air';
+      },
       /** The house has no power: the clock runs at the carrying speed and Next job does not skip. */
       get dark() { return dark(); },
       rateLabel() {
@@ -833,7 +844,6 @@ export function createLevel(ctx, deps = {}) {
       seed = lv.seed ?? 1;
       inRun = !!lv.inRun;
       engine.restore(lv.jobs, d);
-      watch.restore(lv.watch || null);
       fired = new Set(lv.fired || []); points = lv.points || []; weighs = lv.weighs || []; signedEnd = !!(lv.signedEnd ?? lv.signed7); fast = !!lv.fast;
       failAt = lv.failAt ?? null; startAt = lv.startAt ?? env.day;
       if (lv.bad) bad = { gradedOut: lv.bad.gradedOut || 0, looked: lv.bad.looked || 0, weak: lv.bad.weak || 0, called: lv.bad.called ?? null };
@@ -842,6 +852,8 @@ export function createLevel(ctx, deps = {}) {
       if (data.player && player) player.teleport(data.player.x, data.player.z, data.player.yaw);
       prevDay = env.day;
       enterMode('resume');
+      // the flock watch after the mode is 'level' (review round: its rows are evaluated at once, the card shows on Continue)
+      watch.restore(lv.watch || null);
       engine.tick();
       // a level saved at its end (a run's level-end save) shows its result again, it does not play on
       if (lv.ended) end(lv.ended);

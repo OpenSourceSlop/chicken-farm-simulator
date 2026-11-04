@@ -311,6 +311,17 @@ test('Phase 4: startRun({ condition: \'hot\' }) puts it on the farm and in the r
   assert(S.farm.condition === null && S.run.state().condition === null, 'no condition: the normal season');
 });
 
+test('review round: a new run after an abandoned bad batch (normal season and a water problem) grows as its own flock: no leftover delivery or slow start', () => {
+  for (const c of [null, 'water']) {
+    const R = makeRun();
+    R.run.startRun({ seed: 1, at: 'level1', condition: 'badChicks' });
+    R.level.debug.goto(1, 15.2, { auto: true });   // the bad batch's brooding week left on day 1
+    R.run.startRun({ seed: 1, at: 'plan', condition: c });
+    const ok = R.run.startLevel('week3', { from: 'standard', condition: c });
+    assert(ok && R.level.def.id === 'week3' && !R.farm.delivery, `${c || 'normal'}: the standard start reaches week 3 (${where(R)}, ${R.level.result?.failText ?? ''})`);
+    assert(R.farm.gainK72 === undefined && R.farm.lateK === undefined, `${c || 'normal'}: no bad batch growth factors left`);
+  }
+});
 test('Phase 4: the harder flocks are shut before the first full cycle and open after (cyclesDone in the skill profile)', () => {
   const R = makeRun();
   assert(!R.run.harderOpen && R.run.conditionsAvailable().every((c) => !c.canStart && !c.open), 'shut before a full cycle');

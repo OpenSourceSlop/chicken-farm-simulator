@@ -33,7 +33,8 @@ export const BOARD_P4_ITEMS = {
     ],
   },
   'feeder-box': {
-    add: [it('Pan rim: the figure for the day on this plate, give or take 3 cm.')],
+    // (review round: the brooding days' limit of the pans-on-the-litter rule, PANS_ON_LITTER_CM, on the plate itself)
+    add: [it('Pan rim: the figure for the day on this plate, give or take 3 cm (days 0–3, pans on the litter: 7 cm at most).')],
   },
   // (pad-pump: 'A pad in good order gives most of that, never all of it.' is Phase 3's line, content-signs-cycle.js; now checked)
 };
@@ -51,6 +52,8 @@ export const BOARD_COND_ITEMS = {
     'sign-vent': [it('Rainy season: the outside air is already damp. Step the minimum ventilation up every morning, and about a quarter over the table while the house reads over 80 % at dawn; the damp does not leave by itself.')],
     'sign-litter': [it('Storms drive rain in through the side-wall inlets: close the storm flaps on the south inlets while it storms; open them again after.')],
     'pad-pump': [it('In the damp air of the rainy season a pad cools only about 2–4 °C.')],
+    // review round: the reading the rainy ideal follows (general practice; the fan panel's Birds feel against the row)
+    'sign-heat': [it('Rainy season: on damp afternoons (the house over about 85 %) the birds keep their heat. When the fan panel’s Birds feel reads well over the brooder sign’s row, switch on tunnel fans one at a time until it reads near the row: one or two for young birds, as many as it needs for big birds. The pad gives little cooling in air this damp.', g, 8)],
     'sign-health': [it('Wet litter in the rainy season: watch the droppings for blood (coccidiosis) and the feet for sores.', g, 8)],
   },
   badChicks: {

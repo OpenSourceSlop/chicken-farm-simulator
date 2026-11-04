@@ -1,5 +1,5 @@
 // HUD: farm clock card, gauge strip (measured values only) and time controls. Owner: systems/UI agent.
-import { FAN_COUNT, TIME, WEATHER } from './config.js';
+import { FAN_COUNT, TIME, WEATHER, LEVEL1 } from './config.js';
 import { MAX_DAY } from './sim.js';
 import { h, button, setText, setAttr, fmt1, fmt0 } from './ui-dom.js';
 import { ICONS, weatherIcon } from './ui-icons.js';
@@ -105,10 +105,12 @@ export function createHud(parent, env) {
       sky.innerHTML = lastNight ? ICONS.moon : ICONS.sun;
       sky.classList.toggle('is-night', lastNight);
     }
-    if (env.weather !== lastWeather) {
-      lastWeather = env.weather;
+    // a season condition names the hour's weather (level.weatherText: 'Storm', 'Heat wave'); else the weather's label
+    const wt = level?.weatherText ? level.weatherText() : null, wKey = `${env.weather}|${wt}`;
+    if (wKey !== lastWeather) {
+      lastWeather = wKey;
       wIcon.innerHTML = weatherIcon(env.weather);
-      setText(wText, WEATHER[env.weather]?.label ?? env.weather);
+      setText(wText, wt || (WEATHER[env.weather]?.label ?? env.weather));
     }
     let speed = null;
     for (const s of SPEEDS) if (s.scale === env.timeScale) speed = s;
@@ -154,7 +156,7 @@ export function createHud(parent, env) {
   function setLevel(hooks) {
     level = hooks;
     skipBtn.hidden = morningBtn.hidden = !!hooks;
-    SPEEDS.forEach((s, i) => setAttr(speedBtns[i], 'title', hooks ? (i ? 'Four times faster while you walk' : 'Normal speed while you walk: a farm hour takes 30 s') : s.title));
+    SPEEDS.forEach((s, i) => setAttr(speedBtns[i], 'title', hooks ? (i ? 'Four times faster while you walk' : `Normal speed while you walk: a farm hour takes ${Math.round(3600 / LEVEL1.clock.work)} s`) : s.title));
     lastDay = null; lastScale = null; lastPaused = null;
     refresh();
   }

@@ -33,7 +33,7 @@ export function cycleWaterParts(L, { linesSec, foldPlates, needTime = null }) {
     sync();
   };
   // the key names what pressing it does: shut while the valve is open, open while it is shut
-  const mainRow = (sub) => { const t = toggleKey('Open the main valve', 'Shut the main valve', valveToggle); const r = machineRow('Main valve', sub, t.el); r.led.classList.add('led--pad'); return { ...r, t }; };
+  const mainRow = (sub) => { const t = toggleKey('Open the main valve', 'Shut the main valve', valveToggle, 'Main valve · shut'); const r = machineRow('Main valve', sub, t.el); r.led.classList.add('led--pad'); return { ...r, t }; };
   const mainLines = mainRow('water to the header tank and the lines');
   mainLines.el.hidden = true;
   linesSec.prepend(mainLines.el);
@@ -74,13 +74,14 @@ export function cycleWaterParts(L, { linesSec, foldPlates, needTime = null }) {
     L.act('water.medicate', { on });
     sync();
   });
+  med.stateText('Medicine · in the water');
   const medRow = machineRow('Medicator', 'medicine into the water at the vet’s dose', med.el);
   medRow.led.classList.add('led--pad');
   const medState = h('p', { class: 'cyc-line' });
   const medPlate = buildPlate('medicator');
   tabs.secs[2].append(medRow.el, medState, medPlate.el);
   // ---------- Clean-out ----------
-  const dis = toggleKey('Run the tank clean', 'Put disinfectant in the tank', () => { L.act('water.disinfect', { on: !farm.clean?.disinfectant }); sync(); });
+  const dis = toggleKey('Run the tank clean', 'Put disinfectant in the tank', () => { L.act('water.disinfect', { on: !farm.clean?.disinfectant }); sync(); }, 'Disinfectant · in the tank');
   const disRow = machineRow('Header tank', 'disinfectant mixed as its label says', dis.el);
   disRow.led.classList.add('led--pad');
   const flushes = DRINKER_LINES_Z.map((z, i) => {
@@ -91,6 +92,7 @@ export function cycleWaterParts(L, { linesSec, foldPlates, needTime = null }) {
       memo.flush[i] = on;
       sync();
     });
+    t.stateText('Flush valve · open');
     const r = machineRow(`Line ${i + 1}`, '', t.el);
     r.led.classList.add('led--pad');
     return { t, r };

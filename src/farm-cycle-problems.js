@@ -127,7 +127,10 @@ export function tickCycleProblems(farm, env) {
  * are chilled (mean felt comfort under -1.5 °C: too much air for their age). Young birds (under 21 days) may have the
  * pad with few tunnel fans (the heat sign's young-birds line, the hot season's remedy: one fan in week 2, two or three
  * in week 3), never with more (six fans and the pad chill them). Then few birds panting (10 % or less), or every fan
- * that turns is on with the pad running (or off over its humidity limit).
+ * that turns is on with the pad running (or off over its humidity limit). Young birds (review round): every fan without
+ * the pad only while the pad cannot work (outside air at 75 % or more, or the house over the pad plate's limit), and
+ * on every young-bird route at most YOUNG_PANT_MAX of them panting. Big birds keep the every-fan-and-pad route whatever
+ * the panting (the hot season's day 38 leaves about 44 % panting under every fan and the pads: all the house can do).
  */
 export const YOUNG_PAD_MAX_FANS = 3;   // model: the hot season's week 3 plan (two or three fans with the pad)
 export function heatHandled(farm, env) {
@@ -137,8 +140,15 @@ export function heatHandled(farm, env) {
   if (young && env.padOn && env.fansEffective > YOUNG_PAD_MAX_FANS) return false;
   if (pant <= 0.1) return true;
   const allFans = env.fansEffective >= 6 - (env.fansBroken || []).length;
-  return allFans && (young || env.padOn || env.houseRH > HEAT.padOffAboveRH);
+  if (!allFans) return false;
+  if (env.padOn || env.houseRH > HEAT.padOffAboveRH) return !young || pant <= YOUNG_PANT_MAX;
+  // young birds with every fan and no pad: only while the pad cannot work (damp outside air or a house over the pad
+  // plate's limit), and then few of them panting (review: six fans without the pad left 80-90 % of 10-day-olds panting)
+  const padCanWork = (env.outsideRH ?? 0) < 75 && env.houseRH <= HEAT.padOffAboveRH;
+  return young && !padCanWork && pant <= YOUNG_PANT_MAX;
 }
+/** model: young birds' heat is handled with at most a quarter of them panting (the pad with few fans brings it to none). */
+export const YOUNG_PANT_MAX = 0.25;
 const darkHoursOf = (farm, env) => (env.lightProgram?.darkHours ?? farm.light?.darkHours) ?? 0;
 // the pad plate: above about 90 % the pump off and all the fans running (every fan that turns)
 export const padHumidOk = (farm, env) => (!env.padOn || env.houseRH <= HEAT.padOffAboveRH) && env.fansEffective >= 6 - (env.fansBroken || []).length;

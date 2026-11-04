@@ -69,7 +69,7 @@ export function buildFanPanel(api) {
   const allOn = button({ class: 'key key--wide' }, 'All six');
   allOff.addEventListener('click', () => setFans(0));
   allOn.addEventListener('click', () => setFans(FAN_COUNT));
-  const pad = toggleKey('Stop the pad pump', 'Start the pad pump', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); waits(); refresh(); });
+  const pad = toggleKey('Stop the pad pump', 'Start the pad pump', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); waits(); refresh(); }, 'Pad pump · running');
   const hint = h('span', { class: 'cyc-dim' });
   // stage table (unlock tunnelStages)
   const draft = { stages: [{ overC: 1, fans: 2 }, { overC: 2, fans: 4 }, { overC: 3, fans: 6 }], padOn: false, padOverC: 5 };
@@ -79,7 +79,7 @@ export function buildFanPanel(api) {
     return { over, nf, el: h('div', { class: 'cyc-stage' }, h('span', { class: 'fan-name' }, `Stage ${i + 1}`), h('span', { class: 'ctrl-keys' }, over.els), h('span', { class: 'ctrl-keys' }, nf.els)) };
   });
   const padStage = stepper('Pad from degrees over the target', '°C', (d) => { draft.padOverC = Math.max(0, Math.min(12, draft.padOverC + d * 0.5)); refresh(); });
-  const padIn = toggleKey('Run the pad by hand', 'Put the pad in the table', () => { draft.padOn = !draft.padOn; refresh(); });
+  const padIn = toggleKey('Run the pad by hand', 'Put the pad in the table', () => { draft.padOn = !draft.padOn; refresh(); }, 'Pad · in the table');
   const setStages = button({ class: 'key key--wide key--apply' }, 'Set the stages');
   const stagesOff = button({ class: 'key key--wide' }, 'Stages off');
   setStages.addEventListener('click', () => { L.act('vent.stages', { stages: draft.stages.map((s) => ({ ...s })), padOverC: draft.padOn ? draft.padOverC : null }); waits(); refresh(); });
@@ -182,7 +182,7 @@ export function buildPadPump(api) {
   const { env, farm } = L;
   const shell = equipShell({ cls: 'equip--pad', icon: ICONS.pad, title: 'Cooling pad pump', sub: 'West end · pump, distribution pipe, float valve', plates: ['pad-pump'], signLinks: ['sign-heat'], onClose: L.close });
   const lcd = climateLcd(env, [['Outside', '°C'], ['Humidity out', '%']], 'Pad pump display');
-  const pump = toggleKey('Stop the pump', 'Start the pump', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); const t = heldWaitText(L.engine()); if (t) shell.needTime(t); refresh(); });
+  const pump = toggleKey('Stop the pump', 'Start the pump', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); const t = heldWaitText(L.engine()); if (t) shell.needTime(t); refresh(); }, 'Pump · running');
   const pumpRow = machineRow('Pad pump', 'water over the pad while the tunnel fans run', pump.el);
   pumpRow.led.classList.add('led--pad');
   const pic = h('div', { class: 'cyc-pad' });

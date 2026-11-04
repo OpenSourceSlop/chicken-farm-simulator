@@ -26,7 +26,8 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
   marks.name = 'dead-marks';
   marks.count = 0; marks.frustumCulled = false; marks.renderOrder = 18;
   scene.add(marks);
-  const bucketMark = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: BUCKET_COLOR, transparent: true, opacity: 0.95, depthWrite: false }));
+  // (no depth test: the bucket's marker shows over a wall or a pen rail between it and the camera)
+  const bucketMark = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: BUCKET_COLOR, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false }));
   bucketMark.name = 'bucket-mark'; bucketMark.visible = false; bucketMark.renderOrder = 18; bucketMark.scale.setScalar(1.25);
   scene.add(bucketMark);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), pos = new THREE.Vector3();
@@ -44,6 +45,9 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
   let t = 0, acc = 0, near = [], rects = [], rectAge = 0;
   const shown = { dead: null, bucket: null, marks: 0 };
 
+  // review round: the tag sits over the bird's marker (not on it), keeps off the farmer's own figure and moves one way
+  // past the HUD cards; once moved its arrow turns toward the bird
+  const top = new THREE.Vector3();
   function placeChip(c, x, y, z, text, extraAvoid = []) {
     camera.updateMatrixWorld();
     ndc.set(x, y, z).project(camera);
@@ -52,9 +56,12 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
     if (behind) { nx = -nx; ny = -ny; }
     const W = root.clientWidth, H = root.clientHeight;
     let px, py, onScreen = !behind && Math.abs(nx) < 0.94 && Math.abs(ny) < 0.94;
+    const bx = (nx * 0.5 + 0.5) * W, by = (-ny * 0.5 + 0.5) * H;
+    if (text !== c.last || !c.w) { c.last = text; setText(c.text, text); c.el.hidden = false; c.w = c.el.offsetWidth || 120; c.h = c.el.offsetHeight || 28; }
     if (onScreen) {
-      // a tag over the bird: the chip sits 30 px above it, its arrow pointing down
-      px = (nx * 0.5 + 0.5) * W; py = (-ny * 0.5 + 0.5) * H - 30;
+      // a tag over the bird: the chip's bottom just over the marker (1.15 m), its arrow pointing down at the bird
+      top.set(x, 1.15, z).project(camera);
+      px = bx; py = (-top.y * 0.5 + 0.5) * H - c.h / 2 - 2;
       c.icon.style.transform = 'rotate(1.5708rad)';
     } else {
       const k = Math.max(Math.abs(nx) / 0.86, Math.abs(ny) / (ny > 0 ? 0.66 : 0.7), 1e-6);
@@ -63,8 +70,7 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
     }
     if ((rectAge -= 1) <= 0) { rectAge = 20; rects = avoid ? avoid().map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0) : []; }
     const all = [...rects, ...extraAvoid];
-    // the chip's size is measured when its text changes (no layout read every frame)
-    if (text !== c.last || !c.w) { c.last = text; setText(c.text, text); c.el.hidden = false; c.w = c.el.offsetWidth || 120; c.h = c.el.offsetHeight || 28; }
+    // (the chip's size is measured when its text changes, above: no layout read every frame)
     const hw = c.w / 2 + 4, hh = c.h / 2 + 4;
     // a tag over the bird moves sideways off a HUD card (it stays by its bird); an edge chip moves along the edge, always
     // the same way once it has moved (down past a card in the top half, up past one in the bottom half), so two cards
@@ -75,18 +81,28 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
       for (const r of all) {
         if (!(px + hw > r.left && px - hw < r.right && py + hh > r.top && py - hh < r.bottom)) continue;
         moved = true;
-        if (onScreen) { px = (r.left + r.right) / 2 > W / 2 ? r.left - hw : r.right + hw; continue; }
+        if (onScreen) { if (!dir) dir = px < (r.left + r.right) / 2 ? -1 : 1; px = dir < 0 ? r.left - hw : r.right + hw; continue; }
         if (!dir) dir = (r.top + r.bottom) / 2 < H / 2 ? 1 : -1;
         py = dir > 0 ? r.bottom + hh : r.top - hh;
       }
       if (!moved) break;
     }
     px = Math.max(hw, Math.min(W - hw, px)); py = Math.max(hh, Math.min(H - hh, py));
+    // a tag moved off its bird: the arrow turns toward the bird's own point on the screen
+    if (onScreen && Math.abs(px - bx) > 8) c.icon.style.transform = `rotate(${Math.atan2(by - py, bx - px).toFixed(3)}rad)`;
     c.el.hidden = false;
     c.el.style.transform = `translate(${px.toFixed(0)}px, ${py.toFixed(0)}px) translate(-50%, -50%)`;
     return { px, py, onScreen };
   }
   const rectOf = (el) => (el && !el.hidden ? [el.getBoundingClientRect()] : []);
+  /** The farmer's own figure on the screen (his feet to his head, about ±40 px): no tag sits on him. */
+  const fp = new THREE.Vector3();
+  function farmerRect(p) {
+    const W = root.clientWidth, H = root.clientHeight;
+    fp.set(p.x, 0, p.z).project(camera); const fx = (fp.x * 0.5 + 0.5) * W, fy = (-fp.y * 0.5 + 0.5) * H;
+    fp.set(p.x, 1.8, p.z).project(camera); const hy = (-fp.y * 0.5 + 0.5) * H;
+    return fp.z > 1 ? [] : [{ left: fx - 40, right: fx + 40, top: Math.min(hy, fy) - 6, bottom: Math.max(hy, fy) + 4, width: 80 }];
+  }
 
   return {
     deadChip: deadChip.el, bucketChip: bucketChip.el,
@@ -122,14 +138,14 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
       if (count > 0 && first) {
         const m = Math.round(Math.hypot(first.x - p.x, first.z - p.z));
         const text = `${count} dead bird${count === 1 ? '' : 's'} · ${m < 1 ? 'at your feet' : `${m} m`}`;
-        const at = placeChip(deadChip, first.x, 0.6, first.z, text, rectOf(jobPointer?.()));
+        const at = placeChip(deadChip, first.x, 0.6, first.z, text, [...rectOf(jobPointer?.()), ...farmerRect(p)]);
         shown.dead = { text, metres: m, count, x: first.x, z: first.z, onScreen: at.onScreen };
       } else { deadChip.el.hidden = true; shown.dead = null; }
       // the bucket's chip while he is more than 3 m from it
       const bm = b ? Math.hypot(b.x - p.x, b.z - p.z) : 0;
       if (b && bm > 3) {
         const text = `Bucket · ${b.n} bird${b.n === 1 ? '' : 's'} · ${Math.round(bm)} m`;
-        placeChip(bucketChip, b.x, 0.6, b.z, text, [...rectOf(jobPointer?.()), ...rectOf(deadChip.el)]);
+        placeChip(bucketChip, b.x, 0.6, b.z, text, [...rectOf(jobPointer?.()), ...rectOf(deadChip.el), ...farmerRect(p)]);
         shown.bucket = { text, metres: Math.round(bm) };
       } else { bucketChip.el.hidden = true; shown.bucket = null; }
     },

@@ -15,7 +15,7 @@ import { hhmm, int } from './ui-format.js';
 import { cycleControllerParts } from './ui-cycle-controller.js';
 // the clarity round: the open job done here, its steps, the sign's target beside the live value
 import { createJobStrip } from './ui-jobstrip.js';
-import { timerAirM3h, luxOfDimmer, ventNeed } from './job-figures.js';
+import { timerAirM3h, luxOfDimmer, ventNeed, inletAirM3h, flapsWords } from './job-figures.js';
 // the steps hotfix: a setting a held job waits on runs a paused clock again, with a note under the display
 import { farmTimeNote, heldWaitText } from './ui-farmtime.js';
 
@@ -25,11 +25,11 @@ const READ_AFTER = 2; // real seconds open before the controller counts as read
  *  timer setting on the keys (not sent yet or sent) beside the need of the flock the farmer knows (job-figures ventNeed:
  *  the vent sign's table; on the prep day the sign's own example of 6,000 chicks of 42 g). */
 export function ventLine(env, farm, draft) {
-  const v = ventNeed(env, farm, draft), air = Math.round(timerAirM3h(draft));
-  if (!(v.need > 0)) return `This setting ≈ ${int(air)} m³/h`;
+  const v = ventNeed(env, farm, draft), air = Math.round(inletAirM3h(env, draft)), fl = flapsWords(env);
+  if (!(v.need > 0)) return `This setting ≈ ${int(air)} m³/h${fl ? ` (${fl})` : ''}`;
   const share = Math.round((air / v.need) * 100);
   const need = Math.round(v.need);
-  return `This setting ≈ ${int(air)} m³/h = ${share} % of the need (${v.prep ? `vent sign: about 900; ${int(need)} worked out for tomorrow’s chicks` : `${int(need)} m³/h worked out for today’s flock from the vent sign’s table`})`;
+  return `This setting ≈ ${int(air)} m³/h = ${share} % of the need (${v.prep ? `vent sign: about 900; ${int(need)} worked out for tomorrow’s chicks` : `${int(need)} m³/h worked out for today’s flock from the vent sign’s table`}${fl ? `; ${fl}` : ''})`;
 }
 
 /** Scroll the panel (not the page) so `el` is inside its visible part, the least distance (block: nearest). */

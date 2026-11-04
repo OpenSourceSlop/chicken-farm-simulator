@@ -26,7 +26,7 @@ function bandSvg(ratio) {
 
 /** "Your week" of the brooding week: per day what was set and read, beside the sign value. Plain numbers. */
 function yourWeek(L, res) {
-  const tl = L.records.timeline?.() || [];
+  const tl = L.records.timeline?.() || [], hot = L.farm?.condition === 'hot';
   const byDay = new Map(tl.map((e) => [e.day, e]));
   const notes = (d, kinds) => (L.records.notesOf?.(d) || []).filter((n) => kinds.includes(n.kind));
   const rows = [];
@@ -42,16 +42,19 @@ function yourWeek(L, res) {
     const need = e.ventSignM3h ?? Math.round((minVentM3hPer1000(weightAt(d)) * LEVEL1.chicksPlaced) / 1000);
     const floor = e.floorAtArrivalC ?? res.floorAtArrival;
     const crops = e.cropTally && typeof e.cropTally === 'object' ? `${e.cropTally.full} of ${e.cropTally.of} crops full and soft` : e.cropTally;
+    // review round: the hot season's decisive column: the house at 15:00 beside the row, the pad and the tunnel fans
+    const pm = hot ? L.farm?.condX?.st?.pm15?.[d] : null;
     rows.push(h('tr', null, h('th', { scope: 'row' }, String(d)),
       h('td', null, sp != null ? `${one(sp)}` : '—', h('small', null, ` sign ${one(Math.round(targetTempAt(d) * 2) / 2)}`)),
       h('td', null, flows.length ? flows.map((f) => fmt0(f)).join(' / ') : '—', h('small', null, ` sign ${flowTargetAt(d)}`)),
       h('td', null, heights.length ? heights.map((x) => fmt0(x)).join(' / ') : '—', h('small', null, ` about ${fmt0(nippleHeightCmAt(d))}`)),
       h('td', null, air != null ? int(air) : '—', h('small', null, ` sign ≈ ${int(need)}`)),
       h('td', null, e.lightHours != null ? one(e.lightHours) : '—'),
-      h('td', null, d === 0 ? (floor != null ? `${one(floor)} °C` : '—') : d === 1 ? (crops || '—') : '')));
+      h('td', null, d === 0 ? (floor != null ? `${one(floor)} °C` : '—') : d === 1 ? (crops || '—') : ''),
+      hot ? h('td', null, pm ? `${one(pm[0])}` : '—', h('small', null, pm ? ` row ${one(pm[1])} · pad ${pm[2] ? 'on' : 'off'} · ${pm[3]} fan${pm[3] === 1 ? '' : 's'}` : '')) : null));
   }
   return h('div', { class: 'ledger-scroll', tabindex: '0', role: 'region', 'aria-label': 'Your week' },
-    h('table', { class: 'ledger ledger--dark' }, h('thead', null, h('tr', null, ['Day', 'Thermostat °C', 'Flow ml/min (lines)', 'Nipples cm', 'Timer air m³/h', 'Light h', 'Floor at arrival · crops'].map((t) => h('th', { scope: 'col' }, t)))),
+    h('table', { class: 'ledger ledger--dark' }, h('thead', null, h('tr', null, ['Day', 'Thermostat °C', 'Flow ml/min (lines)', 'Nipples cm', 'Timer air m³/h', 'Light h', 'Floor at arrival · crops', ...(hot ? ['House at 15:00 °C'] : [])].map((t) => h('th', { scope: 'col' }, t)))),
       h('tbody', null, rows)));
 }
 
@@ -73,7 +76,13 @@ function yourDays(L, def) {
 }
 
 const branchName = (id) => SKILL_BRANCHES.find((b) => b.id === id)?.name || id;
-const big = (k, v, sub, extra) => h('div', { class: 'big' }, h('p', { class: 'big-k' }, k), h('p', { class: 'big-v' }, v), sub ? h('p', { class: 'big-sub' }, sub) : null, extra || null);
+const big = (k, v, sub, extra, extra2) => h('div', { class: 'big' }, h('p', { class: 'big-k' }, k), h('p', { class: 'big-v' }, v), sub ? h('p', { class: 'big-sub' }, sub) : null, extra || null, extra2 || null);
+// review round: the brooding week's deaths by cause on the deaths card (the model's causes in the farmer's words)
+const CAUSE_WORDS = { heat: 'heat', cold: 'cold', dehydration: 'thirst', weak: 'weak chicks', starveout: 'never found feed', box: 'in the boxes', sds: 'sudden death', legs: 'legs', disease: 'disease', respiratory: 'breathing' };
+export function byCauseText(by) {
+  const parts = Object.entries(by || {}).filter(([, n]) => n >= 1).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${CAUSE_WORDS[k] || k} ${int(n)}`);
+  return parts.length ? parts.join(', ') : null;
+}
 // the grid follows the number of cards shown (an early end shows two or three)
 const bigs = (...cards) => { const c = cards.filter(Boolean); return h('div', { class: `bigs bigs--${c.length}` }, c); };
 const deathsCard = (res, def) => big(def.fail?.withDoa ? 'Deaths, culls, dead on arrival' : 'Deaths and culls', `${two(res.deathsPct)} %`,
@@ -92,7 +101,8 @@ function cardsOf(res, def) {
           res.deadInBoxes ? `${int(res.deadInBoxes)} dead in the boxes` : null, res.culls ? `${int(res.culls)} culled` : null,
           // a bad batch (PHASE4.md §3.4): the chicks graded out on day 0 and claimed from the hatchery are counted apart
           res.claimedApart && res.claimed ? `${int(res.claimed)} graded out on day 0, claimed from the hatchery (not counted here)` : null,
-          res.claimedApart && !res.claimed && res.gradedOut ? `${int(res.gradedOut)} graded out on day 0 counted as culls: the hatchery was not told that day` : null].filter(Boolean).join(' · ')) : null),
+          res.claimedApart && !res.claimed && res.gradedOut ? `${int(res.gradedOut)} graded out on day 0 counted as culls: the hatchery was not told that day` : null].filter(Boolean).join(' · ')) : null,
+        res.byCause ? h('p', { class: 'big-sub' }, `By cause: ${res.byCause}`) : null),
       res.uniformityPct != null ? big('Uniformity', `${fmt0(res.uniformityPct)} %`, 'birds within ±10 % of the mean, hand weighing') : null,
       res.fcr != null ? big('FCR', two(res.fcr), 'feed ÷ live weight so far') : null);
   }
@@ -174,7 +184,8 @@ export function buildResultPanel(L) {
     const paper = (nodes) => h('div', { class: 'book-paper result-paper' }, nodes);
     body.replaceChildren(...nodes(
       h('header', { class: 'result-head' }, h('p', { class: 'sign-kicker' }, kicker), h('h2', { id: titleId }, title)),
-      cardsOf(res, def),
+      // (review round: the brooding week's deaths by cause, from the flock's own count: the level is the flock so far)
+      cardsOf(isL1 && !res.byCause ? { ...res, byCause: byCauseText(L.farm?.flock?.deadByCause) } : res, def),
       outcome, btns, carried,
       res.levelId === 'plan' && res.plan?.outcome ? [h('h3', { class: 'result-h' }, 'The company’s reply'), h('ul', { class: 'result-points' }, replyLines(res.plan).map((l) => h('li', null, l)))] : null,
       res.levelId === 'finish' ? [h('h3', { class: 'result-h' }, 'The harvest record'), paper(harvestPage(L))] : null,

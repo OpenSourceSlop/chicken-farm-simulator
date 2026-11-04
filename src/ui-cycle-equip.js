@@ -31,6 +31,7 @@ export function cycleFeederParts(L, { foldPlates, needTime = null, timeNote = nu
     memo.withdrawn = on; memo.at = env.day;
     sync();
   });
+  wd.stateText('Feed · taken away');
   const wdRow = machineRow('Feed withdrawal', '', wd.el);
   wdRow.led.classList.add('led--run');
   wdRow.el.hidden = true;

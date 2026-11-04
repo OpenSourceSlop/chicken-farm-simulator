@@ -75,6 +75,18 @@ function drawLcd(lcd, env, dark = false) {
   lcd.t.needsUpdate = true;
 }
 
+
+/** A soft round glow (white at the centre, clear at the rim): the alarm lamp's light on the cabinet face. */
+function glowTexture() {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), r = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.35, 'rgba(255,255,255,0.55)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export function buildFittings(kit) {
   const { stat, group, mats } = kit;
   const back = IN > 0 ? 0 : Math.PI;                // planes face into the house
@@ -103,8 +115,9 @@ export function buildFittings(kit) {
   const alarm = new THREE.Group();
   const alarmLamp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff2a1a, toneMapped: false }));
   alarmLamp.position.set(cx - L * 0.16, cy + 0.36, cz + IN * 0.01);
-  const alarmGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.5), new THREE.MeshBasicMaterial({ color: 0xff3020, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending }));
-  alarmGlow.position.set(cx - L * 0.12, cy + 0.3, cz + IN * 0.1);
+  // review round: a soft round glow centred on the lamp (a radial gradient drawn in code), not a hard-edged red box
+  const alarmGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.28), new THREE.MeshBasicMaterial({ map: glowTexture(), color: 0xff3020, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+  alarmGlow.position.set(cx - L * 0.16, cy + 0.36, cz + IN * 0.06);
   alarmGlow.rotation.y = back;
   alarm.add(alarmLamp, alarmGlow);
   alarm.visible = false;

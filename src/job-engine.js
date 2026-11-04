@@ -39,7 +39,7 @@ import { BROOD_BOUNDS, CLEANOUT, CYCLE, DRINKER_LINES_Z, EQUIP, FAN_COUNT, FLOOR
 import { EV, matchPayload } from './events.js';
 import { ALL_JOBS } from './content-jobs.js';
 import { feltNearTarget } from './farm-problems.js';
-import { heatHandled } from './farm-cycle-problems.js';
+import { heatHandled, YOUNG_PAD_MAX_FANS } from './farm-cycle-problems.js';
 import { FEED } from './farm-feed.js';
 import { knownAliveOf, ventNeed, ventInBand, VENT_BAND, nippleInBand, rimInBand, flowToday, brooderRowC, luxOfDimmer, fansWorking, NIPPLE_DAY0_CM, FLOW_BAND, CHICK_LUX, DARK_H,
   CATCH_DIMMER_MAX, CATCH_FANS_MIN, LINES_UP_CM, PANS_UP_CM, PANS_ON_LITTER_CM } from './job-figures.js';
@@ -332,6 +332,7 @@ function stateTest(test, st, { env, farm, props }, inst, rule = {}) {
     case 'feed-withdrawn': return !!farm.feed?.withdrawn;
     case 'pump-ok': { const T = farm.waterTank; return !!T && !T.fixing && (T.pumpShare ?? 1) >= 0.99; }
     case 'lines-cool': { const t = farm.water?.lineTempC; return Array.isArray(t) && t.length ? t.every((v) => !(v > 30 + EPS)) : true; }
+    case 'pad-few-fans': { const n = env.fansEffective ?? 0; return !!env.padOn && n >= 1 && n <= YOUNG_PAD_MAX_FANS; }
     // the brooder sign's day 0 row (34 °C) within 1 °C, and the brooders burning
     case 'preheat-on': return Math.abs(env.heaterSetpoint - brooderRowC(0)) <= 1 + EPS && !!env.heatersOn;
     // the brooding floor covered, at least the litter sign's 5 cm deep

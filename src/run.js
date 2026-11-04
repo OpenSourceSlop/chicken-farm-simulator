@@ -264,6 +264,8 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     startedAt = id; standard = true;   // the levels before it are the ideal farmer's (saved with every start of the trace)
     // the player's own entries of the levels before (attempts, keys): the ideal farmer's play does not replace them
     const before = Object.fromEntries(RUN_ORDER.slice(0, Math.max(0, RUN_ORDER.indexOf(id))).filter((k) => levels[k]).map((k) => [k, clone(levels[k])]));
+    // the ideal farmer's auto play raises no flock watch notice (review round: they went into the farmer's notebook)
+    level.watch?.quiet?.(true);
     try {
       level.start({ seed: s, run: true, condition: runCond });
       started(LEVEL1);
@@ -280,7 +282,7 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       for (const [k, v] of Object.entries(before)) levels[k] = { ...v, starts: [...new Set([...(v.starts || []), ...(levels[k]?.starts || [])])].sort((a, b) => a - b) };
       saveRun();
       return true;
-    } finally { if (snap) level.profile.restore(snap); }
+    } finally { level.watch?.quiet?.(false); if (snap) level.profile.restore(snap); }
   }
 
   /** A new run (Start a new flock, or a level row's condition other than the run's): the old run and its starts go;

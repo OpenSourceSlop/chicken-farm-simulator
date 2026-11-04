@@ -89,7 +89,9 @@ export function broodStopsCond(condition, delivery = null) {
   if (condition === 'hot') for (let d = 1; d <= 7; d++) { add(d, 11, 'hotBrood'); add(d, 18, 'hotBroodOff'); }
   for (const s of storms(condition)) if (s.day <= 7) { add(s.day, s.hour, 'stormStart'); add(s.until.day, s.until.hour, 'stormEnd'); }
   if (condition === 'water') add(1, 9, 'wTest');
-  if (condition === 'badChicks') { add(-1, 7.4, 'trays'); add(2, 9, 'crop48'); for (const d of [0, 1, 2, 3]) add(d, 13, 'warmer'); }
+  // (review round: the warmer brooding ends with day 3's evening: at 22:00 the thermostat goes to day 4's plain row, so the
+  // chicks do not spend the night 2 °C over their target once it drops at midnight)
+  if (condition === 'badChicks') { add(-1, 7.4, 'trays'); add(2, 9, 'crop48'); for (const d of [0, 1, 2, 3]) add(d, 13, 'warmer'); add(3, 22, 'warmerEnd'); }
   return { stops: out, truckHour: delivery && Number.isFinite(delivery.arrivalHour) ? delivery.arrivalHour : 8 };
 }
 
@@ -112,6 +114,7 @@ export function applyCondRound(farm, env, day, round, P, act) {
     case 'trays': if (P.trays) act('brood.trays', { on: true }); return;
     case 'crop48': if (P.crop48) for (let i = 0; i < 10; i++) { const [x, z] = [[-19, -2.6], [-11, 2.6], [-3, -2.6]][i % 3]; act('sample.crop', { x, z, index: i }); } return;
     case 'warmer': if (P.warmer && !farm.house.broodersUp) env.setHeaterSetpoint(Math.round(targetTempAt(day) * 2) / 2 + 1); return;
+    case 'warmerEnd': if (P.warmer && !farm.house.broodersUp) env.setHeaterSetpoint(Math.round(targetTempAt(day + 1) * 2) / 2); return;
     case 'cut': return;
     case 'cutGen': {
       const m = Math.round((env.day - at(CUT.day, CUT.hour)) * 1440);
@@ -203,6 +206,17 @@ export function condFanPlan(farm, env, P, day, age, n, pad) {
     if (P.padsAllNight && age >= 20.7 && n >= 6 && env.outsideTemp >= HEAT_P4.padEveningAboveC && env.houseRH <= 90) pad = true;
     // the pad with as many fans as the birds' feel needs (the dry spell's air cools far more through the pad)
     if (pad && age >= 20.7 && P.feelFans !== false) { const k = padFansForFeel(env, age); return k == null ? { n: fansForFeel(env, age, 1), pad: false } : { n: Math.min(n, k), pad: true }; }
+  }
+  if (P.condition === 'rainy') {
+    // damp air (review round): birds in air this wet keep their heat; tunnel fans by what they feel (the fan panel's Birds
+    // feel), young birds by day (at most two in week 2, four in week 3), big birds at any hour up to every fan; the pad
+    // stays off over the pad plate's humidity
+    const young = age < 20.7, day_ = env.hour >= 9 && env.hour < 20;
+    if (env.houseRH > 85 && age >= 7.7 && (!young || day_)) {
+      const k = fansForFeel(env, age, 1, age < 13.7 ? 2 : young ? 4 : 6);
+      if (k > n) n = k;
+      if (pad && env.houseRH > HEAT.padOffAboveRH) pad = false;
+    }
   }
   return { n, pad };
 }

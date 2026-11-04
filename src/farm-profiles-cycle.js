@@ -16,7 +16,7 @@
 // browser cannot import a script) at its stops, base controls only (no vent.stages).
 import { EQUIP, LIGHT_PRESETS, HARVEST, CLEAN, WEATHER, LEVEL1, PLAN_LEVEL, levelOfDay, feedStdGAt, flowTargetAt, nippleHeightCmAt, feederRimCmAt, targetTempAt, PLACEMENT_DAY, feedTypeForDay, HEAT, HEAT_P4 } from './config.js';
 import { signTimer } from './farm-profiles.js';
-import { condProfile, condStops, applyCondRound, condAm, condAnswer, condFanPlan } from './farm-profiles-cond.js';
+import { condProfile, condStops, applyCondRound, condAm, condAnswer, condFanPlan, fansForFeel } from './farm-profiles-cond.js';
 import { feedLeftKg } from './farm-silos.js';
 
 /** Profile names (keys of CYCLE_TARGETS in scripts/test-cycle.mjs). */
@@ -101,6 +101,7 @@ export function cycleStops(fromDay, toDay, condition = null) {
       add(d, 13.25, 'pm');
       add(d, 18.5, 'night');
       if (d === 10) add(d, 8, 'curtain');
+      if (d === 16) add(d, 17, 'fans');   // the warm afternoon of week 3: the fans stepped down by what the birds feel
       if (d === 12) { add(d, 8.5, 'vaccine'); add(d, 10, 'vaccine2'); }
       if (d === 14) add(d, 15, 'change');
       if (d === 15) { add(d, 6.1, 'change0'); add(d, 15, 'change2'); }
@@ -161,7 +162,10 @@ function fanPlan(farm, env, act, P, day) {
   // the last stop of the evening (sign-heat): young birds want the tunnel fans off at night, so under four weeks
   // the fans go by the night's low
   if (env.hour >= 20.5 && age < 28) n = Math.min(n, Math.max(1, idealFans({ outsideTemp: nightLow(env), targetTemp: env.targetTemp }, age)));
-  if (P.fixes && heatFound(farm, env)) n = P.padYoung1 && day === 16 ? 1 : 6;
+  // a found heat problem: every fan for big birds; young birds (under 21 days) the fewest tunnel fans that bring what they
+  // feel to the target + 1 °C, read again at each stop as the afternoon cools (review round: six fans on 16-day-olds
+  // chilled them 3-5.6 °C under their target for about five hours); padWeek3 is the mistake of six fans and the pad
+  if (P.fixes && heatFound(farm, env)) n = P.padYoung1 && day === 16 ? 1 : age < 21 && !P.padWeek3 ? fansForFeel(env, age, 1) : 6;
   if (P.fixes && isState(farm, 'dusty-air', 'found') && P.dustAnswer) n = Math.max(n, 2);
   if (P.fixes && isState(farm, 'heat-wave', 'found', 'fixed') && day >= 30 && day <= 32) n = Math.max(n, idealFans(env, age));
   const atCatch = farm.harvest.started || (farm.harvest.catchAt != null && env.day >= farm.harvest.catchAt - 1 / 24);
@@ -383,6 +387,15 @@ function answerProblems(farm, env, act, P, day) {
   // a heat problem found: every fan on, the pad by its plate (the switches pressed even when they were on)
   for (const id of ['warm-afternoon3', 'hot-afternoon', 'hot-finish']) if (found(id) && !noTunnelOn(P, day)) {
     if (P.padYoung1 && id === 'warm-afternoon3') { env.setFans(1); act('vent.fans', { n: 1 }); env.setPad(true); act('vent.pad', { on: true }); continue; }
+    // young birds: tunnel fans by what they feel, no pad (the fan plan steps them down at the next stops)
+    // (a condition's plan on top: the hot season's pad with few fans, the rainy season's damp air)
+    if (farm.age < 21 && !P.padWeek3) {
+      let k = fansForFeel(env, farm.age, 1), pad = false;
+      if (P.condition) ({ n: k, pad } = condFanPlan(farm, env, P, day, farm.age, k, false));
+      env.setFans(k); act('vent.fans', { n: k });
+      if (pad !== env.padOn || pad) { env.setPad(pad); act('vent.pad', { on: pad }); }
+      continue;
+    }
     env.setFans(6); act('vent.fans', { n: 6 });
     const pad = (P.padWeek3 && id === 'warm-afternoon3') || (P.pads !== 'never' && idealPad(envView(env), 6));
     if (pad !== env.padOn || pad) { env.setPad(pad); act('vent.pad', { on: pad }); }

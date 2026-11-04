@@ -10,7 +10,9 @@ import { createRun } from '../src/run.js';
 import { profileOf } from '../src/farm-profiles.js';
 import { EV } from '../src/events.js';
 import { LEVEL1 } from '../src/config.js';
-import { WATCH, refShare } from '../src/flock-watch.js';
+import { WATCH, refShare, causeOf } from '../src/flock-watch.js';
+import { cycleProfileOf } from '../src/farm-profiles-cycle.js';
+import { p2ProfileFor } from '../src/farm-profiles-cond.js';
 
 let failed = 0;
 function test(name, fn) {
@@ -104,6 +106,8 @@ test('week 2 neglected (noCare) and week 3 with the coccidiosis left (cocciUntre
     const L = makeLevel();
     L.run.startRun({ seed: 1 });
     L.run.startLevel(lv, { from: 'standard' });
+    // review round: the ideal farmer's auto play of a standard start raises no notice and writes no notebook line
+    assert(!L.warns.length && !L.records.notebook.some((n) => n.kind === 'watch'), `${lv}: the standard start is quiet: ${show(L.warns)}`);
     L.warns.length = 0;
     const def = L.level.def;
     L.level.debug.goto(def.endDay, 21, { auto: true, profile: prof });
@@ -140,6 +144,8 @@ test('save -> resume keeps the watch: samples, the warning memory and the rows',
   const before = L.level.watch.status(), n0 = L.level.watch.samples.length, w0 = L.level.watch.warnings.length;
   const M = makeLevel();
   M.level.resume(blob);
+  // review round: the card's rows are there at once after Continue (the watch restored once the level runs)
+  assert(M.level.watch.status().on && M.level.watch.status().rows.comfort, 'the watch reads at once after the resume');
   M.level.update(0.1);
   M.level.debug.goto(1, 15.02);
   const after = M.level.watch.status();
@@ -148,6 +154,74 @@ test('save -> resume keeps the watch: samples, the warning memory and the rows',
   assert(M.level.watch.samples.length >= Math.min(n0 + 1, WATCH.keepH) && M.level.watch.warnings.length === w0, `samples ${M.level.watch.samples.length}, warnings ${M.level.watch.warnings.length}`);
   assert(after.on && after.rows.comfort.state === before.rows.comfort.state && after.rows.weight.state === before.rows.weight.state, `rows after resume: ${JSON.stringify(after.rows.comfort)} / ${JSON.stringify(before.rows.comfort)}`);
   assert(!M.warns.some((w) => w.kind === 'cold'), 'no second cold warning after the resume (the memory came along)');
+  const hrs = M.level.watch.samples.map((x) => Math.floor(x.t * 24 + 0.01));   // (t is saved to 1e-5 day)
+  assert(new Set(hrs).size === hrs.length, `no farm hour sampled twice after the resume: ${hrs.slice(-4).join(' ')}`);
+});
+
+// ---------------- review round ----------------
+const playLevel = (L, profile = 'ideal') => {
+  const def = L.level.def;
+  L.level.debug.goto(def.endDay, 21, { auto: true, profile });
+  if (!L.level.result) L.level.debug.goto(def.endDay + 1, 6.05);
+  return L.level.result;
+};
+test('the comfort row reads the birds now: two fans and no pad at 36 °C on day 30 of the hot season read "hot now" within 10 farm minutes', () => {
+  const L = makeLevel();
+  L.run.startRun({ seed: 1, at: 'level1', condition: 'hot' });
+  L.run.startLevel('weeks45', { from: 'standard', condition: 'hot' });
+  L.level.debug.goto(30, 14.5, { auto: true });
+  const before = L.level.watch.status().rows.comfort;
+  L.env.setFans(2); L.env.setPad(false);
+  L.level.debug.goto(30, 14.5 + 10 / 60);
+  const c = L.level.watch.status().rows.comfort, felt = L.farm.comfort.feltMean;
+  console.log(`     before "${before.value} · ${before.detail}"; 10 farm minutes after: "${c.value} · ${c.detail}" (${c.state}); the model: felt ${felt.toFixed(1)} °C, ${Math.round(L.farm.comfort.pantShare * 100)} % panting, house ${L.env.houseTemp.toFixed(1)} °C`);
+  assert(c.now === 'hot' && /hot now/.test(c.value) && c.state !== 'green', `the row says hot now: ${c.value} (${c.state})`);
+  assert(c.detail.includes(`felt ${(Math.round(felt * 10) / 10).toFixed(1)} °C`), `the live felt figure: ${c.detail} / ${felt}`);
+});
+test('where to look follows the condition: the hot season\'s brooding sun (the pad pump), the water problem\'s tank, the power cut\'s generator; cold from the fans at the fan panel', () => {
+  const H = makeLevel();
+  H.run.startRun({ seed: 1, at: 'level1', condition: 'hot' });
+  const P = { ...profileOf('ideal'), ...p2ProfileFor(cycleProfileOf('hotNoBroodAir', { condition: 'hot' })) };
+  playLevel(H, P);
+  const hw = H.warns.filter((w) => w.kind === 'hot');
+  assert(hw.length && hw.every((w) => /pad pump/.test(w.text) && !/thermostat/.test(w.text)), `hot brooding without the pad: the pad pump, not the thermostat: ${hw[0]?.text}`);
+  const W = makeLevel();
+  W.run.startRun({ seed: 1, at: 'level1', condition: 'water' });
+  W.run.startLevel('weeks45', { from: 'standard', condition: 'water' }); W.warns.length = 0;
+  playLevel(W, 'waterPumpUnfixed');
+  assert(W.warns.length && W.warns.every((w) => w.sign === 'water-tank' && /well pump/.test(w.text)), `the pump left worn: the tank and the well pump: ${show(W.warns)} ${W.warns[0]?.text}`);
+  const R = makeLevel();
+  R.run.startRun({ seed: 1, at: 'level1', condition: 'rainy' });
+  R.run.startLevel('weeks45', { from: 'standard', condition: 'rainy' }); R.warns.length = 0;
+  let cutWarn = null;
+  R.events.on(EV.WATCH, (p) => { if (R.farm.power?.on === false && !cutWarn) cutWarn = p; });
+  playLevel(R, 'rainyNoGenerator');
+  assert(cutWarn && cutWarn.sign === 'sign-power' && /generator/.test(cutWarn.text), `a warning in the cut names the generator: ${cutWarn?.text}`);
+  console.log(`     hot brooding: "${hw[0].text}"\n     water: "${W.warns[0].text}"\n     the cut: "${cutWarn.text}"`);
+  const fan = causeOf('cold', 16, { windChill: 6.8, airSpeed: 2.5, fans: 6 });
+  assert(fan.sign === 'sign-heat' && fan.place === 'fan-panel' && /moving air/.test(fan.why), `cold from the fans at day 16: ${JSON.stringify(fan)}`);
+  assert(causeOf('cold', 16, {}).check.includes('thermostat'), 'cold in still air at day 16: the thermostat');
+});
+// every warning the ideal meets through the cycle under each condition is one of the documented problem events
+const ALLOWED = [
+  ['day 3 low water flow (the blocked filter)', (w) => w.kind === 'intake' && w.day === 3 && w.sign === 'sign-water'],
+  ['day 33 humid heat', (w) => w.kind === 'hot' && w.day === 33],
+  ['week 3 coccidiosis (disease deaths at the droppings sign)', (w) => w.kind === 'deaths' && w.day >= 19 && w.day <= 21 && w.sign === 'sign-droppings'],
+  ['a bad batch\'s culls before the hatchery call', (w) => w.kind === 'deaths' && w.day === 0 && w.place === 'office-desk' && /hatchery/.test(w.text)],
+];
+test('the ideal through the cycle under each condition: every warning is a documented problem event (no comfort alerts in the rainy season\'s damp spells, none for a bad batch\'s warmer nights)', () => {
+  for (const c of [null, 'hot', 'rainy', 'water', 'badChicks']) {
+    const L = makeLevel();
+    L.run.startRun({ seed: 1, at: 'level1', condition: c });
+    const got = [];
+    for (let i = 0; i < 7; i++) {
+      const r = playLevel(L);
+      assert(r && r.pass, `${c || 'normal'} ${L.level.def.id}: the ideal passes (${r?.failText})`);
+      if (L.level.def.id === 'cleanout' || !L.run.next()) break;
+    }
+    for (const w of L.warns) { const a = ALLOWED.find(([, f]) => f(w)); assert(a, `${c || 'normal'}: a warning outside the problem events: d${w.day} ${w.hour} ${w.kind}: ${w.text}`); got.push(`d${w.day} ${w.kind}`); }
+    console.log(`     ${c || 'normal'}: ${got.join(', ') || 'none'}`);
+  }
 });
 
 if (failed) { console.log(`${failed} failed`); process.exit(1); } else console.log('all passed');
