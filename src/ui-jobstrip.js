@@ -106,13 +106,16 @@ export function createJobStrip(L, panelId, { section = null, ctx = () => ({}), l
   injectStyle();
   const el = h('section', { class: 'jstrip', hidden: true, 'aria-label': 'The job done here' });
   let sticky = new Map(), last = '';
+  // the final check: a panel opened again shows the strips of the jobs open now or none, never the html of its last
+  // opening (the empty strip used to equal the reset 'last' and kept the old figures on screen)
+  const clear = () => { el.hidden = true; el.innerHTML = ''; };
   // the steps hotfix: where the farmer stands (the next place's way) and the clock's pause
   const from = () => { const p = L.player?.position; return p ? { x: p.x, z: p.z, inside: !!L.player.isInside } : null; };
   const base = () => ({ env: L.env, farm: L.farm, records: L.records, skills: L.skills, props: L.props, flock: L.flock, engine: L.engine(), minmax: L.minmax, weighings: L.weighings,
     from: from(), paused: !!L.clockPaused?.(), ...ctx() });
   function update() {
     const engine = L.engine();
-    if (!engine || L.farm?.mode !== 'level') { if (!el.hidden) { el.hidden = true; last = ''; } return; }
+    if (!engine || L.farm?.mode !== 'level') { if (!el.hidden || last) clear(); last = ''; return; }
     const list = stripsAt(engine, panelId, section, STRIPS_CYCLE);
     for (const s of list) if (s.here) sticky.set(s.inst.key, s);
     const here = [...sticky.values()].filter((s) => s.inst.status === 'open' || s.inst.status === 'done');
@@ -139,8 +142,8 @@ export function createJobStrip(L, panelId, { section = null, ctx = () => ({}), l
   return {
     el,
     update,
-    onOpen() { sticky = new Map(); last = ''; update(); },
-    onClose() { sticky = new Map(); },
+    onOpen() { sticky = new Map(); last = ''; clear(); update(); },
+    onClose() { sticky = new Map(); last = ''; clear(); },
   };
 }
 
