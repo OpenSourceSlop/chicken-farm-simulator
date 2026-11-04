@@ -266,10 +266,10 @@ function rig(o = {}) {
 }
 const voicesOf = (pool, kind, t) => pool.voices.filter((v) => v.kind === kind && v.busy > t).length;
 
-test('engine: builds once on a context, under 200 nodes', () => {
+test('engine: builds once on a context, at most 230 nodes (PHASE5.md §2.1: one shared noise source and machine bed)', () => {
   const { ac, frame } = rig();
   const n = ac.nodes;
-  assert(n > 50 && n < 200, `${n} nodes`);
+  assert(n > 50 && n <= 230, `${n} nodes`);
   for (let i = 0; i < 600; i++) frame();
   assert(ac.nodes === n, `no node made after start-up (${ac.nodes - n} more)`);
 });

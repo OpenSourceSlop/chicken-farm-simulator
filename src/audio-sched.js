@@ -19,7 +19,7 @@ const expo = (rng) => -Math.log(1 - rng() * 0.999999);
  * pools: { flock, out } voice pools; E: the engine voice (motorbike / truck); S: the engine state;
  * pan(dx, dz): stereo position of a point relative to the farmer and the camera.
  */
-export function createScheduler({ pools, E, S, rng, pan }) {
+export function createScheduler({ pools, E, S, rng, pan, note = () => {} }) {
   const u = { chirp: expo(rng), distress: expo(rng), snick: expo(rng), rattle: expo(rng), flutter: expo(rng), burst: 0,
     bird: expo(rng), moto: expo(rng), dog: expo(rng), frog: expo(rng), gecko: expo(rng) };
   const bird = { rep: 0, at: 0, kind: 0, pan: 0, last: -1 };
@@ -35,50 +35,59 @@ export function createScheduler({ pools, E, S, rng, pan }) {
     B.x = x; B.z = z;
     return d;
   }
+  const ON = { flock: true, out: true };
   function flockEvent(kind, t, M) {
     const d = source();
     if (d < 0) return;
+    let ok = false;
     const w = nearWeight(d), p = pan(B.x - S.x, B.z - S.z);
     const near = 0.3 + 0.7 * Math.sqrt(w), age = M.age, P = pools.flock;
     if (kind === 'chirp') { // contented calls: habituated (M.habit) after a minute among a calm flock
       const h = near * (M.habit ?? 1);
-      if (age > 0.55 && rng() < (age - 0.55) / 0.45) V.cluck(P, t, peak('cluck', 'flock') * h, p, range(rng, 360, 470), rng);
-      else V.chirp(P, t, peak('chirp', 'flock') * h, p, lerp(3900, 2400, Math.min(1, age / 0.55)), rng);
-    } else if (kind === 'distress') V.distressPeep(P, t, peak('distress', 'distress') * near, p, lerp(4100, 1900, age), rng);
-    else if (kind === 'snick') V.snick(P, t, peak('snick', 'snick') * near, p, rng);
-    else if (kind === 'rattle') V.rattle(P, t, peak('rattle', 'snick') * near, p, rng);
-    else if (kind === 'flutter') V.flutter(P, t, peak('flutter', 'pant') * near, p, rng);
+      if (age > 0.55 && rng() < (age - 0.55) / 0.45) ok = V.cluck(P, t, peak('cluck', 'flock') * h, p, range(rng, 360, 470), rng);
+      else ok = V.chirp(P, t, peak('chirp', 'flock') * h, p, lerp(3900, 2400, Math.min(1, age / 0.55)), rng);
+    } else if (kind === 'distress') ok = V.distressPeep(P, t, peak('distress', 'distress') * near, p, lerp(4100, 1900, age), rng);
+    else if (kind === 'snick') ok = V.snick(P, t, peak('snick', 'snick') * near, p, rng);
+    else if (kind === 'rattle') ok = V.rattle(P, t, peak('rattle', 'snick') * near, p, rng);
+    else if (kind === 'flutter') ok = V.flutter(P, t, peak('flutter', 'pant') * near, p, rng);
+    if (ok) note(kind, t);
   }
 
-  function sing(at) {
+  function sing(at, first) {
     const g = range(rng, 0.35, 1), P = pools.out;
     bird.at = bird.kind === 2 ? range(rng, 1.8, 3.2) : range(rng, 0.7, 2.2);
-    if (bird.kind === 0) V.twitter(P, at, peak('twitter', 'birds') * g, bird.pan, rng);
-    else if (bird.kind === 1) V.bulbul(P, at, peak('bulbul', 'birds') * g, bird.pan, rng);
-    else V.dove(P, at, peak('dove', 'birds') * g, bird.pan, rng);
+    let ok;
+    if (bird.kind === 0) ok = V.twitter(P, at, peak('twitter', 'birds') * g, bird.pan, rng);
+    else if (bird.kind === 1) ok = V.bulbul(P, at, peak('bulbul', 'birds') * g, bird.pan, rng);
+    else ok = V.dove(P, at, peak('dove', 'birds') * g, bird.pan, rng);
+    if (ok && first) note('bird', at, bird.kind); // a phrase's first call (its repeats from the same branch follow it)
   }
 
   return {
     /** chicks spilling out of a tipped box stack at (x, z): a quick run of peeps from there */
     burst(x, z) { burst.left = 1.6; burst.x = x; burst.z = z; },
     clear() { burst.left = 0; bird.rep = 0; },
-    /** dt real s; t = start time for anything scheduled now; M = flockMix(); A = ambientTargets() */
-    update(dt, t, M, A) {
+    /** dt real s; t = start time for anything scheduled now; M = flockMix(); A = ambientTargets(); on: { flock, out }
+     *  (a layer slider at 0 schedules no event of its layer, PHASE5.md §2.6) */
+    update(dt, t, M, A, on = ON) {
       // ---- the flock ----
-      if ((u.chirp -= M.chirp * dt) <= 0) { u.chirp = expo(rng); flockEvent('chirp', t, M); }
-      if ((u.distress -= M.distress * dt) <= 0) { u.distress = expo(rng); flockEvent('distress', t, M); }
-      if ((u.snick -= M.snick * dt) <= 0) { u.snick = expo(rng); flockEvent('snick', t, M); }
-      if ((u.rattle -= M.rattle * dt) <= 0) { u.rattle = expo(rng); flockEvent('rattle', t, M); }
-      if ((u.flutter -= M.flutter * dt) <= 0) { u.flutter = expo(rng); flockEvent('flutter', t, M); }
-      if (burst.left > 0) {
-        burst.left -= dt;
-        if ((u.burst -= 13 * dt) <= 0) {
-          u.burst = expo(rng);
-          const x = burst.x + range(rng, -1, 1), z = burst.z + range(rng, -1, 1);
-          const d = Math.hypot(x - S.x, z - S.z), g = peak('burst', 'flock') * A.flockAtten / (1 + d / 6);
-          V.chirp(pools.flock, t, g, pan(x - S.x, z - S.z), range(rng, 3600, 4300), rng);
+      if (!on.flock) { u.chirp = u.distress = u.snick = u.rattle = u.flutter = 1; burst.left = 0; } else {
+        if ((u.chirp -= M.chirp * dt) <= 0) { u.chirp = expo(rng); flockEvent('chirp', t, M); }
+        if ((u.distress -= M.distress * dt) <= 0) { u.distress = expo(rng); flockEvent('distress', t, M); }
+        if ((u.snick -= M.snick * dt) <= 0) { u.snick = expo(rng); flockEvent('snick', t, M); }
+        if ((u.rattle -= M.rattle * dt) <= 0) { u.rattle = expo(rng); flockEvent('rattle', t, M); }
+        if ((u.flutter -= M.flutter * dt) <= 0) { u.flutter = expo(rng); flockEvent('flutter', t, M); }
+        if (burst.left > 0) {
+          burst.left -= dt;
+          if ((u.burst -= 13 * dt) <= 0) {
+            u.burst = expo(rng);
+            const x = burst.x + range(rng, -1, 1), z = burst.z + range(rng, -1, 1);
+            const d = Math.hypot(x - S.x, z - S.z), g = peak('burst', 'flock') * A.flockAtten / (1 + d / 6);
+            if (V.chirp(pools.flock, t, g, pan(x - S.x, z - S.z), range(rng, 3600, 4300), rng)) note('burst', t);
+          }
         }
       }
+      if (!on.out) { bird.rep = 0; return; }
       // ---- the yard: birds by day, then a bird repeating its phrase from the same branch ----
       const P = pools.out;
       if ((u.bird -= (birdRate(S.hour, S.weather) / 60) * dt) <= 0) {
@@ -90,15 +99,15 @@ export function createScheduler({ pools, E, S, rng, pan }) {
         bird.pan = range(rng, -0.85, 0.85);
         bird.rep = Math.floor(rng() * (bird.kind === 2 ? 3 : 4));
         bird.at = 0;
-        sing(t);
-      } else if (bird.rep > 0 && (bird.at -= dt) <= 0) { bird.rep--; sing(t); }
+        sing(t, true);
+      } else if (bird.rep > 0 && (bird.at -= dt) <= 0) { bird.rep--; sing(t, false); }
       // ---- far off: a motorbike on the public road, a dog, frogs in the paddies, a gecko ----
       distantRates(S.hour, S.weather, rates);
       const m = dt / 60;
-      if ((u.moto -= rates.moto * m) <= 0) { u.moto = expo(rng); V.motorbike(E, t, peak('moto', 'distant') * range(rng, 0.6, 1), rng); }
-      if ((u.dog -= rates.dog * m) <= 0) { u.dog = expo(rng); V.dog(P, t, peak('dog', 'distant') * range(rng, 0.5, 1), range(rng, -0.9, 0.9), rng); }
-      if ((u.frog -= rates.frog * m) <= 0) { u.frog = expo(rng); V.frog(P, t, peak('frog', 'distant') * range(rng, 0.5, 1), range(rng, -0.9, 0.9), rng); }
-      if ((u.gecko -= rates.gecko * m) <= 0) { u.gecko = expo(rng); V.gecko(P, t, peak('gecko', 'distant') * range(rng, 0.5, 1), range(rng, -0.7, 0.7), rng); }
+      if ((u.moto -= rates.moto * m) <= 0) { u.moto = expo(rng); if (V.motorbike(E, t, peak('moto', 'distant') * range(rng, 0.6, 1), rng)) note('moto', t); }
+      if ((u.dog -= rates.dog * m) <= 0) { u.dog = expo(rng); if (V.dog(P, t, peak('dog', 'distant') * range(rng, 0.5, 1), range(rng, -0.9, 0.9), rng)) note('dog', t); }
+      if ((u.frog -= rates.frog * m) <= 0) { u.frog = expo(rng); if (V.frog(P, t, peak('frog', 'distant') * range(rng, 0.5, 1), range(rng, -0.9, 0.9), rng)) note('frog', t); }
+      if ((u.gecko -= rates.gecko * m) <= 0) { u.gecko = expo(rng); if (V.gecko(P, t, peak('gecko', 'distant') * range(rng, 0.5, 1), range(rng, -0.7, 0.7), rng)) note('gecko', t); }
     },
     /** a truck on the farm road (chicks, feed or the catching crew) */
     truck(t) { return V.motorbike(E, t, peak('truck', 'distant'), rng, true); },

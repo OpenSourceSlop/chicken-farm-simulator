@@ -96,6 +96,8 @@ export function buildBeds(ac, bus, src, rng) {
   const last = new Float64Array(24).fill(-1);
   let gustAt = 0;
   return {
+    /** the breeze's gust gain: the storm's own gust band (audio-machines.js) swells with it */
+    gust,
     /** A: ambientTargets(); F: flockMix(); s: the engine state (auger, augerPan, trickle, outT); solo: layer gains are set by the engine. */
     update(now, A, F, s, snap = false) {
       const k = snap ? 0.01 : 1, T = 0.35 * k; // snap: the first update sets every bed at once
@@ -118,9 +120,9 @@ export function buildBeds(ac, bus, src, rng) {
       last[14] = toward(murmur.gain, F.murmur * LVL.murmur, now, 0.8 * k, last[14]);
       last[15] = toward(pant.gain, F.pant * LVL.pant, now, 0.8 * k, last[15]);
       // the wind comes in gusts, the crickets stop and start: random targets every few seconds
-      if (now >= gustAt) {
-        gustAt = now + nextGap(rng, 4.5, 1.5, 12);
-        gust.gain.setTargetAtTime(range(rng, 0.5, 1.3), now, range(rng, 0.8, 2.5));
+      if (now >= gustAt) { // a storm's gusts come twice as often (PHASE5.md §2.1)
+        gustAt = now + nextGap(rng, A.storm ? 2.25 : 4.5, A.storm ? 0.75 : 1.5, A.storm ? 6 : 12);
+        gust.gain.setTargetAtTime(range(rng, 0.5, A.storm ? 1.5 : 1.3), now, range(rng, 0.8, 2.5));
         breezeLP.frequency.setTargetAtTime(range(rng, 350, 950), now, range(rng, 0.8, 2.5));
       }
       const warm = clamp(1 + 0.025 * ((s.outT ?? 26) - 26), 0.85, 1.15);

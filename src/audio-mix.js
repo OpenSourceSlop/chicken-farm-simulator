@@ -133,17 +133,20 @@ export function fanSpinOf(env) {
 export const padFlowOf = (env) => (env.padOn ? clamp(Number.isFinite(env.padWorking) ? env.padWorking : 1, 0, 1) : 0);
 /**
  * s: { x, z, k (indoorness), hour, weather, rain (0..1), fanSpin (0..1: fans turning / 6), heaterLevel,
- *      padOn (0..1, padFlowOf: the wet share of the pad; true = 1) }
+ *      padOn (0..1, padFlowOf: the wet share of the pad; true = 1), storm (Phase 5), cond (farm.condition) }
  * out (gains 0..1 before LEVELS): breeze, crickets, cicadas, fans, fanCut (Hz), gas, roar, pad, rain, rainCut,
  * outCut (Hz, the outdoor bed's low-pass: the walls muffle it inside), flockAtten, flockCut
  */
 export function ambientTargets(s, out = {}) {
-  const k = clamp(s.k, 0, 1), x = s.x, z = s.z;
-  const calm = night(s.hour) ? 0.7 : 1;
+  const k = clamp(s.k, 0, 1), x = s.x, z = s.z, hot = s.cond === 'hot';
+  // Phase 5: a storm's wind is 4 dB stronger (and gusts twice as often: audio-beds); the hot season's still midday air
+  // 2 dB calmer, its dusk cicadas 2 dB louder
+  const calm = (night(s.hour) ? 0.7 : 1) * (s.storm ? 1.585 : hot && s.hour > 11 && s.hour < 15 ? 0.79 : 1);
   const wall = lerp(1, 0.13, k); // outdoor sounds through the walls and the pad
   out.breeze = calm * wall;
+  out.storm = s.storm ? 1 : 0;
   out.crickets = insectLevel(s.hour) * wall;
-  out.cicadas = cicadaLevel(s.hour) * wall;
+  out.cicadas = cicadaLevel(s.hour) * wall * (hot ? 1.26 : 1);
   out.outCut = lerp(14000, 1100, k);
   // tunnel fans: inside louder toward the fan end; outside around the exhaust, fading with distance
   const fanIn = 0.36 + 0.64 * Math.exp(-(FAN_WALL - x) / 16);
