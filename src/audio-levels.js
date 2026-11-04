@@ -3,14 +3,14 @@
 // OfflineAudioContext (rounded up to the dB, reverb included), and the layer it plays on. A bed's peak is its level plus
 // BED_CREST (noise beds peak about 11 dB over their RMS). audio-hour.js sums the four layers' loudest in every second.
 export const LOUDEST = {
-  // the flock
-  chirp: -27, distress: -24, snick: -27, rattle: -31, flutter: -31, burst: -27,
-  // the yard and far off
-  bird: -28, moto: -33, dog: -32, frog: -36, gecko: -36, truck: -30, drip: -37, thunder: -20,
-  // the farmer's actions and the machines
-  door: -24, valve: -26, waterValve: -26, winch: -31, beep: -26, probe: -26, paper: -26, click: -37, tick: -25, box: -25,
-  bin: -24, squeeze: -30, alarm: -28, step: -27, crate: -27, ring: -30, dial: -33, pen: -35, scrape: -31,
-  genStart: -27, genStop: -31, clunk: -27,
+  // the flock (p5-sound.json: comfortable chicks' layer peaks -24, cold chicks' -22)
+  chirp: -24, distress: -22, snick: -24, rattle: -28, flutter: -28, burst: -25,
+  // the yard and far off (a placed sound can pan 2 dB louder into one side: included)
+  bird: -26, moto: -31, dog: -30, frog: -34, gecko: -34, truck: -28, drip: -32, thunder: -25,
+  // the farmer's actions and the machines (p5-sound.json cues alone: peaks -21..-24; p5-sound-scenes events alone)
+  door: -22, valve: -24, waterValve: -24, winch: -29, beep: -24, probe: -24, paper: -24, click: -35, tick: -23, box: -23,
+  bin: -22, squeeze: -28, alarm: -32, step: -25, crate: -20, ring: -35, dial: -37, pen: -33, scrape: -31,
+  genStart: -29, genStop: -28, clunk: -25,
 };
 export const BED_CREST = 11;
 const LAYER = {

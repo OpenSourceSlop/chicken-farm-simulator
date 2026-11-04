@@ -26,10 +26,10 @@ const CUES = {
   door: ['cue', 21, 0.8], valve: ['cue', 15, 0.6], waterValve: ['cue', 14.5, 0.6], winch: ['cue', 15.5, 0.5],
   beep: ['cue', 3, 0.25], probe: ['cue', 3.5, 0.3], paper: ['cue', 15, 0.45], click: ['click', 20, 0.05],
   tick: ['tick', 11, 2.0], box: ['cue', 20, 1.2], bin: ['cue', 24.5, 0.8], squeeze: ['cue', 14, 0.5],
-  alarm: ['cue', 3, 4], truck: ['cue', 0, 20],
+  alarm: ['cue', 0.5, 4], truck: ['cue', 0, 20],
   // Phase 5 (PHASE5.md §2.1): the office phone (two rings when a letter comes, a dial and line tone for a call), the pen on
   // the planning sheet (at most 4 a second), the transfer switch; the alarm is two-tone (audio-cues alarm2)
-  ring: ['cue', -2, 2], dial: ['cue', -6, 2], pen: ['cue', -4, 0.25], clunk: ['cue', 2, 2],
+  ring: ['cue', -2, 2], dial: ['cue', -1, 2], pen: ['cue', 3, 0.25], clunk: ['cue', 8.5, 2],
 };
 const CUE_NAMES = Object.keys(CUES);
 // footfalls: gain over LEVELS.steps; the loudest 100 ms of a walk at -42 (the foot dip) .. -47 dBFS, peaks <= -27
@@ -155,7 +155,7 @@ export function createEngine(ac, opts = {}) {
 
   /** calibration (audio-measure opts.calibrate): every bed silent but `name`, which plays at gain 1 */
   function calibrate(name) {
-    for (const k of ['breeze', 'crickets', 'cicadas', 'fans', 'gas', 'roar', 'pad', 'rain']) A[k] = k === name ? 1 : 0;
+    for (const k of ['breeze', 'crickets', 'cicadas', 'fans', 'gas', 'roar', 'pad', 'rain']) A[k] = k === name || (k === 'breeze' && name === 'stormGust') ? 1 : 0;
     for (const k of ['murmur', 'pant']) M[k] = k === name ? 1 : 0;
     A.outCut = 14000; A.flockCut = 16000; A.flockAtten = 1; A.fanCut = 820; A.rainCut = 4000;
     S.auger = name === 'auger' ? 1 : 0; S.augerPan = 0; S.trickle = name === 'trickle' ? 0.5 : -1;
@@ -164,9 +164,8 @@ export function createEngine(ac, opts = {}) {
   function calibrate5(name, T) {
     const M = T.machine, i = MACHINES.indexOf(name);
     T.dayCic = name === 'dayCicadas' ? 1 : 0; T.crew = name === 'crew' ? 1 : 0; T.desk = name === 'deskFan' ? 1 : 0;
-    T.storm = name === 'stormGust' ? 1 : 0; T.crewPan = 0;
+    T.storm = name === 'stormGust' ? 1 : 0; T.crewPan = 0; T.calib = true;
     M.owner = i; M.gain = i >= 0 ? 1 : 0; M.pan = 0; M.inside = false; M.carried = false;
-    if (name === 'stormGust') A.breeze = 1;
   }
   const atDoor = (x, z) => Math.abs(x - HOUSE.door.x) < 2.2 && Math.abs(z - HOUSE.door.z) < 4.5;
   let lastX = NaN, lastZ = NaN;
@@ -191,7 +190,7 @@ export function createEngine(ac, opts = {}) {
       ambientTargets(S, A);
       flockMix(S.snd, flockLoudness(S.flockW), S.day, M);
       M.habit = flockHabituation(habT); M.murmur *= M.habit;
-      if (opts.calibrate) calibrate(opts.calibrate);
+      if (opts.calibrate) calibrate(opts.calibrate); // 'events': every bed silent, the events alone
       beds.update(now, A, M, S, first);
       const T = scenes.targets(now, first ? 0 : Math.max(0.05, Math.min(0.25, now - (bedNow5 < 0 ? now : bedNow5))));
       bedNow5 = now;
@@ -201,8 +200,8 @@ export function createEngine(ac, opts = {}) {
       lastBus[1] = toward(flockLP.frequency, A.flockCut, now, tau, lastBus[1], 0.02);
       lastBus[2] = toward(flockAtt.gain, A.flockAtten, now, tau, lastBus[2]);
     }
-    if (opts.calibrate) return; // one bed alone at full gain: no events, no steps
-    sched.update(dt, t, M, A, on);
+    if (opts.calibrate && opts.calibrate !== 'events') return; // one bed alone at full gain: no events, no steps
+    if (!opts.calibrate) sched.update(dt, t, M, A, on);
     scenes.update(dt, now, t, on);
     // footfalls, landing with the walk cycle; the house door when he passes it
     if (S.teleport) { steps.reset(); walkT = 0; sched.clear(); }
@@ -236,6 +235,8 @@ export function createEngine(ac, opts = {}) {
     ac, S, master, layer, pools, cue, update, counts, setLayers, lim, scenes, machines,
     /** a rumble of createThunderPlanner (audio-scenes.js) to start p.delay s from now */
     thunder: (p) => scenes.thunder(p, ac.currentTime + look),
+    /** one Phase 5 event now at its nominal level (audio-measure opts.events: the level checks) */
+    event: (kind, v = 0, km = 1) => scenes.event(kind, ac.currentTime + look, v, km),
     get layers() { return { ...lv }; },
     get on() { return { ...on }; },
     /** the master gain (the settings' volume over the default's, so the default is 1) */

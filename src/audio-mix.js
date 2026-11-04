@@ -139,9 +139,9 @@ export const padFlowOf = (env) => (env.padOn ? clamp(Number.isFinite(env.padWork
  */
 export function ambientTargets(s, out = {}) {
   const k = clamp(s.k, 0, 1), x = s.x, z = s.z, hot = s.cond === 'hot';
-  // Phase 5: a storm's wind is 4 dB stronger (and gusts twice as often: audio-beds); the hot season's still midday air
-  // 2 dB calmer, its dusk cicadas 2 dB louder
-  const calm = (night(s.hour) ? 0.7 : 1) * (s.storm ? 1.585 : hot && s.hour > 11 && s.hour < 15 ? 0.79 : 1);
+  // Phase 5: a storm's gusts come 4 dB stronger and twice as often (audio-beds, out.storm); the hot season's still
+  // midday air 2 dB calmer, its dusk cicadas 2 dB louder
+  const calm = (night(s.hour) ? 0.7 : 1) * (!s.storm && hot && s.hour > 11 && s.hour < 15 ? 0.79 : 1);
   const wall = lerp(1, 0.13, k); // outdoor sounds through the walls and the pad
   out.breeze = calm * wall;
   out.storm = s.storm ? 1 : 0;

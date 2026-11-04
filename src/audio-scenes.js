@@ -11,8 +11,9 @@ import * as C from './audio-cues.js';
 import { HOUSE_BOUNDS } from './config.js';
 
 // peak gains of the new events (dBFS before the recipe's filters), calibrated with scripts/p5-sound-scenes.json so drips
-// sit at -48 (loudest 100 ms), crates -38, the alarm -38, a near rumble -38 +- 3 over its first 2 s
-export const EVENT5_DB = { drip: -35, crate: -27, thunder: -14, alarm: -29 };
+// sit at -48 (loudest 100 ms), crates -38..-40, the alarm -38, a near rumble -38 +- 3 over its first 2 s (about -40.5,
+// so a storm's wind and rain with a near rumble still peak under -18), a far one about -45
+export const EVENT5_DB = { drip: -32.5, crate: -18.5, thunder: -19.8, alarm: -31.5, crank: -22, genStop: -27, scrape: -25.5 };
 const expo = (rng) => -Math.log(1 - rng() * 0.999999);
 
 /**
@@ -115,8 +116,8 @@ export function createScenes({ pools, machines, S, rng, pan, lim }) {
         const p = pend[i];
         if (p.t > t + 0.05) continue;
         pend.splice(i, 1);
-        const ang = rng() * Math.PI * 2;
-        if (on.out && machines.thunder(Math.max(p.t, t), p, peak('thunder'), !!S.inside, pan(Math.cos(ang), Math.sin(ang)), p.v)) lim.note('thunder', Math.max(p.t, t), p.v, gainToDb((S.inside ? 0.5 : 1) * (p.near ? 1 : 0.5)), p.delay);
+        const side = range(rng, -0.2, 0.2); // the sky: a wide sound, never hard to one side
+        if (on.out && machines.thunder(Math.max(p.t, t), p, peak('thunder'), !!S.inside, side, p.v)) lim.note('thunder', Math.max(p.t, t), p.v, gainToDb((S.inside ? 0.5 : 1) * (p.near ? 1 : 0.6)), p.delay);
       }
       // drips off the eaves (outside, within 6 m of a wall, after the rain)
       const dr = on.out ? dripRate(S) : 0;
@@ -159,8 +160,8 @@ export function createScenes({ pools, machines, S, rng, pan, lim }) {
         const kind = run ? 'genStart' : 'genStop';
         if (on.cues && t >= genCueAt + 2 && lim.allow(kind, t)) {
           genCueAt = t;
-          const g = dbToGain(run ? -30 : -34) * Math.exp(-Math.hypot(S.x - PLACES.generator.x, S.z - PLACES.generator.z) / 20) * (S.inside ? 0.4 : 1);
-          if ((run ? C.crank : C.genStop)(pools.cues, t, g, rng)) lim.note(kind, t, -1, gainToDb(g / dbToGain(run ? -30 : -34)));
+          const g = dbToGain(run ? EVENT5_DB.crank : EVENT5_DB.genStop) * Math.exp(-Math.hypot(S.x - PLACES.generator.x, S.z - PLACES.generator.z) / 20) * (S.inside ? 0.4 : 1);
+          if ((run ? C.crank : C.genStop)(pools.cues, t, g, rng)) lim.note(kind, t, -1, gainToDb(g / dbToGain(run ? EVENT5_DB.crank : EVENT5_DB.genStop)));
         }
       }
       lastGen = run;
@@ -169,8 +170,21 @@ export function createScenes({ pools, machines, S, rng, pan, lim }) {
     /** a footfall at t on `surface`: the scraper scrapes on the litter, the washer's hiss rises with the step */
     step(t, surface, on) {
       if (S.washer === 2) machines.stepPulse(t);
-      if (on.cues && S.scraper && surface === 'litter' && C.scrape(pools.cues, t + 0.01, dbToGain(-34), rng)) lim.note('scrape', t, -1, 0);
+      if (on.cues && S.scraper && surface === 'litter' && C.scrape(pools.cues, t + 0.01, peak('scrape'), rng)) lim.note('scrape', t, -1, 0);
     },
     get pending() { return pend.length; },
+    /** one event at t at its nominal level, centred (the offline level checks: audio-measure opts.events) */
+    event(kind, t, v = 0, km = 1) {
+      switch (kind) {
+        case 'drip': return C.drip(pools.out, t, peak('drip'), 0, v & 3, rng);
+        case 'crate': return C.crate(pools.cues, t, peak('crate'), 0, v & 3, rng);
+        case 'thunder': { const th = thunderOf(rng, km); return machines.thunder(t, th, peak('thunder'), !!S.inside, 0, v & 3); }
+        case 'alarm': return C.alarm2(pools.cues, t, peak('alarm'), 0);
+        case 'crank': return C.crank(pools.cues, t, peak('crank'), rng);
+        case 'genStop': return C.genStop(pools.cues, t, peak('genStop'), rng);
+        case 'scrape': return C.scrape(pools.cues, t, peak('scrape'), rng);
+        default: return false;
+      }
+    },
   };
 }

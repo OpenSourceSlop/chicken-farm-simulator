@@ -122,7 +122,8 @@ export function buildBeds(ac, bus, src, rng) {
       // the wind comes in gusts, the crickets stop and start: random targets every few seconds
       if (now >= gustAt) { // a storm's gusts come twice as often (PHASE5.md §2.1)
         gustAt = now + nextGap(rng, A.storm ? 2.25 : 4.5, A.storm ? 0.75 : 1.5, A.storm ? 6 : 12);
-        gust.gain.setTargetAtTime(range(rng, 0.5, A.storm ? 1.5 : 1.3), now, range(rng, 0.8, 2.5));
+        // a storm's wind never drops: the lulls between its gusts 4 dB stronger (0.8, not 0.5), its gusts as high as ever
+        gust.gain.setTargetAtTime(range(rng, A.storm ? 0.8 : 0.5, 1.3), now, range(rng, 0.8, 2.5));
         breezeLP.frequency.setTargetAtTime(range(rng, 350, 950), now, range(rng, 0.8, 2.5));
       }
       const warm = clamp(1 + 0.025 * ((s.outT ?? 26) - 26), 0.85, 1.15);

@@ -40,7 +40,7 @@ export function genTarget(S) {
 /** The pressure washer: at the wash bay while its machine job runs (1 at the bay, falling off over a few metres), or at
  *  the farmer while he carries it inside the house (his own sound, centred). */
 export function washerTarget(S) {
-  if (S.washer === 2) return 1;
+  if (S.washer === 2) return 0.7; // the lance points at the floor ahead of him: a little under its level at the bay
   if (S.washer === 1) { const d = dist(S, PLACES.washBay); return d > 40 ? 0 : 1 / (1 + Math.max(0, d - 2) / 4); }
   return 0;
 }

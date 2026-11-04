@@ -5,11 +5,16 @@
 //   opts: { seconds = 6, skip = 1.5 (fade-ins left out), seed, volume = 1 (the default slider position),
 //           state: { ... } engine.S overrides (place, hour, fans ...), walk: m/s (footfalls),
 //           cues: [[name, atSeconds, x?, z?], ...], layers: ['mix', 'outside', 'house', 'flock', 'cues'],
-//           calibrate: a bed's name (that bed alone at gain 1: audio-beds BED_CAL) }
+//           calibrate: a bed's name (that bed alone at gain 1: audio-beds BED_CAL),
+//           events: [[kind, atSeconds, variant?, km?], ...] Phase 5 events at their nominal level (drip, crate, thunder,
+//           alarm, crank, genStop, scrape), flashes: [[atSeconds, km?], ...] lightning (its rumble after km / 0.343 s),
+//           levels: { background, flock, cues } the layer sliders }
 //   -> { seconds, layers: { mix: { peakDb, rmsDb, rmsMaxDb, rms100Db, clipped, voices }, outside: ..., ... } }
 // rmsDb: the whole render after `skip` (a bed's level); rmsMaxDb: the loudest 300 ms window; rms100Db: the
 // loudest 100 ms (a short sound's level); voices: most pooled voices sounding at once (sampled every 50 ms).
 import { createEngine, LAYERS } from './audio-engine.js';
+import { createThunderPlanner } from './audio-scenes.js';
+import { makeRng } from './audio-mix.js';
 
 const STEP = 0.05;
 const dB = (meanSquare) => (meanSquare > 1e-12 ? +(10 * Math.log10(meanSquare)).toFixed(1) : -120);
@@ -45,6 +50,8 @@ export async function measure(readState, opts = {}) {
   if (!OAC) return { error: 'no OfflineAudioContext' };
   const sec = opts.seconds ?? 6, rate = opts.rate ?? 44100, skip = opts.skip ?? 1.5;
   const cues = (opts.cues || []).slice().sort((a, b) => a[1] - b[1]);
+  const evs = (opts.events || []).slice().sort((a, b) => a[1] - b[1]);
+  const flashes = (opts.flashes || []).slice().sort((a, b) => a[0] - b[0]);
   const out = { seconds: sec, layers: {} };
   for (const name of opts.layers || ['mix', ...LAYERS]) {
     const ac = new OAC(2, Math.round(sec * rate), rate);
@@ -52,10 +59,17 @@ export async function measure(readState, opts = {}) {
     eng.master.gain.value = opts.volume ?? 1;
     readState(eng.S);
     if (opts.state) Object.assign(eng.S, opts.state);
-    let ci = 0, voices = 0;
+    if (opts.levels) eng.setLayers(opts.levels, 0.001);
+    const planner = createThunderPlanner(makeRng((opts.seed ?? 11) + 3));
+    let ci = 0, ei = 0, fi = 0, nf = 0, voices = 0;
     const tick = () => {
       if (opts.walk != null) { eng.S.speed = opts.walk; eng.S.dist = opts.walk * STEP; }
       while (ci < cues.length && cues[ci][1] <= ac.currentTime + 1e-6) { const c = cues[ci++]; eng.cue(c[0], c[2], c[3]); }
+      while (ei < evs.length && evs[ei][1] <= ac.currentTime + 1e-6) { const e = evs[ei++]; eng.event(e[0], e[2] ?? 0, e[3] ?? 1); }
+      let km = NaN;
+      while (fi < flashes.length && flashes[fi][0] <= ac.currentTime + 1e-6) { km = flashes[fi][1] ?? NaN; fi++; nf++; }
+      const plan = planner.update(STEP, { flashes: nf, storm: !!eng.S.storm, reduced: false, thunderKm: km });
+      if (plan) eng.thunder(plan);
       eng.update(STEP);
       eng.S.teleport = false;
       const v = eng.voicesAt(ac.currentTime + 0.01);

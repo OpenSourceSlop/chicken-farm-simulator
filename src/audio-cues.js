@@ -16,7 +16,7 @@ export function drip(P, t, g, pan, v, rng) {
   if (v === 3) {
     voice.setWave('wood');
     voice.f.setValueAtTime(range(rng, 2300, 3100), t);
-    envelope(voice.g, t, g * 0.8, 0.001, 0.002, 0.03);
+    envelope(voice.g, t, g * 1.05, 0.001, 0.003, 0.035);
     return true;
   }
   voice.setWave('sine');
@@ -38,18 +38,29 @@ export function drip(P, t, g, pan, v, rng) {
   return true;
 }
 
-/** A catching crate: 0 a knock, 1 set down (with its wooden body), 2 the crate door snapping shut, 3 crates stacked. */
+/** A catching crate (plastic, a wooden floor under it): 0 a knock, 1 set down, 2 the crate door snapping shut, 3 crates stacked. */
 export function crate(P, t, g, pan, v, rng) {
-  const n = P.take('noise', t, 0.32);
+  const n = P.take('noise', t, 0.34);
   if (!n) return false;
   panAt(n, t, pan);
-  if (v === 0) { n.q.setValueAtTime(3, t); n.f.setValueAtTime(range(rng, 950, 1300), t); grain(n.g, t, g, 0.025, 0.002); grain(n.g, t + range(rng, 0.06, 0.09), g * 0.6, 0.02, 0.002); }
-  else if (v === 1) {
-    n.q.setValueAtTime(2, t); n.f.setValueAtTime(range(rng, 600, 800), t); grain(n.g, t, g, 0.07, 0.003);
-    const w = P.take('tone', t, 0.15);
-    if (w) { panAt(w, t, pan); w.setWave('wood'); w.f.setValueAtTime(range(rng, 380, 460), t); envelope(w.g, t, g * 0.3, 0.002, 0.004, 0.09); }
-  } else if (v === 2) { n.q.setValueAtTime(4, t); n.f.setValueAtTime(range(rng, 1600, 2100), t); grain(n.g, t, g * 0.9, 0.018, 0.0015); }
-  else { n.q.setValueAtTime(2.5, t); n.f.setValueAtTime(range(rng, 800, 1000), t); let s = t; for (let i = 0; i < 3; i++) s = grain(n.g, s, g * (1 - i * 0.2), 0.03, 0.002) + range(rng, 0.03, 0.06); }
+  const body = P.take('tone', t, 0.2);
+  if (body) { panAt(body, t, pan); body.setWave('wood'); }
+  if (v === 0) {
+    n.q.setValueAtTime(1.5, t); n.f.setValueAtTime(range(rng, 950, 1250), t);
+    grain(n.g, t, g, 0.06, 0.002); grain(n.g, t + range(rng, 0.09, 0.12), g * 0.6, 0.05, 0.002);
+    if (body) { body.f.setValueAtTime(range(rng, 480, 560), t); envelope(body.g, t, g * 0.5, 0.002, 0.004, 0.08); }
+  } else if (v === 1) {
+    n.q.setValueAtTime(1.2, t); n.f.setValueAtTime(range(rng, 600, 750), t); grain(n.g, t, g * 0.6, 0.09, 0.003);
+    if (body) { body.f.setValueAtTime(range(rng, 380, 440), t); envelope(body.g, t, g * 0.42, 0.002, 0.006, 0.12); }
+  } else if (v === 2) {
+    n.q.setValueAtTime(2, t); n.f.setValueAtTime(range(rng, 1600, 2000), t); grain(n.g, t, g * 1.4, 0.045, 0.0015);
+    if (body) { body.f.setValueAtTime(range(rng, 850, 980), t); envelope(body.g, t, g * 0.7, 0.0015, 0.003, 0.05); }
+  } else {
+    n.q.setValueAtTime(1.5, t); n.f.setValueAtTime(range(rng, 800, 1000), t);
+    let s = t;
+    for (let i = 0; i < 3; i++) s = grain(n.g, s, g * (1 - i * 0.2), 0.05, 0.002) + range(rng, 0.03, 0.05);
+    if (body) { body.f.setValueAtTime(range(rng, 420, 500), t); envelope(body.g, t, g * 0.5, 0.002, 0.004, 0.09); }
+  }
   return true;
 }
 
@@ -87,14 +98,21 @@ export function dial(P, t, g, rng) {
   return true;
 }
 
-/** A pen on the planning sheet: a few short scratches. */
+/** A pen on the planning sheet: two to four short strokes. */
 export function pen(P, t, g, rng) {
-  const v = P.take('noise', t, 0.3);
+  const v = P.take('noise', t, 0.34);
   if (!v) return false;
-  v.q.setValueAtTime(1.6, t); v.f.setValueAtTime(range(rng, 3500, 5000), t); v.lp.setValueAtTime(9000, t);
+  v.q.setValueAtTime(1, t); v.lp.setValueAtTime(9000, t);
+  v.g.setValueAtTime(0, t);
   let s = t;
-  const n = 3 + Math.floor(rng() * 3);
-  for (let i = 0; i < n; i++) s = grain(v.g, s, g * range(rng, 0.5, 1), range(rng, 0.015, 0.03), 0.004) + range(rng, 0.008, 0.025);
+  const n = 2 + Math.floor(rng() * 3);
+  for (let i = 0; i < n; i++) {
+    const d = range(rng, 0.04, 0.065);
+    v.f.setValueAtTime(range(rng, 3200, 4800), s);
+    v.g.linearRampToValueAtTime(g * range(rng, 0.6, 1), s + 0.012);
+    v.g.linearRampToValueAtTime(0, s + d);
+    s += d + range(rng, 0.008, 0.02);
+  }
   return true;
 }
 
@@ -133,13 +151,20 @@ export function crank(P, t, g, rng) {
   return true;
 }
 
-/** The generator stopping: a last shudder as it runs down (the bed itself falls over 2 s). */
+/** The generator stopping: its last chugs as it runs down (the bed itself falls over 2 s). */
 export function genStop(P, t, g, rng) {
-  const n = P.take('noise', t, 2.1);
-  if (!n) return false;
-  n.q.setValueAtTime(1, t); n.f.setValueAtTime(range(rng, 300, 380), t);
-  let s = t + 0.2;
-  for (const k of [1, 0.75, 0.55, 0.35]) s = grain(n.g, s, g * k, 0.08, 0.006) + (1.05 - k) * 0.6;
+  const w = P.take('tone', t, 1.4);
+  if (!w) return false;
+  w.setWave('cluck');
+  glide(w.f, t, range(rng, 70, 80), t + 1.2, range(rng, 38, 44));
+  const n = P.take('noise', t, 1.4);
+  if (n) { n.q.setValueAtTime(0.8, t); n.f.setValueAtTime(range(rng, 420, 520), t); }
+  let s = t + 0.1, k = 1;
+  for (let i = 0; i < 5; i++, k *= 0.78) {
+    envelope(w.g, s, g * k, 0.008, 0.02, 0.07);
+    if (n) grain(n.g, s, g * 0.6 * k, 0.07, 0.006);
+    s += 0.12 + i * 0.07;
+  }
   return true;
 }
 
@@ -149,8 +174,8 @@ export function clunk(P, t, g, rng) {
   if (!n) return false;
   n.q.setValueAtTime(1, t); n.f.setValueAtTime(range(rng, 150, 200), t);
   envelope(n.g, t, g, 0.002, 0.012, 0.16);
-  const w = P.take('tone', t, 0.2);
-  if (w) { w.setWave('wood'); w.f.setValueAtTime(range(rng, 88, 102), t); envelope(w.g, t, g * 0.5, 0.002, 0.01, 0.12); }
+  const w = P.take('tone', t, 0.24);
+  if (w) { w.setWave('cluck'); glide(w.f, t, range(rng, 120, 140), t + 0.12, range(rng, 80, 95)); envelope(w.g, t, g, 0.002, 0.015, 0.16); }
   return true;
 }
 
