@@ -36,11 +36,15 @@ export function createWater() {
   };
 }
 
-/** Flow per nipple of line i now (ml/min). */
+/** Flow per nipple of line i now (ml/min). Phase 4: x the tank's pressure (water.supplyK, the water condition) and x the
+ *  line's own nipples (l.flowK: iron); both undefined in a normal run. */
 export function lineFlow(water, i) {
   const l = water.lines[i];
-  return (WATER.flowPerCm * l.pressureCm + WATER.flowBase) * water.filterFactor;
+  const f = (WATER.flowPerCm * l.pressureCm + WATER.flowBase) * water.filterFactor;
+  return water.supplyK == null && l.flowK == null ? f : f * (water.supplyK ?? 1) * (l.flowK ?? 1);
 }
+/** Phase 4 (the hot season): the birds drink x (1 - 0.015 x (line °C - 30)) over 30 °C (water.lineTempC per line). */
+export const lineWaterK = (c) => (c > 30 ? Math.max(0, 1 - 0.015 * (c - 30)) : 1);
 
 /** Height factor of a line at flock age `age`. */
 export function heightFactor(heightCm, age) {
@@ -59,6 +63,7 @@ export function updateAccess(water, age) {
     const r = l.flowMlMin / need;
     let a = Math.pow(Math.max(0, Math.min(1, r / WATER.accessFull)), WATER.accessExp) * heightFactor(l.heightCm, age);
     if (age < WATER.wetUntilAge && r > WATER.wetAbove) a *= Math.max(WATER.wetMin, Math.min(1, 1 - WATER.wetPer * (r - WATER.wetAbove)));
+    if (water.lineTempC) a *= lineWaterK(water.lineTempC[i]);
     l.access = a;
     sum += a; if (a > max) max = a;
   }

@@ -72,6 +72,9 @@ import { windChillP4 } from './farm-tuning.js';
 //                   stay and act again when the power comes back.
 //   env.setTargetShift(c, toDay = 3) / env.targetShiftC   env.targetTemp = the brooder sign's row + c on calendar days
 //                   0..toDay (a bad batch brooded 1 °C warmer); 0 = the sign's row (every reader agrees with it)
+//   env.setInletShare(k) / env.inletShare   the share of the minimum ventilation timer's air the side-wall inlets let in
+//                   (1; the rainy season's storm flaps closed: 0.7)
+//   env.outsideAt(day)   the outside air at time `day` (N + h/24) by the weather and its events (the records' notes)
 
 const HOUR = 3600;
 export const MAX_DAY = 42;  // the last day of the flock; after it the clock keeps day 42
@@ -144,6 +147,7 @@ function initialState() {
     powerOn: true,                 // Phase 4: the house has power (setPower; the farm's mains or generator)
     targetShiftC: 0,               // Phase 4: the target over the sign's row on days 0..targetShiftToDay (setTargetShift)
     targetShiftToDay: 3,
+    inletShare: 1,                 // Phase 4: the timer air the side inlets let in (setInletShare; storm flaps 0.7)
     fanStages: null,               // Phase 3: { stages: [{ overC, fans }], padOverC } or null (setFanStages)
     heatTerms: null,               // Phase 3: the last level-climate step's terms, °C/h (heatBudget)
     // Phase 2 (see the contract at the top)
@@ -291,6 +295,13 @@ export function createSim() {
     // Phase 4 contract (see the top of the file)
     setWindChillP4(on) { this.windChillP4 = !!on; derive(this); },
     setPower(on) { const was = this.powerOn; this.powerOn = !!on; thermostat(this); if (!this.powerOn) this.heaterLevel = 0; derive(this); if (was !== this.powerOn) emit('controls'); },
+    setInletShare(k) { this.inletShare = Number.isFinite(k) ? Math.max(0, Math.min(1, k)) : 1; derive(this); },
+    outsideAt(day) {
+      const h = ((day % 1) + 1) % 1 * 24;
+      let t = outsideTempAt(this.weather, h);
+      for (const ev of this.weatherEvents) if (day > ev.fromDay && day < ev.toDay) t -= ev.outsideDrop * Math.min(1, (day - ev.fromDay) / RAMP_DAYS, (ev.toDay - day) / RAMP_DAYS);
+      return t;
+    },
     setTargetShift(c, toDay = 3) { this.targetShiftC = Number.isFinite(c) ? c : 0; this.targetShiftToDay = Number.isFinite(toDay) ? toDay : 3; derive(this); },
     setFanStages(t) {
       const stages = t && Array.isArray(t.stages) ? t.stages.filter((x) => Number.isFinite(x.overC) && Number.isFinite(x.fans))
@@ -375,7 +386,7 @@ function derive(env) {
     // Phase 3: a broken fan inside the first fansManual shows its lamp (fansOn) but moves no air
     const t = env.ventTimer, broken = env.fansBroken.length ? env.fansBroken.filter((i) => i < env.fansManual).length : 0;
     env.fansEffective = Math.max(0, Math.min(FAN_COUNT, env.fansManual) - broken);
-    env.fanMean = Math.min(FAN_COUNT, env.fansEffective + (t ? t.fans * env.ventDuty : 0));
+    env.fanMean = Math.min(FAN_COUNT, env.fansEffective + (t ? t.fans * env.ventDuty * (env.inletShare ?? 1) : 0));
     const onPart = !!t && ((env.hour * HOUR) % t.cycleSec) < t.onSec;
     env.fansOn = Math.min(FAN_COUNT, env.fansManual + (onPart ? t.fans : 0));
     const timerMean = env.fanMean - env.fansEffective;

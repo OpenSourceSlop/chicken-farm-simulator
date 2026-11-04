@@ -15,7 +15,14 @@ const at = (d, h) => d + h / 24;
 const H = 1 / 24;
 export const RECURRING = ['abnormal-deaths', 'low-silo'];
 const fresh = (id) => ({ id, phase: 'pending', startedAt: null, foundAt: null, fixedAt: null, foundBy: null });
-const defOf = (farm, id) => (farm.cycleLevel && farm.cycleLevel.problems.find((p) => p.id === id)) || null;
+// Phase 4: the level as the farm's condition plays it (dropped problems have no def; replaced ones carry their fields).
+// Only the level def's own problems: the condition's own are farm-cond.js's
+const defOf = (farm, id) => {
+  const lv = farm.cycleLevel, own = lv && lv.problems.find((p) => p.id === id);
+  if (!own) return null;
+  return farm.condition && farm.levelFor ? farm.levelFor(lv).problems.find((p) => p.id === id) || null : own;
+};
+const levelProblems = (farm, def) => (farm.condition && farm.levelFor ? farm.levelFor(def).problems : def.problems);
 const stateOf = (farm, id) => farm.problems.find((p) => p.id === id) || null;
 const isActive = (farm, id) => { const p = stateOf(farm, id); return !!p && p.phase === 'active' && !!defOf(farm, id); };
 const isFound = (farm, id) => { const p = stateOf(farm, id); return !!p && p.phase === 'found' && !!defOf(farm, id); };
@@ -249,7 +256,7 @@ export function cycleNear(farm, env, p) { if (p && p.problemId && isActive(farm,
 export function cycleForecast(farm, env, day, base) {
   const def = farm.cycleLevel;
   if (!def) return base;
-  const ev = (id) => def.problems.find((p) => p.id === id && p.until);
+  const ev = (id) => levelProblems(farm, def).find((p) => p.id === id && p.until);
   const w = WEATHER[env.weather] || WEATHER.normal;
   const say = (text) => ({ ...base, text });
   const rain = ev('rainy-spell'), dry = ev('dusty-air'), wave = ev('heat-wave'), humid = ev('humid-heat');
