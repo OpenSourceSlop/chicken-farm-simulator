@@ -15,6 +15,8 @@ import { int, one, two, num, hhmm } from './ui-format.js';
 import { weekTable } from './ui-records.js';
 import { harvestPage, cleanPage, replyLines } from './ui-letters.js';
 import { shortIn } from './ui-run.js';
+/** The hour a result ended at; 24:00 for a level that ended at the close of its day (a bad batch's claim, PHASE5.md §6.8.2). */
+const endHour = (res) => ((res.hour ?? 0) >= 24 ? '24:00' : hhmm(res.hour ?? 0));
 
 function bandSvg(ratio) {
   const lo = 3, hi = 6, W = 300, X = (v) => 10 + ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * (W - 20);
@@ -95,7 +97,7 @@ function cardsOf(res, def) {
       // only what was measured: no day 7 weight before the weigh-in age, then the card says what ended the level
       res.ratio != null
         ? big('Day 7 weight', `${two(res.ratio)} ×`, `chick weight · ${int(res.weightG)} g ${res.weighedByHand ? 'weighed' : 'automatic scale, not weighed by hand'} ÷ ${one(res.chickWeightG)} g (${res.chickSource === 'box' ? 'box weighing' : 'delivery note'})`, h('div', { class: 'band', html: bandSvg(res.ratio) }))
-        : big(res.early ? 'Ended early' : 'Day 7 weight', res.early ? `Day ${fmt0(res.day)}, ${hhmm(res.hour ?? 0)}` : 'not weighed', res.failText ? `${res.failText.charAt(0).toUpperCase()}${res.failText.slice(1)}. No day 7 weighing.` : 'No day 7 weighing.'),
+        : big(res.early ? 'Ended early' : 'Day 7 weight', res.early ? `Day ${fmt0(res.day)}, ${endHour(res)}` : 'not weighed', res.failText ? `${res.failText.charAt(0).toUpperCase()}${res.failText.slice(1)}. No day 7 weighing.` : 'No day 7 weighing.'),
       big('Deaths and culls', `${two(res.deathsPct)} %`, `${int(res.deaths)} of ${int(res.placed)} chicks ${res.placedReal === false ? 'delivered' : 'placed'}`,
         res.countedDead != null ? h('p', { class: 'big-sub' }, [`${int(res.countedDead)} counted at the bin`, `${int(res.deadOnFloor)} still lying in the house`,
           res.deadInBoxes ? `${int(res.deadInBoxes)} dead in the boxes` : null, res.culls ? `${int(res.culls)} culled` : null,
@@ -132,7 +134,7 @@ function cardsOf(res, def) {
   // a week level
   return bigs(
     res.weightG != null ? big(`Day ${res.targetDay} weight`, `${int(res.weightG)} g`, `${int((res.share ?? 0) * 100)} % of the ${int(res.targetG)} g target · ${res.weighedByHand ? `${int(res.weighedN)} birds weighed` : 'automatic scale, not weighed by hand'}`)
-      : big(res.early ? 'Ended early' : `Day ${res.targetDay} weight`, res.early ? `Day ${fmt0(res.day)}, ${hhmm(res.hour ?? 0)}` : 'not weighed', `No day ${res.targetDay} weighing.`),
+      : big(res.early ? 'Ended early' : `Day ${res.targetDay} weight`, res.early ? `Day ${fmt0(res.day)}, ${endHour(res)}` : 'not weighed', `No day ${res.targetDay} weighing.`),
     deathsCard(res, def),
     res.uniformityPct != null ? big('Uniformity', `${fmt0(res.uniformityPct)} %`, 'birds within ±10 % of the mean, hand weighing') : null,
     res.fcr != null ? big('FCR', two(res.fcr), 'feed ÷ live weight so far') : null);
@@ -195,7 +197,7 @@ export function buildResultPanel(L) {
       pts.length ? h('ul', { class: 'result-points' }, pts.map((p) => h('li', null, h('b', null, `${branchName(p.branch)} +${p.points}`), ` · ${p.text}${p.detail ? ` · ${p.detail}` : ''}`))) : h('p', { class: 'result-note' }, 'No points this level.'),
       res.levelId !== 'plan' ? [h('h3', { class: 'result-h' }, isL1 ? 'The week in the book' : 'The days in the book'),
         weekTable(L, { dark: true, from: isL1 ? LEVEL1.startDay : def.startDay, to: isL1 ? LEVEL1.endDay : Math.min(def.endDay, 46) })] : null,
-      h('p', { class: 'result-note' }, `Result at ${hhmm(res.hour ?? 0)} on day ${fmt0(res.day ?? def.endDay)}.`)));
+      h('p', { class: 'result-note' }, `Result at ${endHour(res)} on day ${fmt0(res.day ?? def.endDay)}.`)));
   }
   return { el, kind: 'paused', show(r) { res = r; render(); }, update(dt, force) { if (force) render(); } };
 }
