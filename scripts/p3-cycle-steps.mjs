@@ -23,8 +23,9 @@ export const until = (advanceUntil, max = 60, step = 0.5) => ({ advanceUntil, ma
 export const next = () => [{ clickOn: '.ljobs-next' }, adv(0.4)];
 /** Next job until the clock reaches `h` (with a job still open the first press asks, the next one skips). */
 // (the button reads "Next job" while jobs are open, then the skip it confirms, "Skip to 13:00 — 1 job open")
-export const nextTo = (h) => [0, 1, 2].flatMap(() => [{ clickTextUntil: 'Next job', until: `__game.env.hour >= ${h}`, max: 1, in: '.ljobs-foot' },
-  { clickTextUntil: 'Skip to', until: `__game.env.hour >= ${h}`, max: 1, in: '.ljobs-foot' }]).concat([adv(0.2)]);
+// (a short advance after each press lets the job card redraw the button's label)
+export const nextTo = (h) => [0, 1, 2].flatMap(() => [{ clickTextUntil: 'Next job', until: `__game.env.hour >= ${h}`, max: 1, in: '.ljobs-foot' }, adv(0.3),
+  { clickTextUntil: 'Skip to', until: `__game.env.hour >= ${h}`, max: 1, in: '.ljobs-foot' }, adv(0.3)]);
 /** E at an interactable and the panel it opens. */
 export const E = (id, label) => [press('e'), adv(0.25), exp(`__game.ui.openPanelId === '${id}' || ('open: ' + __game.ui.openPanelId + ', nearest ' + __game.interact.nearest(__game.player)?.id) && false`, label || `E opens ${id}`)];
 export const esc = () => [press('Escape'), adv(0.15)];
@@ -228,7 +229,7 @@ export const nightThenRecord = (day, n, atDesk = []) => [...nextTo(18), ev(`'Nex
   ...signRecord(atDesk), ...esc()];
 export const evening = (day, atDesk = []) => [...outToOffice(), exp(`'at the office ' + __t() + ': ' + (__missed(${day}) || 'nothing open')`, `day ${day}: at the office`),
   // Next job to 16:00; with a job still open (the drying fans) the first press asks, the second skips
-  { pressIf: 'Escape', if: 'false' }, { clickOn: '.ljobs-next' }, adv(0.2), { clickTextUntil: 'Skip to', until: '__game.env.hour >= 16', max: 1, in: '#hud' }, adv(0.2),
+  { pressIf: 'Escape', if: 'false' }, { clickOn: '.ljobs-next' }, adv(0.3), { clickTextUntil: 'Skip to', until: '__game.env.hour >= 16', max: 1, in: '#hud' }, adv(0.3),
   until('__game.env.hour >= 16', 300), ...signRecord(atDesk), ...esc()];
 /** The growing birds' light program on the controller (Lights): the preset with Lighting level 1, else by hand. */
 export const growingLights = (key) => [click('Lights'), adv(0.1), click('Growing (from day 8)'), adv(0.1), ev(rowOut),
