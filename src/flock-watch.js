@@ -89,7 +89,7 @@ export function causeOf(kind, age, st = {}) {
       return { why: 'weak chicks and chicks that never found feed die first', sign: 'sign-chicks', signName: SIGN.chicks, place: 'feeder-box', check: 'feed and water in reach of every chick' };
     case 'legs': return { why: 'birds with bad legs cannot reach feed and water', sign: 'sign-legs', signName: SIGN.legs, place: 'bird-scale', check: 'how they walk, and the cull of lame birds' };
     case 'disease': return { why: 'a disease in the flock', sign: 'sign-droppings', signName: SIGN.droppings, place: 'bird-check', check: 'the droppings of a few birds in the hand and the company vet by phone' };
-    case 'claim': return { why: 'the chicks graded out at the table count as culls until the hatchery is told the same day', sign: 'sign-chicks', signName: SIGN.chicks, place: 'office-desk', check: 'the phone in the records book at the office desk' };
+    case 'claim': return { why: 'the chicks graded out at the table count as culls until the hatchery is told the same day, before 24:00', sign: 'sign-chicks', signName: SIGN.chicks, place: 'office-desk', check: 'the phone in the records book at the office desk' };
     case 'sds': return { why: 'sudden deaths of fast-growing birds', sign: 'sign-light', signName: SIGN.light, place: 'controller', check: 'the dark hours of the light program' };
     default: return { why: 'more deaths than usual', sign: 'sign-health', signName: SIGN.health, place: 'office-desk', check: 'the dead birds’ causes and the records book' };
   }

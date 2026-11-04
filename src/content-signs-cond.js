@@ -61,7 +61,7 @@ export const BOARD_COND_ITEMS = {
       it('Chicks under about 38 g, or many with open navels and slow reflexes: a weak batch (often a young parent flock or a long trip). Grade every stack at the chick table and cull the weak ones before they go on the floor.'),
       it('Weak chicks with open navels carry yolk-sac infection: left in the flock most of them die in the first week, and they take some of the others with them.'),
       it('A weak batch: about 1 °C warmer for the first 3 days, feed trays and chick paper by the brooders, and feel the crops again at 48 hours.'),
-      it('Tell the hatchery the same day: the chicks you grade out on the day they come are claimed back.'),
+      it('Tell the hatchery the same day, before 24:00: the chicks you grade out on the day they come are claimed back.'),
     ],
     'sign-brooder': [it('Small or weak chicks: about 1 °C over the table for the first 3 days.')],
   },

@@ -122,7 +122,7 @@ export function gradingView(L, host) {
     const graded = Object.keys(g.results).length;
     sum1.innerHTML = graded ? `Graded out: <b>${int(c.culled)} chicks</b> in the cull box from ${graded} stack${graded === 1 ? '' : 's'}.` : 'Nothing graded out yet.';
     setText(sum2, c.toldDay0 ? `Claimed: the hatchery was told${c.told ? ` ${whenText(c.told.t)}` : ' today'}; the chicks graded out on day 0 are counted apart from the week’s culls.`
-      : day <= 0 ? 'Not claimed yet: the hatchery has not been told today. The office phone (records book) calls it; the graded-out chicks of day 0 are claimed once it is told the same day.'
+      : day <= 0 ? 'Not claimed yet: the hatchery has not been told today. The office phone (records book) calls it; the graded-out chicks of day 0 are claimed once it is told the same day, before 24:00.'
         : 'Not claimed: the hatchery was not told on day 0, so the chicks graded out count as culls of the week.');
   }
   return {

@@ -81,7 +81,7 @@ export const STRIPS_COND = {
       return [cmp('Chick weight', 'chick sign: under about 38 g, or many open navels and slow reflexes, is a weak batch', w ? `${one(w)} g (your box weighing)` : 'box not weighed yet'),
         step(`Stacks graded: ${n} of 4 or more (Grade the stacks at the chick table: about 6 farm minutes a stack)`, p[0]?.met),
         line(`Graded out so far: ${int(out)} chicks (the cull box) · claimed: ${c.farm.flock?.claimed ? int(c.farm.flock.claimed) : 'not yet: the hatchery has not been told'}.`),
-        step('Tell the hatchery today: office phone, Call the hatchery (the chicks graded out today are claimed back)', p[1]?.met)];
+        step('Tell the hatchery before 24:00 today: office phone, Call the hatchery (the chicks graded out today are claimed back)', p[1]?.met)];
     } },
   'b-warm': { panels: { controller: 'temp' }, title: 'Brood the small chicks 1 °C warmer',
     rows(c, inst) {

@@ -85,9 +85,11 @@ export const JOBS_COND = [
   D('b-trays', -1, 'prep', 'Put feed trays and chick paper by the brooders', { condition: 'badChicks', spot: 'feederBox', signs: ['sign-chicks', 'feeder-box'], branch: 'brooding',
     done: A('brood.trays', { on: true }) }),
   // chicks.grade: the panel waits its 6 farm minutes at the panel clock (box time runs on), then calls the action (§10.3)
-  P('p-weak-batch', 'Many weak chicks in the boxes', { condition: 'badChicks', problem: 'weak-batch', pin: true, spot: 'chickTable', signs: ['sign-chicks', 'chick-grading'], branch: 'brooding',
+  // the final check: the window is the claim's (the symptom comes on day 0; it closes at 24:00, as the farm's claim and the
+  // fail rule do), never held past it (hardClose), and only a call while the claim is open counts (check claim-open)
+  P('p-weak-batch', 'Many weak chicks in the boxes', { condition: 'badChicks', problem: 'weak-batch', pin: true, window: [0, 24], hardClose: true, spot: 'chickTable', signs: ['sign-chicks', 'chick-grading'], branch: 'brooding',
     done: ALL(L('Grade four stacks or more at the chick table and cull the weak ones', { type: 'count', id: 'chicks.grade', n: 4 }),
-      L('Tell the hatchery today (office phone): the graded-out chicks are claimed', A('phone.hatchery'))) }),
+      L('Tell the hatchery before 24:00 today (office phone): the graded-out chicks are claimed', { type: 'action', id: 'phone.hatchery', check: 'claim-open' })) }),
   // day 0 06:00 to day 3 06:00 (78 h): env.targetTemp is the sign's row + 1 °C on days 0-3 (config delivery.targetShiftC)
   D('b-warm', 0, 'am', 'Brood the small chicks 1 °C warmer', { condition: 'badChicks', window: [6, 78], spot: 'controller', signs: ['sign-brooder', 'sign-chicks'], branch: 'heating',
     done: LIVE('Thermostat 0.5–1.5 °C over the brooder sign’s row of the day', 'brood-warmer') }),

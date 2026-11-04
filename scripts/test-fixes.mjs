@@ -5,6 +5,8 @@
 import { makeWorld } from '../src/farm-profiles-run.js';
 import { createLevel } from '../src/level.js';
 import { createJobStrip } from '../src/ui-jobstrip.js';
+import { EV } from '../src/events.js';
+import { LEVEL1 } from '../src/config.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -64,6 +66,68 @@ test('1: a panel opened again with no job for it shows no strip (not the strip o
   W.level.debug.goto(0, 3.1);
   strip.onOpen(); strip.onClose();
   assert(strip.el.hidden && strip.el.innerHTML === '', 'closing clears the strip');
+});
+
+/** A bad batch at the truck: four stacks graded by hand at the table, every stack tipped, the hatchery not called yet. */
+function badBatchNoCall() {
+  const W = makeLevelJs('badChicks');
+  W.level.debug.goto(0, 10.05, { auto: true });             // the prep day and the morning as the ideal (the truck not yet)
+  assert(W.farm.flock.inBoxes > 0, `the late truck has come: ${W.farm.flock.inBoxes} in boxes`);
+  W.farm.act('sample.box');                                 // the box weighing finds the weak batch: its job opens
+  const TIPS = [[-16, -1], [-16, 1], [-10, -1], [-10, 1], [-4, -1], [-4, 1]];
+  for (let st = 0; st < 6; st++) {
+    if (st < 4) { W.farm.act('chicks.grade', { stack: st }); W.events.emit(EV.ACTION, { id: 'chicks.grade', stack: st, result: { culled: 0 } }); }
+    W.farm.act('chicks.tip', { stack: st, chicks: LEVEL1.chicksPlaced / LEVEL1.stacks, x: TIPS[st][0], z: TIPS[st][1] });
+  }
+  assert(!(W.farm.flock.claimed > 0) && W.farm.flock.gradedOut > 100, `graded out ${W.farm.flock.gradedOut}, claimed ${W.farm.flock.claimed}`);
+  W.env.setHeaterSetpoint(W.env.targetTemp + 0.5);          // the brooders at the weak batch's row
+  return W;
+}
+const call = (W) => W.events.emit(EV.ACTION, { id: 'phone.hatchery', chickWeightG: 36, weakPct: 4 });
+
+test('2: a bad batch: day 0 signed at 20:00 before the call does not fail; a call at 22:00 claims and the week runs on', () => {
+  const W = badBatchNoCall();
+  W.level.debug.goto(0, 20);
+  const job = W.level.jobs.list().find((i) => i.id === 'p-weak-batch');
+  assert(job && job.status === 'open' && Math.abs(job.closesAt - 1) < 1e-9 && job.def.hardClose, `the job's window is the claim's: ${job?.status}, closes ${job?.closesAt}`);
+  assert(W.level.levelDeaths().pct > 2.5, `over the limit before the call: ${W.level.levelDeaths().pct.toFixed(2)} %`);
+  W.records.sign(0);
+  assert(W.level.mode === 'level' && !W.level.result, `the level runs on after day 0's record (the claim open until 24:00): ${W.level.mode}`);
+  W.level.debug.goto(0, 22);
+  call(W);
+  assert(W.farm.flock.claimed > 0 && W.level.levelDeaths().pct < 2.5, `claimed ${W.farm.flock.claimed}: ${W.level.levelDeaths().pct.toFixed(2)} %`);
+  assert(W.level.jobs.byKey(job.key).status === 'done', `the job done by the call at 22:00: ${W.level.jobs.byKey(job.key).status}`);
+  W.level.debug.goto(1, 2);
+  assert(W.level.mode === 'level' && !W.level.result, 'no fail at 24:00 once claimed');
+  // the save keeps the wait: a reload at 21:00 before the call still fails at 24:00 (next test) or passes once called
+  const X = badBatchNoCall();
+  X.level.debug.goto(0, 20); X.records.sign(0);
+  const blob = JSON.parse(JSON.stringify(X.level.saveBlob()));
+  assert(blob.level?.bad?.wait === 0 || JSON.stringify(blob).includes('"wait":0'), 'the wait is saved');
+});
+
+test('2: a bad batch without the call by 24:00 fails at 24:00 of day 0 on its culls; a call after 24:00 claims nothing', () => {
+  const W = badBatchNoCall();
+  W.level.debug.goto(0, 20);
+  W.records.sign(0);
+  assert(W.level.mode === 'level', `runs on at 20:00: ${W.level.result?.failText}`);
+  W.level.debug.goto(0, 23.9);
+  assert(W.level.mode === 'level', 'runs on at 23:54');
+  W.level.debug.goto(1, 3);
+  const r = W.level.result;
+  assert(r && !r.pass && r.reason === 'mortality', `failed: ${r?.reason} ${r?.pass}`);
+  assert(r.day === 1 && r.hour < 0.1, `at 24:00 of day 0: ${r.endedAt}`);
+  assert(/graded out on day 0 count as culls: the hatchery was not told on day 0/.test(r.failText), r.failText);
+  // the job closed with the claim and was not held (hardClose): a call after 24:00 does not count
+  const Y = badBatchNoCall();
+  Y.ui.openPanelId = 'office-desk'; Y.ui.panelKind = 'panel';
+  const run = (sec) => { for (let t = 0; t < sec; t += 0.5) { Y.env.update(0.5); Y.level.update(0.5); } };
+  Y.level.debug.goto(0, 23.95);
+  while (Y.env.day < 1 + 2 / 1440 && Y.level.mode === 'level') run(0.5);
+  const j = Y.level.jobs.list().find((i) => i.id === 'p-weak-batch');
+  assert(j.status === 'missed' && j.heldFrom == null, `the job closed at 24:00 with its panel open: ${j.status}`);
+  call(Y);
+  assert(!(Y.farm.flock.claimed > 0), 'a call after 24:00 claims nothing');
 });
 
 let failed = 0;

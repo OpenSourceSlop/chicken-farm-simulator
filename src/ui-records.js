@@ -193,7 +193,7 @@ export function buildRecordsPanel(L) {
         say('quality', `You told the hatchery at ${env.timeLabel}, day ${d}: ${w != null ? `chicks of ${one(w)} g (your box weighing)` : 'the box not weighed'}${weakPct != null ? `, ${one(weakPct)} % weak at the grading (${int(b.gradedOut)} graded out)` : ''}.`);
       });
       out.push(h('h3', { class: 'book-h' }, 'Hatchery: the chicks that came'),
-        h('p', { class: 'book-note book-note--fact' }, 'Chicks you grade out on the day they come are counted apart and claimed back once the hatchery is told the same day.',
+        h('p', { class: 'book-note book-note--fact' }, 'Chicks you grade out on the day they come are counted apart and claimed back once the hatchery is told the same day, before 24:00.',
           h('small', { class: 'book-src' }, `Source: ${sourceLabel('general')} · the chick sign`)),
         h('p', { class: 'book-note' }, `What you tell them: ${w != null ? `${one(w)} g a chick (box weighing)` : 'no box weighed yet'}${weakPct != null ? ` · ${one(weakPct)} % weak at the grading` : ''}.`),
         h('div', { class: 'book-row' }, call), h('p', { class: 'book-note', 'aria-live': 'polite' }, phoneLines.quality));

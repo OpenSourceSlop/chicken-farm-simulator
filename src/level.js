@@ -108,7 +108,8 @@ export function createLevel(ctx, deps = {}) {
   let free = null;                  // { def, off } while debug.freeRun runs the farm (tools)
   let alarms = 0;                   // EV.POWER { on: false } and alarm symptoms so far (a Next job skip stops at a new one)
   let pinStops = 0;                 // pinned condition jobs opened so far (a minute-by-minute skip stops at a new one too)
-  let bad = { gradedOut: 0, looked: 0, weak: 0, called: null };  // a bad batch: the grading at the table, the hatchery call (env.day)
+  let bad = { gradedOut: 0, looked: 0, weak: 0, called: null, wait: null };  // a bad batch: the grading at the table, the hatchery call (env.day);
+  // wait: the day whose record closed over the limit only by the day-0 culls the hatchery can still claim (checked at 24:00)
 
   /** The level as the farm's condition plays it (config conditionLevel: problems, target, fail, delivery, …). */
   const lv = () => (farm.levelFor ? farm.levelFor(def) : conditionLevel(def, farm.condition ?? null));
@@ -183,13 +184,35 @@ export function createLevel(ctx, deps = {}) {
       saveNow();
       // fail early: deaths and culls past the limit at any day's close
       const max = lv().fail?.mortalityMaxPct;
-      if (max != null && levelDeaths().pct > max) { failAt = failAt || { day: p.day, pct: levelDeaths().pct }; end('mortality'); }
+      if (max != null && levelDeaths().pct > max) {
+        // a bad batch (PHASE4.md §3.4, the final check): the claim stays open until 24:00 of day 0, so a day-0 record closed
+        // before the call fails only on what a call cannot claim; the rest is checked again when the claim closes
+        const ld = levelDeaths(), open = claimOpenN();
+        if (open > 0 && (100 * (ld.n - open)) / Math.max(1, ld.of) <= max) { bad.wait = p.day; return; }
+        failAt = failAt || { day: p.day, pct: ld.pct }; end('mortality');
+      }
     });
+    // the claim closed at 24:00 of day 0 (inside a skip too: an env stepper, as the records' 06:00 close)
+    env.addStepper?.(() => { if (bad.wait != null && env.dayNumber > bad.wait) claimClosedCheck(); });
   }
   function placedCount() { return farm.flock.placed || farm.flock.delivered || 0; }
   /** A bad batch's brooding week counts the chicks claimed from the hatchery apart (fail.claimedApart, PHASE4.md §3.4):
    *  farm.flock.claimed (the farm moves the day-0 culls there once the hatchery is told the same day). */
   const claimedApart = () => (lv().fail?.claimedApart ? Math.max(0, Math.min(farm.flock.claimed || 0, farm.flock.culls || 0)) : 0);
+  /** The day-0 culls a call to the hatchery can still claim (0 once told, or after 24:00 of day 0: farm-cond-chicks). */
+  function claimOpenN() {
+    const X = farm.condX;
+    if (!lv().fail?.claimedApart || !is(def, LEVEL1) || !X || X.hatcheryAt != null || X.claimClosed || env.dayNumber !== LEVEL1.arrivalDay) return 0;
+    return Math.max(0, Math.min(X.day0Culls || 0, (farm.flock.culls || 0) - claimedApart()));
+  }
+  /** 24:00 of day 0 passed after a day-0 record closed over the limit with the call still to come: the level's limit now. */
+  function claimClosedCheck() {
+    const day = bad.wait;
+    bad.wait = null;
+    if (!inLevel() || free || ended) return;
+    const max = lv().fail?.mortalityMaxPct, ld = levelDeaths();
+    if (max != null && ld.pct > max) { failAt = failAt || { day, pct: ld.pct }; end('mortality'); }
+  }
   function mortalityPct() {
     const placed = placedCount();
     if (!placed) return 0;
@@ -237,7 +260,7 @@ export function createLevel(ctx, deps = {}) {
     try { return stripsAt(engine, pid, null, STRIPS_CYCLE).some((x) => x.inst === inst); } catch { return false; }
   }
   function holdJob(inst) {
-    if (noHold > 0 || level.mode !== 'level' || ended || free || !ui) return false;
+    if (noHold > 0 || level.mode !== 'level' || ended || free || !ui || inst.def.hardClose) return false;   // hardClose: a claim's own deadline
     if (panelShows(ui.openPanelId, inst)) return true;                              // (a) its panel is open
     for (const id of ui.backgroundPanelIds?.() || []) if (panelShows(id, inst)) return true; // (d) a machine job of it runs on
     if (ui.jobCard?.atJob?.(inst.key)) return true;                                 // (b) he stands at its place
@@ -543,7 +566,7 @@ export function createLevel(ctx, deps = {}) {
   /** Everything of one level (a new level, a replay, a resume). */
   function resetLevelState() {
     fired = new Set(); points = []; weighs = []; signedEnd = false; ended = null; pending = null; failAt = null;
-    startAt = null; reached.clear(); stoppedAt = null; bad = { gradedOut: 0, looked: 0, weak: 0, called: null }; soonWarned.clear();
+    startAt = null; reached.clear(); stoppedAt = null; bad = { gradedOut: 0, looked: 0, weak: 0, called: null, wait: null }; soonWarned.clear();
     fast = false; userPaused = false; saveIn = null; lastSaveDay = null; tickAcc = 0;
   }
   function resetRun() {
@@ -846,7 +869,7 @@ export function createLevel(ctx, deps = {}) {
       engine.restore(lv.jobs, d);
       fired = new Set(lv.fired || []); points = lv.points || []; weighs = lv.weighs || []; signedEnd = !!(lv.signedEnd ?? lv.signed7); fast = !!lv.fast;
       failAt = lv.failAt ?? null; startAt = lv.startAt ?? env.day;
-      if (lv.bad) bad = { gradedOut: lv.bad.gradedOut || 0, looked: lv.bad.looked || 0, weak: lv.bad.weak || 0, called: lv.bad.called ?? null };
+      if (lv.bad) bad = { gradedOut: lv.bad.gradedOut || 0, looked: lv.bad.looked || 0, weak: lv.bad.weak || 0, called: lv.bad.called ?? null, wait: lv.bad.wait ?? null };
       for (const k of lv.reached || []) reached.add(k);
       if (inRun && lv.run && runApi) runApi.adopt(lv.run);
       if (data.player && player) player.teleport(data.player.x, data.player.z, data.player.yaw);
@@ -976,7 +999,7 @@ export function createLevel(ctx, deps = {}) {
     serialize() {
       return { v: 1, mode: level.mode, seed, levelId: def.id, inRun, jobs: engine.serialize(), fired: [...fired], points, weighs,
         signed7: signedEnd, signedEnd, fast, failAt, startAt, reached: [...reached], ended: ended ? ended.reason : null,
-        ...(bad.gradedOut || bad.called != null ? { bad: { ...bad } } : {}),
+        ...(bad.gradedOut || bad.called != null || bad.wait != null ? { bad: { ...bad } } : {}),
         watch: watch.serialize(),
         ...(inRun && runApi ? { run: runApi.serialize() } : {}) };
     },

@@ -511,6 +511,8 @@ const ACTION_CHECKS = {
     const left = (farm.cyc?.on && f.silos ? f.silos[0].kg + f.silos[1].kg + kgOf(f.pending) : (f.siloKg || 0) + (f.order?.kg || 0)) - eat;
     return left >= -100 && left <= Math.max(1200, left - (p.result?.kg ?? 0) + 1);
   },
+  /** A bad batch's call to the hatchery while its claim is open: day 0, before 24:00 (farm-cond-chicks, PHASE4.md §3.4). */
+  'claim-open': (p, { env }) => env.dayNumber === LEVEL1.arrivalDay,
 };
 
 // ---------------- the engine ----------------
