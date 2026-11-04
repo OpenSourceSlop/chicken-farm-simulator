@@ -912,6 +912,11 @@ html.reduce-motion .boot-bar::before { animation: none; width: 100%; opacity: 0.
   .title-keys { margin-top: 10px; gap: 4px 12px; }
 }
 .runcard-cond { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 3px; }
+/* Phase 5 integration: the standard start's key on its own line under the flock choice, so its second-press words
+   ("… — replaces this run") grow it to the right and never move it from under the pointer (at the 12 px floor they
+   wrapped it onto the next line, and the confirming press missed) */
+.runcard-cond { display: grid; justify-items: start; }
+.runcard-cond .runcard-std.is-confirm { max-width: 100%; }
 .runcard-select { min-width: 0; max-width: 170px; min-height: 24px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--panel-edge); background: var(--panel-sunk); color: var(--ink); font: 500 12px/1.2 var(--font-body, inherit); }
 .runcard-select:disabled { color: var(--ink-faint); }
 .runcard-std-mark { color: var(--ink-faint); font-weight: 400; }
