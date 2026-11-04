@@ -34,17 +34,23 @@ export function buildWashBay(api) {
   const bar = progressBar();
   let busy = null;
   const washedAt = {}; // when the farmer washed each item here (the farm's clean.washbay is the record)
+  let isOpen = false;
   const items = CLEAN.washItems.map((item) => {
-    const job = machineJob(env, 3, () => { L.act('clean.washbay', { item }); washedAt[item] = env.timeLabel; busy = null; bar.set(0); refresh(); });
+    const job = machineJob(env, 3, () => {
+      L.act('clean.washbay', { item }); washedAt[item] = env.timeLabel; busy = null; bar.set(0); refresh();
+      shell.timeNote.done(`${ITEMS[item] || item} washed and disinfected ${env.timeLabel}.`);
+      if (!isOpen) L.notice?.(`Wash bay: ${(ITEMS[item] || item).toLowerCase()} washed and disinfected ${env.timeLabel}.`, 5);
+    });
     const b = button({ class: 'key key--wide', 'aria-label': `Wash and disinfect: ${ITEMS[item] || item}` }, 'Wash');
-    b.addEventListener('click', () => { if (busy) return; shell.foldPlates(); busy = job; job.start(); refresh(); });
+    // the steps hotfix: a wash takes farm time: a paused clock runs again, and a wash still running finishes when the bay closes
+    b.addEventListener('click', () => { if (busy) return; shell.needTime(`washing and disinfecting ${(ITEMS[item] || item).toLowerCase()} takes 3 farm minutes`); busy = job; job.start(); refresh(); });
     const row = machineRow(ITEMS[item] || item, '', b);
     return { item, b, job, row };
   });
   const note = h('p', { class: 'equip-note' });
   shell.main.append(h('div', { class: 'ctrl-rows' }, tools.map((t) => t.row.el)),
     h('div', { class: 'equip-reads' }, washed.el, dry.el, sprayed.el, swabs.el),
-    h('p', { class: 'cyc-k', style: 'margin-top: 12px' }, 'Wash and disinfect at the bay'), h('div', { class: 'cyc-items', style: 'margin-top: 6px' }, items.map((x) => x.row.el)), bar.el, note);
+    h('p', { class: 'cyc-k', style: 'margin-top: 12px' }, 'Wash and disinfect at the bay'), h('div', { class: 'cyc-items', style: 'margin-top: 6px' }, items.map((x) => x.row.el)), bar.el, shell.timeNote.el, note);
   const pct = (v) => `${Math.round(Math.max(0, Math.min(1, v || 0)) * 100)} %`;
   function refresh() {
     const C = farm.clean || {};
@@ -69,8 +75,9 @@ export function buildWashBay(api) {
   let acc = 0;
   return {
     el: shell.el,
-    onOpen() { shell.refreshPlates(); },
-    onClose() { if (busy) { busy.cancel(); busy = null; bar.set(0); } },
+    onOpen() { isOpen = true; shell.refreshPlates(); },
+    busy: () => !!busy,
+    onClose() { isOpen = false; },
     update(dt, force) {
       if (busy) bar.set(busy.tick() || 0.001);
       acc -= dt;

@@ -8,7 +8,8 @@ import { createJobEngine, BROOD_CELLS, LEVEL_END_DAY, windowHours } from '../src
 import { JOBS } from '../src/content-jobs.js';
 import { BROOD_BOUNDS, HEATERS, LEVEL1, CYCLE, CLEAN, PLAN_LEVEL, WEEK2, WEEK3, FINISH, CLEANOUT, levelOfDay } from '../src/config.js';
 import { JOBS_CYCLE, STATE_TEST_IDS_CYCLE } from '../src/content-jobs-cycle.js';
-import { STRIPS, partRows } from '../src/job-strips.js';
+import { STRIPS, partRows, stripRows } from '../src/job-strips.js';
+import { jobPlaces, nextPlace } from '../src/job-next.js';
 import { STRIPS_CYCLE } from '../src/job-strips-cycle.js';
 import { ventNeed } from '../src/job-figures.js';
 
@@ -569,16 +570,61 @@ test('job strips: every open job of every level builds its rows, neutral words o
   let n = 0;
   for (const [def, day, hour] of days) {
     const L = def ? makeCycle(def, { day, hour }) : makeLevel({ startDay: day, startHour: hour });
-    const c = { env: L.env, farm: L.farm, records: { notebook: [] }, props: L.props, engine: L.jobs, minmax: () => ({ min: 20, max: 30 }), weighings: () => ({ n: 0, sectors: 0, mean: null }) };
+    const c = { env: L.env, farm: L.farm, records: { notebook: [] }, props: L.props, engine: L.jobs, minmax: () => ({ min: 20, max: 30 }), weighings: () => ({ n: 0, sectors: 0, mean: null }),
+      from: { x: -14, z: 0, inside: true }, paused: n % 2 === 0 };
     for (const inst of L.jobs.open()) {
       const S = STRIPS[inst.id] || STRIPS_CYCLE[inst.id];
-      const rows = S ? S.rows({ ...c, inst }, inst) : partRows(c, inst);
+      const rows = stripRows(S, c, inst, 'drinker-0');
       assert(Array.isArray(rows), `${inst.key}: rows`);
       for (const r of rows) for (const t of [r.text, r.what, r.sign, r.yours]) if (t != null) { assert(typeof t === 'string' && !/undefined|NaN|\[object/.test(t), `${inst.key}: "${t}"`); assert(!VERDICT.test(t), `${inst.key}: verdict word in "${t}"`); }
       n++;
     }
   }
   assert(n > 40, `strips built for ${n} open jobs`);
+});
+
+// ---------------- the steps hotfix: the next place of a multi-place job, the pause ----------------
+test('steps hotfix: the flow job at line 1 names the line 2 regulator; a reading out of the band says which key; the pause line', () => {
+  const L = makeLevel({ startDay: 0, startHour: 8.27 });
+  const inst = L.jobs.byKey('r-drinkers@0');
+  assert(inst?.status === 'open', `r-drinkers open at 08:16: ${inst?.status}`);
+  const c = { env: L.env, farm: L.farm, props: L.props, engine: L.jobs, from: { x: -21.3, z: -4.9, inside: true }, line: 0, paused: true };
+  const text = (rows) => rows.map((r) => r.text || `${r.what} ${r.sign} ${r.yours}`).join(' | ');
+  let rows = stripRows(STRIPS['r-drinkers'], c, inst, 'drinker-0');
+  assert(/Then walk to the line 2 regulator, about 3 m south along the west wall/.test(text(rows)), `then row: ${text(rows)}`);
+  assert(rows.some((r) => r.paused) && /clock is paused/.test(text(rows)), 'the pause line while the clock is paused');
+  assert(/1 farm minute/.test(text(rows)), 'how long a test takes');
+  L.farm.water.lines[0].pressureCm = 12; L.farm.act('water.flowtest', { line: 0 }); L.jobs.tick();   // 28 ml/min, over 23
+  rows = stripRows(STRIPS['r-drinkers'], c, inst, 'drinker-0');
+  assert(/above 23: lower the pressure one step/.test(text(rows)), `out of the band: ${text(rows)}`);
+  L.farm.water.lines[0].pressureCm = 8; L.farm.act('water.flowtest', { line: 0 }); L.jobs.tick();    // 20 ml/min
+  for (const l of L.farm.water.lines) l.heightCm = 11;
+  rows = stripRows(STRIPS['r-drinkers'], { ...c, paused: false }, inst, 'drinker-0');
+  assert(/Next: walk to the line 2 regulator/.test(text(rows)) && !rows.some((r) => r.paused), `line 1 done, next line 2: ${text(rows)}`);
+  for (const i of [1, 2, 3]) { L.farm.water.lines[i].pressureCm = 8; L.farm.act('water.flowtest', { line: i }); }
+  L.jobs.tick();
+  assert(inst.status === 'done', `four lines in the band: ${inst.status}`);
+  assert(nextPlace(inst, c, { from: c.from }) === null, 'no next place once done');
+});
+
+test('steps hotfix: every multi-place job names its places with a way there; the marker places stay on the farm', () => {
+  const days = [[null, -1, 8], [null, 0, 9], [null, 2, 6.5], [null, 6, 14], [WEEK2, 8, 9], [WEEK2, 12, 7], [WEEK3, 16, 13.5], [WEEK3, 18, 9], [FINISH, 41, 15], [CLEANOUT, 43, 9], [CLEANOUT, 46, 9]];
+  let multi = 0;
+  for (const [def, day, hour] of days) {
+    const L = def ? makeCycle(def, { day, hour }) : makeLevel({ startDay: day, startHour: hour });
+    const c = { env: L.env, farm: L.farm, props: L.props, engine: L.jobs };
+    for (const inst of L.jobs.open()) {
+      for (const from of [{ x: -14, z: 0, inside: true }, { x: -40, z: 36, inside: false }]) {
+        const all = jobPlaces(inst, { ...c, from });
+        if (!all) continue;
+        multi++;
+        for (const p of all) assert(p.name && p.todo && Number.isFinite(p.at.x) && Math.abs(p.at.x) < 60 && Math.abs(p.at.z) < 40, `${inst.key}: place ${JSON.stringify(p)}`);
+        const np = nextPlace(inst, c, { from });
+        if (all.length) assert(np && /^[A-Z]/.test(np.text) && !/undefined|NaN/.test(np.text), `${inst.key}: next ${np?.text}`);
+      }
+    }
+  }
+  assert(multi >= 10, `multi-place jobs seen: ${multi}`);
 });
 
 test('outcome rules: prep-vent in the band only, r-minvent a real step up, the feeders on the litter, the night held', () => {

@@ -15,6 +15,8 @@ import { cycleControllerParts } from './ui-cycle-controller.js';
 // the clarity round: the open job done here, its steps, the sign's target beside the live value
 import { createJobStrip } from './ui-jobstrip.js';
 import { timerAirM3h, luxOfDimmer } from './job-figures.js';
+// the steps hotfix: a setting a held job waits on runs a paused clock again, with a note under the display
+import { farmTimeNote, heldWaitText } from './ui-farmtime.js';
 
 const READ_AFTER = 2; // real seconds open before the controller counts as read
 
@@ -44,18 +46,22 @@ export function buildLevelControllerPanel(L) {
   const out = () => h('output', { class: 'lcd-mini', 'aria-live': 'polite' });
   const row = (title, sub, ...c) => h('div', { class: 'ctrl-row' }, h('span', { class: 'led', 'aria-hidden': 'true' }), h('div', { class: 'ctrl-label' }, h('span', null, title), sub ? h('small', null, sub) : null), h('div', { class: 'ctrl-keys' }, c));
 
+  // the steps hotfix: after a setting, an open job that must hold over farm time (the chicks near the target for 30
+  // farm minutes, the floor drying) needs the clock: a paused clock runs again and the note says what it waits for
+  const timeNote = farmTimeNote();
+  const waits = () => { const t = heldWaitText(L.engine()); if (t) timeNote.start(t); };
   // Temperature
   const spOut = out(), heatState = h('span');
-  const setpoint = (d) => { env.setHeaterSetpoint(env.heaterSetpoint + d); L.uiAct('heat.setpoint', { value: env.heaterSetpoint }); refresh(); };
+  const setpoint = (d) => { env.setHeaterSetpoint(env.heaterSetpoint + d); L.uiAct('heat.setpoint', { value: env.heaterSetpoint }); waits(); refresh(); };
   const chart = h('div', { class: 'ctrl-chart' });
   secs[0].append(row('Brooder thermostat', heatState, key('Lower the brooder thermostat by 0.5 °C', ICONS.minus, () => setpoint(-0.5)), spOut, key('Raise the brooder thermostat by 0.5 °C', ICONS.plus, () => setpoint(0.5))), chart);
 
   // Ventilation. In a level env.fansOn also counts the timer fans while they run: step the fans
   // switched on by hand (env.fansManual).
-  const manualFans = (d) => { env.setFans((env.fansManual ?? env.fansOn) + d); L.uiAct('vent.fans', { n: env.fansManual ?? env.fansOn }); refresh(); };
+  const manualFans = (d) => { env.setFans((env.fansManual ?? env.fansOn) + d); L.uiAct('vent.fans', { n: env.fansManual ?? env.fansOn }); waits(); refresh(); };
   const padState = h('span', { class: 'ctrl-sub' });
   const fanOut = out(), padBtn = button({ class: 'key key--wide key--act', 'aria-pressed': 'false' });
-  padBtn.addEventListener('click', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); refresh(); });
+  padBtn.addEventListener('click', () => { env.setPad(!env.padOn); L.uiAct('vent.pad', { on: env.padOn }); waits(); refresh(); });
   const draft = { fans: env.ventTimer?.fans ?? 1, onSec: env.ventTimer?.onSec ?? 0, cycleSec: env.ventTimer?.cycleSec ?? 300 };
   const tFans = out(), tOn = out(), tCycle = out(), tAir = h('span', { class: 'ctrl-air' }), tNow = h('p', { class: 'ctrl-timer-now' });
   // Shift held: the big step (10 s on-seconds), as the winches step 5 cm
@@ -65,9 +71,9 @@ export function buildLevelControllerPanel(L) {
   applyTimer.addEventListener('click', () => {
     const t = { ...draft };
     L.act('vent.timer', t); // the farm sets env.setVentTimer itself
-    refresh();
+    waits(); refresh();
   });
-  timerOff.addEventListener('click', () => { const t = { fans: draft.fans, onSec: 0, cycleSec: draft.cycleSec }; draft.onSec = 0; L.act('vent.timer', t); refresh(); });
+  timerOff.addEventListener('click', () => { const t = { fans: draft.fans, onSec: 0, cycleSec: draft.cycleSec }; draft.onSec = 0; L.act('vent.timer', t); waits(); refresh(); });
   secs[1].append(
     row('Tunnel fans', 'running all the time, switched by hand: air along the floor, for big birds in the heat', key('One tunnel fan fewer', ICONS.minus, () => manualFans(-1)), fanOut,
       key('One tunnel fan more', ICONS.plus, () => manualFans(1))),
@@ -108,7 +114,7 @@ export function buildLevelControllerPanel(L) {
   const strips = [createJobStrip(L, 'controller', { section: 'top', ctx: sctx, label: SECTION }),
     ...['temp', 'vent', 'lights'].map((sec) => createJobStrip(L, 'controller', { section: sec, ctx: sctx }))];
   secs.forEach((sec, i) => sec.prepend(strips[i + 1].el));
-  el.append(h('div', { class: 'ctrl-case' }, screws, brand, h('div', { class: 'ctrl-plate' }, lcd, strips[0].el,
+  el.append(h('div', { class: 'ctrl-case' }, screws, brand, h('div', { class: 'ctrl-plate' }, lcd, strips[0].el, timeNote.el,
     h('div', { class: 'ctrl-tabs', role: 'tablist' }, tabBtns), secs)), closeBtn);
   showTab(0);
 

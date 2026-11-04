@@ -15,6 +15,8 @@ import { int, one } from './ui-format.js';
 import { cycleFeederParts, cycleSiloParts, cycleHeapParts } from './ui-cycle-equip.js';
 // the clarity round: the open job done here, its steps, the sign's target beside the live value
 import { createJobStrip } from './ui-jobstrip.js';
+// the steps hotfix: an action that waits on farm time runs a paused clock again and says so
+import { farmTimeNote } from './ui-farmtime.js';
 
 /**
  * Machine case: header with icon, title and where; a dark working plate; plate columns at the side.
@@ -37,9 +39,14 @@ export function equipShell({ cls = '', icon, title, sub, plates = [], onClose, s
     h('header', { class: 'ctrl-brand' }, h('span', { class: 'ctrl-logo', html: icon || ICONS.sliders, 'aria-hidden': 'true' }),
       h('div', null, h('h2', { id: titleId }, title), sub ? h('p', null, sub) : null)),
     h('div', { class: `equip-grid${side ? '' : ' equip-grid--solo'}` }, main, side), side ? null : links), closeBtn);
+  const timeNote = farmTimeNote();
   return {
-    el, main, plates: plateEls,
+    el, main, plates: plateEls, timeNote,
     foldPlates() { for (const p of plateEls) p.fold(); },
+    /** An action that waits on farm time starts here: the plates fold (an open plate stands the clock still), a paused
+     *  clock runs again at normal speed, and the panel's note says so ("Clock running: the test takes 1 farm minute").
+     *  The panel puts `timeNote.el` where the farmer reads it (under the key that started it). */
+    needTime(text) { for (const p of plateEls) p.fold(); return timeNote.start(text); },
     /** Phase 3: rebuild a plate whose merged board of today has more lines (BOARD_EXTRA_ITEMS fromDay);
      *  the brooding week's plates never change. Panels call it when they open. */
     refreshPlates() {
@@ -100,8 +107,10 @@ export function buildFeederPanel(L) {
   const strip = createJobStrip(L, 'feeder-box');
   const rows = FEEDER_LINES_Z.map((z, i) => {
     // a running auger fills the pans over farm time: the plate folds so the clock runs
-    const run = toggleKey('Stop auger', 'Start auger', () => { const l = farm.feed.lines[i]; if (!l.running) shell.foldPlates(); L.act('feed.line', { line: i, running: !l.running }); refresh(); });
-    const flood = toggleKey('Close flood windows', 'Open flood windows', () => { const l = farm.feed.lines[i]; if (!l.flood) shell.foldPlates(); L.act('feed.line', { line: i, flood: !l.flood }); refresh(); });
+    // the steps hotfix: starting it runs a paused clock again, and the note under the rows says how long it takes
+    const FILL = 'the auger fills the pans over farm time: about 25 farm minutes for flooded pans. Close the box and let the clock run (Next job works too)';
+    const run = toggleKey('Stop auger', 'Start auger', () => { const l = farm.feed.lines[i]; if (!l.running) shell.needTime(FILL); L.act('feed.line', { line: i, running: !l.running }); refresh(); });
+    const flood = toggleKey('Close flood windows', 'Open flood windows', () => { const l = farm.feed.lines[i]; if (!l.flood) shell.needTime(FILL); L.act('feed.line', { line: i, flood: !l.flood }); refresh(); });
     const height = stepper(`Line ${i + 1} pan height`, 'cm', (d) => {
       const [lo, hi] = EQUIP.feederHeightCm;
       const cm = Math.max(lo, Math.min(hi, Math.round(farm.feed.lines[i].heightCm + d)));
@@ -127,8 +136,8 @@ export function buildFeederPanel(L) {
     const was = prev && (typeof prev.value === 'object' ? prev.value.kg : prev.value);
     meter.set(`${int(r?.kg)} kg`, Number.isFinite(was) ? `${int(r.kg - was)} kg since your reading of day ${prev.day}` : 'since the first fill');
   });
-  const cyc = cycleFeederParts(L, { foldPlates: () => shell.foldPlates() });
-  shell.main.append(strip.el, h('div', { class: 'ctrl-rows' }, rows.map((r) => r.row.el), cyc.els[0]), legend, timeNote, h('div', { class: 'equip-reads' }, meter.el, readBtn), cyc.els[1]);
+  const cyc = cycleFeederParts(L, { foldPlates: () => shell.foldPlates(), needTime: (t) => shell.needTime(t), timeNote: shell.timeNote });
+  shell.main.append(strip.el, h('div', { class: 'ctrl-rows' }, rows.map((r) => r.row.el), cyc.els[0]), shell.timeNote.el, legend, timeNote, h('div', { class: 'equip-reads' }, meter.el, readBtn), cyc.els[1]);
 
   function panSvg(l) {
     // side view: litter line, pan at its rim height, feed heaped by fill (flood = heaped above the rim)
@@ -157,9 +166,11 @@ export function buildFeederPanel(L) {
   }
   return {
     el: shell.el,
-    onOpen() { shell.refreshPlates(); strip.onOpen(); },
+    onOpen() { shell.refreshPlates(); strip.onOpen(); cyc.onOpen?.(); },
+    /** A pan wash still running finishes in the background when the box closes (the panel host keeps updating it). */
+    busy: () => !!cyc.busy?.(),
     onClose() { cyc.onClose(); strip.onClose(); },
-    update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.25; refresh(); cyc.update(); strip.update(); timeNote.hidden = !farm.feed.lines.some((l) => l.running && l.turning); } },
+    update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.25; refresh(); cyc.update(); strip.update(); timeNote.hidden = !!shell.timeNote.text || !farm.feed.lines.some((l) => l.running && l.turning); } },
   };
 }
 

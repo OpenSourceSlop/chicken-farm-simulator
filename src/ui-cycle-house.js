@@ -45,10 +45,11 @@ export function buildCurtainWinch(api) {
   const beyond = readout('Litter beyond the curtain');
   const up = button({ class: 'btn btn--machine btn--go' }, h('span', { html: ICONS.up, 'aria-hidden': 'true' }), 'Wind the curtain up');
   const down = button({ class: 'btn btn--machine' }, h('span', { html: ICONS.down, 'aria-hidden': 'true' }), 'Let the curtain down');
-  up.addEventListener('click', () => { L.act('house.curtain', { open: true }); liftedAt = env.day; refresh(true); });
+  // the steps hotfix: the birds walk out over the new floor while the clock runs (a paused clock runs again)
+  up.addEventListener('click', () => { shell.needTime('the birds walk out over the whole house over the next farm minutes; the walk to look at their spread opens half an hour after the lift'); L.act('house.curtain', { open: true }); liftedAt = env.day; refresh(true); });
   down.addEventListener('click', () => { L.act('house.curtain', { open: false }); refresh(true); });
   const note = h('p', { class: 'equip-note' }, 'Legend: yellow = rice husk on that metre of floor, grey = bare concrete, dotted = where the birds can go.');
-  shell.main.append(pic, h('div', { class: 'equip-reads' }, state.el, beyond.el), h('div', { class: 'equip-btns' }, up, down), note);
+  shell.main.append(pic, h('div', { class: 'equip-reads' }, state.el, beyond.el), h('div', { class: 'equip-btns' }, up, down), shell.timeNote.el, note);
   let liftedAt = null;
   function refresh(force) {
     const open = farm.house?.curtainOpen ?? env.broodCurtain === false;
