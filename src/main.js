@@ -118,6 +118,7 @@ async function start(saved = {}) {
   const interactables = interact.list;
   const deps = { farm, records, skills, save, player, flock, props, interact, events };
   const ui = createUI(ctx, { ...deps, house, world, interactables });
+  ctx.ui = ui;                       // Phase 5: the hubs (createUI sets it too; the packages read ctx.ui, PHASE5.md §8.9)
   const level = createLevel(ctx, { ...deps, ui });
   ctx.level = level;
   const run = createRun({ level, save, events, farm, env, records });
@@ -187,7 +188,9 @@ async function start(saved = {}) {
 
   // Test and tooling hooks (used by scripts/shoot.mjs and the Phase 1 test tools)
   const game = {
-    ready: true,
+    // Phase 5 integration: true only after the warm-up and level.boot() (a steps file that acts right after a reload
+    // could otherwise be overridden by boot(): the saves package's harness race)
+    ready: false,
     THREE, scene, camera, renderer, env, world, house, player, flock, ui,
     config,                       // the config module (steps files read the signs' numbers from it)
     // Phase 2 (PHASE2.md "Test hooks")
@@ -339,6 +342,7 @@ async function start(saved = {}) {
   });
 
   bootScreen.hide();
+  game.ready = true;
   requestAnimationFrame(frame);
 }
 

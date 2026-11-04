@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node build.mjs",
     "shoot": "node scripts/shoot.mjs",
-    "test": "node scripts/test-contracts.mjs && node scripts/test-sim.mjs && node scripts/test-jobs.mjs && node scripts/test-level.mjs && node scripts/test-cycle.mjs && node scripts/test-run.mjs && node scripts/test-tuning.mjs && node scripts/test-cond.mjs --quick && node scripts/test-watch.mjs && node scripts/test-fixes.mjs && node scripts/test-audio.mjs",
+    "test": "node scripts/test-contracts.mjs && node scripts/test-sim.mjs && node scripts/test-jobs.mjs && node scripts/test-level.mjs && node scripts/test-cycle.mjs && node scripts/test-run.mjs && node scripts/test-tuning.mjs && node scripts/test-cond.mjs --quick && node scripts/test-watch.mjs && node scripts/test-fixes.mjs && node scripts/test-audio.mjs && node scripts/test-audio-hour.mjs && node scripts/test-saves.mjs && node scripts/test-settings.mjs && node scripts/test-map.mjs",
     "audit": "node scripts/tuning-audit.mjs",
     "perf": "node scripts/test-perf.mjs"
   },

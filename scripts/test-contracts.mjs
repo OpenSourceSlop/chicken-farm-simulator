@@ -568,6 +568,36 @@ test('phase 5 graphics quality: the governor steps down in Phase 1\'s order; man
   assert(r.shadowMap.enabled === true && r.shadowMap.autoUpdate === true && q.state().shadows === 'high' && sun.shadow.mapSize.x === 2048, 'back to automatic: the soft shadow again');
 });
 
+// Phase 5 as integrated (PHASE5.md §11): the packages' player-facing words, merged
+test('phase 5 merged words: sound captions, intro cards, map places, menu, settings labels and saves messages hold no verdict; the hot season\'s sign line is general practice', async () => {
+  const { CAPTION_WORDS } = await import('../src/audio-captions.js');
+  const caps = Object.values(CAPTION_WORDS);
+  assert(caps.length >= 15 && caps.every((t) => typeof t === 'string' && t && !VERDICT.test(t)), 'sound captions: plain words, no verdict');
+  assert(CAPTION_WORDS.alarm === 'Alarm in the house', 'the alarm caption (PHASE5.md §2.3)');
+  const { INTRO_CARDS } = await import('../src/ui-intro.js');
+  const { fillGuide } = await import('../src/content-guide.js');
+  assert(INTRO_CARDS.length === 4, 'four intro cards');
+  for (const c of INTRO_CARDS) {
+    const t = fillGuide(c.text);
+    assert(!/[{}]/.test(t) && !VERDICT.test(t) && !/°C|L\/kg|m\/s|lux|ppm/.test(t) && !/\?/.test(t), `intro card ${c.id}: no token left, no verdict, no farming figure, no question`);
+  }
+  const { MAP_PLACES } = await import('../src/map-plan.js');
+  for (const p of MAP_PLACES) assert(!VERDICT.test(p.name), `map place name: ${p.name}`);
+  const { SETTINGS_SCHEMA } = await import('../src/settings.js');
+  let nSet = 0;
+  for (const [g, grp] of Object.entries(SETTINGS_SCHEMA)) for (const [k, it] of Object.entries(grp.items || {})) {
+    nSet++;
+    for (const t of [grp.label, it.label, it.hint, ...(it.options || []).map((o) => o[1])].filter((x) => typeof x === 'string')) assert(!VERDICT.test(t), `setting ${g}.${k}: ${t}`);
+  }
+  assert(nSet >= 25, `settings checked: ${nSet}`);
+  const { SAVE_MESSAGES } = await import('../src/save-codec.js');
+  for (const code of ['auto-failed', 'needs-gzip', 'empty', 'no-game', 'auto-unreadable']) assert(typeof SAVE_MESSAGES[code] === 'string' && !VERDICT.test(SAVE_MESSAGES[code]), `save message ${code}`);
+  // the one new sign line of Phase 5 (§6.8.4): the hot season's appetite on the heat sign, general practice, the 2–5 % band
+  const line = BOARD_COND_ITEMS.hot['sign-heat'].find((it) => /eat less in the hottest hours/.test(it.text));
+  assert(line && line.source === 'general' && /2–5 %/.test(line.text) && !VERDICT.test(line.text) && !/p\.\s*\d/.test(line.text), 'the hot season\'s appetite line: general practice, 2–5 %');
+  assert(!Object.values(BOARD_COND_ITEMS).some((byBoard) => Object.entries(byBoard).some(([b, items]) => b !== 'sign-heat' && items.some((it) => /eat less in the hottest hours/.test(it.text)))), 'the appetite line only on the heat sign');
+});
+
 let failed = 0;
 for (const t of tests) {
   try { await t.fn(); console.log(`ok   ${t.name}`); } catch (e) { failed++; console.log(`FAIL ${t.name}: ${e.message}`); }

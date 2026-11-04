@@ -494,7 +494,8 @@ export function createUI(ctx, deps) {
   events.on(EV.SOUND_CAPTION, (p) => {
     let on = false;
     try { on = !!ctx.settings?.get('interface.soundCaptions'); } catch { on = false; }
-    if (on && p?.text && mode !== 'title') caption.show(`[${p.text}]`, 3.5, { ifFree: true });
+    // the alarm is never dropped behind another caption (queued, then replaced by the next one); the rest only when free
+    if (on && p?.text && mode !== 'title') caption.show(`[${p.text}]`, 3.5, p.key === 'alarm' ? { soft: true } : { ifFree: true });
   });
   // the saves' messages (PHASE5.md §3.7, review round): the autosave that could not write says so as a caption (once per
   // level, saves.js decides); any other save message shows here when the saves panel is not open to show it itself
