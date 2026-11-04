@@ -91,8 +91,8 @@ use, at most as many cells as week 1's walks (150 in the morning, 105 in the aft
 - **Day 8: light against sudden death.** *Set the light program for the growing birds* (controller,
   Lights; the new light sign beside it: a dark period every night from week 2; with Lighting level 1,
   earned in the brooding week of a run, the presets) and *Measure the light at bird level* (key **L**,
-  three parts of the floor). From today the morning job *Step up the minimum ventilation for the birds'
-  weight* comes every other day (the vent sign's table now runs to 3 kg) and *Raise the drinker and feeder
+  three parts of the floor). From tomorrow the morning job *Step up the minimum ventilation for the birds'
+  weight* comes every other day, on the mornings without the flow tests (the vent sign's table now runs to 3 kg) and *Raise the drinker and feeder
   lines* every three or four days (days 8, 11, 14, 17, 20, 24, 28, 32).
 - **Day 9: a rainy spell** (two days of 92 % humidity outside). The house air goes damp; the controller
   shows it, a squeeze sticks, the look note says "damp air, wet patches by the walls" → *The air in the
@@ -338,7 +338,7 @@ no birds yet"; clean-out "Clean-out day 2"; resting "Rest day 9 · chicks booked
 ### 3.3 Daily routine by age (PHASE2.md §4.3 table, every day)
 | Round | Days 0–7 (Phase 2) | Days 8–14 | Days 15–41 |
 | --- | --- | --- | --- |
-| Morning | dips · controller · meter · walk (brood floor 50 % = 150 cells + listen) · drinkers (flow test 4 lines) · feeders (meter + silo) · dead birds | same; the walk covers 50 % of the **used** floor, at most 150 cells; *Step up the minimum ventilation* on days 8, 10, 12, 14; the flow tests on even days, the silo gauge on odd days and the order days 13, 27, 36 (the feed meter alone, `r-feedmeter`, on the others; review pacing) | same; *Step up the minimum ventilation* on days 16, 18, 20 |
+| Morning | dips · controller · meter · walk (brood floor 50 % = 150 cells + listen) · drinkers (flow test 4 lines) · feeders (meter + silo) · dead birds | same; the walk covers 50 % of the **used** floor, at most 150 cells; the flow tests on even days, *Step up the minimum ventilation* and the silo gauge on odd days (9, 11, 13), the silo also on the order days 13, 27, 36 (the feed meter alone, `r-feedmeter`, on the others; review pacing) | same; *Step up the minimum ventilation* on days 15, 17, 19 |
 | Afternoon | house dip · walk 35 % (105 cells) · controller · litter (3 squeezes) · dead birds | same (walk on the used floor, at most 105 cells); *Raise the lines* on days 8, 11, 14 | house dip · walk (not on the quiet days 26 and 34) · **fans** instead of the controller (the fan panel read, `r-fans-pm`) · litter · dead birds; *Raise the lines* on days 17, 20, 24, 28, 32 |
 | Evening | record | record | **night ventilation** (18–22: the controller by the door, or the fan panel, `r-vent-night`) · record |
 About 13 routine jobs a day as in week 1, plus one or two of the level's own. Day 42 has only the catch
@@ -377,7 +377,7 @@ engine only makes days −1..7).
 | --- | --- | --- | --- | --- | --- | --- |
 | `w2-lights` *Set the light program for the growing birds* | d8 am | controller | all: any `light.program` / `light.preset`, state `dark-period` (≥ 4 h dark, the light sign) | dark hours, lux → SDS, legs (§6.5) | controller-lights, sign-light | lighting |
 | `w2-lux` *Measure the light at bird level* | d8 am | signLight | `count light.lux` n 3, 3 sectors (L key) | reading | sign-light | lighting |
-| `r-minvent` *Step up the minimum ventilation for the birds' weight* | days 8, 10 … 20 am | controller | `vent.timer` with `result.stepUp` (at least the air of the setting before) | air, humidity (§6.4) | sign-vent | moisture |
+| `r-minvent` *Step up the minimum ventilation for the birds' weight* | days 9, 11 … 19 am (review pacing: the mornings without the flow tests) | controller | `vent.timer` with `result.stepUp` (at least the air of the setting before) | air, humidity (§6.4) | sign-vent | moisture |
 | `w2-ready` *Get the rest of the house ready for the birds* | d9 13:00–18:00 | litterHeap | state `house-ready` | litter cover | sign-curtain, sign-litter | brooding |
 | `w2-curtain` *Lift the brooding curtain and let the birds spread* (pin) | d9 13:00 → d11 18:00 | curtainWinch | `house.curtain { open: true }` | floor in use → house (§6.2) | sign-curtain | brooding |
 | `w2-spread` *Walk the whole house and look at the spread* | rel `curtain` +0.5 … +6 h | curtainWinch | `coverage` area house 25 % (144 cells) + listen | look notes | sign-curtain, sign-health | brooding |

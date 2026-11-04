@@ -500,8 +500,9 @@ hour)` (`level.debug.freeRun`) and `config` (the config module: steps files read
   standard start clears the later levels and their starts of the abandoned flock and keeps the player's entries of the
   levels before; a replay from day 22 deletes the stored day-29 start too (`store.clearStart`). The day-29 inner start
   reached by the running clock no longer teleports the farmer. A skill award schedules a run save (0.5 s).
-- **Pacing (`onDays`):** from day 8 the four flow tests come on even mornings (`FLOW_DAYS`), the silo gauge on odd
-  mornings and the order days 13, 27, 36 (`SILO_DAYS`; `r-feedmeter` asks for the feed meter alone on the others), the
+- **Pacing (`onDays`):** from day 8 the four flow tests come on even mornings (`FLOW_DAYS`), the minimum ventilation
+  step-up (`r-minvent`, days 9–19) and the silo gauge on odd mornings, the silo also on the order days 13, 27, 36
+  (`SILO_DAYS`; `r-feedmeter` asks for the feed meter alone on the others), the
   droppings checks take five birds, the night ventilation is done at the controller by the door, and the afternoon
   walk rests on the quiet days 26 and 34.
 
