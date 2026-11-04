@@ -18,19 +18,19 @@ const CSS = `
 .jstrip[hidden] { display: none; }
 .jstrip + .jstrip { margin-top: -4px; }
 .js-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 0 5px; }
-.js-k { padding: 1px 6px; border-radius: 2px; background: var(--sign-yellow); color: var(--sign-yellow-ink); font: 700 10.5px/1.4 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; }
+.js-k { padding: 1px 6px; border-radius: 2px; background: var(--sign-yellow); color: var(--sign-yellow-ink); font: 700 11px/1.4 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; }
 .js-k.is-done { background: var(--led-run, #6fd36f); color: #10240f; }
 .js-title { font: 700 13.5px/1.25 var(--font-display); letter-spacing: 0.03em; }
 .js-rows { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
 .js-rows > li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 0 6px; align-items: start; }
-.js-mark { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--key-sub); font: 700 9.5px/1 var(--font-display); color: var(--key-sub); }
+.js-mark { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--key-sub); font: 700 12px/1 var(--font-display); color: var(--key-sub); }
 .js-step.is-done .js-mark { background: var(--sign-yellow); box-shadow: none; color: var(--sign-yellow-ink); }
 .js-step.is-done .js-text { color: var(--key-sub); }
 .js-dot { width: 5px; height: 5px; margin: 6px 0 0 6px; border-radius: 50%; background: var(--key-sub); }
 .js-cmp .js-text { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1px 10px; }
 .js-what { grid-column: 1 / -1; font-weight: 600; }
 .js-sign, .js-yours { padding: 2px 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.22); }
-.js-sign b, .js-yours b { display: block; font: 700 9.5px/1.3 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--key-sub); }
+.js-sign b, .js-yours b { display: block; font: 700 11px/1.3 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--key-sub); }
 .js-note .js-text, .js-time .js-text { color: var(--sign-yellow); }
 .js-step.is-next .js-text { font-weight: 600; }
 .js-time.is-paused .js-text { color: var(--key-ink); font-weight: 600; }
@@ -39,7 +39,7 @@ const CSS = `
 .js-bar--scale { position: relative; height: 6px; overflow: visible; }
 .js-bar--scale > span { border-radius: 2px; }
 .js-band { position: absolute; top: -2px; bottom: -2px; border: 1px solid var(--key-ink); border-radius: 2px; background: rgba(255, 255, 255, 0.1); opacity: 0.75; }
-.js-bar--over::after { content: '▶'; position: absolute; right: -11px; top: -5px; font-size: 9px; color: var(--sign-yellow); }
+.js-bar--over::after { content: '▶'; position: absolute; right: -11px; top: -5px; font-size: 12px; color: var(--sign-yellow); }
 .js-more { margin: 5px 0 0; font-size: 12px; color: var(--key-sub); }
 /* on the records book's paper (the Phone page's jobs): ledger ink, not the machine panels' light ink (integrator) */
 .book-paper .jstrip { color: var(--ledger-ink, #2b2a24); background: rgba(231, 182, 70, 0.16); box-shadow: inset 0 0 0 1px rgba(160, 112, 20, 0.55); }
@@ -52,12 +52,12 @@ const CSS = `
 /* machine rows: the state word beside the title, keys that name their action, the pans' fill as a number */
 .ctrl-label > .ctrl-state { display: block; margin-top: 3px; font: 600 12px/1.25 var(--font-display); letter-spacing: 0.02em; text-transform: none; color: var(--sign-yellow); }
 .ctrl-label > .ctrl-state[hidden] { display: none; }
-.key--act { height: auto; min-height: 40px; max-width: 172px; padding: 6px 12px; white-space: normal; line-height: 1.15; font-size: 11.5px; }
+.key--act { height: auto; min-height: 40px; max-width: 172px; padding: 6px 12px; white-space: normal; line-height: 1.15; font-size: 12px; }
 .pan-read { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pan-num { display: grid; gap: 3px; min-width: 104px; font: 600 12.5px/1.2 var(--font-display); color: var(--key-ink); }
 .pan-bar { display: block; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, 0.35); overflow: hidden; }
 .pan-bar > span { display: block; height: 100%; background: var(--sign-yellow); transform-origin: left center; transform: scaleX(0); }
-.ctrl-keys-k { max-width: 74px; font: 600 10.5px/1.2 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--key-sub); text-align: right; }
+.ctrl-keys-k { max-width: 74px; font: 600 11px/1.2 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--key-sub); text-align: right; }
 .equip-legend { margin: 10px 0 0; padding: 0 0 0 16px; font-size: 12.5px; line-height: 1.4; color: var(--key-sub); }
 .equip-legend li + li { margin-top: 2px; }
 .equip-legend b { color: var(--key-ink); font-weight: 600; }

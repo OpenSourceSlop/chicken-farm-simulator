@@ -1,0 +1,23 @@
+[
+  {"wait": 800},
+  {"clearStorage": true},
+  {"wait": 600},
+  {"expect": "(() => { const s = window.__bootSteps || []; return ['Building the farm', 'Bringing in the flock', 'Warming up the graphics'].every((w) => s.includes(w)) && document.getElementById('boot').hidden && 'the loading card named its steps: ' + s.join(' → ') + '; then hidden'; })()", "label": "the loading card's step words seen during boot"},
+  {"expect": "(() => { const b = document.querySelector('.boot-bar'); return !!b && 'the bar is on the card (still under reduced motion: ' + getComputedStyle(b, '::before').animationName + ')'; })()", "label": "the loading card keeps its bar"},
+  {"eval": "__game.stop(), __game.run.startRun({ seed: 1 }), window.__saved0 = JSON.parse(localStorage.getItem('chickenFarm.run.v3') || 'null')?.savedAt ?? 0, 'a run on the planning day; the autosave from ' + __saved0"},
+  {"wait": 120},
+  {"eval": "(() => { const ext = __game.renderer.getContext().getExtension('WEBGL_lose_context'); ext.loseContext(); return 'the graphics context lost (WEBGL_lose_context)'; })()"},
+  {"wait": 400},
+  {"expect": "(() => { const b = document.getElementById('boot'), t = b.textContent; return !b.hidden && b.dataset.error === 'context-lost' && /The graphics stopped/.test(t) && /saved just now/.test(t) && /press Continue/.test(t) && t; })()", "label": "in a level: the 'graphics stopped … saved just now' message"},
+  {"expect": "(() => { const r = document.querySelector('#boot .boot-reload'); return !!r && r.tagName === 'BUTTON' && /Reload the page/.test(r.textContent) && document.activeElement === r && 'its Reload the page key, focused'; })()", "label": "the message has its Reload key"},
+  {"expect": "(() => { const s = JSON.parse(localStorage.getItem('chickenFarm.run.v3') || 'null')?.savedAt ?? 0; return s > __saved0 && 'the autosave written just then: ' + s + ' > ' + __saved0; })()", "label": "the autosave's savedAt newer than before"},
+  {"expect": "(() => { const m = document.querySelector('#boot .boot-msg'), cs = getComputedStyle(m); return parseFloat(cs.fontSize) >= 16 && cs.textAlign === 'center' && 'the message at ' + cs.fontSize + ', centred'; })()", "label": "the message: 16 px, centred"},
+  {"shot": "p5-boot-lost-level"},
+  {"reload": true},
+  {"wait": 1500},
+  {"eval": "__game.stop(), __game.level.toTitle(), 'the title card (mode ' + __game.level.mode + ')'"},
+  {"eval": "(() => { const ext = __game.renderer.getContext().getExtension('WEBGL_lose_context'); ext.loseContext(); return 'the context lost on the title card'; })()"},
+  {"wait": 400},
+  {"expect": "(() => { const b = document.getElementById('boot'), t = b.textContent; return !b.hidden && /The graphics stopped/.test(t) && /Continue goes on from the last time the game saved/.test(t) && !/saved just now/.test(t) && !!document.querySelector('#boot .boot-reload') && t; })()", "label": "on the title card: the '…Continue goes on from the last time the game saved' words"},
+  {"shot": "p5-boot-lost-title"}
+]

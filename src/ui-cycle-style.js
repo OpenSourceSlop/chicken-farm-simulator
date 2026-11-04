@@ -13,7 +13,7 @@ const CSS = `
 .cyc-dim { color: var(--key-sub); }
 .cyc-box { padding: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); min-width: 0; color: var(--key-ink); }
 .cyc-presets .ctrl-apply { justify-content: flex-start; gap: 6px; }
-.cyc-presets .key--wide { min-width: 0; height: 34px; padding: 0 10px; font-size: 11.5px; letter-spacing: 0.05em; }
+.cyc-presets .key--wide { min-width: 0; height: 34px; padding: 0 10px; font-size: 12px; letter-spacing: 0.05em; }
 .cyc-row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .cyc-row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .cyc-check { display: inline-flex; align-items: center; gap: 8px; font: 600 13px/1.2 var(--font-display); letter-spacing: 0.04em; color: var(--key-ink); cursor: pointer; }
@@ -31,13 +31,13 @@ const CSS = `
 .cyc-lcd .lcd-num { font-size: 23px; }
 .cyc-lcd .lcd-cell--wide { grid-column: span 2; }
 .cyc-windchill { flex-wrap: wrap; }
-.cyc-windchill .lcd-sub { flex-basis: 100%; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; opacity: 0.8; margin-top: -2px; }
+.cyc-windchill .lcd-sub { flex-basis: 100%; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; opacity: 0.8; margin-top: -2px; }
 /* fan panel: six switches with lamps and an air vane */
 .fanbank { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .fan-sw { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); }
 .fan-sw .key { width: 40px; height: 36px; }
 .fan-name { font: 600 13px/1.15 var(--font-display); letter-spacing: 0.07em; text-transform: uppercase; }
-.fan-name small { display: block; font: 500 11.5px/1.2 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--key-sub); }
+.fan-name small { display: block; font: 500 12px/1.2 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--key-sub); }
 .fan-vane { display: inline-flex; width: 30px; height: 30px; color: var(--key-sub); }
 .fan-vane svg { width: 100%; height: 100%; }
 .fan-vane.is-turning svg { animation: cyc-spin 0.6s linear infinite; color: var(--key-ink); }
@@ -70,7 +70,7 @@ const CSS = `
 .cyc-sheet-wide { grid-column: 1 / -1; }
 .cyc-sheet-rows { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 4px 8px; align-items: center; margin-bottom: 10px; }
 .cyc-sheet-rows label { font-size: 13.5px; line-height: 1.3; }
-.cyc-sheet-rows label small { display: block; font-size: 11.5px; color: var(--ledger-ink-dim); }
+.cyc-sheet-rows label small { display: block; font-size: 12px; color: var(--ledger-ink-dim); }
 .cyc-sheet input[type="number"] { width: 100%; box-sizing: border-box; padding: 4px 6px; border: 0; border-bottom: 1.5px solid var(--ledger-ink); background: rgba(255, 255, 255, 0.5); color: var(--ledger-ink); font: 600 16px/1.2 var(--font-display); text-align: right; }
 .cyc-sheet input[type="number"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .cyc-sheet .cyc-note { margin: 4px 0 8px; font-size: 12.5px; line-height: 1.4; color: var(--ledger-ink-dim); }
@@ -91,7 +91,7 @@ const CSS = `
 .cyc-guide { margin-top: 8px; padding: 8px; border-radius: 6px; background: var(--sign-face); color: var(--sign-paint); font-size: 12.5px; line-height: 1.35; }
 .cyc-guide-pics { display: grid; grid-template-columns: repeat(3, 38px minmax(0, 1fr)); gap: 4px 8px; align-items: center; margin-bottom: 6px; }
 .cyc-guide-lines { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 2px 8px; align-items: center; }
-.cyc-guide .src { grid-column: 2; margin: 0 0 4px; font-size: 10.5px; color: var(--sign-paint-dim); }
+.cyc-guide .src { grid-column: 2; margin: 0 0 4px; font-size: 11px; color: var(--sign-paint-dim); }
 .cyc-guide svg { display: block; }
 .cyc-card { margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: var(--ledger-paper); color: var(--ledger-ink); font-size: 12.5px; line-height: 1.45; }
 .cyc-card b { font-family: var(--font-display); letter-spacing: 0.04em; }

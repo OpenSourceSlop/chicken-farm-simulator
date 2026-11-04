@@ -82,7 +82,10 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
     if (back) {
       onClose?.();
       open(back.id, { keepStack: true, returnFocus: back.returnFocus });
-      if (returnFocus && document.contains(returnFocus) && returnFocus.offsetParent !== null) returnFocus.focus({ preventScroll: true });
+      // Phase 5 (a11y): the focus back on the key that opened the child; a parent that drew itself again on opening
+      // (the result) gets the same key of its new drawing (same data hooks, else the same words)
+      const target = returnFocus && document.contains(returnFocus) && returnFocus.offsetParent !== null ? returnFocus : twinOf(current?.panel?.el, returnFocus);
+      target?.focus?.({ preventScroll: true });
       return;
     }
     if (restoreFocus) {
@@ -146,6 +149,16 @@ export function createPanelHost(parent, { player, canvas, onOpen, onClose }) {
     /** Phase 5 (PHASE5.md §2.1): the panels whose machine job runs now, open or in the background (the wash bay's washer). */
     busyIds() { const out = []; for (const [id, p] of built) { try { if ((p === current?.panel || background.has(p)) && p.busy?.()) out.push(id); } catch { /* a panel */ } } return out; },
   };
+}
+
+/** In a panel drawn again, the element that stands for `old` (a detached key): the same data-* hooks, else the same tag and words. */
+function twinOf(root, old) {
+  if (!root || !old || !old.tagName) return null;
+  const all = [...root.querySelectorAll(old.tagName)].filter((e) => e.offsetParent !== null);
+  const data = Object.entries(old.dataset || {});
+  if (data.length) { const m = all.find((e) => data.every(([k, v]) => e.dataset[k] === v)); if (m) return m; }
+  const words = (old.textContent || '').trim();
+  return words ? all.find((e) => (e.textContent || '').trim() === words) || null : null;
 }
 
 // Shared dialog frame: a close button with a visible label and the Esc hint.
