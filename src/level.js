@@ -44,7 +44,15 @@
 //
 // JobInstance: { key, id, def, day, status: 'waiting'|'open'|'done'|'missed', opensAt, closesAt,
 //   doneAt, progress (0..1), result }  (times as env.day floats)
-import { FARM, LEVEL1, LEVELS, CYCLE, PLAN_LEVEL, WEEKS45, FINISH, CLEANOUT, HARVEST, PLACEMENT_DAY, levelById, levelOfDay, weightAt } from './config.js';
+//
+// Phase 4 (PHASE4.md §3, §10.5): the condition is farm.condition only (farm.start(def, { condition }) at start({ condition }),
+// the save's farm at resume, kept by enter). The level reads the level as the condition plays it (config conditionLevel:
+// target, fail, a bad batch's claim and truck hour); checkpoints and results carry `condition`. Every EV.POWER { on: false }
+// and every alarm symptom (EV.FARM_PROBLEM symptom with alarm) stops a Next job skip; while the house has no power the
+// clock runs at LEVEL1.clock[GENERATOR.clockWhileDark] and Next job does not skip. rebuildJobs(): the level's jobs again
+// for the farm's condition (__game.setCondition, EV.LEVEL { phase: 'condition' }). The run's cycle counters live in the
+// skill profile (profile.cycles(): cyclesDone, conditionsDone; also skills.profile for the harness).
+import { FARM, LEVEL1, LEVELS, CYCLE, PLAN_LEVEL, WEEKS45, FINISH, CLEANOUT, HARVEST, PLACEMENT_DAY, GENERATOR, CONDITIONS, levelById, levelOfDay, weightAt, conditionLevel, conditionLabel } from './config.js';
 import { EV } from './events.js';
 import { createJobEngine, LEVEL_END_DAY } from './job-engine.js';
 import { applyRound } from './farm-profiles.js';
@@ -64,6 +72,10 @@ export const IDEAL_PLAN = { houses: 6, birdsPerHouse: 6000, cycleDays: 67, losse
 /** How the result lines name a level's days ("deaths and culls in week 3 reached …"). */
 export const LEVEL_WORDS = { plan: 'the plan', level1: 'the brooding week', week2: 'week 2', week3: 'week 3', weeks45: 'weeks 4 and 5', finish: 'the last week', cleanout: 'the clean-out' };
 const isWeekLevel = (d) => d?.target?.kind === 'weight';
+/** Levels are compared by id, never by object (PHASE4.md §3.2). */
+const is = (d, ref) => !!d && d.id === (typeof ref === 'string' ? ref : ref.id);
+/** The Phase 2 round names of the brooding week's goto(auto) (a condition's extra stops have other names). */
+const L1_ROUNDS = new Set(['prep', 'eve', 'sign', 'am', 'truck', 'vent', 'crop', 'noon', 'late', 'weigh', 'pm']);
 
 export function createLevel(ctx, deps = {}) {
   const { farm, records, skills, save, player, flock, props, ui, events } = deps;
@@ -84,20 +96,34 @@ export function createLevel(ctx, deps = {}) {
   let startAt = null;               // env.day this level started
   const details = new Map();        // milestone -> measured detail (profile)
   let free = null;                  // { def, off } while debug.freeRun runs the farm (tools)
+  let alarms = 0;                   // EV.POWER { on: false } and alarm symptoms so far (a Next job skip stops at a new one)
+  let bad = { gradedOut: 0, called: null };  // a bad batch: chicks graded out at the table, the hatchery call (day, hour)
 
-  const lvTag = () => (inRun || def !== LEVEL1 ? { level: def.id, run: inRun } : {});
-  const emitLevel = (p) => events?.emit(EV.LEVEL, { day: env.dayNumber, ...lvTag(), ...p });
+  /** The level as the farm's condition plays it (config conditionLevel: problems, target, fail, delivery, …). */
+  const lv = () => (farm.levelFor ? farm.levelFor(def) : conditionLevel(def, farm.condition ?? null));
+  const condNow = () => farm.condition ?? null;
+  const dark = () => !!farm.power && farm.power.on === false;
+  const lvTag = () => (inRun || !is(def, LEVEL1) ? { level: def.id, run: inRun } : {});
+  const emitLevel = (p) => events?.emit(EV.LEVEL, { day: env.dayNumber, ...lvTag(), condition: condNow(), ...p });
   const checkpoint = (name, key = name, extra = {}) => { if (fired.has(key)) return; fired.add(key); emitLevel({ phase: 'checkpoint', name, ...extra }); };
   const inLevel = () => level.mode === 'level' && !ended;
   const uiAct = (id, args = {}) => events?.emit(EV.ACTION, { id, ...args, result: undefined });
 
   // ---------------- profile (skills kept across replays) ----------------
+  // the run's cycle counters (PHASE4.md §3.1): kept in the skill profile across runs and replays; the same object is
+  // skills.profile (the sim package may give its own: then that one is used), so a harness can set cyclesDone
+  const cyc = (skills && typeof skills.profile === 'object' && skills.profile) || { cyclesDone: undefined, conditionsDone: {} };
+  if (skills && !skills.profile) skills.profile = cyc;
+  if (!cyc.conditionsDone) cyc.conditionsDone = {};
   function loadProfile() {
     const p = save?.loadProfile?.();
     if (p?.skills) skills?.restore?.(p.skills);
     for (const [k, v] of p?.details || []) details.set(k, v);
+    const cd = p?.cyclesDone ?? p?.skills?.cyclesDone;
+    if (Number.isFinite(cd)) cyc.cyclesDone = Math.max(cyc.cyclesDone ?? 0, cd);
+    for (const [k, n] of Object.entries(p?.conditionsDone ?? p?.skills?.conditionsDone ?? {})) if (Number.isFinite(n)) cyc.conditionsDone[k] = Math.max(cyc.conditionsDone[k] ?? 0, n);
   }
-  function saveProfile() { save?.saveProfile?.({ skills: skills?.serialize?.(), details: [...details] }); }
+  function saveProfile() { save?.saveProfile?.({ skills: skills?.serialize?.(), details: [...details], ...(cyc.cyclesDone != null ? { cyclesDone: cyc.cyclesDone } : {}), conditionsDone: { ...cyc.conditionsDone } }); }
 
   // ---------------- autosave (a run's levels save under the run's key, PHASE3.md §11) ----------------
   function saveNow() {
@@ -114,8 +140,13 @@ export function createLevel(ctx, deps = {}) {
   }
 
   // ---------------- bus ----------------
-  const weighDays = () => (def === LEVEL1 ? [LEVEL1.endDay] : def.weighDays || []);
+  const weighDays = () => (is(def, LEVEL1) ? [LEVEL1.endDay] : def.weighDays || []);
   if (events) {
+    // Phase 4: every power cut and every alarm stops a Next job skip (skip() watches the count)
+    events.on(EV.POWER, (p) => { if (p && p.on === false) alarms++; });
+    events.on(EV.FARM_PROBLEM, (p) => { if (p && p.phase === 'symptom' && p.alarm) alarms++; });
+    // farm.setCondition on a running farm (a harness, __game.setCondition): the jobs again for the new condition
+    events.on(EV.LEVEL, (p) => { if (p && p.phase === 'condition' && level.mode === 'level' && !ended && !free) level.rebuildJobs(); });
     events.on(EV.JOB_DONE, () => { if (inLevel()) scheduleSave(2); });
     events.on(EV.SKILL_POINTS, (p) => {
       if (p.detail) details.set(p.milestone, p.detail);
@@ -127,23 +158,29 @@ export function createLevel(ctx, deps = {}) {
     events.on(EV.ACTION, (p) => {
       if (!inLevel() || free) return;
       if (p.id === 'sample.weigh' && weighDays().includes(env.dayNumber)) weighs.push({ w: p.result?.weightG, x: p.x, z: p.z, day: env.dayNumber });
-      if (p.id === 'plan.reply' && def === PLAN_LEVEL) checkpoint('plan');
-      if (p.id === 'swab.read' && def === CLEANOUT) checkpoint('swabs', `swabs@${farm.clean?.labDay ?? env.dayNumber}`);
+      if (p.id === 'plan.reply' && is(def, PLAN_LEVEL)) checkpoint('plan');
+      if (p.id === 'swab.read' && is(def, CLEANOUT)) checkpoint('swabs', `swabs@${farm.clean?.labDay ?? env.dayNumber}`);
+      // a bad batch (PHASE4.md §3.4): the chicks graded out at the table and the call to the hatchery on day 0
+      if (p.id === 'chicks.grade' && Number.isFinite(p.result?.culled)) bad.gradedOut += p.result.culled;
+      if (p.id === 'phone.hatchery' && bad.called == null) bad.called = env.day;
     });
     events.on(EV.RECORD_CLOSED, (p) => {
       if (!inLevel() || free) return;
       if (p.day === def.endDay && p.signed) signedEnd = true;
       saveNow();
       // fail early: deaths and culls past the limit at any day's close
-      const max = def.fail?.mortalityMaxPct;
+      const max = lv().fail?.mortalityMaxPct;
       if (max != null && levelDeaths().pct > max) { failAt = failAt || { day: p.day, pct: levelDeaths().pct }; end('mortality'); }
     });
   }
   function placedCount() { return farm.flock.placed || farm.flock.delivered || 0; }
+  /** A bad batch's brooding week counts the chicks claimed from the hatchery apart (fail.claimedApart, PHASE4.md §3.4):
+   *  farm.flock.claimed (the farm moves the day-0 culls there once the hatchery is told the same day). */
+  const claimedApart = () => (lv().fail?.claimedApart ? Math.max(0, Math.min(farm.flock.claimed || 0, farm.flock.culls || 0)) : 0);
   function mortalityPct() {
     const placed = placedCount();
     if (!placed) return 0;
-    return (((farm.flock.deadTotal || 0) + (farm.flock.culls || 0)) / placed) * 100;
+    return (((farm.flock.deadTotal || 0) + (farm.flock.culls || 0) - claimedApart()) / placed) * 100;
   }
   /** The level's start counters: the farm's own (farm.stats.levelStart, set by farm.enterLevel; PHASE3.md §13.9). */
   function startCounts() {
@@ -152,10 +189,10 @@ export function createLevel(ctx, deps = {}) {
   const doaNow = () => farm.harvest?.result?.doa ?? 0;
   /** Deaths and culls (and dead on arrival in the last week) since the level's start, as % of the birds alive then. */
   function levelDeaths() {
-    if (def === LEVEL1) { const placed = placedCount(); return { n: (farm.flock.deadTotal || 0) + (farm.flock.culls || 0), of: placed, pct: mortalityPct() }; }
-    const s = startCounts();
-    const n = ((farm.flock.deadTotal || 0) - (s.deaths || 0)) + ((farm.flock.culls || 0) - (s.culls || 0)) + (def.fail?.withDoa ? doaNow() - (s.doa || 0) : 0);
-    return { n, of: s.alive || 0, pct: s.alive ? (100 * n) / s.alive : 0, deaths: (farm.flock.deadTotal || 0) - (s.deaths || 0), culls: (farm.flock.culls || 0) - (s.culls || 0), doa: def.fail?.withDoa ? doaNow() - (s.doa || 0) : 0 };
+    if (is(def, LEVEL1)) { const placed = placedCount(); return { n: (farm.flock.deadTotal || 0) + (farm.flock.culls || 0) - claimedApart(), of: placed, pct: mortalityPct(), claimed: claimedApart() }; }
+    const s = startCounts(), withDoa = lv().fail?.withDoa;
+    const n = ((farm.flock.deadTotal || 0) - (s.deaths || 0)) + ((farm.flock.culls || 0) - (s.culls || 0)) + (withDoa ? doaNow() - (s.doa || 0) : 0);
+    return { n, of: s.alive || 0, pct: s.alive ? (100 * n) / s.alive : 0, deaths: (farm.flock.deadTotal || 0) - (s.deaths || 0), culls: (farm.flock.culls || 0) - (s.culls || 0), doa: withDoa ? doaNow() - (s.doa || 0) : 0 };
   }
 
   // ---------------- clock speed (PHASE2.md §2): paused > sign > panel > carry > fast > work ----------------
@@ -163,9 +200,11 @@ export function createLevel(ctx, deps = {}) {
     const kind = ui?.panelKind;
     if (userPaused || kind === 'paused') { env.paused = true; return; }
     env.paused = false;
-    const placing = def === LEVEL1 && engine.anchors.truck != null && !fired.has('placed') && env.dayNumber === LEVEL1.arrivalDay;
+    const placing = is(def, LEVEL1) && engine.anchors.truck != null && !fired.has('placed') && env.dayNumber === LEVEL1.arrivalDay;
     const catching = !!farm.harvest?.started && !farm.harvest?.result; // the crew works on its own (PHASE3.md §2.3)
     if (kind === 'sign') env.timeScale = C.sign;
+    // Phase 4: the house dark (no mains, no generator on the switch): every farm minute counts (carry speed)
+    else if (dark()) env.timeScale = C[GENERATOR.clockWhileDark] ?? C.carry;
     else if (catching) env.timeScale = fast ? C.fast : C.work;
     else if (kind === 'panel') env.timeScale = C.panel;
     else if (CARRY_KINDS.has(props?.carrying) || placing) env.timeScale = C.carry;
@@ -179,7 +218,7 @@ export function createLevel(ctx, deps = {}) {
   function checks() {
     if (!inLevel() || free) return;
     const f = farm.flock;
-    if (def === LEVEL1) {
+    if (is(def, LEVEL1)) {
       if (!fired.has('placed') && engine.anchors.placed != null && f.placed > 0 && f.inBoxes === 0) checkpoint('placed');
       if (closed('d0-vent@0')) checkpoint('vent');
       if (closed('d1-crop@1')) checkpoint('crop');
@@ -194,19 +233,19 @@ export function createLevel(ctx, deps = {}) {
       if (doneOrClosed('w2-curtain@9')) checkpoint('curtain');
       if (doneOrClosed('w2-vaccine@12')) checkpoint('vaccine');
     }
-    if (def === WEEKS45 && env.day >= 32 + 19 * H - 1e-7) checkpoint('heatwave');
-    if (def === FINISH && farm.harvest?.started && f.alive === 0) checkpoint('catch');
-    if (def === CLEANOUT) {
+    if (is(def, WEEKS45) && env.day >= 32 + 19 * H - 1e-7) checkpoint('heatwave');
+    if (is(def, FINISH) && farm.harvest?.started && f.alive === 0) checkpoint('catch');
+    if (is(def, CLEANOUT)) {
       if (doneOrClosed('c-spray@45')) checkpoint('clean');
       if (engine.byKey('c-lab@48')?.status === 'done' && farm.clean?.lab) checkpoint('swabs', `swabs@${farm.clean.labDay ?? 48}`);
     }
-    if (def === PLAN_LEVEL && engine.byKey('pl-reply@-2')?.status === 'done') checkpoint('plan');
+    if (is(def, PLAN_LEVEL) && engine.byKey('pl-reply@-2')?.status === 'done') checkpoint('plan');
     // the end (PHASE3.md §10)
-    if (env.day >= engine.endAt() - 1e-7) { end(def === CLEANOUT ? 'rest' : 'time'); return; }
+    if (env.day >= engine.endAt() - 1e-7) { end(is(def, CLEANOUT) ? 'rest' : 'time'); return; }
     if (!signedEnd) return;
-    if (def === PLAN_LEVEL && fired.has('plan')) end('signed');
-    else if (isWeekLevel(def) && fired.has(`weighin@${def.target.day}`)) end('signed');
-    else if (def === FINISH && farm.harvest?.started && f.alive === 0) { checkpoint('harvest'); end('signed'); }
+    if (is(def, PLAN_LEVEL) && fired.has('plan')) end('signed');
+    else if (isWeekLevel(def) && fired.has(`weighin@${lv().target.day}`)) end('signed');
+    else if (is(def, FINISH) && farm.harvest?.started && f.alive === 0) { checkpoint('harvest'); end('signed'); }
   }
 
   function weighResult(day) {
@@ -219,8 +258,10 @@ export function createLevel(ctx, deps = {}) {
 
   /** Phase 2's result screen numbers of the brooding week (PHASE2.md §10), unchanged. */
   function computeResultL1(reason) {
+    const F = lv().fail || LEVEL1.fail;
     const placed = placedCount() || LEVEL1.chicksPlaced;
-    const deaths = (farm.flock.deadTotal || 0) + (farm.flock.culls || 0);
+    const claimed = claimedApart();
+    const deaths = (farm.flock.deadTotal || 0) + (farm.flock.culls || 0) - claimed;
     const deathsPct = (deaths / placed) * 100;
     const measured = farm.stats?.chickWeightMeasuredG;
     const chick = measured ?? farm.flock.chickWeightG ?? LEVEL1.chickWeightG;
@@ -229,11 +270,13 @@ export function createLevel(ctx, deps = {}) {
     // a level that ended before the weigh-in age has no day 7 weight (null: the screen says what ended it)
     const weightG = wr ? wr.mean : farm.stats?.scaleAtWeighInG ?? null;
     const ratio = chick && weightG != null ? weightG / chick : null;
-    const pass = ratio != null && ratio >= LEVEL1.fail.weightRatioMin && deathsPct <= LEVEL1.fail.mortalityMaxPct;
+    const pass = ratio != null && ratio >= F.weightRatioMin && deathsPct <= F.mortalityMaxPct;
     // what the farmer knows of the dead (the bin) and what he has not seen yet (the floor, the boxes)
     const fl = farm.flock, onFloor = fl.deadOnFloor || 0, inBoxes = (fl.boxDead || 0);
     const notPicked = onFloor > 0 ? ` (${onFloor.toLocaleString('en')} dead bird${onFloor === 1 ? '' : 's'} not picked up)` : '';
-    const failText = deathsPct > LEVEL1.fail.mortalityMaxPct ? `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}${notPicked}`
+    // a bad batch: the chicks graded out on day 0 count as culls of the level unless the hatchery was told that day
+    const unclaimed = F.claimedApart && bad.gradedOut > 0 && !(claimed > 0) ? `; the ${int(bad.gradedOut)} chicks graded out on day 0 count as culls: the hatchery was not told on day 0` : '';
+    const failText = deathsPct > F.mortalityMaxPct ? `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}${notPicked}${unclaimed}`
       : ratio != null ? `day 7 weight ${two(ratio)} × chick weight` : (fl.placed || 0) > 0 ? 'no day 7 weight' : 'no chicks were placed';
     const floor = records?.timeline?.()?.find?.((e) => e.day === 0)?.floorAtArrivalC ?? null;
     const { day, hour } = splitDay(env.day);
@@ -244,7 +287,10 @@ export function createLevel(ctx, deps = {}) {
       // once chicks were placed and are eating
       deathsPct, uniformityPct: wr && wr.n >= 10 ? wr.uniformityPct : null,
       fcr: (fl.placed || 0) > 0 && fl.alive > 0 ? (Number.isFinite(fl.fcr) && fl.fcr > 0 ? fl.fcr : records?.row?.(LEVEL1.endDay)?.fcr || null) : null,
-      failText, floorAtArrival: floor, points: points.slice() };
+      failText, floorAtArrival: floor, points: points.slice(),
+      // Phase 4: the level's limits as the condition has them, a bad batch's claim
+      mortalityMaxPct: F.mortalityMaxPct, weightRatioMin: F.weightRatioMin, claimedApart: !!F.claimedApart, claimed, gradedOut: bad.gradedOut,
+      hatcheryCalled: bad.called != null && Math.floor(bad.called + 1e-9) === LEVEL1.arrivalDay };
   }
 
   /** The plan level: the company's reply (farm.plan.outcome, planOutcome's terms) is the measurement. */
@@ -266,38 +312,38 @@ export function createLevel(ctx, deps = {}) {
 
   /** A week level: the weigh-in of the target day (by hand, else the scale at 08:00) and the level deaths. */
   function weekResult(ld) {
-    const day = def.target.day, targetG = weightAt(day);
+    const M = lv(), day = M.target.day, targetG = weightAt(day);
     const wr = weighResult(day);
     const scale = farm.stats.scaleAt?.[day] ?? null;
     const weightG = wr && wr.n >= 10 ? wr.mean : scale;
     const share = weightG != null ? weightG / targetG : null;
-    const max = def.fail.mortalityMaxPct;
-    const pass = share != null && share >= def.target.minShare && ld.pct <= max && !failAt;
+    const max = M.fail.mortalityMaxPct;
+    const pass = share != null && share >= M.target.minShare && ld.pct <= max && !failAt;
     const failText = failAt || ld.pct > max ? `deaths and culls in ${LEVEL_WORDS[def.id]} reached ${two(failAt?.pct ?? ld.pct)} % on day ${failAt?.day ?? env.dayNumber}`
       : share != null ? `day ${day} weight ${int(weightG)} g${wr && wr.n >= 10 ? '' : ' (automatic scale)'}, ${int(share * 100)} % of the ${int(targetG)} g target` : `no day ${day} weight`;
     const weighs2 = (def.weighDays || []).filter((d) => d !== day).map((d) => { const w = weighResult(d); return w && w.n >= 10 ? { day: d, weightG: w.mean, targetG: weightAt(d), uniformityPct: w.uniformityPct } : null; }).filter(Boolean);
-    return { pass, failText, weightG, targetG, targetDay: day, share, minShare: def.target.minShare, weighedByHand: !!(wr && wr.n >= 10), weighedN: wr?.n ?? 0,
+    return { pass, failText, weightG, targetG, targetDay: day, share, minShare: M.target.minShare, weighedByHand: !!(wr && wr.n >= 10), weighedN: wr?.n ?? 0,
       uniformityPct: wr && wr.n >= 10 ? wr.uniformityPct : null, otherWeighs: weighs2, mortalityMaxPct: max };
   }
 
   /** The last week: the harvest (the tickets) against the target at the catch age less the shrink. */
   function finishResult(ld) {
-    const hv = farm.harvest, r = hv?.result;
-    const max = def.fail.mortalityMaxPct;
+    const hv = farm.harvest, r = hv?.result, M = lv();
+    const max = M.fail.mortalityMaxPct;
     if (!r) return { pass: false, harvest: null, failText: failAt || ld.pct > max ? `deaths and culls in the last week reached ${two(ld.pct)} % on day ${failAt?.day ?? env.dayNumber}` : 'the birds were not caught', mortalityMaxPct: max };
     const age = (hv.startedAt ?? hv.catchAt ?? env.day) - PLACEMENT_DAY;
     const targetG = weightAt(age), expectG = targetG * HARVEST.shrink, share = r.meanLiveG / expectG;
-    const pass = share >= def.target.minShare && ld.pct <= max && !failAt;
+    const pass = share >= M.target.minShare && ld.pct <= max && !failAt;
     const failText = failAt || ld.pct > max ? `deaths, culls and dead on arrival in the last week reached ${two(failAt?.pct ?? ld.pct)} %`
       : `harvest live weight ${int(r.meanLiveG)} g, ${int(share * 100)} % of ${int(targetG)} g less ${int((1 - HARVEST.shrink) * 100)} % shrink`;
-    return { pass, failText, harvest: { ...r, trucks: (hv.trucks || []).map((t) => ({ ...t })) }, catchAgeDays: age, targetG, expectG, share, minShare: def.target.minShare, mortalityMaxPct: max };
+    return { pass, failText, harvest: { ...r, trucks: (hv.trucks || []).map((t) => ({ ...t })) }, catchAgeDays: age, targetG, expectG, share, minShare: M.target.minShare, mortalityMaxPct: max };
   }
 
   /** The clean-out: the lab letter and the rest days before the booked chicks. */
   function cleanResult() {
     const c = farm.clean || {}, lab = c.lab;
     const rest = c.bookedDay != null && c.closedDay != null ? c.bookedDay - c.closedDay : null;
-    const maxPos = def.target.maxPositive, minRest = def.target.restMinDays;
+    const maxPos = lv().target.maxPositive, minRest = lv().target.restMinDays;
     const pass = !!lab && lab.positive <= maxPos && rest != null && rest >= minRest;
     const lines = [];
     if (!lab) lines.push('no swabs went to the lab');
@@ -309,10 +355,11 @@ export function createLevel(ctx, deps = {}) {
 
   /** The result of the level that runs: only what was measured (PHASE3.md §10). */
   function computeResult(reason) {
-    const base = { levelId: def.id, n: def.n, title: def.title, short: def.short, inRun };
-    if (def === LEVEL1) return { ...computeResultL1(reason), ...base };
+    const c = condNow();
+    const base = { levelId: def.id, n: def.n, title: def.title, short: def.short, inRun, condition: c, conditionLabel: c ? conditionLabel(c) : null };
+    if (is(def, LEVEL1)) return { ...computeResultL1(reason), ...base };
     const ld = levelDeaths();
-    const part = def === PLAN_LEVEL ? planResult() : isWeekLevel(def) ? weekResult(ld) : def === FINISH ? finishResult(ld) : def === CLEANOUT ? cleanResult() : { pass: false, failText: '' };
+    const part = is(def, PLAN_LEVEL) ? planResult() : isWeekLevel(def) ? weekResult(ld) : is(def, FINISH) ? finishResult(ld) : is(def, CLEANOUT) ? cleanResult() : { pass: false, failText: '' };
     const { day, hour } = splitDay(env.day);
     const fl = farm.flock;
     return { ...base, ...part, reason, early: reason === 'mortality', endedAt: `day ${day}, ${hhmm(hour)}`, day, hour, failDay: failAt?.day ?? day,
@@ -322,7 +369,7 @@ export function createLevel(ctx, deps = {}) {
 
   function end(reason) {
     if (ended) return;
-    if (def === CLEANOUT) checkpoint('rest');
+    if (is(def, CLEANOUT)) checkpoint('rest');
     checkpoint('level-end');
     engine.finish();
     ended = computeResult(reason);
@@ -341,19 +388,43 @@ export function createLevel(ctx, deps = {}) {
   // ---------------- skips ----------------
   /** Saved starts inside the level (weeks 4-5: day 29 06:00) the clock reaches in (from, to]. */
   const innerStarts = (from, to) => (def.starts || []).filter((d) => d !== def.startDay).map((d) => ({ d, t: d + 6 * H })).filter((s) => s.t > from + 1e-9 && s.t <= to + 1e-9);
-  function skip(hours) {
+  /** Can the power go off during a skip? (a condition run, or the generator carrying the house: its fuel runs out) */
+  const canCut = () => !!farm.condition || !!farm.generator?.running;
+  /**
+   * Move the farm `h` hours on. With `stop` (a Next job skip) and a power cut possible, the clock moves a farm minute
+   * at a time and stops at the first EV.POWER { on: false } or alarm symptom (PHASE4.md §4.2: every farm minute counts).
+   * Returns false when an alarm stopped it.
+   */
+  function advance(h, stop) {
+    if (!(h > 0)) return true;
+    if (!stop || !canCut()) { env.skipHours(h); flock?.afterSkip?.(h); return true; }
+    const a0 = alarms, t0 = env.day, target = env.day + h / 24;
+    while (target - env.day > 0.5 / 1440 && alarms === a0) {
+      const before = env.day;
+      env.skipHours(Math.min(1 / 60, (target - env.day) * 24));
+      if (env.day <= before + 1e-12) break;
+    }
+    const done = (env.day - t0) * 24;
+    if (done > 0) flock?.afterSkip?.(done); // the drawn flock spread over the skipped time
+    return alarms === a0;
+  }
+  /** The last Next job skip an alarm stopped: { at, alarms } (the ui says why the clock stopped there). */
+  let stoppedAt = null;
+  function skip(hours, { stopOnAlarm = false } = {}) {
     if (hours <= 0) return;
     engine.tick(); // a state met just before the skip still counts (its window may close during it)
     const d0 = env.dayNumber, target = env.day + hours / 24;
     ui?.closePanel?.();
+    let stopped = false;
     // a saved start inside the level is taken exactly at its 06:00 (PHASE3.md §11)
     for (const s of innerStarts(env.day, target)) {
-      if (s.t > env.day + 1e-9) { env.skipHours((s.t - env.day) * 24); flock?.afterSkip?.((s.t - env.day) * 24); }
+      if (s.t > env.day + 1e-9 && !advance((s.t - env.day) * 24, stopOnAlarm)) { stopped = true; break; }
       engine.tick(); checks();
       if (ended) return;
       reachStart(s.d);
     }
-    if (target > env.day + 1e-9) { const h = (target - env.day) * 24; env.skipHours(h); flock?.afterSkip?.(h); } // the drawn flock spread over the skipped time
+    if (!stopped && target > env.day + 1e-9) stopped = !advance((target - env.day) * 24, stopOnAlarm);
+    if (stopped) stoppedAt = { at: env.day, alarms };
     engine.tick();
     checks();
     if (env.dayNumber !== d0 && env.hour >= 5.9 && env.hour < 12) player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw); // each morning at the gate
@@ -386,6 +457,7 @@ export function createLevel(ctx, deps = {}) {
   function nextLabel() {
     if (free) return 'No jobs (free run)';
     if (!inLevel()) return 'Next job';
+    if (dark()) return 'No skipping: the power is off';
     if (pending && stepClock.now() - pending.at < NEXT_CONFIRM_MS) return pending.label;
     if (engine.open().length) return 'Next job';
     return skipText(skipTarget([]));
@@ -408,7 +480,7 @@ export function createLevel(ctx, deps = {}) {
   /** Everything of one level (a new level, a replay, a resume). */
   function resetLevelState() {
     fired = new Set(); points = []; weighs = []; signedEnd = false; ended = null; pending = null; failAt = null;
-    startAt = null; reached.clear();
+    startAt = null; reached.clear(); stoppedAt = null; bad = { gradedOut: 0, called: null };
     fast = false; userPaused = false; saveIn = null; lastSaveDay = null; tickAcc = 0;
   }
   function resetRun() {
@@ -425,9 +497,12 @@ export function createLevel(ctx, deps = {}) {
   // ---------------- debug.goto auto: the ideal farmer's rounds ----------------
   // brooding week: farm-profiles.applyRound at the rounds test-sim plays; the planning day: the planning
   // sign's reference plan (IDEAL_PLAN); from week 2: farm-profiles-cycle.applyCycleRound at its cycleStops
+  /** A condition's ideal profile (the sim package's cycleProfileOf(name, { condition }); a name in the normal season). */
+  const profileFor = (name = 'ideal') => (condNow() && cycleProfiles.cycleProfileOf ? cycleProfiles.cycleProfileOf(name, { condition: condNow() }) : name);
   function autoStopsL1(target) {
     const st = farm.stats, out = [];
-    const firstTip = st.firstTipAt ?? LEVEL1.arrivalDay + 8.1 * H;
+    const truckH = lv().delivery?.arrivalHour ?? LEVEL1.arrivalHour;   // a bad batch's truck comes late (PHASE4.md §4.3)
+    const firstTip = st.firstTipAt ?? LEVEL1.arrivalDay + (truckH + 0.1) * H;
     const add = (d, hr, r, t = d + hr * H) => { if (t > env.day + 1e-9 && t < target) out.push({ d, r, t }); };
     const prepDone = !!records?.row?.(LEVEL1.startDay)?.signed;
     for (let d = env.dayNumber; d <= Math.min(Math.floor(target), LEVEL1.endDay); d++) {
@@ -437,20 +512,26 @@ export function createLevel(ctx, deps = {}) {
         continue;
       }
       add(d, d === 1 ? 6.5 : 6.25, 'am');
-      if (d === LEVEL1.arrivalDay) { add(d, 8.1, 'truck'); add(d, 0, 'vent', firstTip + 2.6 * H); }
+      if (d === LEVEL1.arrivalDay) { add(d, truckH + 0.1, 'truck'); add(d, 0, 'vent', firstTip + 2.6 * H); }
       if (d === 1) add(d, 0, 'crop', firstTip + 23 * H);
       if (d === 6) { add(d, 12, 'noon'); add(d, 17, 'late'); }
       if (d === LEVEL1.endDay) add(d, 9, 'weigh');
       add(d, d === 4 ? 15 : 13.25, 'pm');   // day 4: the leak shows by the afternoon (10:00 + 5 h)
       add(d, 20, 'sign');
     }
+    // a condition's own rounds of the brooding week (the sim package's cycleStops(from, to, condition) for days <= 7:
+    // the hot season's 11:00 pad, a bad batch's grading and call): played with the condition's ideal (applyCycleRound)
+    if (condNow()) for (const s of cycleProfiles.cycleStops(Math.max(LEVEL1.startDay, env.dayNumber), Math.min(Math.floor(target), LEVEL1.endDay), condNow()) || []) {
+      const t = s.d + s.h * H;
+      if (s.d <= LEVEL1.endDay && !L1_ROUNDS.has(s.r) && t > env.day + 1e-9 && t < target) out.push({ d: s.d, r: s.r, t, cond: true });
+    }
     return out.sort((a, b) => a.t - b.t);
   }
   function autoStops(target) {
-    if (def === LEVEL1) return autoStopsL1(target);
+    if (is(def, LEVEL1)) return autoStopsL1(target);
     const out = [];
     const add = (d, r, t) => { if (t > env.day + 1e-9 && t < target) out.push({ d, r, t }); };
-    if (def === PLAN_LEVEL) {
+    if (is(def, PLAN_LEVEL)) {
       const d = PLAN_LEVEL.startDay;
       if (!farm.plan?.sentAt) add(d, 'plan', Math.max(d + 7.25 * H, env.day + 1e-6));
       const sent = farm.plan?.sentAt ?? Math.max(d + 7.25 * H, env.day + 1e-6);
@@ -459,7 +540,7 @@ export function createLevel(ctx, deps = {}) {
       return out.sort((a, b) => a.t - b.t);
     }
     const last = Math.min(Math.floor(target), def.endDay);
-    for (const s of cycleProfiles.cycleStops(env.dayNumber, last)) add(s.d, s.r, s.d + s.h * H);
+    for (const s of cycleProfiles.cycleStops(env.dayNumber, last, condNow())) add(s.d, s.r, s.d + s.h * H);
     return out.sort((a, b) => a.t - b.t);
   }
   function pickDead() {
@@ -483,8 +564,9 @@ export function createLevel(ctx, deps = {}) {
     const jobOpen = (id) => engine.list().some((i) => i.id === id && i.status === 'open');
     const r = s.r;
     if (r === 'sign') { if (!records?.row?.(s.d)?.signed) records?.sign?.(s.d); return; }
-    if (def === PLAN_LEVEL) { planRound(r); return; }
-    if (def === LEVEL1) {
+    if (is(def, PLAN_LEVEL)) { planRound(r); return; }
+    if (is(def, LEVEL1) && s.cond) { try { cycleProfiles.applyCycleRound(farm, env, s.d, r, profileFor(profile)); } catch (err) { console.error('applyCycleRound failed', err); } return; }
+    if (is(def, LEVEL1)) {
       if (r === 'truck' && !(farm.flock.inBoxes > 0)) return;
       if (r === 'vent' && !jobOpen('d0-vent')) return;
       if (r === 'crop' && !jobOpen('d1-crop')) return;
@@ -493,7 +575,7 @@ export function createLevel(ctx, deps = {}) {
       if (r === 'am' || r === 'pm') pickDead();
       return;
     }
-    try { cycleProfiles.applyCycleRound(farm, env, s.d, r, profile); } catch (err) { console.error('applyCycleRound failed', err); }
+    try { cycleProfiles.applyCycleRound(farm, env, s.d, r, profileFor(profile)); } catch (err) { console.error('applyCycleRound failed', err); }
     pickDead();
   }
 
@@ -520,6 +602,10 @@ export function createLevel(ctx, deps = {}) {
       /** The HUD's day (PHASE3.md §2.3). */
       // the HUD clock keeps one width: the booked chick day stays on the job card and in the book
       dayText() { return dayLabel(env.dayNumber); },
+      /** Phase 4: the condition's name under the day ("Hot season"); '' in the normal season (PHASE4.md §1.2). */
+      conditionText() { return condNow() ? conditionLabel(condNow()) : ''; },
+      /** The house has no power: the clock runs at the carrying speed and Next job does not skip. */
+      get dark() { return dark(); },
       rateLabel() {
         if (env.paused) return userPaused ? 'Paused' : 'Stopped';
         if (env.timeScale === 0) return 'Stopped';
@@ -537,6 +623,16 @@ export function createLevel(ctx, deps = {}) {
     profile: {
       snapshot() { return { skills: skills?.serialize?.() ?? null, details: [...details] }; },
       restore(p) { if (!p) return; if (p.skills) skills?.restore?.(p.skills); details.clear(); for (const [k, v] of p.details || []) details.set(k, v); saveProfile(); },
+      /** Phase 4 (PHASE4.md §3.1): { cyclesDone (undefined in a Phase 3 profile), conditionsDone: { [id]: n } }. */
+      cycles() { return { cyclesDone: cyc.cyclesDone, conditionsDone: { ...cyc.conditionsDone } }; },
+      /** A run reached its cycle summary with every level passed: cyclesDone + 1 (from `base` when the profile has none
+       *  yet), and conditionsDone[condition] + 1 for a run played under that condition alone. Saved at once. */
+      raiseCycle(condition = null, base = 0) {
+        cyc.cyclesDone = (cyc.cyclesDone ?? base) + 1;
+        if (condition && CONDITIONS[condition]) cyc.conditionsDone[condition] = (cyc.conditionsDone[condition] ?? 0) + 1;
+        saveProfile();
+        return { cyclesDone: cyc.cyclesDone, conditionsDone: { ...cyc.conditionsDone } };
+      },
     },
     boot() {
       loadProfile();
@@ -545,7 +641,7 @@ export function createLevel(ctx, deps = {}) {
     },
     /** A fresh level that starts the flock: the brooding week (Phase 2, default) or the planning day. */
     start(opts = {}) {
-      const d = opts.def === PLAN_LEVEL || opts.level === 'plan' ? PLAN_LEVEL : LEVEL1;
+      const d = is(opts.def, PLAN_LEVEL) || opts.level === 'plan' ? PLAN_LEVEL : LEVEL1;
       seed = opts.seed ?? 1;
       if (level.mode === 'sandbox' || level.mode === 'title') loadProfile();
       resetRun();
@@ -558,7 +654,8 @@ export function createLevel(ctx, deps = {}) {
       props?.reset?.();
       flock?.resetLevel?.();
       ui?.newRun?.();
-      farm.start(d, { seed });
+      // Phase 4: the condition goes on the farm here and only here (null = the normal season, PHASE4.md §3.1)
+      farm.start(d, { seed, condition: opts.condition && CONDITIONS[opts.condition] ? opts.condition : null });
       startAt = env.day;
       reached.add(`${d.id}@${d.startDay}`);
       engine.start(d.startDay, d);
@@ -571,7 +668,7 @@ export function createLevel(ctx, deps = {}) {
     /** The next level of the run on the same flock (PHASE3.md §2.2). */
     enter(next, opts = {}) {
       if (typeof next === 'string') next = levelById(next);
-      if (!next || next === LEVEL1 || next === PLAN_LEVEL) return false;
+      if (!next || is(next, LEVEL1) || is(next, PLAN_LEVEL)) return false;
       if (free) free = null;
       if (opts.run != null) inRun = !!opts.run;
       resetLevelState();
@@ -583,7 +680,7 @@ export function createLevel(ctx, deps = {}) {
       farm.enterLevel(next);
       // the notebook of the levels before the last one folds away (the rows stay whole; PHASE3.md §8.6): the run save
       // stays under its 250 KB to the end of the rest
-      const prevDef = LEVELS[LEVELS.indexOf(next) - 1];
+      const prevDef = LEVELS[LEVELS.findIndex((l) => l.id === next.id) - 1];
       if (records?.compact && prevDef) records.compact(prevDef.startDay);
       startAt = env.day;
       reached.add(`${next.id}@${next.startDay}`);
@@ -605,7 +702,7 @@ export function createLevel(ctx, deps = {}) {
       ui?.newRun?.();
       const e = data.env, lv = data.level;
       const d = levelById(lv.levelId) || LEVEL1;
-      const maxDay = e.maxDay ?? (d === LEVEL1 || d === PLAN_LEVEL ? 42 : CYCLE.lastDay);
+      const maxDay = e.maxDay ?? (is(d, LEVEL1) || is(d, PLAN_LEVEL) ? 42 : CYCLE.lastDay);
       // restore order (PHASE2.md §11, PHASE3.md §11): env -> farm -> records -> props -> flock -> level.
       // farm.start (keepClock) first: it puts the level climate on with the start equipment; the saved
       // env values go on top of it and farm.restore rebuilds timer, light and weather.
@@ -614,7 +711,9 @@ export function createLevel(ctx, deps = {}) {
       env.setWeather(e.weather || d.weather);
       env.setDay(Math.floor(e.day - (e.hour ?? 0) * H + 1e-6));
       env.setHour(e.hour ?? 0);
-      farm.start(d, { seed: lv.seed ?? 1, keepClock: true });
+      // the save's condition (farm.serialize().cond; farm.restore puts it back on the farm)
+      const sc = data.farm?.cond?.condition;
+      farm.start(d, { seed: lv.seed ?? 1, keepClock: true, condition: sc && CONDITIONS[sc] ? sc : null });
       env.setMaxDay?.(maxDay);
       env.setFans(e.fansManual ?? e.fansOn ?? 0); env.setPad(!!e.padOn);
       env.setVentTimer(e.ventTimer ?? null);
@@ -643,6 +742,7 @@ export function createLevel(ctx, deps = {}) {
       engine.restore(lv.jobs, d);
       fired = new Set(lv.fired || []); points = lv.points || []; weighs = lv.weighs || []; signedEnd = !!(lv.signedEnd ?? lv.signed7); fast = !!lv.fast;
       failAt = lv.failAt ?? null; startAt = lv.startAt ?? env.day;
+      if (lv.bad) bad = { gradedOut: lv.bad.gradedOut || 0, called: lv.bad.called ?? null };
       for (const k of lv.reached || []) reached.add(k);
       if (inRun && lv.run && runApi) runApi.adopt(lv.run);
       if (data.player && player) player.teleport(data.player.x, data.player.z, data.player.yaw);
@@ -717,6 +817,8 @@ export function createLevel(ctx, deps = {}) {
       if (!inLevel() || free) return null;
       const open = engine.open();
       const now = stepClock.now();
+      // Phase 4: no skip while the house is dark (PHASE4.md §4.2): the marker stays on the power job
+      if (dark()) { pending = null; ui?.jobCard?.refresh?.(); return { refused: 'dark', pointed: engine.current()?.key ?? null }; }
       if (open.length && !(pending && now - pending.at < NEXT_CONFIRM_MS)) {
         const c = engine.cycle();
         pending = { at: now, label: skipText(skipTarget(open), open.length) };
@@ -727,11 +829,25 @@ export function createLevel(ctx, deps = {}) {
       const target = skipTarget(open);
       const hrs = (target - env.day) * 24;
       // a long jump (more than a day: the rest days) shows the busy card while the farm runs it
-      if (hrs > 24 && ui?.busy?.run) { ui.busy.run(skipText(target), () => skip(hrs)); return { skipped: hrs }; }
-      skip(hrs);
-      return { skipped: hrs };
+      const t0 = env.day;
+      if (hrs > 24 && ui?.busy?.run) { ui.busy.run(skipText(target), () => skip(hrs, { stopOnAlarm: true })); return { skipped: hrs }; }
+      skip(hrs, { stopOnAlarm: true });
+      const went = (env.day - t0) * 24;
+      return went < hrs - 1 / 60 && stoppedAt ? { skipped: went, stopped: 'alarm' } : { skipped: hrs };
     },
     nextLabel,
+    /** The last Next job skip an alarm stopped ({ at, alarms }) or null. */
+    get skipStopped() { return stoppedAt; },
+    /**
+     * Phase 4 (PHASE4.md §3.2): the level's jobs again for the farm's condition (farm.setCondition on a running farm:
+     * __game.setCondition, EV.LEVEL { phase: 'condition' }): another condition's jobs go, the condition's come.
+     */
+    rebuildJobs() {
+      if (level.mode !== 'level' || ended || free) return false;
+      const r = engine.rebuild();
+      ui?.jobCard?.refresh?.();
+      return r;
+    },
     /** Today's hand weighings the level keeps (saved with the level: they survive a reload). */
     weighsToday() { return weighs.filter((x) => (x.day ?? LEVEL1.endDay) === env.dayNumber); },
     jobs: {
@@ -752,6 +868,7 @@ export function createLevel(ctx, deps = {}) {
     serialize() {
       return { v: 1, mode: level.mode, seed, levelId: def.id, inRun, jobs: engine.serialize(), fired: [...fired], points, weighs,
         signed7: signedEnd, signedEnd, fast, failAt, startAt, reached: [...reached], ended: ended ? ended.reason : null,
+        ...(bad.gradedOut || bad.called != null ? { bad: { ...bad } } : {}),
         ...(inRun && runApi ? { run: runApi.serialize() } : {}) };
     },
     saveBlob() {
@@ -797,7 +914,7 @@ export function createLevel(ctx, deps = {}) {
         }
         if (ended) return true;
         // a later level stops at its end (Next job never skips past it); the brooding week as Phase 2
-        const to = def === LEVEL1 ? target : Math.min(target, engine.endAt());
+        const to = is(def, LEVEL1) ? target : Math.min(target, engine.endAt());
         if (to > env.day + 1e-9) skip((to - env.day) * 24);
         return true;
       },
@@ -809,7 +926,7 @@ export function createLevel(ctx, deps = {}) {
        */
       freeRun(day, hour = 6, opts = {}) {
         const target = day + hour * H;
-        if (!free && !(level.mode === 'level' && !ended && def === LEVEL1)) level.start({ seed: opts.seed ?? seed });
+        if (!free && !(level.mode === 'level' && !ended && is(def, LEVEL1))) level.start({ seed: opts.seed ?? seed });
         if (!free && target <= LEVEL1.endDay + 12 * H) return level.debug.goto(day, hour, { auto: true });
         if (!free) {
           level.debug.goto(LEVEL1.endDay, 12, { auto: true });
@@ -820,12 +937,12 @@ export function createLevel(ctx, deps = {}) {
         }
         free.def = levelOfDay(day);
         if (target <= env.day + 1e-9) return true;
-        for (const s of cycleProfiles.cycleStops(env.dayNumber, Math.floor(target))) {
+        for (const s of cycleProfiles.cycleStops(env.dayNumber, Math.floor(target), condNow())) {
           const t = s.d + s.h * H;
           if (t <= env.day + 1e-9 || t >= target) continue;
           skip((t - env.day) * 24);
           if (s.r === 'sign') { if (!records?.row?.(s.d)?.signed) records?.sign?.(s.d); continue; }
-          try { cycleProfiles.applyCycleRound(farm, env, s.d, s.r, 'ideal'); } catch (err) { console.error('applyCycleRound failed', err); }
+          try { cycleProfiles.applyCycleRound(farm, env, s.d, s.r, profileFor('ideal')); } catch (err) { console.error('applyCycleRound failed', err); }
           pickDead();
         }
         if (target > env.day + 1e-9) skip((target - env.day) * 24);
@@ -836,7 +953,7 @@ export function createLevel(ctx, deps = {}) {
       /** Show the result screen now. forcePass true / false makes a passing / failing level for the harness. */
       result(forcePass) {
         const r = computeResult('debug');
-        if (def === LEVEL1) {
+        if (is(def, LEVEL1)) {
           if (forcePass === false) { r.pass = false; r.ratio = 3.8; r.weightG = r.chickWeightG * 3.8; r.failText = `day 7 weight ${two(r.ratio)} × chick weight`; }
           else if (forcePass === true && !r.pass) { r.pass = true; }
         } else if (forcePass === false) { r.pass = false; if (!r.failText) r.failText = `not passed on day ${env.dayNumber}`; }

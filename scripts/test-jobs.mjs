@@ -7,7 +7,7 @@ import { createEvents, EV } from '../src/events.js';
 import { createJobEngine, BROOD_CELLS, LEVEL_END_DAY, windowHours } from '../src/job-engine.js';
 import { JOBS } from '../src/content-jobs.js';
 import { BROOD_BOUNDS, HEATERS, LEVEL1, CYCLE, CLEAN, PLAN_LEVEL, WEEK2, WEEK3, FINISH, CLEANOUT, levelOfDay } from '../src/config.js';
-import { JOBS_CYCLE, STATE_TEST_IDS_CYCLE } from '../src/content-jobs-cycle.js';
+import { JOBS_CYCLE, STATE_TEST_IDS_P3 } from '../src/content-jobs-cycle.js';
 import { STRIPS, partRows, stripRows } from '../src/job-strips.js';
 import { jobPlaces, nextPlace } from '../src/job-next.js';
 import { STRIPS_CYCLE } from '../src/job-strips-cycle.js';
@@ -366,7 +366,8 @@ test('stat anchor: the catch (default day 42 02:00), negative fromH, a booking m
   assert(w.status === 'open', 'withdraw open');
   L.farm.harvest.catchAt = 42 + 5 * H; L.jobs.tick();
   near(w.opensAt, 41 + 15 * H, 'an open job keeps its window');
-  L.act('feed.withdraw', { on: true, result: true });
+  // Phase 4 (§6.7, DONE_P4): done on the outcome, the feed off at the feeder box (the farm's farm.feed.withdrawn)
+  L.farm.act('feed.withdraw', { on: true }); L.jobs.tick();
   assert(w.status === 'done', 'withdrawn');
   const b = makeCycle(FINISH, { day: 37, hour: 7 });
   b.act('phone.bookCatch', { day: 43, hour: 2, result: { booked: false, catchAt: 42 + 2 * H, reason: 'the crew catches between day 41 18:00 and day 42 06:00' } });
@@ -465,7 +466,7 @@ test('every Phase 3 state test, on the farm stub with its fields set (held ones 
     ['rest-done', (L) => { C(L).bookedDay = 20; }, 0, (L) => { C(L).bookedDay = 21; }],
     ['dark-period', (L) => { L.env.setLightProgram({ darkStart: 22, darkHours: 6 }); }, 0, (L) => { L.env.setLightProgram({ darkStart: 22, darkHours: 0 }); }],
   ];
-  assert(CASES.length === STATE_TEST_IDS_CYCLE.length && CASES.every(([t]) => STATE_TEST_IDS_CYCLE.includes(t)), 'one case per STATE_TEST_IDS_CYCLE entry');
+  assert(CASES.length === STATE_TEST_IDS_P3.length && CASES.every(([t]) => STATE_TEST_IDS_P3.includes(t)), 'one case per Phase 3 state test (STATE_TEST_IDS_P3)');
   for (const [test, yes, mins, no] of CASES) {
     const job = T(`t-${test}`, { type: 'state', test });
     const N = makeCycle(CLEANOUT, { day: 20, hour: 6, jobs: [job], before: no });
