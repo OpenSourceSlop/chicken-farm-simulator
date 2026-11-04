@@ -9,6 +9,8 @@ import { COND_PROFILES, COND_RANGE } from '../src/farm-profiles-cond.js';
 import { makeWorld } from '../src/farm-profiles-run.js';
 import { SKILL_BRANCHES, SKILL_LEVEL_POINTS, LEVELS } from '../src/config.js';
 import { BROOD_REFS_P4, COND_CLIMATE_P4, CUT_REFS_P4, TANK_REFS_P4 } from './tuning-refs-cond.mjs';
+import { heatHandled } from '../src/farm-cycle-problems.js';
+import { EV } from '../src/events.js';
 
 const QUICK = process.argv.includes('--quick');
 const QUICK_RUNS = new Set(['hot:ideal', 'hotNoBroodAir', 'rainy:ideal', 'rainyNoGenerator', 'bad:ideal', 'badNoGrade', 'water:ideal', 'waterPumpUnfixed']);
@@ -164,6 +166,117 @@ test('determinism: two seed-7 runs of hot:ideal are identical', () => {
   const a = runCycle('hot:ideal', { seed: 7, to: 'weeks45' }), b = runCycle('hot:ideal', { seed: 7, to: 'weeks45' });
   assert(JSON.stringify(a.records.serialize()) === JSON.stringify(b.records.serialize()) && JSON.stringify(a.hourly) === JSON.stringify(b.hourly), 'two seed-7 runs differ');
 });
-// @@PACKAGE@@
+// ---------------- package checks (PHASE4.md §12.1) ----------------
+const starts = {};
+const startOf = (cond, lv) => { const k = `${cond}:${lv}`; if (!starts[k]) starts[k] = runCycle(cond ? IDEAL_OF[cond] : 'ideal', { seed: 1, from: 'plan', to: lv, keepStarts: true, stopAtStart: true, condition: cond }).starts[lv]; return starts[k]; };
+function restoreBlob(w, blob) {
+  const b = JSON.parse(JSON.stringify(blob));
+  w.farm.start(LEVELS[1], { seed: b.farm.seed ?? 1, keepClock: true, condition: b.farm.cond ? b.farm.cond.condition : null });
+  for (const [k, v] of Object.entries(b.env)) if (!['maxDay', 'curtainForced', 'cycleClimate', 'fansBroken', 'padWorking', 'fanStages', 'broodersUp'].includes(k)) w.env[k] = v;
+  w.env.setMaxDay(b.env.maxDay); w.env.setDay(Math.round(b.env.day - b.env.hour / 24)); w.env.setHour(b.env.hour);
+  w.farm.restore(b.farm); w.records.restore(b.records); w.skills.restore(b.skills);
+  return w;
+}
+const worldAt = (cond, lv) => restoreBlob(makeWorld(), startOf(cond, lv));
+
+test('restore -> serialize identical for a level start under each condition; the restored farm runs on with its condition', () => {
+  const out = [];
+  for (const [cond, lv] of [['hot', 'level1'], ['hot', 'weeks45'], ['rainy', 'weeks45'], ['badChicks', 'level1'], ['water', 'weeks45']]) {
+    const blob = startOf(cond, lv), w = restoreBlob(makeWorld(), blob);
+    for (const k of ['farm', 'records', 'skills']) {
+      const a = JSON.stringify(blob[k]), b = JSON.stringify(w[k].serialize());
+      if (a !== b) { let i = 0; while (a[i] === b[i]) i++; throw new Error(`${cond}/${lv}: ${k} differs at ${i}: ${a.slice(Math.max(0, i - 60), i + 60)} | ${b.slice(Math.max(0, i - 60), i + 60)}`); }
+    }
+    assert(w.farm.condition === cond && w.env.weather === (cond === 'hot' ? 'hot' : cond === 'rainy' ? 'rainy' : w.env.weather), `${cond}/${lv}: condition and weather`);
+    if (cond === 'hot') assert(w.env.weatherEvents.some((e) => /^sun-/.test(e.id)), 'the sun events rebuilt');
+    w.env.skipHours(3);
+    out.push(`${cond}/${lv} ${(JSON.stringify(blob).length / 1024).toFixed(0)} KB`);
+    assert(JSON.stringify(blob).length <= 250 * 1024, `${cond}/${lv} start over 250 KB`);
+  }
+  return out.join(', ');
+});
+
+test('every Phase 4 action answers at once with its result shape (PHASE4.md §10.3)', () => {
+  const w = worldAt('rainy', 'weeks45'), { farm } = w;
+  const shape = { 'gen.start': ['running', 'fuelL', 'hoursLeft'], 'gen.switch': ['on', 'source'], 'gen.test': ['ok', 'fuelL', 'minutes'], 'gen.fuel': ['fuelL'], 'gen.stop': ['running', 'fuelL'],
+    'inlets.storm': true, 'water.tank': ['levelPct', 'lowPct', 'lowAt', 'pumpBar', 'pumpA', 'pumpOn'], 'pump.fix': ['started', 'worn', 'hours'], 'brood.trays': true };
+  const args = { 'gen.switch': { to: 'generator' }, 'inlets.storm': { closed: true }, 'brood.trays': { on: true } };
+  for (const [id, keys] of Object.entries(shape)) {
+    const r = farm.act(id, args[id] || {});
+    if (keys === true) assert(r === true, `${id} -> ${JSON.stringify(r)}`);
+    else for (const k of keys) assert(r && typeof r === 'object' && k in r, `${id} has no ${k}: ${JSON.stringify(r)}`);
+  }
+  assert(farm.act('litter.patch', { x: 0, z: 5 }).onRain === true && farm.act('litter.patch', { x: 0, z: -5 }).onRain === false, 'litter.patch onRain in the rainy season');
+  const b = worldAt('badChicks', 'level1'); b.env.skipHours((10.1 - b.env.hour) + 24);
+  const g = b.farm.act('chicks.grade', { stack: 2 });
+  assert(['stack', 'looked', 'weak', 'culled', 'minutes'].every((k) => k in g) && g.looked === 1000 && g.culled > 0 && g.minutes === 6, `chicks.grade ${JSON.stringify(g)}`);
+  const h = worldAt('hot', 'weeks45'); assert(Number.isFinite(h.farm.act('water.flowtest', { line: 1 }).waterC), 'water.flowtest waterC in the hot season');
+  const wa = worldAt('water', 'weeks45'); assert(Number.isFinite(wa.farm.act('water.test').ironMgL), 'water.test ironMgL in the water condition');
+});
+
+test('a power cut by farm.debug.power(false) stops the fans; gen.start + gen.switch bring them back; EV.POWER on each change', () => {
+  const w = worldAt('rainy', 'weeks45'), { farm, env, events } = w, got = [];
+  events.on(EV.POWER, (p) => got.push(p.on));
+  env.setFans(4); env.setPad(true);
+  farm.debug.power(false);
+  assert(!farm.power.on && !env.powerOn && env.fansEffective === 0 && env.airSpeed === 0 && env.fansManual === 4 && env.padOn, `dark: ${JSON.stringify(farm.power)} fans ${env.fansEffective}`);
+  env.skipHours(0.1);
+  assert(farm.act('gen.start').running === true && !farm.power.on, 'the generator runs; the switch still on the mains');
+  const s = farm.act('gen.switch', { to: 'generator' });
+  assert(s.on === true && s.source === 'generator' && env.powerOn && env.fansEffective === 4, `on the generator: ${JSON.stringify(s)} fans ${env.fansEffective}`);
+  assert(got.join() === 'false,true', `EV.POWER ${got}`);
+});
+
+test('the generator left on runs dry about 10 h after its start; gen-dry comes with its alarm', () => {
+  const w = worldAt('rainy', 'weeks45'), { farm, env, events } = w, sym = [];
+  events.on(EV.FARM_PROBLEM, (p) => { if (p.phase === 'symptom') sym.push(p); });
+  env.skipHours((33 + 15.2 / 24 - env.day) * 24);
+  assert(!farm.power.on && sym.some((p) => p.id === 'power-cut' && p.alarm === true), `the cut at 15:10 with its alarm (${JSON.stringify(sym)})`);
+  env.skipHours(10 / 60); farm.act('gen.start'); farm.act('gen.switch', { to: 'generator' });
+  const t0 = env.day;
+  env.skipHours(3.5);
+  assert(sym.some((p) => p.id === 'mains-back'), 'the mains back while the generator carries the house');
+  while (farm.generator.running && env.day < t0 + 0.6) env.skipHours(0.25);
+  const h = (env.day - t0) * 24;
+  assert(h >= 9.5 && h <= 10.5 && !farm.power.on && sym.some((p) => p.id === 'gen-dry' && p.alarm === true), `dry after ${h.toFixed(2)} h; gen-dry ${JSON.stringify(sym.map((p) => p.id))}`);
+  return `dry ${h.toFixed(2)} h after its start`;
+});
+
+test('pump.fix: fixing for 2 farm hours, then pumpShare 1 and pump-wear fixed', () => {
+  const w = worldAt('water', 'weeks45'), { farm, env } = w;
+  env.skipHours((27 + 8 / 24 - env.day) * 24);
+  const T = farm.waterTank, before = T.pumpShare, r = farm.act('pump.fix');
+  assert(r.started && r.worn && r.hours === 2 && T.fixing && before < 0.9, `${JSON.stringify(r)} share ${before}`);
+  env.skipHours(1.5); assert(T.fixing && farm.act('water.tank').pumpOn === false, 'still fixing at 1.5 h: the pump stopped');
+  env.skipHours(0.6); assert(!T.fixing && T.pumpShare === 1 && farm.problems.find((p) => p.id === 'pump-wear').phase === 'fixed', `after 2 h: ${JSON.stringify(T)}`);
+});
+
+test('a bad batch: the graded-out chicks are claimed only with a call to the hatchery on day 0', () => {
+  const one = (call) => {
+    const w = worldAt('badChicks', 'level1'), { farm, env } = w;
+    env.skipHours((10.1 - env.hour) + 24);
+    for (const s of [0, 1, 2, 3]) farm.act('chicks.grade', { stack: s });
+    if (call === 0) farm.act('phone.hatchery', { chickWeightG: 36, weakPct: 4 });
+    env.skipHours(16);
+    if (call === 1) farm.act('phone.hatchery', { chickWeightG: 36, weakPct: 4 });
+    return farm.flock;
+  };
+  const told = one(0), late = one(1), none = one(null);
+  assert(told.gradedOut > 150 && told.claimed === told.gradedOut, `told on day 0: ${told.claimed} of ${told.gradedOut}`);
+  assert(late.claimed === 0 && none.claimed === 0, `told on day 1: ${late.claimed}; never: ${none.claimed}`);
+  return `${told.gradedOut} graded out of 4 stacks, claimed ${told.claimed}`;
+});
+
+test('heatHandled: 16-day-olds on the warm afternoon (day 16) with the pad and one fan are handled, with the pad and six fans not', () => {
+  const w = worldAt(null, 'week3'), { farm, env } = w;
+  env.skipHours((16 + 11 / 24 - env.day) * 24);
+  env.setFans(1); env.setPad(true); env.skipHours(4);
+  const one = heatHandled(farm, env), e1 = farm.comfort.meanOver;
+  env.setFans(6); env.setPad(true); env.skipHours(1);
+  const six = heatHandled(farm, env), e6 = farm.comfort.meanOver;
+  assert(one && !six, `pad + 1 fan ${one} (e ${fmt(e1)}), pad + 6 fans ${six} (e ${fmt(e6)})`);
+  return `pad + 1 fan e ${fmt(e1)}, pad + 6 fans e ${fmt(e6)}`;
+});
+
 console.log(failed ? `${failed} failed` : `all passed${skipped ? ` (${skipped} skipped${QUICK ? ': --quick' : ''})` : ''}`);
 process.exit(failed ? 1 : 0);
