@@ -34,8 +34,9 @@ export const WATCH = {
   // the last 2 farm hours projected to the lines' 20 % (WATER_TANK.linesFromPct): red within 8 h, or a worn pump (the
   // plate's pressure low) with the tank falling 3 % an hour or more, or under the plate's 30 % mark; amber within 16 h,
   // a worn or stopped pump, the tank under 50 %, or the meter's litres per 1,000 birds of the last 3 hours under 85 % of
-  // the same hours yesterday
-  supplyRedH: 8, supplyAmberH: 16, supplyFallMin: 1, wornFallPct: 3, tankAmberPct: 50, meterH: 3, meterAmber: 0.85,
+  // the same hours yesterday together with a supply cause (Phase 5, PHASE5.md §6.8.1: the tank under 90 % or falling 1 %
+  // an hour, the pump worn or stopped; the meter alone reads a cooler day after a heat wave, not the supply), lit hours only
+  supplyRedH: 8, supplyAmberH: 16, supplyFallMin: 1, wornFallPct: 3, tankAmberPct: 50, meterH: 3, meterAmber: 0.85, meterCausePct: 90,
 };
 export const WATCH_STATES = { green: 'steady', amber: 'watch', red: 'alert' };
 
@@ -59,13 +60,16 @@ export const refWeight = (age) => weightAt(age) * refShare(age);
 const SIGN = { brooder: 'the brooder sign', heat: 'the heat and tunnel fans sign', water: 'the water lines sign', feeder: 'the feeder lines plate on the feeder box',
   light: 'the light program sign', lightPlate: 'the light program plate on the controller', vent: 'the minimum ventilation sign', air: 'the air quality sign',
   legs: 'the legs and feathers sign', droppings: 'the droppings sign', chicks: 'the chick arrival sign', health: 'the flock health sign',
-  power: 'the power cut sign by the generator', tank: 'the water tank plate at the tank tower', grading: 'the chick grading plate at the chick table' };
+  power: 'the power cut sign by the generator', tank: 'the water tank plate at the tank tower', grading: 'the chick grading plate at the chick table',
+  supply: 'the water supply plate (its filter gauges)' };
 /** The farm's state the causes read (watchState(env, farm); every field optional). */
 export function watchState(env, farm) {
   const T = farm?.waterTank;
   return { condition: farm?.condition ?? null, sun: env?.sunHeatPerH ?? 0, powerOff: farm?.power?.on === false,
     tankLow: !!T && farm?.condition === 'water' && ((T.levelPct ?? 100) < 30 || (T.pumpShare ?? 1) < 0.9 || !!T.fixing),
-    windChill: env?.windChill ?? 0, airSpeed: env?.airSpeed ?? 0, fans: env?.fansEffective ?? 0, houseRH: env?.houseRH ?? 60 };
+    windChill: env?.windChill ?? 0, airSpeed: env?.airSpeed ?? 0, fans: env?.fansEffective ?? 0, houseRH: env?.houseRH ?? 60,
+    // Phase 5 (PHASE5.md §6.8.1, review round): the water condition's iron filter clogged (farm-cond-water.js condX.filterK)
+    ironFilter: farm?.condition === 'water' && !!farm?.condX?.filterK };
 }
 const POWER = { why: 'the power is off: the fans, the pad pump, the lights and the augers stand still', sign: 'sign-power', signName: SIGN.power, place: 'generator', check: 'the generator and its transfer switch at the generator house' };
 const TANK = { why: 'the water tank runs low: the drinker lines and the pads get too little water', sign: 'water-tank', signName: SIGN.tank, place: 'water-tank', check: 'the tank’s gauge and the well pump at the tank tower' };
@@ -97,7 +101,9 @@ export function causeOf(kind, age, st = {}) {
       if (brooding) return { why: 'the young birds are hot for their age', sign: 'sign-heat', signName: `${SIGN.heat} (its young-birds line)`, place: 'pad-pump', check: 'the pad pump with one or two tunnel fans at the fan panel (three in week 3)' };
       return { why: 'the birds are hot for their age', sign: 'sign-heat', signName: SIGN.heat, place: 'fan-panel', check: 'the fan panel and the pad pump' };
     }
-    case 'water': return { why: 'water reaches few birds (the flow, the nipple height or the filter)', sign: 'sign-water', signName: SIGN.water, place: 'drinker-0', check: 'a flow test at the drinker line regulators and the water supply’s filter' };
+    case 'water':
+      if (st.ironFilter) return { why: 'water reaches few birds: iron from the well clogs the water supply’s filter', sign: 'water-supply', signName: SIGN.supply, place: 'water-supply', check: 'the filter gauges at the water supply (the pressure after the filter), then a flow test at the drinker line regulators' };
+      return { why: 'water reaches few birds (the flow, the nipple height or the filter)', sign: 'sign-water', signName: SIGN.water, place: 'drinker-0', check: 'a flow test at the drinker line regulators and the water supply’s filter' };
     case 'feed': return { why: 'feed is out of reach or the pans run empty', sign: 'feeder-box', signName: SIGN.feeder, place: 'feeder-box', check: 'the pans’ height and the feed in them at the feeder box' };
     case 'light': return { why: 'the light program cuts their eating time', sign: young ? 'controller-lights' : 'sign-light', signName: young ? SIGN.lightPlate : SIGN.light, place: 'controller', check: 'the lights at the climate controller' };
     case 'air': return { why: 'ammonia in the air: too little fresh air', sign: young ? 'sign-vent' : 'sign-air', signName: young ? SIGN.vent : SIGN.air, place: 'controller', check: 'the minimum ventilation timer at the climate controller' };
@@ -161,7 +167,9 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       cold: hc.cold, hot: hc.hot, felt: C.feltMean ?? (C.meanOver ?? 0) + env.targetTemp, tgt: env.targetTemp, e: C.meanOver ?? 0,
       feedKg: fl.cumFeedKg || 0, waterL: farm.water?.meterL || 0, lit: !!env.lightsOn, litH: Math.max(1, 24 - (lp.darkHours || 0)),
       excl: !!(farm.feed?.withdrawn || farm.cyc?.liftOn || farm.power?.on === false || farm.water?.mainClosed), // the withdrawal, the heat-wave lift, a cut, the vaccine's thirst
-      f: { fT: f.fT ?? 1, fL: f.fL ?? 1, fF: f.fF ?? 1, fW: f.fW ?? 1, fAir: f.fAir ?? 1 }, tank: tankNow() };
+      f: { fT: f.fT ?? 1, fL: f.fL ?? 1, fF: f.fF ?? 1, fW: f.fW ?? 1, fAir: f.fAir ?? 1 }, tank: tankNow(),
+      // Phase 5 (PHASE5.md §6.8.4): the hot season's appetite this hour (farm-cycle-step.js fx.fHot; 1 outside the hot season)
+      hotK: farm.cyc?.fx?.fHot ?? 1 };
   }
   /** The water condition's tank and pump now (the tank plate's figures), else null (no tank modelled). */
   function tankNow() {
@@ -228,17 +236,29 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
     // ---- intake (the last 6 lit hours, from 24 h after the first tip) ----
     const tip = farm.stats?.firstTipAt;
     if (tip != null && (s.t - tip) * 24 >= WATCH.intakeFromH) {
-      let eat = 0, want = 0, drink = 0, hrs = 0;
+      let eat = 0, want = 0, drink = 0, hrs = 0, hot = false;
       for (let i = samples.length - 1; i > 0 && hrs < WATCH.litH; i--) {
         const a = samples[i - 1], b = samples[i];
         if (!a.lit || !b.lit || a.excl || b.excl || b.t - a.t > 1.5 * H) continue;
         eat += b.feedKg - a.feedKg; drink += b.waterL - a.waterL;
-        want += (a.alive * feedStdGAt(a.age)) / 1000 / a.litH * ((b.t - a.t) * 24);
+        // Phase 5 (PHASE5.md §6.8.4): the standard is the expected intake: x the hour's hot-season appetite (1 elsewhere),
+        // so a well-cooled flock's hot afternoon reads steady and sends nobody to add fans
+        const k = ((a.hotK ?? 1) + (b.hotK ?? 1)) / 2;
+        if (k < 1 - 1e-9) hot = true;
+        want += (a.alive * feedStdGAt(a.age)) / 1000 / a.litH * ((b.t - a.t) * 24) * k;
         hrs++;
       }
       if (hrs >= 3 && want > 0) {
         const fs = eat / want, ws = drink / (want * WATCH.waterPerKg), m = Math.min(fs, ws);
-        rows.intake = { state: m >= WATCH.intakeGreen ? 'green' : m >= WATCH.intakeRed ? 'amber' : 'red', label: 'Intake', value: `feed ${int(fs * 100)} % · water ${int(ws * 100)} %`, detail: `of what ${who.toLowerCase()} this age take (the last ${hrs} lit hours)`, feed: fs, water: ws, hours: hrs };
+        const state = m >= WATCH.intakeGreen ? 'green' : m >= WATCH.intakeRed ? 'amber' : 'red';
+        rows.intake = { state, label: 'Intake', value: `feed ${int(fs * 100)} % · water ${int(ws * 100)} %`,
+          detail: `of what ${who.toLowerCase()} this age take (the last ${hrs} lit hours)${hot ? ' (hot season: the birds eat a little less in the hottest hours)' : ''}`, feed: fs, water: ws, hours: hrs, hot };
+        // Phase 5 (PHASE5.md §6.8.1, review round): a row out of steady names its likely cause and where to look (the water
+        // condition's clogged iron filter reaches the watch only through this row: the water supply's filter, its plate)
+        if (state !== 'green') {
+          const k = likely(rows, s), c = k ? causeOf(k, s.age, watchState(env, farm)) : null;
+          if (c) { rows.intake.cause = { kind: k, why: c.why, sign: c.sign, signName: c.signName, place: c.place, check: c.check }; rows.intake.detail += ` · see ${c.signName}`; }
+        }
       }
     }
     // ---- the water supply (the water condition's tank, pump and meter) ----
@@ -246,13 +266,13 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
     status = { on: true, rows, last: warnings[warnings.length - 1] || null, age: s.age };
     return rows;
   }
-  /** The meter's litres per 1,000 birds of the last 3 farm hours and of the same hours yesterday (hours without the
-   *  withdrawal, the lift, a cut or the main valve shut only), or null. */
+  /** The meter's litres per 1,000 birds of the last 3 farm hours and of the same hours yesterday, or null: lit hours only
+   *  on both days (Phase 5, PHASE5.md §6.8.1), and no hour of the withdrawal, the lift, a cut or the main valve shut. */
   function meterVsYesterday(s) {
     const n = WATCH.meterH, a = back(n), y1 = back(24), y0 = back(24 + n);
     if (!a || !y1 || !y0 || (s.t - a.t) * 24 < n - 0.01 || (y1.t - y0.t) * 24 < n - 0.01) return null;
     const win = samples.filter((x) => (x.t >= a.t - 1e-6 && x.t <= s.t + 1e-6) || (x.t >= y0.t - 1e-6 && x.t <= y1.t + 1e-6));
-    if (win.some((x) => x.excl) || !(s.alive > 0) || !(y1.alive > 0)) return null;
+    if (win.some((x) => x.excl || !x.lit) || !(s.alive > 0) || !(y1.alive > 0)) return null;
     const m = ((s.waterL - a.waterL) * 1000) / s.alive, y = ((y1.waterL - y0.waterL) * 1000) / y1.alive;
     return y >= 2 ? { m, y, r: m / y } : null;
   }
@@ -263,7 +283,10 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
     const toLines = fall >= WATCH.supplyFallMin && t.L > lines ? (t.L - lines) / fall : t.L <= lines ? 0 : Infinity;
     const worn = t.on && t.bar > 0 && t.bar <= WATER_TANK.wornBar, mv = meterVsYesterday(s);
     const red = toLines <= WATCH.supplyRedH || t.L < WATER_TANK.lowPct || (worn && fall >= WATCH.wornFallPct);
-    const amber = toLines <= WATCH.supplyAmberH || worn || !t.on || t.L < WATCH.tankAmberPct || (mv && mv.r < WATCH.meterAmber);
+    // the meter's fall counts only beside a supply cause (PHASE5.md §6.8.1): a full tank and a pump at its plate read a
+    // cooler day after the heat wave, not a supply that fails
+    const cause = t.L < WATCH.meterCausePct || fall >= WATCH.supplyFallMin || worn || !t.on;
+    const amber = toLines <= WATCH.supplyAmberH || worn || !t.on || t.L < WATCH.tankAmberPct || (!!mv && mv.r < WATCH.meterAmber && cause);
     const pump = !t.power ? 'pump stopped: no power' : t.fix ? 'pump stopped for its repair'
       : `pump ${two(t.bar)} bar, ${one(t.A)} A (plate ${one(WATER_TANK.pumpBar)} bar, ${WATER_TANK.pumpA} A)`;
     return { state: red ? 'red' : amber ? 'amber' : 'green', label: 'Supply',
@@ -372,7 +395,9 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
         samples: samples.map((x) => [r5(x.t), r5(x.age), x.w == null ? null : Math.round(x.w * 10) / 10, x.alive, x.lost, x.of, x.cold ? 1 : 0, x.hot ? 1 : 0, Math.round(x.felt * 100) / 100,
           Math.round(x.tgt * 100) / 100, r3(x.e), Math.round(x.feedKg * 10) / 10, Math.round(x.waterL), x.lit ? 1 : 0, x.litH, x.excl ? 1 : 0,
           [x.f.fT, x.f.fL, x.f.fF, x.f.fW, x.f.fAir].map(r3), Object.values(x.causes), x.dead,
-          x.tank ? [Math.round(x.tank.L * 100) / 100, x.tank.bar, x.tank.A, x.tank.on ? 1 : 0, x.tank.fix ? 1 : 0, x.tank.power ? 1 : 0] : null]),
+          x.tank ? [Math.round(x.tank.L * 100) / 100, x.tank.bar, x.tank.A, x.tank.on ? 1 : 0, x.tank.fix ? 1 : 0, x.tank.power ? 1 : 0] : null,
+          // Phase 5: the hot season's appetite of the hour, only where it is under 1 (no field in any other season's save)
+          ...(x.hotK != null && x.hotK < 1 ? [r5(x.hotK)] : [])]),
         causeKeys: samples.length ? Object.keys(samples[0].causes) : [] };
     },
     restore(d) {
@@ -383,7 +408,8 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       samples = (d.samples || []).map((a) => ({ t: a[0], age: a[1], w: a[2], alive: a[3], lost: a[4], of: a[5], cold: !!a[6], hot: !!a[7], felt: a[8], tgt: a[9], e: a[10],
         feedKg: a[11], waterL: a[12], lit: !!a[13], litH: a[14], excl: !!a[15], f: { fT: a[16][0], fL: a[16][1], fF: a[16][2], fW: a[16][3], fAir: a[16][4] },
         causes: Object.fromEntries(keys.map((k, i) => [k, a[17][i] || 0])), dead: a[18] ?? a[4],
-        tank: Array.isArray(a[19]) ? { L: a[19][0], bar: a[19][1], A: a[19][2], on: !!a[19][3], fix: !!a[19][4], power: a[19][5] !== 0 } : null }));
+        tank: Array.isArray(a[19]) ? { L: a[19][0], bar: a[19][1], A: a[19][2], on: !!a[19][3], fix: !!a[19][4], power: a[19][5] !== 0 } : null,
+        hotK: Number.isFinite(a[20]) ? a[20] : 1 }));
       lastHour = Number.isFinite(d.lastHour) ? d.lastHour : samples.length ? Math.floor(samples[samples.length - 1].t * 24 + 1e-6) : null;
       let L = null;
       try { L = ctxFn?.(); } catch { L = null; }

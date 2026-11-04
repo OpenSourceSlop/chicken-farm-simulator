@@ -1,10 +1,11 @@
 // Save encoding (PHASE5.md §3.2, §3.5): a whole run as text that survives localStorage, the clipboard and a paste.
-// Pure (no DOM): node tests run it as it is. Owner after the design round: package "saves" (it adds the gzip path through
-// CompressionStream, 'gz64'); the text format, crc32 and the error codes are the frozen contract.
+// Pure (no DOM): node tests run it as it is. Owner: package "saves" (Phase 5: the gzip path through CompressionStream,
+// 'gz64', with 'json64' where the browser has none); the text format, crc32 and the error codes are the frozen contract.
 //
 //   crc32(bytes | string)                 -> unsigned 32-bit CRC (IEEE), the check that a paste is whole
 //   await encodePayload(obj, { gzip? })   -> { enc: 'gz64' | 'json64', crc, data } (data: base64; crc: of the encoded bytes)
-//   await decodePayload({ enc, crc, data }) -> the object, or throws SaveError('damaged' | 'incomplete' | 'unknown-encoding')
+//   await decodePayload({ enc, crc, data }) -> the object, or throws SaveError('damaged' | 'incomplete' | 'unknown-encoding' |
+//                                            'needs-gzip' (a gz64 save in a browser without DecompressionStream))
 //   composeText({ meta, enc, crc, data }) -> the backup text: two header lines, the marker line, the payload lines, END
 //   composeParts({ meta, enc, crc, data }, maxChars?) -> [text]: one text when it fits in SAVE_SLOTS.partChars, else
 //                                            numbered parts ("part 2 of 6"), each at most maxChars characters long
@@ -34,6 +35,13 @@ export const SAVE_MESSAGES = {
   full: 'The browser’s storage for this game is full. Delete a slot (back it up first if you want to keep it), then save again.',
   blocked: 'Saving is off in this browser (site storage is blocked or this is a private window). Back up your game as text instead.',
   'load-failed': 'This save could not be loaded. The farm you had is unchanged; the save is kept as it is.',
+  // Phase 5, package saves (PHASE5.md §3.7): the autosave that could not write (EV.SAVE kind 'auto-failed'), a gz64 backup
+  // in a browser that cannot unpack it, a slot that is empty, slots in the sandbox
+  'auto-failed': 'The game could not save just now: the browser’s storage is full. Open Save or load to make room.',
+  'needs-gzip': 'This browser cannot unpack this save. Open the game in a newer browser (Chrome, Edge, Firefox or Safari 16.4 or later), then try again.',
+  empty: 'This slot is empty.',
+  'no-game': 'There is no farm to save yet: start a flock or continue one first.',
+  'auto-unreadable': 'The autosave could not be read: Continue uses your newest slot.',
 };
 
 let TABLE = null;
@@ -70,21 +78,46 @@ function fromBase64(b64) {
 /** gzip is available (CompressionStream; Chrome 80+, Firefox 113+, Safari 16.4+, node 18+). */
 export const canGzip = () => typeof CompressionStream === 'function' && typeof DecompressionStream === 'function';
 
+/** Bytes through a CompressionStream / DecompressionStream (written and read at once: no back-pressure stall). */
+async function through(stream, bytes) {
+  const writer = stream.writable.getWriter();
+  const wrote = writer.write(bytes).then(() => writer.close());
+  wrote.catch(() => {});                       // a damaged gzip rejects the reader too: the reader's error is the one thrown
+  const reader = stream.readable.getReader(), chunks = [];
+  let n = 0;
+  for (;;) { const { value, done } = await reader.read(); if (done) break; chunks.push(value); n += value.length; }
+  await wrote;
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out;
+}
+export const gzipBytes = (bytes) => through(new CompressionStream('gzip'), bytes);
+export const gunzipBytes = (bytes) => through(new DecompressionStream('gzip'), bytes);
+
 /**
- * Encode a JSON-safe object. Stub (design round): always 'json64' (base64 of the UTF-8 JSON); the saves package adds
- * 'gz64' (gzip, then base64) when canGzip() and opts.gzip !== false.
+ * Encode a JSON-safe object: 'gz64' (gzip, then base64) where the browser has CompressionStream and opts.gzip !== false,
+ * else 'json64' (base64 of the UTF-8 JSON). crc: the CRC-32 of the encoded bytes before base64 (PHASE5.md §3.2).
  * @returns {Promise<{ enc: 'gz64'|'json64', crc: string, data: string }>}
  */
-export async function encodePayload(obj) {
-  const bytes = utf8(JSON.stringify(obj));
-  return { enc: 'json64', crc: hex8(crc32(bytes)), data: toBase64(bytes) };
+export async function encodePayload(obj, { gzip = true } = {}) {
+  const raw = utf8(JSON.stringify(obj));
+  let bytes = raw, enc = 'json64';
+  if (gzip !== false && canGzip()) {
+    try { bytes = await gzipBytes(raw); enc = 'gz64'; } catch { bytes = raw; enc = 'json64'; }   // a failing stream: the plain form
+  }
+  return { enc, crc: hex8(crc32(bytes)), data: toBase64(bytes) };
 }
 /** @returns {Promise<any>} the object; throws SaveError. */
 export async function decodePayload({ enc, crc, data }) {
   const bytes = fromBase64(data);
   if (crc != null && hex8(crc32(bytes)) !== String(crc).toLowerCase()) throw new SaveError('incomplete', 'crc');
-  if (enc !== 'json64') throw new SaveError('unknown-encoding', enc);
-  try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new SaveError('damaged', 'json'); }
+  let json = bytes;
+  if (enc === 'gz64') {
+    if (typeof DecompressionStream !== 'function') throw new SaveError('needs-gzip', enc);
+    try { json = await gunzipBytes(bytes); } catch { throw new SaveError('damaged', 'gzip'); }
+  } else if (enc !== 'json64') throw new SaveError('unknown-encoding', enc);
+  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(json)); } catch { throw new SaveError('damaged', 'json'); }
 }
 
 /** The backup text (PHASE5.md §3.5) of one payload, or of one part of it (part: { k, n, from, to }). meta: { name, savedAt }. */

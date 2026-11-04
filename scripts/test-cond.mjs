@@ -7,7 +7,9 @@
 import { runCycle, cycleProfileOf } from '../src/farm-profiles-cycle.js';
 import { COND_PROFILES, COND_RANGE } from '../src/farm-profiles-cond.js';
 import { makeWorld } from '../src/farm-profiles-run.js';
-import { SKILL_BRANCHES, SKILL_LEVEL_POINTS, LEVELS } from '../src/config.js';
+import { SKILL_BRANCHES, SKILL_LEVEL_POINTS, LEVELS, weightAt } from '../src/config.js';
+import { boardsForDay } from '../src/content-signs-cycle.js';
+import { appetiteHot, TUNING } from '../src/farm-tuning.js';
 import { BROOD_REFS_P4, COND_CLIMATE_P4, CUT_REFS_P4, TANK_REFS_P4 } from './tuning-refs-cond.mjs';
 import { heatHandled } from '../src/farm-cycle-problems.js';
 import { EV } from '../src/events.js';
@@ -24,8 +26,11 @@ const band = (name) => [...BROOD_REFS_P4, ...COND_CLIMATE_P4, ...CUT_REFS_P4, ..
 export const COND_TARGETS = {
   'hot:ideal': {
     plan: { pass: true }, level1: { pass: true, ratio: [4.5, 4.95], deathsPct: [0, 1.0] }, week2: { pass: true, weightG: [480, Infinity] }, week3: { pass: true },
-    weeks45: { pass: true, weightG: [2100, 2350] }, finish: { pass: true, liveG: [2650, 2950], fcr: [1.55, 1.8] /* sim: 1.6 -> 1.55 */, epef: [330, 440] /* sim: 420 -> 440 */ }, cleanout: { pass: true },
+    // Phase 5 (PHASE5.md §6.8.4, package saves): the hot season's appetite: FCR <= 1.62 (was 1.8), EPEF >= 390 (was 330), the
+    // catch 2-5 % under the normal ideal of the same seed (measured 3.4 %: 2,788 g against 2,887 g), day 35 >= 95 % of the target
+    weeks45: { pass: true, weightG: [2100, 2350] }, finish: { pass: true, liveG: [2650, 2950], fcr: [1.55, 1.62] /* sim: 1.6 -> 1.55 */, epef: [390, 440] /* sim: 420 -> 440 */ }, cleanout: { pass: true },
     snaps: { heatL1Pct: [0, 0.05], gasL1VsNormal: [0, 0.6], heatW2Pct: [0, 0.05], heatW3Pct: [0, 0.1], heatW45Pct: [0, 0.1], minBranchPoints: [SKILL_LEVEL_POINTS[1], Infinity],
+      finishUnderNormalPct: [2, 5], day35OfTargetPct: [95, Infinity],
       earned: ['hot-brood-air'], eBrood15: band('hot-brood-pad1').at, eYoung: ['hot-d12-15-young', 'hot-d14-15-young', 'hot-d18-15-young'] },
   },
   hotNoBroodAir: { level1: { pass: false }, snaps: { deathsL1: [2.0, Infinity], ratioUnderIdeal: [0.2, 0.5], notEarned: ['hot-brood-air'], eBrood15: band('hot-brood-sign').at } },
@@ -88,6 +93,9 @@ export const SNAPS = {
   day21UnderIdealPct: (r, i) => under(r.levels.week3?.weightG, i.levels.week3?.weightG),
   day14UnderIdealPct: (r, i) => under(r.levels.week2?.weightG, i.levels.week2?.weightG),
   day35VsNormalPct: (r, i, n) => (n ? (100 * (r.levels.weeks45.weightG - n.levels.weeks45.weightG)) / n.levels.weeks45.weightG : null),
+  // Phase 5 (PHASE5.md §6.8.4): the catch's live weight under the normal ideal's of the same seed, %; day 35 of its target
+  finishUnderNormalPct: (r, i, n) => (n?.levels.finish && r.levels.finish ? under(r.levels.finish.liveG, n.levels.finish.liveG) : null),
+  day35OfTargetPct: (r) => (r.levels.weeks45?.weightG != null ? (100 * r.levels.weeks45.weightG) / weightAt(35) : null),
   litter21At15: (r) => Hr(r, 21, 15)?.litterMean ?? null,
   nh3NightsW3: (r) => nightsMaxNh3(r, 15, 21), nh3NightsW46: (r) => nightsMaxNh3(r, 22, 41),
   cutDeathsPct: (r) => deadPct(r, 'heat', 33.25, 34.25),
@@ -117,7 +125,8 @@ const fmt = (v) => (typeof v === 'number' ? +v.toFixed(3) : v);
 const runs = {};
 const runOf = (name) => runs[name] || (runs[name] = runCycle(name, { seed: 1 }));
 let normal = null;
-const normalRun = () => normal || (normal = runCycle('ideal', { seed: 1, to: 'weeks45' }));
+// (Phase 5: to the catch, for the hot season's appetite against the normal season)
+const normalRun = () => normal || (normal = runCycle('ideal', { seed: 1, to: 'finish' }));
 /** Compare one profile run with its COND_TARGETS (its condition's ideal and the normal ideal for the comparisons). */
 export function checkCond(name, r, ideal, norm) {
   const t = COND_TARGETS[name], bad = [], got = {};
@@ -152,6 +161,20 @@ for (const [cond, names] of Object.entries(COND_PROFILES)) {
     });
   }
 }
+// Phase 5 (PHASE5.md §6.8.4, package saves): the heat sign's hot-season line holds the figure the model gives
+test('Phase 5: the hot season\'s appetite: the term (1 outside the hot season, before day 21 and at or under 28 °C), the heat sign\'s hot-season line (general practice) holds the measured weight cost', () => {
+  const A = TUNING.hotAppetite;
+  assert(A.fromAge === 21 && A.aboveC === 28 && A.perC === 0.025 && A.floor === 0.85, `the constants ${JSON.stringify(A)}`);
+  assert(appetiteHot(null, 34, 30) === 1 && appetiteHot('rainy', 34, 30) === 1 && appetiteHot('hot', 34, 20.9) === 1 && appetiteHot('hot', 28, 30) === 1, 'no term outside the hot season, before day 21, at 28 °C');
+  assert(Math.abs(appetiteHot('hot', 32, 30) - 0.9) < 1e-12 && appetiteHot('hot', 40, 30) === 0.85, 'x 0.9 at 32 °C, the floor 0.85');
+  const line = boardsForDay(30, 'hot')['sign-heat'].items.find((x) => /eat less in the hottest hours/.test(x.text));
+  assert(line && line.source === 'general', `the line on the heat sign, general practice: ${JSON.stringify(line)}`);
+  assert(!boardsForDay(30, null)['sign-heat'].items.some((x) => /eat less in the hottest hours/.test(x.text)), 'not on the normal season\'s heat sign');
+  const m = /about (\d+)–(\d+) %/.exec(line.text), lo = +m[1], hi = +m[2];
+  const h = runOf('hot:ideal'), n = normalRun(), pct = (100 * (n.levels.finish.liveG - h.levels.finish.liveG)) / n.levels.finish.liveG;
+  assert(pct >= lo && pct <= hi, `the sign says ${lo}–${hi} %; the model ${pct.toFixed(2)} %`);
+  return `the hot ideal ${h.levels.finish.liveG} g against ${n.levels.finish.liveG} g: ${pct.toFixed(2)} % lighter (the sign: about ${lo}–${hi} %), FCR ${h.levels.finish.fcr}, EPEF ${h.levels.finish.epef}, day 35 ${h.levels.weeks45.weightG} g`;
+});
 test('every condition ideal: level 2 (9 points) in every branch with needsProblem applied', () => {
   const out = [];
   for (const [c, name] of Object.entries(IDEAL_OF)) {
