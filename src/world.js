@@ -68,6 +68,7 @@ export function buildWorld(ctx) {
   const metalBase = mats.metalFade.color.clone();
   const wx = { rain: 0, flash: 0, hot: 0 };
   let powerK = 1, wetK = -1;
+  const genRoof = root.getObjectByName('generator-roof');
 
   return {
     colliders,
@@ -92,7 +93,11 @@ export function buildWorld(ctx) {
       fields.update(sky, season.season);
       season.wet(r.wet);
       if (view) view.rainWet = r.wet; // the house's wet roof reads it (house.update gets the same view object)
-      if (Math.abs(r.wet - wetK) > 0.002) { wetK = r.wet; mats.metalFade.color.copy(metalBase).multiplyScalar(1 - 0.18 * r.wet); }
+      if (Math.abs(r.wet - wetK) > 0.002) {
+        wetK = r.wet;
+        mats.metalFade.color.copy(metalBase).multiplyScalar(1 - 0.18 * r.wet);
+        if (genRoof) genRoof.material.color.copy(metalBase).multiplyScalar(1 - 0.18 * r.wet);
+      }
       // the power cut: the yard lamps and the office windows go dark (back on with the power, EV.POWER)
       powerK = powerOff(farm, env) ? 0 : 1;
       lamps.update(sky.state.night, powerK);

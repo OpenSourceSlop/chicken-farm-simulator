@@ -101,9 +101,9 @@ export function buildFittings(kit) {
   // Phase 4: the red alarm lamp over the amber one, lit while the house has no power (blinking; steady under
   // prefers-reduced-motion), with a little red glow on the cabinet face
   const alarm = new THREE.Group();
-  const alarmLamp = new THREE.Mesh(new THREE.SphereGeometry(0.034, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff2a1a, toneMapped: false }));
-  alarmLamp.position.set(cx - L * 0.16, cy + 0.345, cz + IN * 0.01);
-  const alarmGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.3), new THREE.MeshBasicMaterial({ color: 0xff3020, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const alarmLamp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff2a1a, toneMapped: false }));
+  alarmLamp.position.set(cx - L * 0.16, cy + 0.36, cz + IN * 0.01);
+  const alarmGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.5), new THREE.MeshBasicMaterial({ color: 0xff3020, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending }));
   alarmGlow.position.set(cx - L * 0.12, cy + 0.3, cz + IN * 0.1);
   alarmGlow.rotation.y = back;
   alarm.add(alarmLamp, alarmGlow);

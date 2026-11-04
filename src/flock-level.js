@@ -10,6 +10,7 @@
 // Events: listens to farm:death (lay dead birds) and farm:placed (placeBatch); emits bird:pick,
 // bird:release, dead:pick. Providers: 'chick' and 'sick-bird' (5), 'dead-bird' (6).
 import { EV } from './events.js';
+import { DRINKER_LINES_Z } from './config.js';
 import { ACT, COLD, HOT, makeRand } from './flock-state.js';
 import { ST } from './flock-pop.js';
 import { createAccess, refreshAccess, thinkSick, updateSick } from './flock-sick.js';
@@ -112,7 +113,7 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
       if (catchFlock.update(dt, farm, env)) { let w = 0; for (const v of catchFlock.want) w += v; lastTarget = Math.round(w); }
       else lastTarget = pop.reconcile(farm, dt, farmerPos);
       pop.sizes(farm, dt, false);
-      wantSick = updateSick(S, farm, heldSick());
+      wantSick = updateSick(S, farm, heldSick(), env);
       wantLame = updateLame(S, farm, heldLame());
       dead.update(dt, farm);
       return true;
@@ -236,6 +237,18 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
       sickBirds() { const o = []; for (let i = 0; i < S.n; i++) if (S.sick[i]) o.push({ index: S.id[i], x: +S.px[i].toFixed(2), z: +S.pz[i].toFixed(2), lame: S.sick[i] === 2 || S.sick[i] === LAME, phase3Lame: S.sick[i] === LAME }); return o; },
       /** Phase 3: drawn birds per 6 m section (x -24 + 6i ..), and the catch's wanted counts */
       sections() { const c = new Array(8).fill(0); for (let i = 0; i < S.n; i++) c[Math.max(0, Math.min(7, Math.floor((S.px[i] + 24) / 6)))]++; return { drawn: c, want: Array.from(catchFlock.want, (v) => +v.toFixed(1)) }; },
+      /** Phase 4: the crowding at the drinker lines: the share of the drawn birds within 0.45 m of a line, the birds
+       *  holding a nipple, and the access the flock reads (lv.houseShort: the house's water is short) */
+      crowd() {
+        let near = 0, drink = 0;
+        for (let i = 0; i < S.n; i++) {
+          let d = 9;
+          for (const z of DRINKER_LINES_Z) d = Math.min(d, Math.abs(S.pz[i] - z));
+          if (d < 0.45) near++;
+          if (S.res[i] >= S.nPans && S.act[i] === 3) drink++;
+        }
+        return { nearLines: +(near / Math.max(1, S.n)).toFixed(3), drinking: drink, meanAcc: +lv.meanAcc.toFixed(3), houseShort: !!lv.houseShort, drawn: S.n };
+      },
       /** Phase 3: mean x of the drawn birds (the spread after the curtain lift) */
       meanX() { let s = 0; for (let i = 0; i < S.n; i++) s += S.px[i]; return S.n ? +(s / S.n).toFixed(2) : null; },
       catchFlock,

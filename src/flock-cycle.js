@@ -12,7 +12,7 @@
 //   water(lv, farm, env)   the vaccination: the main valve shut = dry lines (the birds crowd them);
 //                          the lines open again = the flock rushes to drink
 //   breathing(farm)        snick / rattle from the dust index and ammonia (flock.sounds)
-import { DRINKER_LINES_Z, NIPPLE_X } from './config.js';
+import { DRINKER_LINES_Z, NIPPLE_X, PHASE4 } from './config.js';
 import { hotFrom } from './farm-heat.js';
 import { ACT } from './flock-state.js';
 import { farmerPenalty, setTarget, startActivity, wetAt } from './flock-think.js';
@@ -39,9 +39,20 @@ export function heatBand(S, farm, env, on) {
   if (!on) { S.hotK = 1; S.hotB = 0; S.heatRef = 1.5; S.hotView = 1.5; return; } // chicks: the first pant at +1.5 °C
   const age = Math.max(0, farm?.age ?? (env.day - 1 / 3));
   const hf = fin(farm?.comfort?.hotFrom) ? farm.comfort.hotFrom : hotFrom(age);
+  // Phase 4 (PHASE4.md §2.3 pantShareP4, §12.4): the tuned model's panting ramp, from the first birds (pantFrom) to
+  // all of them (pantAll); each bird's own tolerance spreads over it, and the comfort view's orange sits where the
+  // first birds pant. Until the farm exports pantFrom, Phase 3's ramp below (hotFrom - 1.5 once the tuned model is
+  // live: config.PHASE4.tunedSigns, the switch the integrator sets with it).
+  const c = farm?.comfort;
+  if (fin(c?.pantFrom)) {
+    const from = c.pantFrom, all = fin(c.pantAll) && c.pantAll > from ? c.pantAll : from + 4;
+    S.hotK = (all - from) / 3; S.hotB = from - 1.5 * S.hotK; S.heatRef = from; S.hotView = Math.max(0.5, from);
+    return;
+  }
   // hotTh 1.5 -> hf - 0.5, 4.5 -> hf + 0.5 (the farm's panting ramp, PHASE3.md §6.3)
-  S.hotK = 1 / 6; S.hotB = hf - 0.75; S.heatRef = hf - 0.5; S.hotView = hf;
+  S.hotK = 1 / 6; S.hotB = hf - 0.75; S.heatRef = hf - 0.5; S.hotView = TUNED() ? Math.max(0.5, hf - 1.5) : hf;
 }
+const TUNED = () => !!PHASE4.tunedSigns;
 
 /** Lame birds on the floor (and in the hand) follow farm.flock.lameOnFloor, 1:1, at most 24. */
 export function updateLame(S, farm, heldLame) {

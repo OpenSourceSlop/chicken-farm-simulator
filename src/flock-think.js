@@ -285,7 +285,8 @@ export function drinkerSpot(S, i, ctx) {
     if (S.resUse[S.nPans + r] < use) { use = S.resUse[S.nPans + r]; best = r; }
   }
   // low flow (a clogged filter): birds crowd the nipples, three to one, and peck on and on
-  if (best < 0 || use >= (S.lv && S.lv.meanAcc < 0.8 ? 3 : 2)) return false;
+  // Phase 4: the house's water short (the tank run low): four to a nipple, the lines crowded end to end
+  if (best < 0 || use >= (S.lv && S.lv.meanAcc < 0.8 ? (S.lv.houseShort ? 4 : 3) : 2)) return false;
   S.res[i] = S.nPans + best; S.resUse[S.nPans + best]++;
   if (S.lv) S.actT[i] *= 1 + 1.5 * (1 - S.lv.acc[line]);
   const nx = S.nips[best * 2], nz = S.nips[best * 2 + 1];
@@ -317,6 +318,7 @@ function chooseRight(S, i, field, env, ctx, grid) {
   if (lv) {
     // thirsty when the water is short, restless when the pans are empty, quiet in dim light
     wD *= 1 + 2 * (1 - lv.meanAcc) + 5 * (lv.rush || 0); // (Phase 3: the lines just opened after the thirst)
+    if (lv.houseShort) wD *= 1 + 5 * (1 - lv.meanAcc);   // Phase 4: little water in the whole house: they crowd the lines
     wE *= 0.5 + 0.5 * lv.meanFill;
     wW += 0.35 * (1 - lv.meanFill);
     if (lv.lowLux) { wW *= 0.4; wR *= 1.6; }
@@ -332,12 +334,24 @@ function chooseRight(S, i, field, env, ctx, grid) {
     if (drinkerSpot(S, i, ctx)) return;
   } else if ((r -= wW + wI) >= 0) {
     startActivity(S, i, ACT.REST, 12 + rand() * (20 + 30 * age));
+    // Phase 4: with the house's water short the resting birds wait along the drinker lines
+    if (lv && lv.houseShort && rand() < 0.7) { lineRest(S, i); return; }
     if (rand() < 0.5) wanderSpot(S, i, field, ctx, grid, 1.2); else setTarget(S, i, S.px[i], S.pz[i]);
     return;
   }
   if (rand() < 0.3) { startActivity(S, i, ACT.IDLE, 2 + rand() * 5); setTarget(S, i, S.px[i], S.pz[i]); return; }
   startActivity(S, i, ACT.WANDER, 12);
   wanderSpot(S, i, field, ctx, grid, 1.5 + rand() * 4.5);
+}
+
+// Phase 4: a resting spot beside the nearest drinker line, a little along it (the crowd waiting for water).
+function lineRest(S, i) {
+  const b = S.bounds, z = S.pz[i];
+  let best = DRINKER_LINES_Z[0];
+  for (const lz of DRINKER_LINES_Z) if (Math.abs(lz - z) < Math.abs(best - z)) best = lz;
+  const side = z >= best ? 1 : -1;
+  const x = Math.max(b.xMin + 0.3, Math.min(b.xMax - 0.3, S.px[i] + (S.rand() - 0.5) * 1.6));
+  setTarget(S, i, x, Math.max(b.zMin + 0.1, Math.min(b.zMax - 0.1, best + side * (0.22 + 0.3 * S.rand()))));
 }
 
 // One decision tick for bird i. ctx = { farmerOn, fx, fz, farmerR }.
@@ -369,7 +383,7 @@ export function thinkBird(S, i, field, env, ctx, grid) {
   if (th === HOT) {
     if (changed || (a !== ACT.PANT && a !== ACT.DRINK) || S.actT[i] <= 0) {
       if (a === ACT.PANT && !changed && rand() < 0.6) { S.actT[i] = 4 + rand() * 6; return; }
-      if (rand() < 0.15 && a !== ACT.DRINK) {
+      if (rand() < (S.lv && S.lv.houseShort ? 0.15 + 0.6 * (1 - S.lv.meanAcc) : 0.15) && a !== ACT.DRINK) {
         startActivity(S, i, ACT.DRINK, 6 + rand() * 8);
         ctx.anyTemp = true; // a hot bird drinks wherever the nipple is
         const ok = drinkerSpot(S, i, ctx);

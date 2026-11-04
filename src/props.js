@@ -427,6 +427,7 @@ export function buildProps(ctx, { house } = {}) {
       catchNight.leave(0, true); catchNight.leave(1, true);
       tools.reset();
       floor.refresh(ctx.farm);
+      ctx.condScene?.reset?.();     // Phase 4: the cull box empties with a new level
     },
     serialize() {
       return {
@@ -438,6 +439,8 @@ export function buildProps(ctx, { house } = {}) {
         // Phase 3: the catching trucks, the panels put up, the tape's hook, the feed truck's silo
         catchTrucks: catchNight.trucks.map((t) => (t.state === 'parked' || t.state === 'in' ? 1 : 0)), panels: tools.panelsSeen ? 1 : 0,
         tape: tools.st.tape ? { ...tools.st.tape } : null, feedSilo: trucks.feedSilo,
+        // Phase 4: the cull box's count (a bad batch's grading); absent in older saves
+        ...(ctx.condScene?.serialize ? { cond: ctx.condScene.serialize() } : {}),
       };
     },
     restore(d) {
@@ -455,10 +458,12 @@ export function buildProps(ctx, { house } = {}) {
       (d.catchTrucks || []).forEach((on, i) => { if (on) catchNight.arrive(i, true); else catchNight.leave(i, true); });
       tools.st.panelsSeen = !!d.panels;
       tools.st.tape = d.tape && props.carrying === 'tape' ? { ...d.tape } : null;
+      ctx.condScene?.restore?.(d.cond || null);
       floor.refresh(ctx.farm);
     },
     // test and tooling hooks (not part of the contract)
-    debug: { trucks, boxes, floor, pool, triggers, yard, equip, boards, equip3, yard3, catchNight, get tools() { return tools; }, dust },
+    debug: { trucks, boxes, floor, pool, triggers, yard, equip, boards, equip3, yard3, catchNight, get tools() { return tools; }, dust,
+      get cond() { return ctx.condScene || null; } },   // Phase 4: the conditions' scene (props-cond.js), for the harness
   };
   tools = createCycleTools(ctx, { props, pool, yard: yard3, lv });
   return props;
