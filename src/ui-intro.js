@@ -175,12 +175,15 @@ export function createIntro(ctx, { root = null, claimKeys = null, busy = () => f
 
   return {
     cards: INTRO_CARDS,
-    get active() { return !!current; },
+    get active() { return !!current && !card.hidden; },
     start, skip, reset, next: advance,
     allow(on = true) { allowed = !!on; },
     update(dt) {
       if (current) {
         if (!free() && !ctx.ui?.openPanelId) { hide(); return; }       // a mode change under the card
+        // a panel opened over the card (E on a sign): the card steps aside until it closes, then shows again
+        if (ctx.ui?.openPanelId) { card.hidden = true; ring.hidden = true; if (release) { release(); release = null; } return; }
+        if (card.hidden) { show(current); return; }
         lastBoxes = anchorBox(current);
         place(lastBoxes);
         return;
@@ -194,7 +197,7 @@ export function createIntro(ctx, { root = null, claimKeys = null, busy = () => f
     },
     state() {
       const box = (el) => { if (!el || el.hidden) return null; const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
-      return { active: !!current, card: current?.id ?? null, anchorBox: current ? anchorBox(current) : null, cardBox: box(card), arrowBox: current && !arrow.hidden ? box(arrow) : null, text: current ? text.textContent : null, done: !!get('done', false), seen: seen() };
+      return { active: !!current && !card.hidden, card: current?.id ?? null, anchorBox: current ? anchorBox(current) : null, cardBox: box(card), arrowBox: current && !arrow.hidden ? box(arrow) : null, text: current ? text.textContent : null, done: !!get('done', false), seen: seen() };
     },
   };
 }
