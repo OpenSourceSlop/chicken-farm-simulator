@@ -62,7 +62,7 @@ export function buildSkillTreePanel(L) {
       const card = b.earnable
         ? button({ class: `branch branch--earn branch--pick${b.id === picked ? ' is-picked' : ''}`, 'aria-pressed': String(b.id === picked) },
           h('div', { class: 'branch-top' }, h('span', { html: badge(b.id, b.level) }), h('div', null, h('h3', null, b.name), pips)),
-          h('div', { class: 'branch-pts' }, h('b', null, String(b.points)), ' points'), bar,
+          h('div', { class: 'branch-pts' }, h('b', null, String(b.points)), b.points === 1 ? ' point' : ' points'), bar,
           h('p', { class: 'branch-later branch-next' }, b.level < 3 && next ? [h('b', null, `Level ${b.level + 1}`), ` · ${next.name}`] : 'Every level reached'))
         : button({ class: `branch branch--later branch--pick${b.id === picked ? ' is-picked' : ''}`, 'aria-pressed': String(b.id === picked) },
           h('div', { class: 'branch-top' }, h('span', { html: badge(b.id, 0) }), h('div', null, h('h3', null, b.name), pips)),

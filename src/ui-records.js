@@ -15,6 +15,7 @@ import { dialogShell } from './ui-panels.js';
 import { int, one, two, signedPct, hhmm, readingText, dayTime } from './ui-format.js';
 import { jobById } from './content-jobs.js';
 import { dayLabel } from './content.js';
+import { sourceLabel } from './content-signs.js';
 import { planPage, harvestPage, cleanPage, lettersPage } from './ui-letters.js';
 import { graphsPage } from './ui-summary.js';
 
@@ -152,7 +153,8 @@ export function buildRecordsPanel(L) {
       say('order', r.arriveDay != null ? `Ordered ${int(r.kg ?? kg)} kg of ${label} at ${env.timeLabel}. The feed truck comes ${dayTime(r.arriveDay + (r.arriveHour ?? 9) / 24)}.${took}` : `Ordered ${int(kg)} kg of ${label} at ${env.timeLabel}.${took}`);
     });
     out.push(h('h3', { class: 'book-h' }, 'Feed mill'),
-      h('p', { class: 'book-note' }, 'Two silos of 6,000 kg: starter and finisher go to silo 1, grower to silo 2. Ordered before 16:00, it comes the next morning at 09:00.'),
+      h('p', { class: 'book-note book-note--fact' }, 'Two silos of 6,000 kg: starter and finisher go to silo 1, grower to silo 2. Ordered before 16:00, it comes the next morning at 09:00.',
+        h('small', { class: 'book-src' }, `Source: ${sourceLabel('general')} · the Feed program sign and the silo plate`)),
       h('div', { class: 'book-row' }, typeBtns), h('div', { class: 'book-row' }, kgBtns), h('div', { class: 'book-row' }, order), h('p', { class: 'book-note', 'aria-live': 'polite' }, phoneLines.order));
     // the company vet
     const report = button({ class: 'btn btn--paper btn--ink' }, h('span', { html: ICONS.phone, 'aria-hidden': 'true' }), 'Report the deaths to the company vet');

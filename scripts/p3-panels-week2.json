@@ -38,7 +38,7 @@
   {"clickText": "Main valve shut", "in": ".panel:not([hidden])"},
   {"advance": 0.3},
   {"expect": "(() => { const ids = __acts.filter((a) => ['water.main', 'vaccine.mix'].includes(a.id)); const seq = ids.map((a) => a.id + (a.id === 'water.main' ? (a.open ? ' on' : ' off') : a.stabiliser ? ' (stabiliser)' : '')).join(' → '); return seq === 'water.main off → vaccine.mix (stabiliser) → water.main on' && 'the bus saw ' + seq; })()", "label": "the bus saw water.main, vaccine.mix, water.main"},
-  {"expect": "__game.farm.health.vaccine.state === 'drinking' && __open().textContent.includes('The birds are drinking the vaccine since day 12') && 'drinking'", "label": "the Vaccine tab says the birds are drinking"},
+  {"expect": "__game.farm.health.vaccine.state === 'drinking' && __open().textContent.includes('The birds have been drinking the vaccine since day 12') && 'drinking'", "label": "the Vaccine tab says the birds are drinking"},
   {"shot": "p3-panels-vaccine"},
   {"eval": "__game.ui.closePanel(), 'walking the birds up'"},
   {"advanceUntil": "__game.farm.health.vaccine.state === 'drunk'", "max": 120, "step": 1},

@@ -38,7 +38,7 @@ export function roundLabel(env, anchors, farm = null) {
   if (d < 0) return 'Prep day — chicks arrive tomorrow 08:00';
   if (d >= 43 && d <= 46) return `Clean-out day ${d - 42}`;
   if (d > 46) { const b = farm?.clean?.bookedDay; return `Rest day ${d - 46}${b != null ? ` · chicks booked for day ${b}` : ''}`; }
-  if (d === 42) return farm?.harvest?.started && !farm?.harvest?.result ? 'Day 42 · catching' : 'Day 42 · the catch';
+  if (d === 42) return 'Day 42 · the catch';
   if (d === 0 && hr < LEVEL1.arrivalHour && hr >= 6) return 'Day 0 · Before the truck (08:00)';
   if (d === 0 && anchors.truck != null && anchors.placed == null) return 'Day 0 · The chicks are here';
   const R = LEVEL1.rounds;

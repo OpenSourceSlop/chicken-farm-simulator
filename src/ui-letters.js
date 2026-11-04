@@ -71,6 +71,13 @@ export function planPage(L) {
   return out;
 }
 
+/** records-cycle deathsByLevel() -> [{ level, name, deaths, culls, doa, pct }] (an older { id: pct } map is read too). */
+export function deathsByLevelRows(dbl) {
+  if (!dbl) return [];
+  const list = Array.isArray(dbl) ? dbl : Object.entries(dbl).map(([level, v]) => (typeof v === 'number' ? { level, pct: v } : { level, ...v }));
+  return list.filter((d) => d && Number.isFinite(d.pct)).map((d) => ({ ...d, name: levelById(d.level)?.short ?? String(d.level) }));
+}
+
 /** Weight tickets and the harvest record (PHASE3.md §8.3); target columns with Growth level 1. */
 export function harvestPage(L) {
   const { farm, records } = L;
@@ -86,7 +93,7 @@ export function harvestPage(L) {
   if (!r) { out.push(h('p', { class: 'book-note' }, 'The crew is catching.')); return out; }
   const targets = !!L.skills?.unlocked?.('recordsTargets');
   const age = (hv.startedAt ?? hv.catchAt) - PLACEMENT_DAY, expect = weightAt(age) * HARVEST.shrink;
-  const byLevel = page.deathsByLevel ? Object.entries(page.deathsByLevel).map(([id, p]) => `${levelById(id)?.short ?? id} ${two(p)} %`).join(' · ') : null;
+  const byLevel = deathsByLevelRows(page.deathsByLevel).map((d) => `${d.name} ${two(d.pct)} %`).join(' · ') || null;
   out.push(kv([
     ['Birds sold', int(r.sold)],
     ['Mean live weight', `${int(r.meanLiveG)} g${targets ? ` (target ${int(expect)} g: ${int(weightAt(age))} g at ${one(age)} days less ${int((1 - HARVEST.shrink) * 100)} % shrink)` : ''}`],

@@ -36,11 +36,11 @@ export function zones(farm, out) {
 
 /** Hot thresholds: S.hotK / S.hotB map each bird's own Phase 1 tolerance (1.5..4.5 °C) onto the band. */
 export function heatBand(S, farm, env, on) {
-  if (!on) { S.hotK = 1; S.hotB = 0; S.heatRef = 1.5; return; }
+  if (!on) { S.hotK = 1; S.hotB = 0; S.heatRef = 1.5; S.hotView = 1.5; return; } // chicks: the first pant at +1.5 °C
   const age = Math.max(0, farm?.age ?? (env.day - 1 / 3));
   const hf = fin(farm?.comfort?.hotFrom) ? farm.comfort.hotFrom : hotFrom(age);
   // hotTh 1.5 -> hf - 0.5, 4.5 -> hf + 0.5 (the farm's panting ramp, PHASE3.md §6.3)
-  S.hotK = 1 / 6; S.hotB = hf - 0.75; S.heatRef = hf - 0.5;
+  S.hotK = 1 / 6; S.hotB = hf - 0.75; S.heatRef = hf - 0.5; S.hotView = hf;
 }
 
 /** Lame birds on the floor (and in the hand) follow farm.flock.lameOnFloor, 1:1, at most 24. */

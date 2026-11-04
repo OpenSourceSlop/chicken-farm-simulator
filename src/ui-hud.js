@@ -89,7 +89,7 @@ export function createHud(parent, env) {
   // `gauges` false: only the clock (every frame). Gauges and buttons refresh about 10 times a second.
   function refresh(gauges = true) {
     // clock
-    // in a level the level names the day (PHASE3.md §2.3: "Planning day", "Day 42 · catching", "Rest day 9 …")
+    // in a level the level names the day (PHASE3.md §2.3: "Planning day", "Day 42 · the catch", "Clean-out day 2")
     if (level?.dayText) setText(day, level.dayText());
     else if (env.dayNumber !== lastDay) { lastDay = env.dayNumber; setText(day, level && lastDay < 0 ? 'Prep day' : `Day ${fmt0(lastDay)}`); }
     setText(time, env.timeLabel);

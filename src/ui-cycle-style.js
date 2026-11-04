@@ -30,6 +30,8 @@ const CSS = `
 .cyc-lcd .lcd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 22px; }
 .cyc-lcd .lcd-num { font-size: 23px; }
 .cyc-lcd .lcd-cell--wide { grid-column: span 2; }
+.cyc-windchill { flex-wrap: wrap; }
+.cyc-windchill .lcd-sub { flex-basis: 100%; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; opacity: 0.8; margin-top: -2px; }
 /* fan panel: six switches with lamps and an air vane */
 .fanbank { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .fan-sw { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); }
@@ -87,7 +89,9 @@ const CSS = `
 .cyc-look { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 7px 9px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); }
 .cyc-look .btn--machine { justify-self: stretch; padding: 4px 10px; white-space: normal; text-align: left; line-height: 1.2; }
 .cyc-look-v { min-height: 1.3em; font: 600 13.5px/1.3 var(--font-display); color: var(--lcd); }
-.cyc-guide { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 4px 8px; align-items: center; margin-top: 8px; padding: 8px; border-radius: 6px; background: var(--sign-face); color: var(--sign-paint); font-size: 12.5px; line-height: 1.35; }
+.cyc-guide { margin-top: 8px; padding: 8px; border-radius: 6px; background: var(--sign-face); color: var(--sign-paint); font-size: 12.5px; line-height: 1.35; }
+.cyc-guide-pics { display: grid; grid-template-columns: repeat(3, 38px minmax(0, 1fr)); gap: 4px 8px; align-items: center; margin-bottom: 6px; }
+.cyc-guide-lines { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 2px 8px; align-items: center; }
 .cyc-guide .src { grid-column: 2; margin: 0 0 4px; font-size: 10.5px; color: var(--sign-paint-dim); }
 .cyc-guide svg { display: block; }
 .cyc-card { margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: var(--ledger-paper); color: var(--ledger-ink); font-size: 12.5px; line-height: 1.45; }
@@ -124,12 +128,15 @@ const CSS = `
 }
 @media (max-width: 560px) {
   .cyc-looks, .cyc-items, .cyc-tickets, .cyc-row3 { grid-template-columns: minmax(0, 1fr); }
+  .cyc-guide-pics { grid-template-columns: repeat(2, 38px minmax(0, 1fr)); }
 }
 /* a short window (960 x 600): tighter rows so the panels fit without much scrolling */
 @media (max-height: 700px) and (min-width: 700px) {
   .fan-sw { padding: 5px 8px; }
   .fan-sw .key { height: 32px; }
   .cyc-look { padding: 5px 8px; }
+  .cyc-looks { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .cyc-hand-top { margin-bottom: 6px; }
   .cyc-sheet-rows { gap: 2px 10px; margin-bottom: 6px; }
   .cyc-sheet input[type="number"] { padding: 2px 6px; font-size: 15px; }
 }

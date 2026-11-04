@@ -495,7 +495,8 @@ export function createLevel(ctx, deps = {}) {
       get fast() { return fast; },
       get userPaused() { return userPaused; },
       /** The HUD's day (PHASE3.md §2.3). */
-      dayText() { const c = farm.clean; return dayLabel(env.dayNumber, { bookedDay: env.dayNumber > 46 ? c?.bookedDay : null }); },
+      // the HUD clock keeps one width: the booked chick day stays on the job card and in the book
+      dayText() { return dayLabel(env.dayNumber); },
       rateLabel() {
         if (env.paused) return userPaused ? 'Paused' : 'Stopped';
         if (env.timeScale === 0) return 'Stopped';

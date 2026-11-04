@@ -26,8 +26,11 @@ export function buildFanPanel(api) {
   const { env, skills } = L;
   const shell = equipShell({ cls: 'equip--fans', icon: ICONS.fan, title: 'Fan panel', sub: 'Six tunnel fans · pad pump · air at bird height', plates: ['fan-panel'], signLinks: ['sign-heat'], onClose: L.close });
   const lcd = climateLcd(env, [['Air at birds', 'm/s'], ['Outside', '°C']]);
-  const chill = lcdCell('Wind chill', '°C');
+  // Wind chill (unlock): what the birds feel in the moving air, with the cooling as a plain offset (no minus sign).
+  const chill = lcdCell('Birds feel', '°C');
   chill.el.classList.add('cyc-windchill', 'lcd-cell--wide');
+  const chillSub = h('span', { class: 'lcd-sub' });
+  chill.el.append(chillSub);
   lcd.el.querySelector('.lcd-grid').append(chill.el);
   const fFans = h('span', { class: 'lcd-flag' }), fPad = h('span', { class: 'lcd-flag' }, 'PAD'), fStage = h('span', { class: 'lcd-flag' }, 'STAGES'), fRead = h('span', { class: 'lcd-read' });
   lcd.flags.append(fFans, ' ', fPad, ' ', fStage, ' ', fRead);
@@ -90,7 +93,11 @@ export function buildFanPanel(api) {
     lcd.set([fmt1(env.houseTemp), fmt0(env.houseRH), fmt1(env.airSpeed ?? 0), fmt1(env.outsideTemp)]);
     const showChill = !!skills?.unlocked?.('windChill');
     chill.el.hidden = !showChill;
-    if (showChill) setText(chill.value, `−${fmt1(Math.max(0, env.windChill ?? 0))}`);
+    if (showChill) {
+      const wc = Math.max(0, env.windChill ?? 0);
+      setText(chill.value, fmt1(env.houseTemp - wc));
+      setText(chillSub, wc > 0.05 ? `wind chill: ${fmt1(wc)} °C cooler in ${fmt1(env.airSpeed ?? 0)} m/s air` : 'still air: no wind chill');
+    }
     setText(fFans, `FANS ${env.fansOn}/${FAN_COUNT}`); fFans.classList.toggle('is-on', env.fansOn > 0);
     fPad.classList.toggle('is-on', !!env.padOn);
     fStage.hidden = !env.fanStages; fStage.classList.toggle('is-on', !!env.fanStages);

@@ -140,17 +140,30 @@ export function createUI(ctx, deps) {
     h('div', { class: 'floor-legend-ticks' }, FLOOR_TEMP_RAMP.map(([t], i) => h('span', null, i === FLOOR_TEMP_RAMP.length - 1 ? `${t} °C` : `${t}`))));
   root.appendChild(floorLegend);
   // Phase 3 views (C comfort, M litter moisture; PHASE3.md §9.1): continuous ramps, a legend in °C or %
-  const rampLegend = (title, key, ramp, unit, label) => {
-    const lo = ramp[0][0], hi = ramp[ramp.length - 1][0];
-    const css = ramp.map(([t, c]) => `rgb(${c.map((v) => Math.round(v * 255)).join(' ')}) ${(((t - lo) / (hi - lo)) * 100).toFixed(0)}%`).join(', ');
-    const el = h('div', { class: 'floor-legend', hidden: true, role: 'img', 'aria-label': label },
+  const rampLegend = (title, key, ramp, unit, label, tickWords = null) => {
+    const lo = ramp[0][0], hi = ramp[ramp.length - 1][0], n = ramp.length;
+    // with words the ticks are equal cells and each colour stop sits under the middle of its cell
+    const at = (t, i) => (tickWords ? ((i + 0.5) / n) * 100 : ((t - lo) / (hi - lo)) * 100);
+    const css = ramp.map(([t, c], i) => `rgb(${c.map((v) => Math.round(v * 255)).join(' ')}) ${at(t, i).toFixed(0)}%`).join(', ');
+    const ticks = tickWords || ramp.map(([t], i) => (i === ramp.length - 1 ? `${t} ${unit}` : `${t}`));
+    const el = h('div', { class: `floor-legend${tickWords ? ' floor-legend--words' : ''}`, hidden: true, role: 'img', 'aria-label': label },
       h('p', { class: 'floor-legend-k' }, h('span', null, title), h('kbd', { class: 'kbd' }, key)),
       h('div', { class: 'floor-legend-bar', style: `background: linear-gradient(90deg, ${css})` }),
-      h('div', { class: 'floor-legend-ticks' }, ramp.map(([t], i) => h('span', null, i === ramp.length - 1 ? `${t > 0 && unit === '°C' ? '+' : ''}${t} ${unit}` : `${t > 0 && unit === '°C' ? '+' : ''}${t}`))));
+      h('div', { class: `floor-legend-ticks${tickWords ? ' floor-legend-ticks--words' : ''}` }, ticks.map((t) => h('span', null, t))));
     root.appendChild(el);
     return el;
   };
-  const comfortLegend = rampLegend('Comfort view: felt °C from the target', 'C', COMFORT_RAMP, '°C', 'Comfort view: each bird by what it feels, blue 6 °C under the target, white at the target, orange 6 °C over it');
+  // the warm half follows the birds' own panting threshold at this age (flock-shader.js uHotFrom)
+  const comfortLegend = rampLegend('Comfort view', 'C', COMFORT_RAMP, '°C', 'Comfort view: each bird by what it feels, blue colder than the target, white at the target, orange where panting starts at this age, red 3 °C past it',
+    ['cold', 'cool', 'right', 'panting starts', 'too hot']);
+  const comfortSub = h('p', { class: 'floor-legend-sub' });
+  comfortLegend.append(comfortSub);
+  let comfortSubText = '';
+  const syncComfortSub = () => {
+    const hf = flock?.comfortHotFrom?.();
+    const t = Number.isFinite(hf) ? `White at the target · birds this age start to pant at +${hf.toFixed(1)} °C` : '';
+    if (t !== comfortSubText) { comfortSubText = t; comfortSub.textContent = t; }
+  };
   const moistureLegend = rampLegend('Litter moisture view', 'M', MOISTURE_RAMP, '%', 'Litter moisture view: light sand 10 % to dark brown 50 %');
   const views = { comfort: false };
   const busy = createBusyCard(root);
@@ -465,6 +478,7 @@ export function createUI(ctx, deps) {
       panels.update(dt);
       floorLegend.hidden = !(mode === 'level' && props?.overlay?.floorTemp);
       comfortLegend.hidden = !(mode === 'level' && views.comfort);
+      if (!comfortLegend.hidden) syncComfortSub();
       moistureLegend.hidden = !(mode === 'level' && props?.overlay?.moisture);
       caption.update(dt);
       floatRead.update(dt);

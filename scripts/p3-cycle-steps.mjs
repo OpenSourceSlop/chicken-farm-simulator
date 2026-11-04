@@ -318,6 +318,10 @@ SEGMENTS.finish = () => [
   until('!!__game.farm.harvest.result', 240, 1),
   ...E('loading-bay', 'E opens the loading bay'), click('Read the ticket of truck 1'), click('Read the ticket of truck 2'), adv(0.3), shot('p3c-24-tickets'), ...esc(),
   exp(`(() => { const r = __game.farm.harvest.result; return r && 'harvest: ' + JSON.stringify({ liveG: r.liveG ?? r.meanLiveG, birds: r.birds, doa: r.doa }); })()`, 'the catch done, the tickets read'),
+  // the office book's harvest page reads the deaths by level as numbers (review: no '[object Object]', no '— %')
+  ev(`__game.ui.openPanel('office-desk'), 'the record book'`), adv(0.2), click('Harvest'), adv(0.2), shot('p3c-24b-book-harvest'),
+  exp(`(() => { const t = document.querySelector('#hud .panel:not([hidden])')?.textContent || ''; const m = t.match(/By level[^%]*%[^]*?(?=Uniformity)/); return /By level/.test(t) && !/object/i.test(t) && !/— %/.test(t) && 'harvest page: ' + (m ? m[0].replace(/\s+/g, ' ').slice(0, 200) : t.slice(0, 120)); })()`, 'the harvest page: deaths by level as numbers'),
+  ...esc(),
   ...outToHouse(), W(0, 0, 0.6), adv(2), shot('p3c-25-empty-house'),
   ...autoTo(42, 21), passed('finish', ', live: r.liveG, fcr: r.fcr'), shot('p3c-26-harvest-result'),
 ];
@@ -348,6 +352,7 @@ SEGMENTS.cleanout = () => [
   passed('cleanout', ', rest: r.restDays, positive: r.positive'), shot('p3c-29-cleanout-result'),
   exp(`(() => { const s = __game.run.state(); const lv = s.levels; const ids = ['plan', 'level1', 'week2', 'week3', 'weeks45', 'finish', 'cleanout']; return ids.every((id) => lv[id]?.state === 'passed') && s.summary && 'every level passed; the cycle summary: ' + JSON.stringify(s.summary).slice(0, 300); })()`, 'the cycle summary: every level passed'),
   ev(`(() => { const b = [...document.querySelectorAll('#hud .panel:not([hidden]) button, .result-btns .btn')].find((x) => /summary/i.test(x.textContent)); if (b) b.click(); return b ? 'opened: ' + b.textContent.trim() : 'no summary button'; })()`), adv(0.4), shot('p3c-30-cycle-summary'),
+  exp(`(() => { const t = document.querySelector('#hud .panel:not([hidden])')?.textContent || ''; const i = t.indexOf('Deaths by level'); return i >= 0 && !/object/i.test(t) && !/— %/.test(t) && /Week 2[0-9.]+ %/.test(t) && 'summary: ' + t.slice(i, i + 220); })()`, 'the cycle summary: deaths by level as numbers'),
   ev(`Object.values(window.__timed).map((t) => t.text).join(' | ')`),
 ];
 

@@ -92,6 +92,7 @@ attribute float aComf;
 uniform float uComfortOn;
 uniform vec3 uRampC[${RAMP_N}];
 uniform float uRampT[${RAMP_N}];
+uniform float uHotFrom; // the birds' panting threshold at this age (°C over the target): the warm half is relative to it
 vec3 comfortRamp(float e) {
   vec3 c = uRampC[0];
   for (int k = 1; k < ${RAMP_N}; k++) {
@@ -132,7 +133,10 @@ const COLOR_CODE = /* glsl */`
   if (uComfortOn > 0.5) {
     // the eye stays dark; beak, legs and comb keep a little of their own colour
     float own = (pi == 9) ? 1.0 : (feather > 0.5 ? 0.0 : 0.35);
-    vBirdColor = mix(comfortRamp(aComf) * (0.82 + 0.18 * aShade), col, own);
+    // cold half in °C; warm half: orange (ramp 3) at the panting threshold of this age, red 3 °C past it
+    float hf = max(uHotFrom, 0.5);
+    float ce = aComf <= 0.0 ? aComf : (aComf <= hf ? aComf * 3.0 / hf : 3.0 + (aComf - hf));
+    vBirdColor = mix(comfortRamp(ce) * (0.82 + 0.18 * aShade), col, own);
     vBrood = 0.0;
   }
 #endif
@@ -161,6 +165,7 @@ export function createBirdUniforms() {
     uComfortOn: { value: 0 },
     uRampC: { value: COMFORT_RAMP.map(([, c]) => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace)) },
     uRampT: { value: COMFORT_RAMP.map(([t]) => t) },
+    uHotFrom: { value: 1.5 },
   };
 }
 

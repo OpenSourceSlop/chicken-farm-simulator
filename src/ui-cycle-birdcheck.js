@@ -98,8 +98,10 @@ export function buildBirdCheck(api) {
     const b = api.boards('sign-droppings');
     const items = (b?.items || []).filter((it) => /read the droppings|normal|watery|blood|white/i.test(it.text));
     guide.replaceChildren(
-      ...['normal', 'caecal', 'watery', 'undigested', 'bloody', 'white'].flatMap((k) => [h('span', { html: dropPic(k) }), h('span', null, WORDS.droppings(k))]),
-      ...items.flatMap((it) => [h('span', { html: ICONS.facts, 'aria-hidden': 'true' }), h('span', null, it.text), h('p', { class: 'src' }, api.sourceLabel(it.source))]));
+      h('div', { class: 'cyc-guide-pics' }, ['normal', 'caecal', 'watery', 'undigested', 'bloody', 'white'].flatMap((k) => [h('span', { html: dropPic(k) }), h('span', null, WORDS.droppings(k))])),
+      h('div', { class: 'cyc-guide-lines' }, items.flatMap((it) => [h('span', { html: ICONS.facts, 'aria-hidden': 'true' }), h('span', null, it.text), h('p', { class: 'src' }, api.sourceLabel(it.source))])));
+    // the guide sits next to the reading: bring it into view the first time it opens (960 x 600)
+    if (typeof guide.scrollIntoView === 'function' && typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { try { guide.scrollIntoView({ block: 'nearest' }); } catch { /* old browsers */ } });
   }
   function drawCard() {
     const on = !!skills?.unlocked?.('sampleCard');

@@ -190,6 +190,7 @@ export function createFlock(ctx, { house } = {}) {
     applyDay(env, false);
     S.lightsOn = env.lightsOn !== false;
     uniforms.uBrood.value = 0.55 * (env.heaterLevel || 0); // the brooder pools light the birds in them
+    uniforms.uHotFrom.value = S.hotView ?? 1.5; // comfort view: orange = this age's panting threshold
     if (field.refresh(env, dt, lv ? lvl.zones() : null) === 2) {
       // the climate jumped (heaters, setpoint, fans, test tools): everyone reconsiders soon
       for (let i = 0; i < S.n; i++) { S.thinkT[i] = Math.min(S.thinkT[i], S.rand() * 0.4); S.actT[i] = Math.min(S.actT[i], S.rand() * 1.2); }
@@ -296,6 +297,8 @@ export function createFlock(ctx, { house } = {}) {
     /** 'comfort': each drawn bird in the colour of its felt comfort (unlock comfortOverlay, key C;
      *  config COMFORT_RAMP, blue cooler / white at the target / orange warmer; the run draws the legend). */
     overlay: { comfort: false },
+    /** The panting threshold the comfort view paints orange at (°C over the target; the legend's tick). */
+    comfortHotFrom() { return S.hotView ?? 1.5; },
     setOverlay(name, on) {
       if (name !== 'comfort') return;
       api.overlay.comfort = !!on;

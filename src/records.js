@@ -181,7 +181,9 @@ export function createRecords({ farm, env, events } = {}) {
       const kind = KIND[p.id];
       if (!kind) return;
       if (kind === 'text') { const t = textOf(p); if (t) records.note('text', t); return; }
-      let value = p.result === undefined ? strip(p) : p.result;
+      // a reading is what was read: a bare true / number the farm returned is never stored in its place
+      let value = p.result === undefined || p.result === null || typeof p.result !== 'object' ? strip(p) : p.result;
+      if (kind === 'fans' || kind === 'controller') value = { ...strip(p), ...(p.result && typeof p.result === 'object' ? p.result : {}) };
       if (kind === 'water.flow') value = { line: p.line, ...p.result };
       if (kind === 'dead') value = p.byLook ? { n: p.n, byLook: { ...p.byLook } } : { n: p.n };
       // Phase 3: the controller's humidity memory (the farm keeps it; the panel's payload may not carry it)

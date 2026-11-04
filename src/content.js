@@ -79,13 +79,13 @@ export const LEVEL_TEXT = {
   saveNote: 'The game saves by itself as you play, and keeps the start of every level for a replay.',
 };
 
-/** HUD day label (PHASE3.md §2.3): "Planning day", "Prep day", "Day N", "Day 42 · catching", "Clean-out
+/** HUD day label (PHASE3.md §2.3): "Planning day", "Prep day", "Day N", "Day 42 · the catch", "Clean-out
  *  day k", "Rest day k". `o.bookedDay`: while resting, the booked chick day. */
 export function dayLabel(d, o = {}) {
   if (d <= -2) return 'Planning day';
   if (d < 0) return 'Prep day';
   if (d < 42) return `Day ${d}`;
-  if (d === 42) return 'Day 42 · catching';
+  if (d === 42) return 'Day 42 · the catch';
   if (d <= 46) return `Clean-out day ${d - 42}`;
   return o.bookedDay != null ? `Rest day ${d - 46} · chicks booked: day ${o.bookedDay}` : `Rest day ${d - 46}`;
 }

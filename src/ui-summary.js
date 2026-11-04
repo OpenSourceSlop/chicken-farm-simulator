@@ -1,19 +1,22 @@
 // The record book's graphs (unlocks: waterTrend, weightGraph, feedGraph, gasGraph, comfortGraph) and the
 // cycle summary after the clean-out (PHASE3.md §1 "Cycle summary", §8.5). Graphs draw the farmer's numbers
 // beside the plate's, in one ink: no good or bad colours. Owner: package "run".
-import { SKILL_BRANCHES, LEVELS, weightAt, feedStdGAt, flockAgeAt } from './config.js';
+import { SKILL_BRANCHES, weightAt, feedStdGAt, flockAgeAt } from './config.js';
 import { h, button, uniqueId, nodes } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
 import { int, one, two } from './ui-format.js';
-import { replyLines } from './ui-letters.js';
+import { replyLines, deathsByLevelRows } from './ui-letters.js';
 
 /** A small line / bar chart over days (SVG). series: [{ pts: [[day, v]], kind: 'line'|'bars'|'dots', dash, label }]. */
 export function dayChart({ series, title, unit = '', yMin = 0, yMax = null, W = 760, H = 220 }) {
   const all = series.flatMap((s) => s.pts.filter((p) => Number.isFinite(p[1])));
   if (!all.length) return '<p class="book-note">No signed rows yet.</p>';
   const days = all.map((p) => p[0]), d0 = Math.min(...days), d1 = Math.max(d0 + 1, ...days);
-  const top = yMax ?? Math.max(1, ...all.map((p) => p[1])) * 1.08;
+  // A round top and round ticks (1-2-5 x 10^n) the farmer can read against the targets.
+  const span = Math.max(1e-9, (yMax ?? Math.max(1, ...all.map((p) => p[1]))) - yMin);
+  const raw = span / 4, mag = 10 ** Math.floor(Math.log10(raw)), tickStep = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((v) => v >= raw - 1e-9);
+  const top = yMax ?? yMin + Math.ceil(span / tickStep - 1e-9) * tickStep;
   const padL = 46, padR = 14, padT = 22, padB = 30;
   const X = (d) => padL + ((d - d0 + 0.5) / (d1 - d0 + 1)) * (W - padL - padR), Y = (v) => H - padB - ((v - yMin) / (top - yMin)) * (H - padT - padB);
   const bw = Math.min(30, ((W - padL - padR) / (d1 - d0 + 1)) * 0.6);
@@ -26,11 +29,13 @@ export function dayChart({ series, title, unit = '', yMin = 0, yMax = null, W = 
   }).join('');
   const step = Math.max(1, Math.ceil((d1 - d0 + 1) / 14));
   const ticks = []; for (let d = d0; d <= d1; d += step) ticks.push(`<text x="${X(d).toFixed(1)}" y="${H - 10}" font-size="11" text-anchor="middle">${d}</text>`);
-  const yt = [0, 0.5, 1].map((k) => { const v = yMin + k * (top - yMin); return `<text x="${padL - 6}" y="${(Y(v) + 4).toFixed(1)}" font-size="10" text-anchor="end">${v >= 100 ? int(v) : one(v)}</text>`; }).join('');
+  const yv = []; for (let v = yMin; v <= top + tickStep * 1e-6; v += tickStep) yv.push(v);
+  const whole = Number.isInteger(tickStep) || tickStep >= 1;
+  const yt = yv.map((v) => `<line x1="${padL - 3}" x2="${padL}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--ledger-rule)"/><text x="${padL - 6}" y="${(Y(v) + 4).toFixed(1)}" font-size="10" text-anchor="end">${whole && Math.abs(v - Math.round(v)) < 1e-6 ? int(v) : one(v)}</text>`).join('');
   const legend = series.filter((s) => s.label).map((s) => s.label).join(' · ');
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${title}: ${legend}">
     <line x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}" stroke="var(--ledger-rule)"/>${yt}${parts}${ticks.join('')}
-    <text x="${padL}" y="12" font-size="10">${legend}${unit ? ` (${unit})` : ''}</text><text x="${W - padR}" y="${H - 1}" font-size="10" text-anchor="end">day</text></svg>`;
+    <text x="${padL}" y="12" font-size="10">${legend}${unit ? ` (${unit})` : ''}</text><text x="${W - padR}" y="${H - 4}" font-size="10" text-anchor="end">day</text></svg>`;
 }
 
 /** Phase 2's water graph (bars: litres per 1,000 birds; dashed: water : feed on its own axis 0-3), any days. */
@@ -106,7 +111,7 @@ export function buildSummaryPanel(L) {
     const big = (k, v, sub) => h('div', { class: 'big' }, h('p', { class: 'big-k' }, k), h('p', { class: 'big-v' }, v), sub ? h('p', { class: 'big-sub' }, sub) : null);
     const kv = (rows) => h('table', { class: 'ledger ledger--dark' }, h('tbody', null, rows.filter(Boolean).map(([k, ...v]) => h('tr', null, h('th', { scope: 'row' }, k), ...v.map((x) => h('td', null, x))))));
     const p = s.plan, a = s.actual || {};
-    const dbl = s.deathsByLevel && typeof s.deathsByLevel === 'object' ? Object.entries(s.deathsByLevel) : [];
+    const dbl = deathsByLevelRows(s.deathsByLevel);
     const weights = (s.weights || []).filter((w) => w.targetG);
     const chart = dayChart({ title: 'Weight', series: [{ pts: weights.map((w) => [w.day, w.weighedG]), label: 'line: weighed' }, { kind: 'dots', pts: weights.map((w) => [w.day, w.weighedG]) },
       { pts: weights.map((w) => [w.day, w.targetG]), dash: true, ink2: true, label: 'dashed: the target' }] });
@@ -127,7 +132,7 @@ export function buildSummaryPanel(L) {
       btns,
       h('h3', { class: 'result-h' }, 'Weight against the target'), h('div', { class: 'graph graph--dark', html: chart }),
       h('h3', { class: 'result-h' }, 'Deaths by level'),
-      dbl.length ? kv(dbl.map(([id, v]) => [LEVELS.find((l) => l.id === id)?.short ?? id, typeof v === 'number' ? `${two(v)} %` : String(v)])) : h('p', { class: 'result-note' }, 'Not in the record.'),
+      dbl.length ? kv(dbl.map((d) => [d.name, `${two(d.pct)} %`, d.deaths != null ? `${int(d.deaths)} dead, ${int(d.culls || 0)} culled${d.doa ? `, ${int(d.doa)} dead on arrival` : ''}` : ''])) : h('p', { class: 'result-note' }, 'Not in the record.'),
       h('h3', { class: 'result-h' }, 'Used'),
       kv([['Feed', s.feedKg != null ? `${int(s.feedKg)} kg` : '—'], ['Water', s.waterL != null ? `${int(s.waterL)} L` : '—'], ['Gas', s.gasKg != null ? `${int(s.gasKg)} kg` : '—'],
         ['Rest before the next chicks', s.restDays != null ? `${int(s.restDays)} days` : '—'], ['Swabs that grew bacteria', s.swabsPositive != null ? `${int(s.swabsPositive)} of 10` : '—']]),
@@ -139,7 +144,7 @@ export function buildSummaryPanel(L) {
         : h('p', { class: 'result-note' }, 'This run started at the brooding week: no plan to compare with.'),
       run?.state()?.plan?.outcome ? h('p', { class: 'result-note' }, `The company’s reply: ${replyLines(run.state().plan).join(' · ')}.`) : null,
       h('h3', { class: 'result-h' }, 'Skill points by branch'),
-      h('ul', { class: 'result-points' }, Object.entries(pts).map(([b, n]) => h('li', null, h('b', null, branchName(b)), ` · ${int(n)} points`)))));
+      h('ul', { class: 'result-points' }, Object.entries(pts).map(([b, n]) => h('li', null, h('b', null, branchName(b)), ` · ${int(n)} ${n === 1 ? 'point' : 'points'}`)))));
   }
   return { el, kind: 'paused', show(sum) { s = sum || null; render(); }, onOpen() { render(); }, update(dt, force) { if (force) render(); } };
 }

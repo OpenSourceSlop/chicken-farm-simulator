@@ -105,7 +105,7 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
       none: 'No vaccine in the header tank.',
       thirst: `Main valve shut since ${whenText(v.thirstFrom)} (${since(v.thirstFrom)}): the lines run dry.`,
       mixed: `Vaccine mixed ${whenText(v.mixedAt)}, waiting in the header tank.`,
-      drinking: `The birds are drinking the vaccine since ${whenText(v.startAt)} (${since(v.startAt)}).`,
+      drinking: `The birds have been drinking the vaccine since ${whenText(v.startAt)} (${since(v.startAt)}).`,
       drunk: `Header tank empty ${whenText(v.drunkAt)}: vaccine drunk in ${hoursText(v.hours)}.`,
     }[v.state] || '');
     const mixed = v.state !== 'none' && v.state !== 'thirst';
