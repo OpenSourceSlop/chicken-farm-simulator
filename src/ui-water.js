@@ -124,7 +124,8 @@ export function buildDrinkerPanel(L, line) {
         if (env.day >= test.until - 1e-9) {
           test = null; testBtn.disabled = false;
           const r = L.act('water.flowtest', { line });
-          flow.set(`${one(r?.mlMin)} ml`, `in one minute, ${env.timeLabel}`);
+          // Phase 4, the hot season: the flow test also reads the line's water (waterC)
+          flow.set(`${one(r?.mlMin)} ml`, `in one minute, ${env.timeLabel}${Number.isFinite(r?.waterC) ? ` · water ${one(r.waterC)} °C` : ''}`);
           const said = `Line ${line + 1}: ${one(r?.mlMin)} ml in one minute, recorded ${env.timeLabel}.`;
           shell.timeNote.done(`Flow test done. ${said}`);
           if (!isOpen) L.notice?.(`Drinker line ${line + 1} flow test done: ${one(r?.mlMin)} ml in one minute (recorded ${env.timeLabel}).`, 6);
@@ -171,12 +172,15 @@ export function buildWaterSupplyPanel(L) {
     return { row, t, tube };
   });
   const overview = h('div', { class: 'overview' });
+  const valvesK = h('p', { class: 'supply-k supply-k--rows' }, 'Flush valves · sight tube at the east end of each line');
+  // the water in each line (the hot season, PHASE4.md §4.1): null without a condition that measures it
+  const lineTempOf = (i) => { const t = farm.mode === 'level' && farm.condition === 'hot' ? farm.water?.lineTempC?.[i] : null; return Number.isFinite(t) ? t : null; };
   // Phase 2's content is the Lines tab; from day 8 the Phase 3 tabs sit above it (the brooding week has none)
   const linesSec = h('div', { role: 'tabpanel' },
     h('div', { class: 'supply-top' },
       h('div', { class: 'supply-box' }, h('p', { class: 'supply-k' }, 'Water meter'), dial, meter.el, readMeter),
       h('div', { class: 'supply-box' }, h('p', { class: 'supply-k' }, 'Main filter'), gauges, filt.el, h('div', { class: 'equip-btns' }, readFilter, clean), cleanBar)),
-    h('p', { class: 'supply-k supply-k--rows' }, 'Flush valves · sight tube at the east end of each line'),
+    valvesK,
     h('div', { class: 'ctrl-rows supply-valves' }, valves.map((v) => v.row.el)), overview);
   const cyc = cycleWaterParts(L, { linesSec, foldPlates: () => shell.foldPlates(), needTime: (t) => shell.needTime(t) });
   shell.main.append(cyc.bar, shell.timeNote.el, linesSec, ...cyc.secs);
@@ -208,8 +212,12 @@ export function buildWaterSupplyPanel(L) {
       v.row.led.classList.toggle('is-on', !!l.flushing);
       v.tube.style.setProperty('--clear', clear.toFixed(2));
       v.tube.classList.toggle('is-running', !!l.flushing);
-      setText(v.row.small.lastChild, l.flushing ? 'flushing: water running' : clear > 0.98 ? 'clear water in the tube' : clear > 0.02 ? 'cloudy water in the tube' : 'brown water in the tube');
+      // Phase 4, the hot season: the thermometer at the east end shows the water in the line (farm.water.lineTempC)
+      const tC = lineTempOf(i);
+      setText(v.row.small.lastChild, `${l.flushing ? 'flushing: water running' : clear > 0.98 ? 'clear water in the tube' : clear > 0.02 ? 'cloudy water in the tube' : 'brown water in the tube'}${tC != null ? ` · water ${one(tC)} °C` : ''}`);
     });
+    const hot = lineTempOf(0) != null;
+    setText(valvesK, hot ? 'Flush valves · sight tube and thermometer at the east end of each line (drinker plate: over about 30 °C the birds drink less)' : 'Flush valves · sight tube at the east end of each line');
     const on = skills?.unlocked?.('lineOverview');
     overview.hidden = !on;
     if (on) {

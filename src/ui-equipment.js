@@ -5,6 +5,7 @@
 import { EQUIP, FEEDER_LINES_Z, LEVEL1 } from './config.js';
 import { BOARDS } from './content-signs.js';
 import { BOARDS_CYCLE } from './content-signs-cycle.js';
+import { BOARDS_COND } from './content-signs-cond.js';
 import { h, button, setText, uniqueId, fmt0 } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
@@ -29,8 +30,9 @@ export function equipShell({ cls = '', icon, title, sub, plates = [], onClose, s
   const plateEls = plates.map((id) => buildPlate(id));
   /** The job strip at the top of the working plate (ui-jobstrip.js): the panel mounts it with its id. */
   // Phase 3: a link may name a board of the full cycle (content-signs-cycle.js BOARDS_CYCLE)
-  const board = (id) => BOARDS[id] || BOARDS_CYCLE[id];
-  const links = signLinks.length ? h('p', { class: 'equip-links' }, h('span', { html: ICONS.facts, 'aria-hidden': 'true' }),
+  // Phase 4: or a board of a condition (content-signs-cond.js BOARDS_COND: the power cut sign by the generator)
+  const board = (id) => BOARDS[id] || BOARDS_CYCLE[id] || BOARDS_COND[id];
+  const links = signLinks.some(board) ? h('p', { class: 'equip-links' }, h('span', { html: ICONS.facts, 'aria-hidden': 'true' }),
     `Facts also on: ${signLinks.filter(board).map((id) => `${board(id).title} (${board(id).where.toLowerCase()})`).join('; ')}`) : null;
   const side = plateEls.length ? h('div', { class: 'equip-side' }, plateEls.map((p) => p.el), links) : null;
   if (!plateEls.length && links) { links.classList.add('equip-links--below'); }
@@ -137,7 +139,13 @@ export function buildFeederPanel(L) {
     meter.set(`${int(r?.kg)} kg`, Number.isFinite(was) ? `${int(r.kg - was)} kg since your reading of day ${prev.day}` : 'since the first fill');
   });
   const cyc = cycleFeederParts(L, { foldPlates: () => shell.foldPlates(), needTime: (t) => shell.needTime(t), timeNote: shell.timeNote });
-  shell.main.append(strip.el, h('div', { class: 'ctrl-rows' }, rows.map((r) => r.row.el), cyc.els[0]), shell.timeNote.el, legend, timeNote, h('div', { class: 'equip-reads' }, meter.el, readBtn), cyc.els[1]);
+  // Phase 4, a bad batch (PHASE4.md §4.3): feed trays and chick paper by the brooders on the prep day to day 3 (brood.trays)
+  const traysOn = () => !!farm.brood?.trays;
+  const trays = toggleKey('Take the trays and paper away', 'Put out feed trays and chick paper', () => { L.act('brood.trays', { on: !traysOn() }); refresh(); });
+  const trayRow = machineRow('Feed trays and chick paper', 'by the brooders, for small chicks to find feed from the first hour (chick arrival sign)', trays.el);
+  trayRow.led.classList.add('led--run');
+  trayRow.el.hidden = true;
+  shell.main.append(strip.el, h('div', { class: 'ctrl-rows' }, rows.map((r) => r.row.el), trayRow.el, cyc.els[0]), shell.timeNote.el, legend, timeNote, h('div', { class: 'equip-reads' }, meter.el, readBtn), cyc.els[1]);
 
   function panSvg(l) {
     // side view: litter line, pan at its rim height, feed heaped by fill (flood = heaped above the rim)
@@ -163,6 +171,9 @@ export function buildFeederPanel(L) {
       const k = `${Math.round(l.heightCm)}|${l.flood}|${Math.round(l.panFill * 20)}`;
       if (r.pan.__k !== k) { r.pan.__k = k; r.pan.innerHTML = panSvg(l); }
     });
+    const d = L.env.dayNumber, showTrays = farm.mode === 'level' && farm.condition === 'badChicks' && d >= -1 && d <= 3;
+    trayRow.el.hidden = !showTrays;
+    if (showTrays) { const on = traysOn(); trays.set(on); trayRow.led.classList.toggle('is-on', on); trayRow.setState(`Trays and chick paper: ${on ? 'out by the brooders' : 'not out'}`); }
   }
   return {
     el: shell.el,

@@ -8,8 +8,11 @@ import { ICONS } from './ui-icons.js';
 import { equipShell, readout, stepper } from './ui-equipment.js';
 import { int, one, two, cropWords } from './ui-format.js';
 // Phase 3 (package "panels"): the weight spread chart in the weigh panel (unlock uniformityChart)
-import { spreadChart } from './ui-cycle-kit.js';
+import { spreadChart, makeTabs } from './ui-cycle-kit.js';
 import { clock } from './clock.js';
+// Phase 4 (package "panels"): a bad batch's Grade the stacks tab (PHASE4.md §4.3, §12.3), the chick-grading table
+import { gradingFor, gradingView } from './ui-cond-grading.js';
+import { buildPlate } from './ui-boards.js';
 
 // A chick drawn in 2D (top-left origin 0..60). flip = on its back, cull = gone.
 function chickSvg({ flip = false, size = 1 } = {}) {
@@ -62,10 +65,26 @@ export function buildGradingPanel(L) {
     setText(handed, complete ? `Sheet handed in at ${L.env.timeLabel}: it goes into the record as your chick-quality note.`
       : `Sheet handed in at ${L.env.timeLabel} with ${l.chicks ? `${l.chicks} chick${l.chicks === 1 ? '' : 's'} not looked at` : ''}${l.chicks && !l.weighed ? ' and ' : ''}${l.weighed ? '' : 'the box not weighed'}: finish them and hand it in again.`);
   });
-  shell.main.append(h('div', { class: 'grade-grid' },
+  const sampleSec = h('div', { role: 'tabpanel' }, h('div', { class: 'grade-grid' },
     h('div', null, grid, h('div', { class: 'grade-actions' }, flipBtn, navelBtn, hockBtn, cullBtn), look),
     h('div', { class: 'grade-sheet' }, h('p', { class: 'sheet-k' }, 'Grading sheet · sample box'), tallyRows,
       h('div', { class: 'equip-reads' }, boxRead.el, weighBtn), h('div', { class: 'equip-btns' }, submit), handed)));
+  // Phase 4: a bad batch grades every stack still in its boxes (the tab shows only in that condition; otherwise the
+  // panel is Phase 2's exactly). The grading waits its 6 farm minutes at the panel clock: the tab's plate folds first.
+  const tabs = makeTabs(['Sample box', 'Grade the stacks'], { secs: [sampleSec] });
+  tabs.bar.hidden = true;
+  let isOpen = false, gAcc = 0;
+  const gPlate = buildPlate('chick-grading', { open: false });
+  const host = { needTime: (t) => { gPlate.fold(); return shell.needTime(t); }, timeNote: shell.timeNote, isOpen: () => isOpen };
+  const grading = gradingFor(L), gView = gradingView(L, host);
+  tabs.secs[1].append(h('div', { class: 'cyc-split' }, gView.el, gPlate.el));
+  shell.main.append(tabs.bar, sampleSec, tabs.secs[1], shell.timeNote.el);
+  const syncTabs = () => {
+    const bad = L.farm?.mode === 'level' && L.farm?.condition === 'badChicks';
+    tabs.bar.hidden = !bad;
+    if (!bad && tabs.current !== 0) tabs.show(0);
+    return bad;
+  };
 
   function draw() {
     chicks.forEach((c, i) => {
@@ -99,7 +118,14 @@ export function buildGradingPanel(L) {
     el: shell.el,
     // the job strip's figures (job-strips-cycle d0-grade): the looks done, the box, the farmer's own sheet
     stripCtx: () => ({ grade: { n: (k) => chicks.filter((c) => c.seen[k]).length, culled: chicks.filter((c) => c.culled).length, box, sheet: { ...sheet } } }),
-    update() {
+    onOpen() { isOpen = true; syncTabs(); },
+    onClose() { isOpen = false; },
+    /** A stack still on its grading bar finishes with the table closed (a bad batch). */
+    busy: () => grading.busy() && grading.host === host,
+    update(dt, force) {
+      grading.tick();
+      gAcc -= dt || 0;
+      if (syncTabs() && tabs.current === 1 && (force || gAcc <= 0)) { gAcc = 0.2; gView.update(force); }
       const now = clock.now();
       let changed = false;
       for (const c of chicks) {

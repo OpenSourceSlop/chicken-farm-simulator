@@ -1,7 +1,8 @@
 // The fan panel (east end, north wall) and the cooling pad pump (outside the west end): PHASE3.md §1 Week 3
 // to the catch, §6.3, §13.3. Package "panels". House °C and humidity side by side, six fan switches with
 // their lamps and air vanes (a lamp on with a still vane: no air from that fan), the pad pump, the air
-// speed. Open 2 s = fans.read (once per opening). Unlocks: windChill (the wind chill readout),
+// speed. Open 2 s = fans.read (once per opening). Unlocks: windChill (the Birds feel readout: Phase 4, the model's felt
+// temperature farm.comfort.feltMean, the wind chill and the damp named under it),
 // tunnelStages (the stage table, vent.stages), fanChart (24 hours of fans, pad and house).
 import { FAN_COUNT } from './config.js';
 import { h, button, setText, fmt1, fmt0 } from './ui-dom.js';
@@ -10,6 +11,22 @@ import { key, lcdCell } from './ui-controller.js';
 import { equipShell, machineRow, toggleKey, stepper } from './ui-equipment.js';
 import { ROTOR, FAN_INDEXES, lineChart, historyOf, machineJob, progressBar, padCheckOf } from './ui-cycle-kit.js';
 import { heldWaitText } from './ui-farmtime.js';
+import { humidityTerm } from './farm-heat.js';
+
+/**
+ * What the birds feel, °C (PHASE4.md §6.12, the heat sign's "felt: the fan panel's Birds feel reading"): the model's
+ * own felt temperature, farm.comfort.feltMean (the house less the wind chill, plus the damp, over the birds' floor),
+ * while the cycle model runs; else the house less the wind chill plus the damp term (farm-heat humidityTerm).
+ * -> { felt, chill, damp, rest } (rest: the floor, the walls and the litter, what feltMean adds to the house terms)
+ */
+export function birdsFeel(env, farm) {
+  const chill = Math.max(0, env.windChill ?? 0), damp = humidityTerm(env.houseRH, env.houseTemp);
+  const base = env.houseTemp - chill + damp;
+  const fm = farm?.comfort?.feltMean;
+  const model = farm?.mode === 'level' && farm?.cyc?.on && Number.isFinite(fm);
+  const felt = model ? fm : base;
+  return { felt, chill, damp, rest: felt - base, model };
+}
 
 const READ_AFTER = 2; // real seconds open before the panel counts as read (as the controller)
 
@@ -98,9 +115,13 @@ export function buildFanPanel(api) {
     const showChill = !!skills?.unlocked?.('windChill');
     chill.el.hidden = !showChill;
     if (showChill) {
-      const wc = Math.max(0, env.windChill ?? 0);
-      setText(chill.value, fmt1(env.houseTemp - wc));
-      setText(chillSub, wc > 0.05 ? `wind chill: ${fmt1(wc)} °C cooler in ${fmt1(env.airSpeed ?? 0)} m/s air` : 'still air: no wind chill');
+      // Birds feel = the model's felt temperature (the damp included); the line under it names its parts
+      const f = birdsFeel(env, L.farm);
+      setText(chill.value, fmt1(f.felt));
+      const parts = [f.chill > 0.05 ? `wind chill ${fmt1(f.chill)} °C cooler in ${fmt1(env.airSpeed ?? 0)} m/s air` : 'still air: no wind chill',
+        f.damp > 0.05 ? `damp air +${fmt1(f.damp)} °C at ${fmt0(env.houseRH)} % humidity` : null,
+        Math.abs(f.rest) > 0.15 ? `the floor and the walls ${f.rest > 0 ? '+' : '−'}${fmt1(Math.abs(f.rest))} °C` : null].filter(Boolean);
+      setText(chillSub, `${parts.join(' · ')} (heat sign)`);
     }
     setText(fFans, `FANS ${env.fansOn}/${FAN_COUNT}`); fFans.classList.toggle('is-on', env.fansOn > 0);
     fPad.classList.toggle('is-on', !!env.padOn);
