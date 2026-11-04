@@ -11,7 +11,7 @@
 // update() moves gains, cut-offs and pitches toward targets at most ten times a second; the machine bed retunes only
 // while it is silent (a 0.3 s crossfade through nothing when another machine takes it).
 import { gainNode, biquad, lfo, toward, noiseSource } from './audio-synth.js';
-import { dbToGain, nextGap, range, lerp, clamp } from './audio-mix.js';
+import { dbToGain, range, lerp, clamp } from './audio-mix.js';
 import { MACHINES } from './audio-rules.js';
 import { BED_DB, BED_RAW_DB } from './audio-beds.js';
 
@@ -101,7 +101,12 @@ export function buildMachines(ac, bus, nb, src, rng, gust) {
       last[3] = toward(crewPan.pan, Math.max(-0.5, Math.min(0.5, T.crewPan || 0)), now, 0.3 * k, last[3], 0.02); // a crowd: never hard to one side
       last[4] = toward(desk.gain, T.desk * LVL.deskFan, now, 0.5 * k, last[4]);
       // the machine bed: the owner's level, a slow +-1.5 dB wander over 20-90 s
-      if (now >= wanderAt) { wanderAt = now + range(rng, 20, 90); wanderWant = range(rng, -1.5, 1.5); }
+      if (now >= wanderAt) {
+        wanderAt = now + range(rng, 20, 90); wanderWant = range(rng, -1.5, 1.5);
+        if (tuned === 0 && owner === 0 && genState !== 'starting' && genState !== 'stopping' && !T.calib) { // the diesel's firing drifts within 24-30 Hz with its load
+          const f = range(rng, 24.5, 29); o1.frequency.setTargetAtTime(f, now, 4); o2.frequency.setTargetAtTime(3 * f, now, 4);
+        }
+      }
       wander += (wanderWant - wander) * (snap ? 1 : 0.01);
       if (T.calib) wander = 0;
       const M = T.machine;

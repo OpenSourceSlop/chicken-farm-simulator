@@ -12,10 +12,10 @@ import { buildBeds } from './audio-beds.js';
 import { createScheduler } from './audio-sched.js';
 import * as V from './audio-voices.js';
 import * as C from './audio-cues.js';
-import { buildMachines, BED5_NAMES } from './audio-machines.js';
+import { buildMachines } from './audio-machines.js';
 import { createScenes } from './audio-scenes.js';
 import { createLimiter } from './audio-limit.js';
-import { CAPS, layerGain, MACHINES, PLACES } from './audio-rules.js';
+import { CAPS, layerGain, MACHINES } from './audio-rules.js';
 import { HOUSE } from './config.js';
 
 export const LAYERS = ['outside', 'house', 'flock', 'cues'];
@@ -34,7 +34,6 @@ const CUES = {
 const CUE_NAMES = Object.keys(CUES);
 // footfalls: gain over LEVELS.steps; the loudest 100 ms of a walk at -42 (the foot dip) .. -47 dBFS, peaks <= -27
 const STEP_DB = { gravel: 19, concrete: 20, litter: 14, grass: 13.5, dip: 19.5 };
-const CONTROLLER = PLACES.controller;
 const LAYER_SLIDER = { outside: 'background', house: 'background', flock: 'flock', cues: 'cues' };
 
 /** opts: { rng | seed, lookahead (s ahead of the clock a sound starts), solo (a layer name: the others silent),

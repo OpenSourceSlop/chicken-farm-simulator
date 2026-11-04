@@ -13,7 +13,7 @@ import { FEEDER_LINES_Z, LINE_X, BIRDS_PER_INSTANCE } from './config.js';
 import { createSoundSettings, volumeToGain, DEFAULT_VOLUME, SOUND_KEY } from './audio-settings.js';
 import { createEngine } from './audio-engine.js';
 import { nearWeight, surfaceAt, fanSpinOf, padFlowOf, makeRng } from './audio-mix.js';
-import { ringHeard } from './audio-rules.js';
+import { ringHeard, PLACES } from './audio-rules.js';
 import { createGameState } from './audio-state.js';
 import { createThunderPlanner } from './audio-scenes.js';
 import { createCaptions } from './audio-captions.js';
@@ -208,8 +208,8 @@ export function createAudio(ctx, deps = {}) {
     });
     events.on(EV.LETTER, () => { // the office phone rings when a letter comes, heard within 30 m of the desk
       if (!ringHeard(player.position)) return;
-      cue('ring', -34.1, 26.3);
-      caps.raise('phone', { x: -34.1, z: 26.3 });
+      cue('ring', PLACES.desk.x, PLACES.desk.z);
+      caps.raise('phone', { x: PLACES.desk.x, z: PLACES.desk.z });
     });
   }
 
