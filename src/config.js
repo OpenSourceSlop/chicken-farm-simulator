@@ -554,7 +554,8 @@ export const LIGHT_PRESETS = {
 // Outside air in the Phase 3 levels (env.cycleClimate, PHASE3.md §6.3; model): the day's water content
 // in g/m3 by weather. The RH follows the temperature: 'normal' about 89 % at 05:00 (24 °C) and 54 % at
 // 15:00 (33 °C); 'cool' about 86 % / 48 %. A weather event with `rh` sets the outside RH during it.
-export const OUTSIDE_WATER_GM3 = { cool: 14, normal: 19.5, hot: 24, rainy: 21 };
+// Phase 4: 'hot' 22 g/m3 (the hot season, 28-38 °C: about 80 % at dawn, 47 % at 15:00); 'rainy' 21 (24-30 °C: 96 % / 69 %).
+export const OUTSIDE_WATER_GM3 = { cool: 14, normal: 19.5, hot: 22, rainy: 21 };
 // Cooling pad efficiency (model): the pad takes the air this share of the way to its wet bulb.
 export const PAD_EFF = 0.8;
 
@@ -652,10 +653,143 @@ export const MOISTURE_RAMP = [[10, [0.93, 0.86, 0.64]], [20, [0.84, 0.72, 0.45]]
 // Run saves (PHASE3.md §11). The skill profile stays SAVE.profileKey.
 export const RUN_SAVE = { key: 'chickenFarm.run.v3', startPrefix: 'chickenFarm.run.v3.start.', version: 3 };
 
-// Harder replay conditions: Phase 4 (shown dimmed on the run card after a full cycle).
-export const CONDITIONS = {
-  hot: { label: 'Hot season', available: false },
-  rainy: { label: 'Rainy season', available: false },
-  badChicks: { label: 'A bad batch of chicks', available: false },
-  water: { label: 'A water problem', available: false },
+
+// ================================================================================================
+// Phase 4 (simulation tuning and the harder replay conditions, PHASE4.md). Shared constants: every package reads
+// these, nobody edits them without the integrator. The tuned model values live in src/farm-tuning.js (sim);
+// figures a farmer reads off a sign are general practice (SIGN_FIGURES); numbers marked "model" are tuning values.
+// ================================================================================================
+
+// Interactive spots added in Phase 4 (scene builds the objects; run / panels read them).
+export const SPOTS4 = {
+  generator: { x: -32.0, z: 8.0, label: 'Generator', inside: false },               // south door of FARM.generator
+  signPower: { x: -29.4, z: 8.0, label: 'Power cut sign', inside: false },           // beside it, facing south
+  waterTank: { x: -32.2, z: -11.0, label: 'Water tank gauge and well pump', inside: false }, // east foot of FARM.waterTank
+  chickTable: SPOTS2.chickTable,                                                      // the grading of a bad batch (PHASE4.md §4.3)
 };
+
+// The generator and the well pump (general where a sign says so, else model; PHASE4.md §4.2, §4.4).
+export const GENERATOR = { fuelL: 150, litresPerH: 15, startMin: 2, testMin: 10, kva: 60 };
+export const WATER_TANK = { m3: 10, pumpM3h: 4.0, lowPct: 30, refillFromPct: 60 };
+
+/**
+ * The harder replay conditions (PHASE4.md §3-§4), offered after the first full cycle (skills profile cyclesDone)
+ * and selectable for any level on the run card. One condition per run (`run.state().condition`, the farm's
+ * `farm.condition`). Each changes the levels through `levels[levelId]`:
+ *   weather     the level's weather key (WEATHER / OUTSIDE_WATER_GM3); `weather` on the condition = every level
+ *   drop        problem ids of the level def that do not happen
+ *   replace     { [problemId]: fields } merged into the level def's problem
+ *   problems    extra problems (same shape as config LEVELS problems; `until` makes a weather event, `storm` marks
+ *               rain, `back` ends a power cut, `alarm` stops a skip at its symptom)
+ *   target/fail fields merged into the level def's (the brooding week of a bad batch counts the chicks graded out
+ *               at the table apart: `claimedApart`)
+ *   routineDays { [routine job id]: [fromDay, toDay] } the days a Phase 2/3 routine runs in this condition
+ * cycleClimateFrom: the first level that runs the cycle climate (the hot and rainy seasons: the brooding week).
+ * Condition jobs, signs and milestones: content-jobs-cond.js, content-signs-cond.js, skills-cond.js.
+ * `available` is what the run card reads; the integrator sets it true at the run merge (as `earnable`).
+ */
+export const CONDITIONS = {
+  hot: {
+    label: 'Hot season', months: 'April–May', available: false, weather: 'hot', cycleClimateFrom: 'level1',
+    summary: 'April–May: afternoons of 37–38 °C, nights hardly under 28 °C, a heat wave to about 41 °C in week 5. The cooling pads and the tunnel fans decide.',
+    levels: {
+      level1: { drop: ['warm-afternoon'] },           // every afternoon is warm: the routine h-brood-air instead
+      week2: { routineDays: { 'r-fans-pm': [8, 41], 'r-vent-night': [8, 41] } },
+      week3: { replace: { 'warm-afternoon3': { outsideRise: 2.5 } } },                       // about 40 °C on day 16
+      weeks45: {
+        replace: { 'hot-afternoon': { outsideRise: 1.5 }, 'heat-wave': { outsideRise: 3 } },  // about 39.5 / 41 °C
+        drop: ['humid-heat'],
+        problems: [{ id: 'hot-spell', day: 33, hour: 18, outsideRise: 2, sunPerH: 1, until: { day: 35, hour: 18 } }], // nights about 30 °C
+      },
+      finish: { replace: { 'hot-finish': { outsideRise: 2 } } },                              // about 40 °C on day 38
+    },
+  },
+  rainy: {
+    label: 'Rainy season', months: 'August–September', available: false, weather: 'rainy', cycleClimateFrom: 'level1',
+    summary: 'August–September: damp air day and night (about 96 % at dawn), storms every week, wet litter, weak pad cooling and a power cut in week 5 that needs the generator.',
+    levels: {
+      level1: { problems: [{ id: 'storm-5', day: 5, hour: 14, outsideDrop: 4, rh: 98, storm: true, until: { day: 5, hour: 18 } }] },
+      week2: { replace: { 'rainy-spell': { rh: 97 } }, problems: [{ id: 'storm-12', day: 12, hour: 14, outsideDrop: 4, rh: 98, storm: true, until: { day: 12, hour: 18 } }] },
+      week3: { problems: [
+        { id: 'storm-19', day: 19, hour: 13, outsideDrop: 4, rh: 98, storm: true, until: { day: 19, hour: 17 } },
+        { id: 'rain-in', day: 19, hour: 13.5, storm: 'storm-19', litresPerCellH: 0.6, rows: 2 },   // the south inlets' two cell rows
+      ] },
+      weeks45: {
+        drop: ['dusty-air', 'hot-afternoon', 'heat-wave', 'humid-heat'],
+        problems: [
+          { id: 'storm-26', day: 26, hour: 14, outsideDrop: 4, rh: 98, storm: true, until: { day: 26, hour: 18 } },
+          { id: 'damp-spell', day: 29, hour: 7, outsideDrop: 2, rh: 97, until: { day: 31, hour: 18 }, forecastDay: 28 },
+          { id: 'storm-33', day: 33, hour: 14, outsideDrop: 4, rh: 98, storm: true, until: { day: 33, hour: 18 } },
+          { id: 'power-cut', day: 33, hour: 15 + 10 / 60, back: { day: 33, hour: 18 + 10 / 60 }, alarm: true },
+        ],
+      },
+      finish: { drop: ['hot-finish'], problems: [{ id: 'storm-39', day: 39, hour: 14, outsideDrop: 4, rh: 98, storm: true, until: { day: 39, hour: 18 } }] },
+    },
+  },
+  badChicks: {
+    label: 'A bad batch of chicks', months: '', available: false, cycleClimateFrom: null,
+    summary: 'Chicks from a young parent flock after a long trip: small (about 36 g) and uneven, many weak ones. Grade them, cull the weak, brood them closer.',
+    levels: {
+      level1: {
+        problems: [{ id: 'weak-batch', day: 0, hour: 8 }],
+        fail: { mortalityMaxPct: 2.5, claimedApart: true },   // the chicks graded out at the table are the hatchery's claim
+      },
+    },
+  },
+  water: {
+    label: 'A water problem', months: '', available: false, cycleClimateFrom: null,
+    summary: 'Iron in the well water and an old well pump: the filter and the nipples clog, and in week 4 the tank runs low in the afternoons. Find it from the water meter and the birds.',
+    levels: {
+      level1: { problems: [{ id: 'iron-water', day: -1, hour: 7 }] },
+      week2: { problems: [{ id: 'iron-filter', day: 13, hour: 10, flowFactor: 0.6 }] },
+      week3: { problems: [{ id: 'iron-nipples', day: 18, hour: 6, line: 3, flowFactor: 0.7 }] },
+      weeks45: { problems: [{ id: 'pump-wear', day: 26, hour: 6, lossPerDay: 0.08 }, { id: 'iron-filter', day: 31, hour: 10, flowFactor: 0.6 }] },
+    },
+  },
+};
+export const CONDITION_IDS = Object.keys(CONDITIONS);
+export const conditionLabel = (id) => (id && CONDITIONS[id] ? CONDITIONS[id].label : 'Normal season');
+
+/**
+ * A level as a condition plays it (PHASE4.md §3.2): the level def's problems with the condition's dropped, replaced
+ * and added, its weather, target and fail rules and the routine days. Pure; the level def itself is never changed
+ * (compare levels by `id`, never by object). No condition: the def's own `problems` array (same object).
+ * @returns {{ condition: string|null, problems: object[], weather: string, target: object, fail: object,
+ *   routineDays: object, cycleClimate: boolean }}
+ */
+export function conditionLevel(def, condId) {
+  const c = condId ? CONDITIONS[condId] : null;
+  const ownClimate = def.id !== LEVEL1.id && def.id !== PLAN_LEVEL.id;
+  if (!c) return { condition: null, problems: def.problems || [], weather: def.weather, target: def.target, fail: def.fail, routineDays: {}, cycleClimate: ownClimate };
+  const part = (c.levels && c.levels[def.id]) || {}, drop = new Set(part.drop || []);
+  const problems = (def.problems || []).filter((p) => !drop.has(p.id))
+    .map((p) => (part.replace && part.replace[p.id] ? { ...p, ...part.replace[p.id] } : p)).concat(part.problems || []);
+  const order = LEVELS.map((l) => l.id), from = c.cycleClimateFrom ? order.indexOf(c.cycleClimateFrom) : -1;
+  // routine days carry on into the later levels of the condition (week 2's r-fans-pm from day 8 stays in week 3)
+  const routineDays = {};
+  for (const l of LEVELS.slice(0, order.indexOf(def.id) + 1)) Object.assign(routineDays, (c.levels[l.id] || {}).routineDays || {});
+  return { condition: condId, problems, weather: part.weather || c.weather || def.weather, target: { ...def.target, ...(part.target || {}) },
+    fail: { ...def.fail, ...(part.fail || {}) }, routineDays, cycleClimate: ownClimate || (from >= 0 && order.indexOf(def.id) >= from && def.id !== PLAN_LEVEL.id) };
+}
+
+/**
+ * Every figure a Phase 4 sign prints that the model must also give (PHASE4.md §2.5; all general practice). `text`
+ * is how the board prints it (package run: content-signs*.js); `model` names the check in scripts/test-tuning.mjs
+ * (package sim: the model's value lies in `band`).
+ */
+export const SIGN_FIGURES = [
+  { id: 'wind-chill-5wk', board: 'sign-heat', text: 'at 2.5 m/s birds of 5 weeks feel about 5–6 °C cooler', model: 'windChill35', band: [5, 6] },
+  { id: 'wind-chill-2wk', board: 'sign-heat', text: 'birds of 2 weeks about 7 °C', model: 'windChill14', band: [6.5, 7.5] },
+  { id: 'wind-chill-hot', board: 'sign-heat', text: 'moving air cools less once the air is over about 35 °C; near 40 °C it gives little: then the pads cool the birds', model: 'windChillHot', band: [0.1, 0.4] },
+  { id: 'air-per-fan', board: 'sign-heat', text: 'six fans about 2.5 m/s at bird height, each about 0.4 m/s', model: 'airPerFan', band: [0.4, 0.43] },
+  { id: 'pant-felt-5wk', board: 'sign-heat', text: 'birds of 5 weeks start to pant when they feel about 24 °C, all of them by about 28 °C (felt: the house less the wind chill)', model: 'firstPant35', band: [23.5, 24.5] },
+  { id: 'pant-all-5wk', board: 'sign-heat', text: 'all of them by about 28 °C', model: 'allPant35', band: [27.5, 28.5] },
+  { id: 'water-feed', board: 'drinker', text: 'water : feed about 1.8 L/kg while the birds are comfortable', model: 'waterRatioComfort', band: [1.7, 1.9] },
+  { id: 'water-feed-hot', board: 'drinker', text: 'on hot days they drink more: about 2–2.5 L/kg', model: 'waterRatioHot', band: [2, 2.5] },
+  { id: 'water-feed-wave', board: 'drinker', text: 'in a heat wave up to about 3 L/kg', model: 'waterRatioWave', band: [2.8, 3.2] },
+  { id: 'pad-most', board: 'pad-pump', text: 'a pad in good order gives most of that, never all of it', model: 'padShareOfRule', band: [0.6, 0.95] },
+  { id: 'pad-most-max', board: 'pad-pump', text: 'a pad in good order gives most of that, never all of it', model: 'padShareOfRuleMax', band: [0.6, 0.95] },
+  { id: 'pad-rainy', board: 'pad-pump', text: 'in the damp air of the rainy season a pad cools only about 2–4 °C', model: 'rainyPadC', band: [2, 4] },
+  { id: 'power-cut-30', board: 'generator', text: 'without fans big birds overheat at once: after half an hour the first die', model: 'powerCut30', band: [0.1, 0.6] },
+  { id: 'power-cut-120', board: 'generator', text: 'after two hours a few in every hundred', model: 'powerCut120', band: [1, 5] },
+];
