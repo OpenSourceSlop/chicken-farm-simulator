@@ -14,7 +14,7 @@ import { stepHarvest } from './farm-harvest.js';
 import { stepClean } from './farm-clean.js';
 import { usedCells, addWater } from './farm-litter.js';
 import { meanPanFill } from './farm-feed.js';
-import { waterPerKgP4, dehydrationAllowed } from './farm-tuning.js';
+import { waterPerKgP4, dehydrationAllowed, appetiteHot } from './farm-tuning.js';
 
 const H = 1 / 24;
 const PAD_CELLS = []; // the two westmost cell columns (the pad overflow)
@@ -38,7 +38,7 @@ export function cyclePre(farm, env, hrs) {
 
 export function cycleComfort(farm, env, C, age) { return houseComfort(env, farm, C, age, farm.flock.meanWeightG); }
 
-/** The cycle's factors for this flock step: f_space x f_form x f_heat x f_health x the change shock x lame birds. */
+/** The cycle's factors for this flock step: f_space x f_form x f_heat x f_hot x f_health x the change shock x lame birds. */
 export function cycleFactors(farm, env, age, hrs = 0) {
   const X = farm.cyc, fx = X.fx, fl = farm.flock, C = farm.comfort;
   const cr = (X.crowd = crowding(farm, age));
@@ -46,7 +46,11 @@ export function cycleFactors(farm, env, age, hrs = 0) {
   fx.fSpace = cr.fSpace; fx.fForm = form.fForm; fx.fpgK = form.fpgK; fx.fHeat = C.fHeat ?? 1;
   fx.shock = X.shockUntil != null && env.day < X.shockUntil ? SILO_MODEL.shockIntake : 1;
   const lame = fl.alive > 0 ? 1 - (0.5 * (fl.lameOnFloor || 0)) / fl.alive : 1;
-  fx.f = fx.fSpace * fx.fForm * fx.fHeat * (fx.fHealth ?? 1) * fx.shock * lame;
+  // Phase 5 (PHASE5.md §6.8.4): the hot season's appetite over 28 °C house air from day 21. Held on fx only in the hot
+  // season (the normal season's farm, its saves and every number stay byte-identical: the product's x 1 is exact)
+  const fHot = appetiteHot(farm.condition, env.houseTemp, age);
+  if (farm.condition === 'hot') fx.fHot = fHot; else if ('fHot' in fx) delete fx.fHot;
+  fx.f = fx.fSpace * fx.fForm * fx.fHeat * fHot * (fx.fHealth ?? 1) * fx.shock * lame;
   fx.dcv = cr.dcv;
   // a short dry spell (the vaccine's thirst) is no dehydration: deaths only after 4 h with the main shut
   const h = farm.health;

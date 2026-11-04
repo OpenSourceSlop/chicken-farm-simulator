@@ -9,7 +9,7 @@ import { createLevel } from '../src/level.js';
 import { createRun } from '../src/run.js';
 import { profileOf } from '../src/farm-profiles.js';
 import { EV } from '../src/events.js';
-import { LEVEL1 } from '../src/config.js';
+import { LEVEL1, feedStdGAt as feedStd } from '../src/config.js';
 import { WATCH, refShare, causeOf } from '../src/flock-watch.js';
 import { cycleProfileOf } from '../src/farm-profiles-cycle.js';
 import { p2ProfileFor } from '../src/farm-profiles-cond.js';
@@ -222,6 +222,96 @@ test('the ideal through the cycle under each condition: every warning is a docum
     for (const w of L.warns) { const a = ALLOWED.find(([, f]) => f(w)); assert(a, `${c || 'normal'}: a warning outside the problem events: d${w.day} ${w.hour} ${w.kind}: ${w.text}`); got.push(`d${w.day} ${w.kind}`); }
     console.log(`     ${c || 'normal'}: ${got.join(', ') || 'none'}`);
   }
+});
+
+// ---------------- Phase 5 (PHASE5.md §6.8.1, §6.8.4; package saves) ----------------
+const hourly = (L, from, to, profile, each) => {
+  for (let t = from; t <= to + 1e-9; t += H) {
+    const d = Math.floor(t + 1e-9), hr = Math.round((t - d) * 24);
+    L.level.debug.goto(d, hr + 0.01, { auto: true, profile });
+    if (L.level.result) return;
+    each(d, hr);
+  }
+};
+test('Phase 5 §6.8.1: the water condition\'s ideal on day 33 reads Supply steady with a full tank (the meter alone no longer raises it); the worn pump left still warns 6 farm hours ahead', () => {
+  const W = makeLevel();
+  W.run.startRun({ seed: 1, at: 'level1', condition: 'water' });
+  W.run.startLevel('weeks45', { from: 'standard', condition: 'water' });
+  const odd = [], at = {};
+  hourly(W, 32 + 18 * H, 34 + 6 * H, 'ideal', (d, hr) => {
+    const r = W.level.watch.status().rows.supply, t = W.farm.waterTank;
+    if (d === 33 && (hr === 12 || hr === 15)) at[hr] = `${r?.state} (tank ${t.levelPct.toFixed(1)} %, ${r?.detail})`;
+    // a full tank, not falling, the pump at its plate: no reason for amber (main read amber here on the meter alone)
+    if (r && r.state !== 'green' && t.levelPct >= 90 && !(r.fall >= WATCH.supplyFallMin) && !r.worn && r.tank.on) odd.push(`d${d} ${hr} ${r.state} ${r.detail}`);
+  });
+  console.log(`     day 33 12:00 ${at[12]}; 15:00 ${at[15]}`);
+  assert(/^green/.test(at[12] || '') && /^green/.test(at[15] || ''), `Supply steady at 12:00 and 15:00 of day 33: ${JSON.stringify(at)}`);
+  assert(W.farm.waterTank.levelPct >= 90, `the tank full: ${W.farm.waterTank.levelPct}`);
+  assert(!odd.length, `amber with a full tank and the pump at its plate: ${odd.join('; ')}`);
+  // the worn pump left unrepaired still warns hours before the tank is under the lines' 20 %
+  const U = makeLevel();
+  U.run.startRun({ seed: 1, at: 'level1', condition: 'water' });
+  U.run.startLevel('weeks45', { from: 'standard', condition: 'water' });
+  let under20 = null;
+  U.env.addStepper(() => { if (under20 == null && U.farm.mode === 'level' && U.farm.waterTank.levelPct < 20) under20 = U.env.day; });
+  U.warns.length = 0;
+  U.level.debug.goto(30, 22, { auto: true, profile: 'waterPumpUnfixed' });
+  const sup = U.warns.find((w) => w.kind === 'supply'), ahead = sup && under20 != null ? (under20 - (sup.day + sup.hour * H)) * 24 : null;
+  console.log(`     waterPumpUnfixed: supply warning d${sup?.day} ${sup?.hour?.toFixed(2)}, the tank under 20 % ${ahead?.toFixed(1)} farm hours later`);
+  assert(sup && ahead >= 6, `warned ${ahead?.toFixed(1)} farm hours ahead (at least 6)`);
+});
+// main before the change (measured by the saves package, waterFilterLate from a standard start of weeks 4-5, hour by
+// hour): no EV.WATCH warning on days 24-25; the intake row amber from day 24 09:00 to day 25 08:00 (feed 80-86 %)
+const FILTER_MAIN = { from: 24 + 9 * H, to: 25 + 8 * H };
+test('Phase 5 §6.8.1: the iron filter left until its flow test is skipped (waterFilterLate) still shows: the intake row out of steady over main\'s hours, its cause the water supply\'s filter, its plate and place', () => {
+  const W = makeLevel();
+  W.run.startRun({ seed: 1, at: 'level1', condition: 'water' });
+  W.run.startLevel('weeks45', { from: 'standard', condition: 'water' });
+  W.warns.length = 0;
+  const off = [], named = [], other = [];
+  hourly(W, 22, 26, 'waterFilterLate', (d, hr) => {
+    const r = W.level.watch.status().rows, t = d + hr * H;
+    if (t < 24 - 1e-9 || t > 26 - 1e-9) return;
+    const out = r.intake && r.intake.state !== 'green';
+    if (out) off.push(t);
+    if (out && r.intake.cause?.sign === 'water-supply' && r.intake.cause.place === 'water-supply' && /water supply’s filter/.test(r.intake.cause.why) && /filter gauges/.test(r.intake.detail)) named.push(t);
+    else if (out && W.farm.condX?.filterK) other.push(`d${d} ${hr} ${JSON.stringify(r.intake.cause)}`);
+  });
+  const span = (a) => (a.length ? `d${Math.floor(a[0])} ${Math.round((a[0] % 1) * 24)}:00 – d${Math.floor(a[a.length - 1])} ${Math.round((a[a.length - 1] % 1) * 24)}:00 (${a.length} h)` : 'none');
+  console.log(`     intake out of steady ${span(off)} (main: d24 9:00 – d25 8:00); the filter named ${span(named)}; warnings d24-25: ${show(W.warns.filter((w) => w.day >= 24 && w.day <= 25)) || 'none'}`);
+  assert(off.length && Math.abs(off[0] - FILTER_MAIN.from) < 1e-6 && Math.abs(off[off.length - 1] - FILTER_MAIN.to) < 1e-6, `the same hours as on main: ${span(off)}`);
+  assert(named.length >= 18 && Math.abs(named[0] - FILTER_MAIN.from) < 1e-6, `the cause names the filter while it is clogged: ${span(named)}`);
+  assert(!other.length, `an hour with the filter clogged and another cause: ${other.join('; ')}`);
+  assert(!W.warns.some((w) => w.day >= 24 && w.day <= 25), `no new warning on days 24-25 (as on main): ${show(W.warns)}`);
+});
+test('Phase 5 §6.8.4: the hot ideal\'s intake row expects the hot season\'s appetite: never out of steady on days 21-41 from fHot alone; the note on the row', () => {
+  const L = makeLevel();
+  L.run.startRun({ seed: 1, at: 'level1', condition: 'hot' });
+  L.run.startLevel('week3', { from: 'standard', condition: 'hot' });
+  let hotRows = 0, noted = 0, raw = 0;
+  const out = [];
+  L.env.addStepper(() => {
+    const s = L.level.watch.samples, last = s[s.length - 1];
+    if (!last || L.farm.mode !== 'level' || last.age + 0 < 0 || L.env.day < 21 || L.env.day >= 42 || last.counted) return;
+    last.counted = true;
+    const r = L.level.watch.status().rows.intake;
+    if (!r) return;
+    if (r.hot) { hotRows++; if (/hot season: the birds eat a little less/.test(r.detail)) noted++; }
+    // the same window without the expectation (the standard alone): how often fHot alone would have read amber
+    let eat = 0, want = 0, n = 0;
+    for (let i = s.length - 1; i > 0 && n < WATCH.litH; i--) {
+      const a = s[i - 1], b = s[i];
+      if (!a.lit || !b.lit || a.excl || b.excl || b.t - a.t > 1.5 * H) continue;
+      eat += b.feedKg - a.feedKg; want += (a.alive * feedStd(a.age)) / 1000 / a.litH * ((b.t - a.t) * 24); n++;
+    }
+    if (n >= 3 && want > 0 && eat / want < WATCH.intakeGreen) raw++;
+    if (r.state !== 'green') out.push(`d${Math.floor(last.t)} ${Math.round((last.t % 1) * 24)} ${r.state} ${r.value}`);
+  });
+  for (let i = 0; i < 3; i++) { const r = playLevel(L); assert(r && r.pass, `${L.level.def.id}: ${r?.failText}`); if (L.level.def.id === 'finish' || !L.run.next()) break; }
+  console.log(`     hours with the hot-season expectation ${hotRows} (noted ${noted}); without it the feed would read under ${WATCH.intakeGreen * 100} % in ${raw} hours; out of steady: ${out.join(', ') || 'none'}`);
+  assert(hotRows > 50 && noted === hotRows, `the row carries the hot-season note: ${noted} / ${hotRows}`);
+  assert(!out.length, `the intake row out of steady from fHot alone: ${out.join(', ')}`);
+  assert(!L.warns.some((w) => w.kind === 'intake' && w.day >= 21), `no intake warning: ${show(L.warns)}`);
 });
 
 if (failed) { console.log(`${failed} failed`); process.exit(1); } else console.log('all passed');

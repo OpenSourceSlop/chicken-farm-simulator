@@ -307,6 +307,22 @@ for (const name of CYCLE_PROFILES) {
 }
 
 
+// ---- Phase 5 (PHASE5.md §6.8.4, package saves): the hot season's appetite leaves the normal season untouched ----
+// main's digests before the term (measured by the saves package on the Phase 5 design round's main, seed 1): the ideal's
+// 48 hourly rows of day 42, its finish result and the day-42 record row, as JSON, sha-256 (first 16 hex digits)
+const NORMAL_DIGEST = { rows42: 'ef7b3f40bb483c38', finish: '2026020ad848985d', record42: 'c68a51989ae088c3' };
+test('Phase 5: the normal season is byte-identical to main (the ideal\'s day-42 rows, finish and record row digests)', async () => {
+  if (STUB) return 'skip';
+  const { createHash } = await import('node:crypto');
+  const sha = (o) => createHash('sha256').update(JSON.stringify(o)).digest('hex').slice(0, 16);
+  idealRun ||= runCycle('ideal', { seed: 1 });
+  const got = { rows42: sha(idealRun.hourly.filter((x) => x.day === 42)), finish: sha(idealRun.levels.finish), record42: sha(idealRun.records.row(42)) };
+  console.log(`     ${Object.entries(got).map(([k, v]) => `${k} ${v}`).join(', ')}; finish ${idealRun.levels.finish.liveG} g, FCR ${idealRun.levels.finish.fcr}, EPEF ${idealRun.levels.finish.epef}`);
+  for (const k of Object.keys(NORMAL_DIGEST)) assert(got[k] === NORMAL_DIGEST[k], `${k}: ${got[k]} (main ${NORMAL_DIGEST[k]})`);
+  assert(!('fHot' in idealRun.farm.cyc.fx), 'no hot-season appetite on a normal-season farm');
+  return undefined;
+});
+
 // ---- package checks (PHASE3.md §14.1 acceptance): speed, save sizes, restore, action shapes, null readings, the run store ----
 test('package: the whole cycle (-2 -> 67) in 15 s or less; farm.step <= 0.5 ms with the whole house in use; a 24 h skip <= 200 ms', () => {
   if (STUB) return 'skip';

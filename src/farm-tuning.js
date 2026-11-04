@@ -40,6 +40,11 @@ export const TUNING = {
   // Tuned 0.8 -> 0.5 by the sim package (PHASE4.md §2.7): the base growth (0.0002 a day) dominates after day 14; at
   // 0.8 the ideal's flock reads 67.0 % at day 40, at 0.5 69.1 % (weighed 68 %)
   cvGrowthAfter14: 0.5,
+  // Phase 5 (PHASE5.md §6.8.4, model, the hot season only): in April-May heat the air behind the pads still stands over
+  // 28 °C through the hot hours and birds of 3 weeks and older eat less then, even well cooled and out of panting: the
+  // intake x max(floor, 1 - perC x (house air °C - aboveC)) from fromAge. The heat sign's hot-season line says what it
+  // costs (a hot-season flock finishes about 2-5 % lighter, general practice; scripts/test-cond.mjs measures it).
+  hotAppetite: { fromAge: 21, aboveC: 28, perC: 0.025, floor: 0.85 },
 };
 
 const lerpTable = (t, a) => {
@@ -80,6 +85,15 @@ export function heatDeathRateP4(e, age, weightG) {
 }
 /** Intake factor from the heat (Phase 3's slope over the new panting reference). */
 export const heatIntakeP4 = (e, age) => Math.max(0.5, 1 - 0.04 * Math.max(0, e - hotFromP4(age)));
+/**
+ * The hot season's appetite (PHASE5.md §6.8.4): 1 outside the hot season and before TUNING.hotAppetite.fromAge (day 21);
+ * from then max(0.85, 1 - 0.025 x (house air °C - 28)) — exactly 1 at or under 28 °C, so a cool hour costs nothing.
+ */
+export function appetiteHot(condition, houseC, age) {
+  const A = TUNING.hotAppetite;
+  if (condition !== 'hot' || !(age >= A.fromAge) || !Number.isFinite(houseC)) return 1;
+  return Math.max(A.floor, 1 - A.perC * Math.max(0, houseC - A.aboveC));
+}
 /** e under which chilled birds of `age` start to die (null before TUNING.cold.fromAge: Phase 2's rule). */
 export function coldDeathFromP4(age) {
   const C = TUNING.cold;
