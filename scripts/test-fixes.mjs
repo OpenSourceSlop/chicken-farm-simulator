@@ -1,13 +1,16 @@
 // Node regressions of the Phase 4 final check (PHASE4.md §15.9): (1) a panel opened again shows the strip of the jobs
 // open now or none, never the strip of its last opening; (2) a bad batch's hatchery claim stays open until 24:00 of
 // day 0 (the fail rule, the job window and the sign agree); (3) the flock watch warns of the water condition's worn
-// pump hours before the tank runs dry. Run: node scripts/test-fixes.mjs (in npm test).
+// pump hours before the tank runs dry. Phase 5 (PHASE5.md §6.8.2, §4.1, package experience): (5) the bad batch's fail
+// at the claim's close names day 0, 24:00; (6) the Time settings (the work clock at a job's place, jobs not held, a level
+// starting at 4x, signs running the panel clock). Run: node scripts/test-fixes.mjs (in npm test).
 import { makeWorld } from '../src/farm-profiles-run.js';
 import { createLevel } from '../src/level.js';
 import { createJobStrip } from '../src/ui-jobstrip.js';
 import { EV } from '../src/events.js';
 import { LEVEL1, WATER_TANK } from '../src/config.js';
 import { createRun } from '../src/run.js';
+import { createSettings } from '../src/settings.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -31,14 +34,14 @@ function withDom(fn) {
 }
 
 /** A level through level.js (the job engine, the farm, the records), as test-jobs' makeLevelJs. */
-function makeLevelJs(condition) {
+function makeLevelJs(condition, settings = null) {
   const w = makeWorld();
   const pos = { x: 0, z: 0 };
   const player = { position: pos, yaw: 0, isInside: false, teleport(x, z, yaw) { pos.x = x; pos.z = z; this.yaw = yaw ?? 0; } };
   const ui = { panelKind: null, setMode() {}, closePanel() {}, showResult() {}, jobCard: { refresh() {}, reset() {} }, newRun() {} };
   const store = { save: () => true, load: () => null, clear() {}, loadProfile: () => null, saveProfile() {}, info: () => null };
   const props = { carrying: null, reset() {}, serialize: () => ({}), restore() {}, drop() {} };
-  const level = createLevel({ env: w.env }, { ...w, save: store, player, flock: { resetLevel() {}, serialize: () => ({}), restore() {}, afterSkip() {} }, props, ui });
+  const level = createLevel({ env: w.env, settings }, { ...w, save: store, player, flock: { resetLevel() {}, serialize: () => ({}), restore() {}, afterSkip() {} }, props, ui });
   level.start({ seed: 1, condition });
   return { ...w, level, ui, player, props, store };
 }
@@ -127,7 +130,8 @@ test('2: a bad batch without the call by 24:00 fails at 24:00 of day 0 on its cu
   W.level.debug.goto(1, 3);
   const r = W.level.result;
   assert(r && !r.pass && r.reason === 'mortality', `failed: ${r?.reason} ${r?.pass}`);
-  assert(r.day === 1 && r.hour < 0.1, `at 24:00 of day 0: ${r.endedAt}`);
+  // Phase 5 (PHASE5.md §6.8.2): the result names the claim's close, day 0 at 24:00 (the stepper ran just after midnight)
+  assert(r.day === 0 && r.hour === 24 && r.endedAt === 'day 0, 24:00', `at 24:00 of day 0: ${r.endedAt}`);
   assert(/graded out on day 0 count as culls: the hatchery was not told on day 0/.test(r.failText), r.failText);
   // the job closed with the claim and was not held (hardClose): a call after 24:00 does not count
   const Y = badBatchNoCall();
@@ -209,6 +213,105 @@ test('4: b-warm holds over its window: open after the thermostat is set, done at
   X.env.setHeaterSetpoint(35); X.level.debug.goto(0, 13);
   X.env.setHeaterSetpoint(34); X.level.debug.goto(3, 7);   // back to the row at once
   assert(X.level.jobs.byKey(key).status === 'missed', `missed: ${X.level.jobs.byKey(key).status}, ${X.farm.condX.warmH} h`);
+});
+
+// ---------------- Phase 5 (package experience) ----------------
+test('5: a bad batch failed at the claim\'s close: "by 24:00 of day 0", ended day 0, 24:00, failDay 0 (never "day 1")', () => {
+  const W = badBatchNoCall();
+  W.level.debug.goto(0, 20);
+  W.records.sign(0);
+  W.level.debug.goto(1, 3);
+  const r = W.level.result;
+  assert(r && !r.pass && r.reason === 'mortality', `failed at the claim's close: ${r?.reason}`);
+  console.log(`     "${r.failText}" · ended ${r.endedAt} · failDay ${r.failDay}`);
+  assert(/day 0/.test(r.failText) && /24:00/.test(r.failText) && !/day 1\b/.test(r.failText), `the fail line: ${r.failText}`);
+  assert(/when the hatchery claim closed/.test(r.failText) && /graded out on day 0 count as culls: the hatchery was not told on day 0/.test(r.failText), r.failText);
+  assert(r.endedAt === 'day 0, 24:00' && !/day 1\b/.test(r.endedAt), `ended: ${r.endedAt}`);
+  assert(r.failDay === 0, `failDay ${r.failDay}`);
+  assert(!VERDICT.test(r.failText), `neutral words: ${r.failText}`);
+});
+
+/** Real seconds of play (the env and the level each frame), as the browser's loop. */
+const play = (W, sec, dt = 0.25) => { for (let t = 0; t < sec - 1e-9; t += dt) { W.env.update(dt); W.level.update(dt); } };
+
+test('6: Time settings — at an open job\'s place: ⅔ speed by default, the work clock (90) with time.atJobSlow off', () => {
+  const S = createSettings({ storage: null });
+  const W = makeLevelJs(null, S);
+  W.level.debug.goto(-1, 8);
+  W.ui.jobCard.atAnyJob = () => true; W.ui.jobCard.atJob = () => true;
+  play(W, 0.5);
+  assert(W.env.timeScale === LEVEL1.clock.atJob, `default at a job's place: ${W.env.timeScale}`);
+  S.set('time.atJobSlow', false);
+  play(W, 0.5);
+  assert(W.env.timeScale === LEVEL1.clock.work, `atJobSlow off: ${W.env.timeScale} (the work clock ${LEVEL1.clock.work})`);
+  W.ui.jobCard.atAnyJob = () => false;
+  play(W, 0.5);
+  assert(W.env.timeScale === LEVEL1.clock.work, `away from a job: ${W.env.timeScale}`);
+});
+
+test('6: Time settings — time.holdJobs off: a job closes at its window while he works at it (held by default)', () => {
+  const run = (hold) => {
+    const S = createSettings({ storage: null });
+    if (!hold) S.set('time.holdJobs', false);
+    const W = makeLevelJs(null, S);
+    W.level.debug.goto(-1, 16.5);
+    const key = 'prep-flush@-1', j = () => W.level.jobs.byKey(key);
+    assert(j()?.status === 'open' && j().closesAt != null, `the flush open: ${j()?.status}`);
+    const close = j().closesAt;
+    W.level.debug.goto(Math.floor(close), (close - Math.floor(close)) * 24 - 3 / 60);
+    // he works at its place (the water supply), the farm's clock running
+    W.ui.jobCard.atAnyJob = () => true; W.ui.jobCard.atJob = (k) => k === key;
+    play(W, 10);   // 10 real s at the ⅔ clock: about 10 farm minutes, past the close
+    assert(W.env.day > close, `past the close: ${W.env.day} / ${close}`);
+    return j();
+  };
+  const held = run(true);
+  assert(held.status === 'open' && held.heldFrom != null, `held by default: ${held.status}, heldFrom ${held.heldFrom}`);
+  const off = run(false);
+  assert(off.status === 'missed' && off.heldFrom == null, `holdJobs off: closed at its window: ${off.status}`);
+});
+
+test('6: Time settings — time.defaultSpeed 4x: a level starts (and resumes) at 4×; 1x as Phase 4', () => {
+  const S = createSettings({ storage: null });
+  const A = makeLevelJs(null, S);
+  assert(A.level.fast === false, 'the default: a level starts at 1×');
+  S.set('time.defaultSpeed', '4x');
+  const W = makeLevelJs(null, S);
+  assert(W.level.fast === true, `4x: the level starts fast: ${W.level.fast}`);
+  W.ui.jobCard.atAnyJob = () => false;
+  play(W, 0.5);
+  assert(W.env.timeScale === LEVEL1.clock.fast, `the clock at 4×: ${W.env.timeScale}`);
+  W.level.hudHooks.setFast(false);
+  play(W, 0.5);
+  assert(W.env.timeScale === LEVEL1.clock.work, `the 1× key still changes it: ${W.env.timeScale}`);
+  const blob = JSON.parse(JSON.stringify(W.level.saveBlob()));
+  const R = makeLevelJs(null, S);
+  assert(R.level.resume(blob) && R.level.fast === true, `a resume with 4x set: ${R.level.fast}`);
+});
+
+test('6: Time settings — time.signStops off: a sign runs the panel clock (24) instead of stopping it (0)', () => {
+  const S = createSettings({ storage: null });
+  const W = makeLevelJs(null, S);
+  W.ui.jobCard.atAnyJob = () => false;
+  W.ui.panelKind = 'sign';
+  play(W, 0.5);
+  assert(W.env.timeScale === LEVEL1.clock.sign, `a sign stops the clock by default: ${W.env.timeScale}`);
+  S.set('time.signStops', false);
+  play(W, 0.5);
+  assert(W.env.timeScale === LEVEL1.clock.panel && !W.env.paused, `signStops off: the panel clock: ${W.env.timeScale}`);
+  W.ui.panelKind = 'paused';
+  play(W, 0.5);
+  assert(W.env.paused, 'a paused panel still stops the clock');
+});
+
+test('6: level.saveNow() saves the level in play (true) and answers false on the title card', () => {
+  const W = makeLevelJs(null);
+  let n = 0; W.store.save = () => { n++; return true; };
+  assert(W.level.saveNow() === true && n === 1, `saved: ${n}`);
+  W.store.save = () => false;
+  assert(W.level.saveNow() === false, 'a write that fails answers false');
+  W.level.toTitle();
+  assert(W.level.saveNow() === false, 'nothing to save on the title card');
 });
 
 let failed = 0;

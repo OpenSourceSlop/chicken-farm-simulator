@@ -1,0 +1,854 @@
+[
+ {
+  "wait": 800
+ },
+ {
+  "clearStorage": true
+ },
+ {
+  "reload": true
+ },
+ {
+  "wait": 1500
+ },
+ {
+  "eval": "__game.stop(), 'stopped: accessibility (PHASE5.md §6.6, §6.7, p5-a11y)'"
+ },
+ {
+  "eval": "(() => {\n  // shown: not hidden, a box, and its centre inside every scrolling or clipping box around it (a list scrolled past it hides it)\n  const V = (e, clip = true) => {\n    if (!e || !(e instanceof Element)) return false;\n    if (e.closest('[hidden], [aria-hidden=\"true\"], .sr-only')) return false;\n    const r = e.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false;\n    const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || cs.display === 'none') return false;\n    if (!clip) return true;\n    const c = { x: r.left + r.width / 2, y: r.top + r.height / 2 };\n    for (let n = e.parentElement; n && n !== document.body; n = n.parentElement) {\n      const s = getComputedStyle(n);\n      if (/(auto|scroll|hidden)/.test(`${s.overflowX} ${s.overflowY}`)) { const b = n.getBoundingClientRect(); if (c.x < b.left || c.x > b.right || c.y < b.top || c.y > b.bottom) return false; }\n    }\n    return true;\n  };\n  const rgb = (s) => { const m = s && s.match(/rgba?\\(([^)]+)\\)/); if (!m) return null; const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p[3] == null ? 1 : p[3]]; };\n  const most = (s) => { let best = null; for (const m of String(s).matchAll(/rgba?\\(([^)]+)\\)/g)) { const c = rgb(m[0]); if (c && (!best || c[3] > best[3])) best = c; } return best; };\n  // the backgrounds behind the text: an ancestor counts only where the text's centre lies inside its box (a label set\n  // outside its tick mark, top: 15px, sits on the panel, not on the tick)\n  const inside = (n, c) => { const r = n.getBoundingClientRect(); return c.x >= r.left && c.x <= r.right && c.y >= r.top && c.y <= r.bottom; };\n  const bg = (e) => { const layers = [], er = e.getBoundingClientRect(), c0 = { x: er.left + er.width / 2, y: er.top + er.height / 2 }; for (let n = e; n && n !== document.documentElement; n = n.parentElement) { if (n !== e && !inside(n, c0)) continue; const cs = getComputedStyle(n); let c = rgb(cs.backgroundColor); if ((!c || c[3] === 0) && /gradient/.test(cs.backgroundImage)) c = most(cs.backgroundImage); if (c && c[3] > 0) { layers.push(c); if (c[3] >= 0.99) break; } } let base = [201, 196, 184]; for (let i = layers.length - 1; i >= 0; i--) { const c = layers[i]; base = base.map((v, k) => v * (1 - c[3]) + c[k] * c[3]); } return base; };\n  const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };\n  const contrast = (e) => { const cs = getComputedStyle(e); let op = 1; for (let n = e; n && n !== document.documentElement; n = n.parentElement) op *= +getComputedStyle(n).opacity; const fg = rgb(cs.color) || [255, 255, 255, 1], b = bg(e), a = fg[3] * op; const f = b.map((v, k) => v * (1 - a) + fg[k] * a); const x = lum(f), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };\n  window.__floors = (root) => {\n    const out = [], seen = new Set(), list = typeof root === 'string' ? [...document.querySelectorAll(root)] : [root];\n    let n = 0;\n    for (const r of list) {\n      const tw = document.createTreeWalker(r, NodeFilter.SHOW_TEXT);\n      while (tw.nextNode()) {\n        const t = tw.currentNode, txt = t.textContent.trim();\n        if (!txt || !/[A-Za-z0-9]/.test(txt)) continue;\n        const e = t.parentElement;\n        if (!e || seen.has(e) || !V(e)) continue;\n        seen.add(e); n++;\n        const cs = getComputedStyle(e), px = parseFloat(cs.fontSize);\n        const caps = cs.textTransform === 'uppercase' || (txt.length >= 2 && /[A-Z]/.test(txt) && txt === txt.toUpperCase());\n        const src = !!e.closest('.src, .src-k, .book-src, .wk-src, .plate-src');\n        const floor = caps || src ? 11 : 12;\n        const tag = `\"${txt.slice(0, 28)}\" (${(e.getAttribute('class') || e.tagName).slice(0, 40)})`;\n        if (px < floor - 0.01) out.push(`${px}px under ${floor}: ${tag}`);\n        else if (caps || src) { const k = contrast(e); if (k < 4.5) out.push(`contrast ${k.toFixed(2)}: ${tag}`); }\n      }\n    }\n    return { n, bad: out };\n  };\n  window.__rings = (root) => {\n    const sel = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex=\"-1\"])';\n    const r = typeof root === 'string' ? document.querySelector(root) : root;\n    const els = r ? [...r.querySelectorAll(sel)].filter((e) => V(e, false)) : [];\n    const bad = [];\n    for (const e of els) {\n      e.focus({ preventScroll: true });\n      const cs = getComputedStyle(e);\n      const ok = document.activeElement === e && ((cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 2) || (cs.boxShadow && cs.boxShadow !== 'none'));\n      if (!ok) bad.push(`${(e.getAttribute('class') || e.tagName).slice(0, 30)} \"${(e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 24)}\"`);\n    }\n    return { n: els.length, bad };\n  };\n  window.__fid = () => { const a = document.activeElement; if (!a || a === document.body) return 'body'; const d = a.dataset || {}; return d.menu || d.titleAction || d.place || d.mapView || d.tab || (a.getAttribute('aria-label') || a.textContent || a.tagName).trim().slice(0, 40); };\n  return 'a11y helpers ready';\n})()"
+ },
+ {
+  "eval": "__game.level.toTitle(), 'the title card, a first visit (no save)'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "/Start a new flock/.test(__fid()) && 'the focus on ' + __fid()",
+  "label": "the title: the focus starts on Start a new flock"
+ },
+ {
+  "eval": "window.__order = [__fid()], 'order: ' + __order"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "eval": "(__order.push(__fid()), __order.join(' → '))"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "eval": "(__order.push(__fid()), __order.join(' → '))"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "eval": "(__order.push(__fid()), __order.join(' → '))"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "eval": "(__order.push(__fid()), __order.join(' → '))"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "eval": "(__order.push(__fid()), __order.join(' → '))"
+ },
+ {
+  "expect": "(() => { const o = __order; return /brooding week/.test(o[1]) && /sandbox/i.test(o[2]) && /Skill tree/.test(o[3]) && o.slice(4).some((x) => x === 'saves' || x === 'settings') && 'Start → ' + o.slice(1).join(' → '); })()",
+  "label": "the title's tab order: Start, Start at the brooding week, the quiet keys"
+ },
+ {
+  "expect": "(() => { const t = document.querySelector('#hud .title'), runFirst = t.querySelector('.runcard button, .runcard select, .runcard [tabindex]'), keys = [...t.querySelectorAll('button')].filter((b) => !b.hidden && b.offsetParent); return !!runFirst && keys.indexOf(runFirst) > keys.findIndex((b) => b.dataset.titleAction === 'guide') && 'the run card after the quiet keys'; })()",
+  "label": "the run card comes after the quiet keys"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "press": "Shift+Tab"
+ },
+ {
+  "eval": "(() => { const r = __rings(\"#hud .title\"); return 'the title card: ' + r.n + ' focusable' + (r.bad.length ? ', no ring: ' + r.bad.slice(0, 6).join(' | ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const r = __rings(\"#hud .title\"); return r.n > 0 && !r.bad.length && 'the title card: ' + r.n + ' focusable elements, each with its focus ring'; })()",
+  "label": "the focus ring: the title card"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .title\"); return 'the title card: ' + f.n + ' texts' + (f.bad.length ? ', under a floor: ' + f.bad.slice(0, 6).join(' | ') : ', none under a floor'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .title\"); return f.n > 0 && !f.bad.length && 'the title card: ' + f.n + ' texts at or over their floor (11 px caps and sources at 4.5 : 1, 12 px others)'; })()",
+  "label": "the two text floors: the title card"
+ },
+ {
+  "shot": "p5-a11y-title"
+ },
+ {
+  "eval": "__game.startLevel({ seed: 1 }), 'the prep day'"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .hud-tl, #hud .hud-tr--level, #hud .hud-bl, #hud .fw, #hud .hud-bc\"); return 'the HUD: ' + f.n + ' texts' + (f.bad.length ? ', under a floor: ' + f.bad.slice(0, 6).join(' | ') : ', none under a floor'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .hud-tl, #hud .hud-tr--level, #hud .hud-bl, #hud .fw, #hud .hud-bc\"); return f.n > 0 && !f.bad.length && 'the HUD: ' + f.n + ' texts at or over their floor (11 px caps and sources at 4.5 : 1, 12 px others)'; })()",
+  "label": "the two text floors: the HUD"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'menu' && __fid() === 'resume' && 'the menu, the focus on ' + __fid()",
+  "label": "Esc opens the menu, the focus on its first entry"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "press": "Shift+Tab"
+ },
+ {
+  "eval": "(() => { const r = __rings(\"#hud .menu\"); return 'the menu: ' + r.n + ' focusable' + (r.bad.length ? ', no ring: ' + r.bad.slice(0, 6).join(' | ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const r = __rings(\"#hud .menu\"); return r.n > 0 && !r.bad.length && 'the menu: ' + r.n + ' focusable elements, each with its focus ring'; })()",
+  "label": "the focus ring: the menu"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .menu\"); return 'the menu: ' + f.n + ' texts' + (f.bad.length ? ', under a floor: ' + f.bad.slice(0, 6).join(' | ') : ', none under a floor'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .menu\"); return f.n > 0 && !f.bad.length && 'the menu: ' + f.n + ' texts at or over their floor (11 px caps and sources at 4.5 : 1, 12 px others)'; })()",
+  "label": "the two text floors: the menu"
+ },
+ {
+  "press": "Enter"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "expect": "__game.ui.openPanelId === null && 'Enter on Back to the farm closes it'",
+  "label": "the menu: Back to the farm by Enter"
+ },
+ {
+  "advance": 0.7
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { let n = 0; while (__fid() !== 'map' && n++ < 8) { const bs = [...document.querySelectorAll('#hud .menu [data-menu]')]; bs[(bs.indexOf(document.activeElement) + 1) % bs.length].focus(); } return 'at ' + __fid(); })()"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "press": "Shift+Tab"
+ },
+ {
+  "expect": "__fid() === 'map' && 'Tab reaches map'",
+  "label": "the menu: Tab reaches map"
+ },
+ {
+  "press": "Enter"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'map' && __game.ui.parentPanels.join() === 'menu' && 'map open over the menu'",
+  "label": "the menu: Enter opens map"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "press": "Shift+Tab"
+ },
+ {
+  "eval": "(() => { const r = __rings(\"#hud .map\"); return 'the map: ' + r.n + ' focusable' + (r.bad.length ? ', no ring: ' + r.bad.slice(0, 6).join(' | ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const r = __rings(\"#hud .map\"); return r.n > 0 && !r.bad.length && 'the map: ' + r.n + ' focusable elements, each with its focus ring'; })()",
+  "label": "the focus ring: the map"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .map\"); return 'the map: ' + f.n + ' texts' + (f.bad.length ? ', under a floor: ' + f.bad.slice(0, 6).join(' | ') : ', none under a floor'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .map\"); return f.n > 0 && !f.bad.length && 'the map: ' + f.n + ' texts at or over their floor (11 px caps and sources at 4.5 : 1, 12 px others)'; })()",
+  "label": "the two text floors: the map"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'menu' && __fid() === 'map' && 'Esc: back to the menu, the focus on map'",
+  "label": "Esc in map: the menu again, the focus where it was"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "advance": 0.7
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { let n = 0; while (__fid() !== 'saves' && n++ < 8) { const bs = [...document.querySelectorAll('#hud .menu [data-menu]')]; bs[(bs.indexOf(document.activeElement) + 1) % bs.length].focus(); } return 'at ' + __fid(); })()"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "press": "Shift+Tab"
+ },
+ {
+  "expect": "__fid() === 'saves' && 'Tab reaches saves'",
+  "label": "the menu: Tab reaches saves"
+ },
+ {
+  "press": "Enter"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'saves' && __game.ui.parentPanels.join() === 'menu' && 'saves open over the menu'",
+  "label": "the menu: Enter opens saves"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "press": "Shift+Tab"
+ },
+ {
+  "eval": "(() => { const r = __rings(\"#hud .saves\"); return 'the saves: ' + r.n + ' focusable' + (r.bad.length ? ', no ring: ' + r.bad.slice(0, 6).join(' | ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const r = __rings(\"#hud .saves\"); return r.n > 0 && !r.bad.length && 'the saves: ' + r.n + ' focusable elements, each with its focus ring'; })()",
+  "label": "the focus ring: the saves"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .saves\"); return 'saves (another package\\'s screen, for the integrator): ' + f.n + ' texts, ' + f.bad.length + ' under a floor' + (f.bad.length ? ': ' + f.bad.slice(0, 5).join(' | ') : ''); })()"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'menu' && __fid() === 'saves' && 'Esc: back to the menu, the focus on saves'",
+  "label": "Esc in saves: the menu again, the focus where it was"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "advance": 0.7
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { let n = 0; while (__fid() !== 'settings' && n++ < 8) { const bs = [...document.querySelectorAll('#hud .menu [data-menu]')]; bs[(bs.indexOf(document.activeElement) + 1) % bs.length].focus(); } return 'at ' + __fid(); })()"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "press": "Shift+Tab"
+ },
+ {
+  "expect": "__fid() === 'settings' && 'Tab reaches settings'",
+  "label": "the menu: Tab reaches settings"
+ },
+ {
+  "press": "Enter"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'settings' && __game.ui.parentPanels.join() === 'menu' && 'settings open over the menu'",
+  "label": "the menu: Enter opens settings"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "press": "Shift+Tab"
+ },
+ {
+  "eval": "(() => { const r = __rings(\"#hud .settings\"); return 'the settings: ' + r.n + ' focusable' + (r.bad.length ? ', no ring: ' + r.bad.slice(0, 6).join(' | ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const r = __rings(\"#hud .settings\"); return r.n > 0 && !r.bad.length && 'the settings: ' + r.n + ' focusable elements, each with its focus ring'; })()",
+  "label": "the focus ring: the settings"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .settings\"); return 'settings (another package\\'s screen, for the integrator): ' + f.n + ' texts, ' + f.bad.length + ' under a floor' + (f.bad.length ? ': ' + f.bad.slice(0, 5).join(' | ') : ''); })()"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'menu' && __fid() === 'settings' && 'Esc: back to the menu, the focus on settings'",
+  "label": "Esc in settings: the menu again, the focus where it was"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "advance": 0.7
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { let n = 0; while (__fid() !== 'guide' && n++ < 8) { const bs = [...document.querySelectorAll('#hud .menu [data-menu]')]; bs[(bs.indexOf(document.activeElement) + 1) % bs.length].focus(); } return 'at ' + __fid(); })()"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "press": "Shift+Tab"
+ },
+ {
+  "expect": "__fid() === 'guide' && 'Tab reaches guide'",
+  "label": "the menu: Tab reaches guide"
+ },
+ {
+  "press": "Enter"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'guide' && __game.ui.parentPanels.join() === 'menu' && 'guide open over the menu'",
+  "label": "the menu: Enter opens guide"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'menu' && __fid() === 'guide' && 'Esc: back to the menu, the focus on guide'",
+  "label": "Esc in guide: the menu again, the focus where it was"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "__game.setState({ farmer: { x: -40, z: 40.5, yaw: 0 } }), document.activeElement?.blur?.(), 'at the gate, the keyboard only from here'"
+ },
+ {
+  "holdKey": "w",
+  "for": 1.6
+ },
+ {
+  "holdKey": "d",
+  "for": 1.1
+ },
+ {
+  "eval": "'he stands at ' + __game.player.position.x.toFixed(1) + ', ' + __game.player.position.z.toFixed(1) + '; the prompt: ' + __game.ui.promptId"
+ },
+ {
+  "expect": "(() => { const j = __game.level.jobs.byKey('prep-gate@-1'); return j && (j.status === 'done' || j.progress > 0) && 'walked in through the gate dip: ' + j.status + ' ' + (j.progress * 100).toFixed(0) + ' %'; })()",
+  "label": "the gate dip by the walk keys"
+ },
+ {
+  "eval": "window.__before = document.activeElement, 'focus before: ' + __fid()"
+ },
+ {
+  "press": "e"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'sign-gate' && 'E reads the gate sign'",
+  "label": "E opens the gate sign"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden])\"); return 'the gate sign: ' + f.n + ' texts' + (f.bad.length ? ', under a floor: ' + f.bad.slice(0, 6).join(' | ') : ', none under a floor'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden])\"); return f.n > 0 && !f.bad.length && 'the gate sign: ' + f.n + ' texts at or over their floor (11 px caps and sources at 4.5 : 1, 12 px others)'; })()",
+  "label": "the two text floors: the gate sign"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "expect": "__game.ui.openPanelId === null && (document.activeElement === __before || document.activeElement === __game.renderer.domElement) && 'Esc closed it, the focus back on ' + __fid()",
+  "label": "Esc closes the sign, the focus back where it was"
+ },
+ {
+  "advance": 0.8
+ },
+ {
+  "eval": "__game.setState({ farmer: { x: -12, z: -4.4, yaw: 0 } }), 'at the climate controller'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "press": "e"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'controller' && 'the controller'",
+  "label": "E opens the climate controller"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "press": "Shift+Tab"
+ },
+ {
+  "eval": "(() => { const r = __rings(\"#hud .panel:not([hidden])\"); return 'the climate controller: ' + r.n + ' focusable' + (r.bad.length ? ', no ring: ' + r.bad.slice(0, 6).join(' | ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const r = __rings(\"#hud .panel:not([hidden])\"); return r.n > 0 && !r.bad.length && 'the climate controller: ' + r.n + ' focusable elements, each with its focus ring'; })()",
+  "label": "the focus ring: the climate controller"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden])\"); return 'the climate controller: ' + f.n + ' texts' + (f.bad.length ? ', under a floor: ' + f.bad.slice(0, 6).join(' | ') : ', none under a floor'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden])\"); return f.n > 0 && !f.bad.length && 'the climate controller: ' + f.n + ' texts at or over their floor (11 px caps and sources at 4.5 : 1, 12 px others)'; })()",
+  "label": "the two text floors: the climate controller"
+ },
+ {
+  "eval": "window.__sp = __game.env.heaterSetpoint, (() => { const b = [...document.querySelectorAll('#hud .panel:not([hidden]) button')].find((x) => /raise|up|\\+/i.test(x.getAttribute('aria-label') || x.textContent)); b?.focus(); return 'focus on ' + __fid(); })()"
+ },
+ {
+  "press": "Enter"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "'the setpoint ' + __sp + ' -> ' + __game.env.heaterSetpoint"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.8
+ },
+ {
+  "eval": "__game.setState({ farmer: { x: -34.1, z: 27.4, yaw: 0 } }), 'at the office desk'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "press": "e"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'office-desk' && 'the records book'",
+  "label": "E opens the records book"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden])\"); return 'the records book: ' + f.n + ' texts' + (f.bad.length ? ', under a floor: ' + f.bad.slice(0, 6).join(' | ') : ', none under a floor'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden])\"); return f.n > 0 && !f.bad.length && 'the records book: ' + f.n + ' texts at or over their floor (11 px caps and sources at 4.5 : 1, 12 px others)'; })()",
+  "label": "the two text floors: the records book"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "press": "Enter"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'office-desk' && 'used by Tab and Enter (' + __fid() + ')'",
+  "label": "the records book by Tab and Enter"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.8
+ },
+ {
+  "press": "k"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'skilltree' && 'K: the skill tree'",
+  "label": "K opens the skill tree"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden])\"); return 'the skill tree: ' + f.n + ' texts' + (f.bad.length ? ', under a floor: ' + f.bad.slice(0, 6).join(' | ') : ', none under a floor'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden])\"); return f.n > 0 && !f.bad.length && 'the skill tree: ' + f.n + ' texts at or over their floor (11 px caps and sources at 4.5 : 1, 12 px others)'; })()",
+  "label": "the two text floors: the skill tree"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "advance": 0.1
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "__game.ui.openPanelId === null && 'Esc closed the skill tree'",
+  "label": "Esc closes the skill tree"
+ },
+ {
+  "advance": 0.8
+ },
+ {
+  "eval": "__game.level.debug.result(true), 'a result'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden])\"); return 'the result: ' + f.n + ' texts' + (f.bad.length ? ', under a floor: ' + f.bad.slice(0, 6).join(' | ') : ', none under a floor'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden])\"); return f.n > 0 && !f.bad.length && 'the result: ' + f.n + ' texts at or over their floor (11 px caps and sources at 4.5 : 1, 12 px others)'; })()",
+  "label": "the two text floors: the result"
+ },
+ {
+  "eval": "(() => { const b = [...document.querySelectorAll('#hud .result-btns button')].find((x) => /Skill tree/.test(x.textContent)); b.focus(); return 'focus on ' + __fid(); })()"
+ },
+ {
+  "press": "Enter"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'skilltree' && __game.ui.parentPanels.join() === 'result' && 'the skill tree over the result'",
+  "label": "Enter on the result's Skill tree key"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'result' && /Skill tree/.test(__fid()) && 'Esc: the result again, the focus on Skill tree'",
+  "label": "Esc: the result again with the focus where it was"
+ },
+ {
+  "expect": "!!document.querySelector('#hud .result-btns [data-result-key=\"saves\"]') && 'the result has its Save or load key'",
+  "label": "the result's Save or load key"
+ },
+ {
+  "eval": "__game.startLevel({ seed: 1 }), document.activeElement?.blur?.(), window.__nl = __game.level.nextLabel(), 'a new prep day: ' + __nl"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "press": "j"
+ },
+ {
+  "advance": 0.1
+ },
+ {
+  "expect": "__game.level.nextLabel() !== __nl && /Skip to/.test(__game.level.nextLabel()) && 'J pressed Next job: ' + __game.level.nextLabel()",
+  "label": "J: Next job"
+ },
+ {
+  "press": "p"
+ },
+ {
+  "advance": 0.1
+ },
+ {
+  "expect": "__game.level.hudHooks.userPaused && 'P paused the clock'",
+  "label": "P: pause"
+ },
+ {
+  "press": "4"
+ },
+ {
+  "advance": 0.1
+ },
+ {
+  "expect": "__game.level.fast && !__game.level.hudHooks.userPaused && '4: the clock at 4×'",
+  "label": "4: 4×"
+ },
+ {
+  "press": "1"
+ },
+ {
+  "advance": 0.1
+ },
+ {
+  "expect": "!__game.level.fast && '1: the clock at 1×'",
+  "label": "1: 1×"
+ },
+ {
+  "press": "o"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "expect": "__game.ui.openPanelId === 'map' && 'O: the farm map'",
+  "label": "O: the map"
+ },
+ {
+  "press": "Escape"
+ },
+ {
+  "advance": 0.8
+ },
+ {
+  "eval": "document.querySelector('#hud .timebar .seg button:last-child').focus(), 'focus on the 4× key'"
+ },
+ {
+  "press": "Tab"
+ },
+ {
+  "expect": "/Next job|Skip to/.test(document.activeElement?.getAttribute('aria-label') || '') && \"Tab: the time bar's Next job key\"",
+  "label": "Tab reaches the time bar's Next job key"
+ },
+ {
+  "eval": "window.__t0 = __game.env.day, 'Enter on it twice (point, then skip)'"
+ },
+ {
+  "press": "Enter"
+ },
+ {
+  "press": "Enter"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "expect": "__game.env.day > __t0 && 'Enter pressed it: the clock skipped ' + ((__game.env.day - __t0) * 24).toFixed(2) + ' farm hours'",
+  "label": "Enter presses the Next job key"
+ },
+ {
+  "viewport": [
+   390,
+   844
+  ]
+ },
+ {
+  "eval": "sessionStorage.removeItem('chicken-farm.narrow-look'), 'a phone 390 x 844'"
+ },
+ {
+  "reload": true
+ },
+ {
+  "wait": 1500
+ },
+ {
+  "eval": "__game.stop(), 'reloaded'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "(() => { const n = document.querySelector('#hud .narrow'); return !!n && !n.hidden && /keyboard and a mouse/.test(n.textContent) && /look at the farm here/.test(n.textContent) && n.textContent.trim().slice(0, 80); })()",
+  "label": "390 x 844: the phone note shows, its words say what works"
+ },
+ {
+  "expect": "document.scrollingElement.scrollWidth <= innerWidth && 'no sideways scroll: ' + document.scrollingElement.scrollWidth + ' <= ' + innerWidth",
+  "label": "390 x 844: nothing scrolls sideways"
+ },
+ {
+  "expect": "(() => { const bs = [...document.querySelectorAll('#hud .narrow button')]; return bs.length && bs.every((b) => b.getBoundingClientRect().height >= 44) && 'its keys ' + bs.map((b) => Math.round(b.getBoundingClientRect().height)).join(', ') + ' px high'; })()",
+  "label": "390 x 844: the note's keys at least 44 px high"
+ },
+ {
+  "shot": "p5-a11y-phone-390"
+ },
+ {
+  "clickText": "Look anyway",
+  "in": "#hud .narrow"
+ },
+ {
+  "eval": "__game.level.toTitle(), 'the title at phone width'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "(() => { const c = document.querySelector('#hud .title-card').getBoundingClientRect(); return c.width <= innerWidth && document.scrollingElement.scrollWidth <= innerWidth && 'the title card ' + Math.round(c.width) + ' px wide, no sideways scroll'; })()",
+  "label": "390 x 844: the title card fits (one column)"
+ },
+ {
+  "eval": "__game.startLevel({ seed: 1 }), __game.ui.menu.open('hook'), 'the menu at phone width'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "(() => { const m = document.querySelector('#hud .menu').getBoundingClientRect(); return m.width <= innerWidth - 16 && m.left >= 0 && document.scrollingElement.scrollWidth <= innerWidth && 'the menu ' + Math.round(m.width) + ' px wide'; })()",
+  "label": "390 x 844: the menu fits"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.ui.openSettings('time'), 'the settings at phone width'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "(() => { const m = document.querySelector('#hud .settings').getBoundingClientRect(); return m.width <= innerWidth - 16 && m.left >= 0 && document.scrollingElement.scrollWidth <= innerWidth && 'the settings ' + Math.round(m.width) + ' px wide'; })()",
+  "label": "390 x 844: the settings fit"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), 'closed'"
+ },
+ {
+  "viewport": [
+   412,
+   915
+  ]
+ },
+ {
+  "eval": "sessionStorage.removeItem('chicken-farm.narrow-look'), 'a phone 412 x 915'"
+ },
+ {
+  "reload": true
+ },
+ {
+  "wait": 1500
+ },
+ {
+  "eval": "__game.stop(), 'reloaded'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "(() => { const n = document.querySelector('#hud .narrow'); return !!n && !n.hidden && /keyboard and a mouse/.test(n.textContent) && /look at the farm here/.test(n.textContent) && n.textContent.trim().slice(0, 80); })()",
+  "label": "412 x 915: the phone note shows, its words say what works"
+ },
+ {
+  "expect": "document.scrollingElement.scrollWidth <= innerWidth && 'no sideways scroll: ' + document.scrollingElement.scrollWidth + ' <= ' + innerWidth",
+  "label": "412 x 915: nothing scrolls sideways"
+ },
+ {
+  "expect": "(() => { const bs = [...document.querySelectorAll('#hud .narrow button')]; return bs.length && bs.every((b) => b.getBoundingClientRect().height >= 44) && 'its keys ' + bs.map((b) => Math.round(b.getBoundingClientRect().height)).join(', ') + ' px high'; })()",
+  "label": "412 x 915: the note's keys at least 44 px high"
+ },
+ {
+  "shot": "p5-a11y-phone-412"
+ },
+ {
+  "clickText": "Look anyway",
+  "in": "#hud .narrow"
+ },
+ {
+  "eval": "__game.level.toTitle(), 'the title at phone width'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "(() => { const c = document.querySelector('#hud .title-card').getBoundingClientRect(); return c.width <= innerWidth && document.scrollingElement.scrollWidth <= innerWidth && 'the title card ' + Math.round(c.width) + ' px wide, no sideways scroll'; })()",
+  "label": "412 x 915: the title card fits (one column)"
+ },
+ {
+  "eval": "__game.startLevel({ seed: 1 }), __game.ui.menu.open('hook'), 'the menu at phone width'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "(() => { const m = document.querySelector('#hud .menu').getBoundingClientRect(); return m.width <= innerWidth - 16 && m.left >= 0 && document.scrollingElement.scrollWidth <= innerWidth && 'the menu ' + Math.round(m.width) + ' px wide'; })()",
+  "label": "412 x 915: the menu fits"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.ui.openSettings('time'), 'the settings at phone width'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "expect": "(() => { const m = document.querySelector('#hud .settings').getBoundingClientRect(); return m.width <= innerWidth - 16 && m.left >= 0 && document.scrollingElement.scrollWidth <= innerWidth && 'the settings ' + Math.round(m.width) + ' px wide'; })()",
+  "label": "412 x 915: the settings fit"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), 'closed'"
+ },
+ {
+  "viewport": [
+   960,
+   600
+  ]
+ }
+]

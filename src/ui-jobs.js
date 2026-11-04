@@ -5,7 +5,8 @@
 // to go, its fact links and its bar. Footer: Next job, Notebook (N), Skill tree (K).
 // Phase 3 (PHASE3.md §3.2): headers for the planning day, the clean-out and the rest; the facts links read
 // the merged boards of the day; the cycle's spots (SPOTS3, the lame bird, the stopped fan, the next bait
-// station or swab place). Owner: package "run" (Phase 2: "level").
+// station or swab place). Owner: package "experience" (Phase 5: spots() for the farm map, PHASE5.md §8.9; each open job's
+// number on the card, the same number as its marker on the map; the footer keys name the keys as bound now).
 import { CLEAN, DRINKER_LINES_Z, FARM, FLOOR_GRID, HEATERS, HEATER_HEIGHT, LEVEL1, ROUNDS, SPOTS, SPOTS2, SPOTS3, SPOTS4, CONDITIONS, JOB_HOLD, HOUSE_BOUNDS } from './config.js';
 import { BOARDS } from './content-signs.js';
 import { boardsForDay } from './content-signs-cycle.js';
@@ -153,6 +154,8 @@ const BAR_TESTS = ['litter-covered', 'lines-flushed', 'pans-flooded', 'all-place
   'house-near-target', 'rh-under', 'air-clear', 'heat-handled', 'pad-humid-ok', 'night-comfort', 'chick-lights', 'catch-ready', 'vent-in-band', 'flows-in-band',
   // Phase 4
   'feed-withdrawn', 'brood-warmer', 'brood-warmer-held', 'power-on'];
+/** The open jobs in the card's order (pinned, problems, before the truck, the rest): their numbers 1, 2, 3 … */
+const cardOrder = (eng) => { const g = eng.groups ? eng.groups() : null; return g ? [...g.pinned, ...g.problems, ...g.preTruck, ...g.rest] : (eng.open?.() || []); };
 const hasBar = (inst) => { const t = inst.def.done.type; return t === 'each' || t === 'count' || t === 'coverage' || t === 'all' || t === 'any' || (t === 'state' && BAR_TESTS.includes(inst.def.done.test)); };
 
 export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook, onSkills, nextLabel }) {
@@ -169,6 +172,14 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
   const nextBtn = button({ class: 'btn btn--accent ljobs-next' }, h('span', { html: ICONS.next, 'aria-hidden': 'true' }), h('span'));
   const nbBtn = button({ class: 'btn btn--icon', title: 'Notebook (N)', 'aria-label': 'Notebook (N)', html: ICONS.notebook });
   const skBtn = button({ class: 'btn btn--icon ljobs-sk', title: 'Skill tree (K)', 'aria-label': 'Skill tree (K)', html: ICONS.tree });
+  const keyOf = (id, d) => { try { return ctx.keys?.label?.(id) || d; } catch { return d; } };
+  function keyTitles() {
+    const n = keyOf('notebook', 'N'), k = keyOf('skills', 'K');
+    nbBtn.title = `Notebook (${n})`; nbBtn.setAttribute('aria-label', `Notebook (${n})`);
+    skBtn.title = `Skill tree (${k})`; skBtn.setAttribute('aria-label', `Skill tree (${k})`);
+    nextBtn.setAttribute('aria-keyshortcuts', keyOf('nextJob', 'J'));
+  }
+  keyTitles();
   const dot = h('span', { class: 'dot', hidden: true, 'aria-hidden': 'true' });
   skBtn.append(dot);
   nextBtn.addEventListener('click', onNext);
@@ -298,6 +309,8 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     sig = key;
     items = new Map(); soonEls = new Map();
     const sections = [];
+    // Phase 5: each open job's number (its marker's number on the farm map: spots())
+    const numOf = new Map(eng.open ? cardOrder(eng).map((i, k) => [i.key, k + 1]) : []);
     const add = (inst, cls = '') => {
       const isCur = cur && inst.key === cur.key;
       let extra = null;
@@ -315,6 +328,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
       const it = itemEl(inst, `${cls}${isCur ? ' is-current' : ''}${inst.def.pin ? ' is-pin' : ''}`, extra);
       it.mark.innerHTML = inst.def.kind === 'problem' ? ICONS.eye : inst.def.pin ? ICONS.pin : '';
       if (inst.def.kind === 'problem') it.body.firstChild.prepend(h('span', { class: 'chip-new' }, 'new'));
+      if (numOf.has(inst.key)) it.body.firstChild.prepend(h('span', { class: 'job-n', title: `Job ${numOf.get(inst.key)}: its marker on the farm map` }, String(numOf.get(inst.key))));
       if (isCur) it.li.setAttribute('aria-current', 'step');
       return it.li;
     };
@@ -392,9 +406,33 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
       if (chip) { chip.classList.remove('is-cue'); void chip.offsetWidth; chip.classList.add('is-cue'); }
     }
   });
+  /** PHASE5.md §8.9: the open jobs' places for the farm map, the current job first: [{ key, n, title, x, z, inside,
+   *  current, name? }] (n: its number on the card; a job of several places gives each unfinished place; the marker's
+   *  own spotFor otherwise, the job's own place, never a fact board the farmer asked to be pointed to). */
+  function spots() {
+    const eng = L.engine();
+    if (!eng) return [];
+    const p = ctx.player?.position || { x: 0, z: 0 };
+    const cur = eng.current?.() || null, c = cardCtx(), out = [];
+    cardOrder(eng).forEach((inst, k) => {
+      const base = { key: inst.key, n: k + 1, title: inst.def.title, current: !!cur && cur.key === inst.key };
+      let places = null;
+      try { places = jobPlaces(inst, c); } catch { places = null; }
+      if (Array.isArray(places) && places.length) {
+        for (const pl of places) if (Number.isFinite(pl.at?.x)) out.push({ ...base, x: pl.at.x, z: pl.at.z, inside: pl.at.inside != null ? !!pl.at.inside : inHouseXZ(pl.at.x, pl.at.z), name: pl.name || null });
+        return;
+      }
+      let s = null;
+      try { s = spotFor(inst, p, true); } catch { s = null; }
+      if (s && Number.isFinite(s.x) && Number.isFinite(s.z)) out.push({ ...base, x: s.x, z: s.z, inside: inHouseXZ(s.x, s.z), name: null });
+    });
+    return out.sort((a, b) => (b.current - a.current) || a.n - b.n);
+  }
   let acc = 0;
   return {
     el: card,
+    spots,
+    keyTitles,
     /** The job marker's edge pointer (PHASE4.md §15.4). */
     get pointerEl() { return marker.pointer; },
     /** PHASE4.md §15.2: the farmer stands at this open job's place. */

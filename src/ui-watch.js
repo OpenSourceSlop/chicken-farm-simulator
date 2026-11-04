@@ -5,6 +5,9 @@
 // Review round: ui.js places it under the real bottom of the clock and gauge row (and the alarm banner) with setTop; on
 // screens up to 1100 px wide it is a compact strip of the four dots while every row is steady and no warning is new (it
 // opens by itself on an amber or red row, and on a click); the warning starts with where to look.
+// Phase 5 (package experience, PHASE5.md §4.1, §6.8.3): interface.watch shown / folded (the dots only, open on a click) /
+// hidden (no card: the warnings still come as captions and notebook lines); the warning is shown whole: when the card
+// would reach the time bar, fit() gives its box the room left and it scrolls inside, with a fade and "more below".
 import { h, button, setText, store } from './ui-dom.js';
 import { WATCH_STATES } from './flock-watch.js';
 
@@ -39,27 +42,52 @@ export function createWatchCard(root, ctx) {
     ROWS.map((id) => h('span', { class: 'fw-mini-i', 'data-row': id }, h('span', { class: 'fw-dot', role: 'img' }), LABEL[id])));
   const miniDots = [...mini.querySelectorAll('.fw-dot')], miniItems = [...mini.querySelectorAll('.fw-mini-i')];
   const warnWhere = h('b', { class: 'fw-warn-where' }), warnWhat = h('span');
-  const warn = h('p', { class: 'fw-warn', hidden: true }, h('span', { class: 'fw-warn-in' }, warnWhere, ' ', warnWhat));
+  const warn = h('p', { class: 'fw-warn', hidden: true, tabindex: '-1' }, h('span', { class: 'fw-warn-in' }, warnWhere, ' ', warnWhat));
+  const more = button({ class: 'fw-more', hidden: true, 'aria-label': 'Show more of the warning' }, 'more below ▾');
+  more.addEventListener('click', () => warn.scrollBy({ top: Math.max(24, warn.clientHeight * 0.7), behavior: 'smooth' }));
+  const syncMore = () => { const m = warn.scrollHeight - warn.clientHeight > 1 && warn.scrollTop + warn.clientHeight < warn.scrollHeight - 1; if (more.hidden === m) more.hidden = !m; warn.classList.toggle('is-more', m); };
+  warn.addEventListener('scroll', syncMore);
   const card = h('section', { class: 'card fw', hidden: true, 'aria-label': 'Flock watch' },
-    h('header', { class: 'fw-head' }, title, sub, fold), list, mini, warn);
+    h('header', { class: 'fw-head' }, title, sub, fold), list, mini, warn, more);
   root.appendChild(card);
   let folded = store.get?.(FOLD_KEY) === '1';
   let opened = false;      // narrow screens: the farmer opened the compact strip (until he folds it again)
   const setFold = (f) => { folded = f; card.classList.toggle('is-folded', f); setText(fold, f ? '+' : '–'); fold.setAttribute('aria-expanded', f ? 'false' : 'true'); store.set?.(FOLD_KEY, f ? '1' : '0'); };
   // narrow screens, every row steady: the fold key goes back to the compact strip; otherwise it folds the details
-  fold.addEventListener('click', () => { if (narrowNow() && opened && lastCalm) { opened = false; acc = 0; return; } setFold(!folded); });
+  fold.addEventListener('click', () => { if (opened && ((narrowNow() && lastCalm) || pref() === 'folded')) { opened = false; acc = 0; return; } setFold(!folded); });
   mini.addEventListener('click', () => { opened = true; acc = 0; });
   setFold(folded);
-  let acc = 0, lastWarn = '', lastTop = null, lastCalm = true;
+  let acc = 0, lastWarn = '', lastTop = null, lastCalm = true, tightKey = '';
+  const pref = () => { try { return ctx.settings?.get?.('interface.watch') || 'shown'; } catch { return 'shown'; } };
+  // a change in the settings shows at once (the next update draws it; the folded strip starts closed)
+  try { ctx.settings?.subscribe?.((c) => { if (c.key === 'watch') { opened = false; acc = 0; } }, 'interface'); } catch { /* no store */ }
+  /** The room the warning box has (PHASE5.md §6.8.3): the card's bottom stays 12 px over the time bar's top. */
+  function fit(limitY) {
+    if (card.hidden || warn.hidden || !Number.isFinite(limitY)) { if (warn.style.maxHeight) warn.style.maxHeight = ''; syncMore(); return; }
+    // measured without clearing the box (its scroll position stays): the room from the box's top to 12 px over the time bar
+    const r = card.getBoundingClientRect(), wr = warn.getBoundingClientRect(), s = r.width / Math.max(1, card.offsetWidth) || 1;
+    const moreH = more.hidden ? 0 : more.getBoundingClientRect().height + 3 * s;
+    const below = r.bottom - wr.bottom - moreH, room = (limitY - 12) - wr.top - below;
+    // too little room for three lines of the warning (a large HUD on a 600 px screen): the rows keep their values and drop
+    // their detail lines while this warning shows, so the warning keeps its room (the card never reaches the time bar)
+    const key = `${lastWarn.length}|${Math.round(limitY)}|${Math.round(r.width)}`;
+    if (key !== tightKey) { tightKey = key; if (card.classList.contains('is-tight')) { card.classList.remove('is-tight'); fit(limitY); return; } }
+    if (!card.classList.contains('is-tight') && warn.scrollHeight * s > room + 0.5 && room - 18 * s < 58 * s) { card.classList.add('is-tight'); fit(limitY); return; }
+    const want = warn.scrollHeight * s <= room + 0.5 ? '' : `${Math.max(36, Math.floor((room - 18 * s) / s))}px`;
+    if (warn.style.maxHeight !== want) warn.style.maxHeight = want;
+    syncMore();
+  }
 
   return {
     el: card,
     /** The card's top in px inside the HUD (ui.js: under the clock and gauge row and the alarm banner). */
     setTop(px) { if (px !== lastTop && Number.isFinite(px)) { lastTop = px; card.style.top = `${px}px`; } },
+    fit,
     update(dt, on) {
       if ((acc -= dt) > 0) return;
       acc = 0.5;
-      const st = on ? ctx.level?.watch?.status?.() : null;
+      const mode = pref();
+      const st = on && mode !== 'hidden' ? ctx.level?.watch?.status?.() : null;
       const show = !!(st && st.on);
       if (card.hidden === show) card.hidden = !show;
       if (!show) return;
@@ -83,9 +111,10 @@ export function createWatchCard(root, ctx) {
       // the last warning while it is less than 12 farm hours old: where to look first, then what happened
       const w = st.last, env = ctx.env;
       const text = w && env && env.day - w.t < 0.5 ? w.text : '';
-      if (text !== lastWarn) { lastWarn = text; const p = splitWarning(text); setText(warnWhere, p.where); setText(warnWhat, p.what); warn.hidden = !text; warn.title = text; }
+      if (text !== lastWarn) { lastWarn = text; const p = splitWarning(text); setText(warnWhere, p.where); setText(warnWhat, p.what); warn.hidden = !text; warn.scrollTop = 0; warn.removeAttribute('title'); }
       lastCalm = calm && !text;
-      const compact = narrowNow() && !opened && lastCalm;
+      // folded (the settings): the dots only until he opens it; narrow screens: the dots while every row is steady
+      const compact = mode === 'folded' ? !opened : narrowNow() && !opened && lastCalm;
       card.classList.toggle('is-compact', compact);
     },
     hide() { card.hidden = true; },

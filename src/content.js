@@ -77,6 +77,8 @@ export const LEVEL_TEXT = {
   skills: 'Skill tree',
   noSave: 'Saving is off in this browser: replays start from a standard flock, and closing the page ends the run.',
   saveNote: 'The game saves by itself as you play, and keeps the start of every level for a replay.',
+  // Phase 5 (PHASE5.md §6.1): the first-run line (no save, no settings stored)
+  firstRun: 'New here? Start a new flock: the first morning points out the job card, the signs and the clock.',
 };
 
 /** HUD day label (PHASE3.md §2.3): "Planning day", "Prep day", "Day N", "Day 42 · the catch", "Clean-out
@@ -134,11 +136,13 @@ export const HARDER = {
   water: { line: 'Iron in the well water and an old pump.' },
 };
 
-// Keys of a level (title card and the help card). Physical keys, as in Phase 1.
+// Keys of a level (title card and the help card). Physical keys, as in Phase 1. Phase 5: `id` is the keys.js action, so
+// the title card shows each key as bound now (`key` is the default's label)
 export const LEVEL_KEYS = [
-  { key: 'E', what: 'use' }, { key: 'Q', what: 'squeeze litter' }, { key: 'T', what: 'floor thermometer' },
-  { key: 'L', what: 'light meter' }, { key: 'V', what: 'air meter' },
-  { key: 'N', what: 'notebook' }, { key: 'K', what: 'skill tree' }, { key: 'H', what: 'help' },
+  { id: 'use', key: 'E', what: 'use' }, { id: 'squeeze', key: 'Q', what: 'squeeze litter' }, { id: 'probe', key: 'T', what: 'floor thermometer' },
+  { id: 'lux', key: 'L', what: 'light meter' }, { id: 'air', key: 'V', what: 'air meter' },
+  { id: 'notebook', key: 'N', what: 'notebook' }, { id: 'skills', key: 'K', what: 'skill tree' }, { id: 'map', key: 'O', what: 'farm map' },
+  { id: 'help', key: 'H', what: 'help' },
 ];
 export const LEVEL_HELP_KEYS = [
   { keys: ['W', 'A', 'S', 'D'], what: 'Walk, or click the ground' },

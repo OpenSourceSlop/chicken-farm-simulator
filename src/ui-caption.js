@@ -3,7 +3,8 @@
 // Owner: package "level".
 import { h, setText, reducedMotion } from './ui-dom.js';
 
-export function createCaption(root) {
+// timeScale(): interface.captionTime (Phase 5): every caption stays its seconds x this
+export function createCaption(root, { timeScale = () => 1 } = {}) {
   const text = h('p', { class: 'caption-text' });
   const el = h('div', { class: 'caption', hidden: true, role: 'status', 'aria-live': 'polite' }, text);
   root.appendChild(el);
@@ -13,18 +14,21 @@ export function createCaption(root) {
   // ifFree: only when no caption shows (the closes-soon cue: it never pushes another caption back)
   // soft: any later caption replaces it at once (the closes-soon cue, the flock watch's warning: the card and the
   //   notebook keep it), so the farmer's own feedback is never held back behind it
-  let soft = false;
+  let soft = false, shownFor = 0;
   function show(msg, seconds = 4.5, { now = false, ifFree = false, soft: isSoft = false } = {}) {
     if (!msg) return;
     if (ifFree && (!el.hidden || queue.length)) return;
     if (!now && !soft && !el.hidden && left > 1.2) { queue.push([msg, seconds, isSoft || ifFree]); if (queue.length > 3) queue.shift(); return; }
     soft = !!(ifFree || isSoft);
-    setText(text, msg); el.hidden = false; left = seconds;
+    let k = 1; try { k = Math.max(0.5, Math.min(3, Number(timeScale()) || 1)); } catch { k = 1; }
+    setText(text, msg); el.hidden = false; left = seconds * k; shownFor = left;
     el.classList.remove('is-in'); void el.offsetWidth; if (!reducedMotion()) el.classList.add('is-in');
   }
   return {
     show,
     clear() { queue.length = 0; left = 0; el.hidden = true; },
+    /** The caption showing now and its whole time in seconds (the harness: interface.captionTime). */
+    get now() { return el.hidden ? null : { text: text.textContent, seconds: shownFor, left }; },
     update(dt) {
       if (el.hidden) return;
       left -= dt;

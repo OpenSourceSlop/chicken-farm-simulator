@@ -58,13 +58,16 @@ import { registerSavesPanel } from './ui-saves.js';
 import { createMap } from './ui-map.js';
 import { createIntro } from './ui-intro.js';
 import { clock as stepClock } from './clock.js';
+import { createKeys } from './keys.js';
 
 const MOVE_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
 const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift']);
 const ARROW_KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
-const isKeyE = (e, k) => e.code === 'KeyE' || k === 'e';
-const isKeyHelp = (e, k) => e.code === 'KeyH' || k === 'h' || k === '?' || (e.code === 'Slash' && e.shiftKey);
-const isCode = (e, k, code, letter) => e.code === code || (!e.code && k === letter);
+// Phase 5 (PHASE5.md §4.3): every key check through keys.js (a rebound key works here at once); the walk keys as bound now
+const MOVE_IDS = ['forward', 'back', 'left', 'right', 'run', 'turnLeft', 'turnRight'];
+// the level's own keys, each to its action (the views and meters come with the level, PHASE3.md §13.6); the bucket's key
+// ('bucket', KeyG by default: PHASE4.md §15.3) is acted on here only, as every other farm key
+const LEVEL_IDS = ['squeeze', 'probe', 'notebook', 'skills', 'floorView', 'lux', 'air', 'comfortView', 'moistureView'];
 const P1_IDS = new Set(['sign-gate', 'controller', 'sign-brooder']); // what E reaches in the sandbox
 const TWO_HANDS_PANELS = new Set(['chick-table', 'chick-grading']);    // PHASE4.md §15.3 (c): panels that handle chicks
 const clockText = (t) => { const m = Math.round((((t % 1) + 1) % 1) * 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
@@ -78,6 +81,11 @@ export function createUI(ctx, deps) {
   const root = document.getElementById('hud');
   root.textContent = '';
   let mode = 'sandbox';
+  // the key table (main.js makes it from the settings; a page without one gets the defaults) and the settings
+  const K = ctx.keys || createKeys(null);
+  const is = (e, id) => { try { return K.matches(e, id); } catch { return false; } };
+  const keyWord = (id, d) => { try { return K.label(id) || d; } catch { return d; } };
+  const setting = (path, d) => { try { const v = ctx.settings?.get?.(path); return v == null ? d : v; } catch { return d; } };
 
   // top left: farm clock and gauges
   const hud = createHud(root, env);
@@ -94,8 +102,10 @@ export function createUI(ctx, deps) {
   const p1Pointer = root.querySelector('.edge-pointer');
 
   // bottom left: controls legend and time controls (one legend per mode)
-  const help = createHelp();
-  const lhelp = createHelp(LEVEL_HELP_KEYS, 'chicken-farm.level-help-dismissed');
+  // the legends' rows come from keys.js (PHASE5.md §4.3): a rebound key shows at once; interface.helpLegend says when
+  // they open by themselves (ui-help.js)
+  const help = createHelp({ keys: K, mode: 'sandbox', settings: ctx.settings });
+  const lhelp = createHelp({ keys: K, mode: 'level', seenKey: 'chicken-farm.level-help-dismissed', settings: ctx.settings, fallback: LEVEL_HELP_KEYS });
   lhelp.toggleBtn.hidden = true; lhelp.hide();
   const nextBar = button({ class: 'btn', title: 'Next job', 'aria-label': 'Next job' });
   nextBar.innerHTML = `${ICONS.next}<span>Next job</span>`; // icon outside a span: narrow screens hide the text spans
@@ -127,7 +137,7 @@ export function createUI(ctx, deps) {
   window.addEventListener('resize', fitTools);
 
   // bottom centre: "E  Read the ..." and the panels
-  const prompt = createPrompt(root, (id, target) => useTarget(target || { id }));
+  const prompt = createPrompt(root, (id, target) => useTarget(target || { id }), { useKey: () => keyWord('use', 'E') });
   const panels = createPanelHost(root, {
     player,
     canvas,
@@ -171,7 +181,8 @@ export function createUI(ctx, deps) {
   // top right in a level: the job card; captions and the floating reading
   const trL = h('div', { class: 'hud-tr hud-tr--level', hidden: true });
   root.appendChild(trL);
-  const caption = createCaption(root);
+  // every caption's seconds x interface.captionTime (PHASE5.md §4.1)
+  const caption = createCaption(root, { timeScale: () => parseFloat(setting('interface.captionTime', '1')) || 1 });
   // floor thermometer view (F, unlock floorOverlay): its °C legend, the same ramp props paints
   const rampCss = FLOOR_TEMP_RAMP.map(([t, c]) => `rgb(${c.map((v) => Math.round(v * 255)).join(' ')}) ${(((t - 24) / 12) * 100).toFixed(0)}%`).join(', ');
   const floorLegend = h('div', { class: 'floor-legend', hidden: true, role: 'img', 'aria-label': 'Floor thermometer view: litter surface temperature, blue 24 °C to orange 36 °C' },
@@ -419,6 +430,9 @@ export function createUI(ctx, deps) {
     saveInfo: () => (ctx.saves ? ctx.saves.latestInfo() : ctx.run ? ctx.run.info() : deps.save?.info?.() ?? null),
     saveAvailable: () => (ctx.run ? !!ctx.run.available : !!deps.save?.available),
     run: () => ctx.run ?? null,
+    keys: K,
+    // the first-run line (PHASE5.md §6.1): only while no settings were ever stored in this browser
+    settingsStored: () => { try { return !!ctx.settings?.stored; } catch { return true; } },
   });
   const jobCard = createJobCard(trL, ctx, L, {
     root, avoid,
@@ -440,26 +454,37 @@ export function createUI(ctx, deps) {
 
   // ---- Phase 5 (PHASE5.md §4-§6): the game menu, settings, the guide, the saves, the farm map, the introduction ----
   const reg = (id, build, opts) => panels.register(id, build, opts);
-  const menu = createGameMenu({ register: reg, openPanel, closePanel, events, mode: () => mode, keys: ctx.keys, isOpen: () => panels.openId === 'menu' });
+  const menu = createGameMenu({ register: reg, openPanel, closePanel, events, mode: () => mode, keys: K, isOpen: () => panels.openId === 'menu',
+    where: () => (mode === 'level' || mode === 'result' ? [ctx.level?.hudHooks?.dayText?.(), env.timeLabel, ctx.level?.def?.title, L.conditionName()].filter(Boolean).join(' · ') : mode === 'sandbox' ? 'The Phase 1 farm (sandbox)' : '') });
   const p5 = { register: reg, openPanel, closePanel, ctx, menu, title };
   let settingsUI = null, guideUI = null, map = null;
   try { settingsUI = registerSettingsPanel(p5); } catch (err) { console.error('settings panel failed to register', err); }
   try { guideUI = registerGuidePanel(p5); } catch (err) { console.error('guide panel failed to register', err); }
   try { registerSavesPanel(p5); } catch (err) { console.error('saves panel failed to register', err); }
-  try { map = createMap(ctx, { register: reg, openPanel, closePanel }); } catch (err) { console.error('map failed', err); }
-  const intro = createIntro(ctx, { root });
+  try { map = createMap(ctx, { register: reg, openPanel, closePanel, jobCard }); } catch (err) { console.error('map failed', err); }
+  // the first-play pointers (PHASE5.md §6.1): their keys through claimKeys; they wait while a panel, the title or the busy card shows
+  const intro = createIntro(ctx, { root, claimKeys: (fn) => claimKeys(fn), busy: () => busy.open || title.open || narrow.open, mode: () => mode });
   menu.add({ id: 'resume', label: 'Back to the farm', icon: 'play', hint: 'menu', order: 0, onSelect: () => {} });
   menu.add({ id: 'map', label: 'Farm map', icon: 'map', hint: 'map', order: 20, onSelect: (via) => map?.open(via) });
   menu.add({ id: 'title', label: 'Back to the title card', icon: 'outside', order: 90, visible: (m) => m === 'level' || m === 'result', onSelect: () => ctx.level?.toTitle() });
   // the time bar: the farm map and the settings gear (the speaker key of audio-ui.js mounts after them)
-  const keyWord = (id, d) => { try { return ctx.keys?.label(id) || d; } catch { return d; } };
-  const mapBtn = button({ class: 'btn btn--icon', title: `Farm map (${keyWord('map', 'O')})`, 'aria-label': `Open the farm map (${keyWord('map', 'O')})` });
+  const mapBtn = button({ class: 'btn btn--icon' });
   mapBtn.innerHTML = ICONS.map;
+  // the time bar's keys name their keys as bound now (a rebind redraws them)
+  const keyTitles = () => {
+    mapBtn.title = `Farm map (${keyWord('map', 'O')})`; mapBtn.setAttribute('aria-label', `Open the farm map (${keyWord('map', 'O')})`);
+    nextBar.setAttribute('aria-keyshortcuts', keyWord('nextJob', 'J'));
+    jobCard.keyTitles?.();
+  };
   mapBtn.addEventListener('click', () => map?.open());
   const gearBtn = button({ class: 'btn btn--icon', title: 'Menu and settings (Esc)', 'aria-label': 'Open the menu: saves, settings and how to play (Esc)' });
   gearBtn.innerHTML = ICONS.gear;
   gearBtn.addEventListener('click', () => menu.open('gear'));
   hud.timebar.append(mapBtn, gearBtn);
+  keyTitles();
+  K.subscribe?.(() => keyTitles());
+  // the legends' "Full guide" key (PHASE5.md §6.2: the guide of package settings, on its controls section)
+  for (const lg of [help, lhelp]) lg.onGuide(() => { if (guideUI) guideUI.open('controls'); });
   // Esc with no panel open opens the menu in a level, but never on the press that closed a panel or the legend, nor within
   // ESC_GUARD_MS of a panel closing (an earlier steps file's Escape after a panel that closed itself stays harmless)
   const ESC_GUARD_MS = 600;
@@ -519,9 +544,9 @@ export function createUI(ctx, deps) {
     const out = [];
     if (chickJob()) {
       const d = deadTarget();
-      if (d) out.push({ key: 'Shift+E', text: d.id === 'bucket' ? 'Pick up the bucket' : 'Pick up the dead bird', act: () => useTarget(d) });
+      if (d) out.push({ key: `Shift+${keyWord('use', 'E')}`, text: d.id === 'bucket' ? 'Pick up the bucket' : 'Pick up the dead bird', act: () => useTarget(d) });
     }
-    if (props?.carrying === 'bucket') out.push({ key: 'G', text: 'Set the bucket down', act: () => setBucketDown() });
+    if (props?.carrying === 'bucket') out.push({ key: keyWord('bucket', 'G'), text: 'Set the bucket down', act: () => setBucketDown() });
     return out;
   }
   function setBucketDown() {
@@ -608,24 +633,25 @@ export function createUI(ctx, deps) {
       let used = false;
       try { used = panels.openPanel?.onKey?.(e) === true; } catch (err) { console.error('panel key failed', err); }
       if (used) { e.stopImmediatePropagation(); return; }
-      if (MOVE_CODES.has(e.code) || MOVE_KEYS.has(k)) e.stopImmediatePropagation(); // typed WASD must not walk the farmer
+      // typed walk keys must not walk the farmer (the defaults and the keys as bound now)
+      if (MOVE_CODES.has(e.code) || MOVE_KEYS.has(k) || K.actionOf(e, MOVE_IDS)) e.stopImmediatePropagation();
       if (k === 'escape') { e.preventDefault(); if (panels.openId !== 'result') panels.close(); }
-      else if (isKeyE(e, k) && !e.repeat && !typingInControl(e.target) && panels.openId !== 'result') { e.preventDefault(); panels.close(); }
-      else if (mode === 'level' && !e.repeat && isCode(e, k, 'KeyN', 'n') && panels.openId === 'notebook') { e.preventDefault(); panels.close(); }
-      else if (mode !== 'sandbox' && !e.repeat && isCode(e, k, 'KeyK', 'k') && panels.openId === 'skilltree') { e.preventDefault(); panels.close(); }
+      else if ((is(e, 'use') || is(e, 'useDead')) && !e.repeat && !typingInControl(e.target) && panels.openId !== 'result') { e.preventDefault(); panels.close(); }
+      else if (mode === 'level' && !e.repeat && is(e, 'notebook') && panels.openId === 'notebook') { e.preventDefault(); panels.close(); }
+      else if (mode !== 'sandbox' && !e.repeat && is(e, 'skills') && panels.openId === 'skilltree') { e.preventDefault(); panels.close(); }
       return;
     }
     if (title.open) return;
     if (inFormControl(e.target) && (ARROW_KEYS.has(k) || (e.code || '').startsWith('Arrow'))) { e.stopImmediatePropagation(); return; }
     if (typingInControl(e.target)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (isKeyE(e, k) && !e.repeat) {
+    if ((is(e, 'use') || is(e, 'useDead')) && !e.repeat) {
       // Shift+E in a level: the dead bird (or the bucket) when a chick job keeps them off E
-      const target = e.shiftKey && mode === 'level' && chickJob() ? deadTarget() : nearestTarget();
+      const target = is(e, 'useDead') && mode === 'level' && chickJob() ? deadTarget() : nearestTarget();
       if (target) { e.preventDefault(); useTarget(target); }
-    } else if (mode === 'level' && !e.repeat && isCode(e, k, 'KeyG', 'g')) {
+    } else if (mode === 'level' && !e.repeat && is(e, 'bucket')) {
       e.preventDefault(); setBucketDown();
-    } else if (isKeyHelp(e, k) && !e.repeat) {
+    } else if (is(e, 'help') && !e.repeat) {
       helpAuto = false;
       (mode === 'sandbox' ? help : lhelp).toggle();
     } else if (k === 'escape' && (mode === 'sandbox' ? help : lhelp).visible) {
@@ -638,15 +664,18 @@ export function createUI(ctx, deps) {
     } else if (!e.repeat && (mode === 'level' || mode === 'sandbox') && ctx.keys?.actionOf(e, ['pause', 'speed1', 'speed4', 'nextJob'])) {
       e.preventDefault(); timeKey(ctx.keys.actionOf(e, ['pause', 'speed1', 'speed4', 'nextJob']));
     } else if (mode === 'level' && !e.repeat) {
-      if (isCode(e, k, 'KeyQ', 'q')) { e.preventDefault(); squeeze(); }
-      else if (isCode(e, k, 'KeyT', 't')) { e.preventDefault(); probe(); }
-      else if (isCode(e, k, 'KeyN', 'n')) { e.preventDefault(); openPanel('notebook'); }
-      else if (isCode(e, k, 'KeyK', 'k')) { e.preventDefault(); openPanel('skilltree'); }
-      else if (isCode(e, k, 'KeyF', 'f') && skills?.unlocked?.('floorOverlay')) { e.preventDefault(); const on = !props.overlay?.floorTemp; if (on && props.overlay?.moisture) props.setOverlay?.('moisture', false); props?.setOverlay?.('floorTemp', on); }
-      else if (isCode(e, k, 'KeyL', 'l')) { e.preventDefault(); luxMeter(); }
-      else if (isCode(e, k, 'KeyV', 'v')) { e.preventDefault(); airMeter(); }
-      else if (isCode(e, k, 'KeyC', 'c')) { e.preventDefault(); toggleView('comfort'); }
-      else if (isCode(e, k, 'KeyM', 'm')) { e.preventDefault(); toggleView('moisture'); }
+      switch (K.actionOf(e, LEVEL_IDS)) {
+        case 'squeeze': e.preventDefault(); squeeze(); break;
+        case 'probe': e.preventDefault(); probe(); break;
+        case 'notebook': e.preventDefault(); openPanel('notebook'); break;
+        case 'skills': e.preventDefault(); openPanel('skilltree'); break;
+        case 'floorView': if (skills?.unlocked?.('floorOverlay')) { e.preventDefault(); const on = !props.overlay?.floorTemp; if (on && props.overlay?.moisture) props.setOverlay?.('moisture', false); props?.setOverlay?.('floorTemp', on); } break;
+        case 'lux': e.preventDefault(); luxMeter(); break;
+        case 'air': e.preventDefault(); airMeter(); break;
+        case 'comfortView': e.preventDefault(); toggleView('comfort'); break;
+        case 'moistureView': e.preventDefault(); toggleView('moisture'); break;
+        default: break;
+      }
     }
   }, true);
 
@@ -670,6 +699,9 @@ export function createUI(ctx, deps) {
     if (m !== 'level' && m !== 'result') jobCard.hide();
     if (m !== 'level') { alarm.hidden = true; alarmT = 0; }
     if (m === 'sandbox') tasks.reset();
+    // Phase 5 (interface.helpLegend 'always'): the legend at each level start (and each visit to the sandbox)
+    if (m === 'level' && was !== 'level') lhelp.showAuto();
+    if (m === 'sandbox' && was !== 'sandbox') help.showAuto();
   }
   /** A new run of the level (start, replay, continue): no panel, chart, reading or sample of the
    *  run before carries over (level.start / level.resume call it). */
@@ -682,6 +714,7 @@ export function createUI(ctx, deps) {
     if (views.comfort) { views.comfort = false; flock?.setOverlay?.('comfort', false); }
     mm.min = mm.max = null; hist.length = 0; histAcc = 0; lastFlows.length = 0; weigh = { day: null, list: [] };
     alarmMsg = ''; alarmT = 0; alarm.hidden = true;
+    lhelp.showAuto();   // interface.helpLegend 'always': at each level start (a start over a running level too)
   }
 
   let hudAcc = 0, fitAcc = 0;
@@ -695,8 +728,23 @@ export function createUI(ctx, deps) {
     if (window.innerWidth < 700) alarm.style.top = '';
     else if (!alarm.hidden) { alarm.style.top = `${Math.round(y + 8)}px`; y = alarm.getBoundingClientRect().bottom - top; }
     watchCard.setTop(Math.round(y + 8));
+    // PHASE5.md §6.8.3: the whole warning; the card's box scrolls inside when it would reach the time bar
+    watchCard.fit?.(bl.getBoundingClientRect().top);
   }
-  return {
+  // Phase 5 (interface.hudScale, PHASE5.md §4.1): the HUD cards scale from their corners (panels keep their size); under
+  // 1100 px wide at most 1.15. The default (1) adds no transform at all: the Phase 4 HUD exactly
+  function applyHudScale() {
+    const want = parseFloat(setting('interface.hudScale', '1')) || 1;
+    const s = window.innerWidth < 700 ? 1 : window.innerWidth < 1100 ? Math.min(1.15, want) : want;
+    root.style.setProperty('--hud-scale', String(s));
+    root.classList.toggle('is-scaled', s !== 1);
+    hudScaleNow = s;
+  }
+  let hudScaleNow = 1;
+  applyHudScale();
+  window.addEventListener('resize', applyHudScale);
+  try { ctx.settings?.subscribe?.((c) => { if (c.key === 'hudScale') { applyHudScale(); hudAcc = 0; } }, 'interface'); } catch { /* no store */ }
+  const api = {
     update(dt) {
       rt += dt;
       hudAcc -= dt;
@@ -750,6 +798,10 @@ export function createUI(ctx, deps) {
     get panelKind() { return title.open || intro.active ? 'paused' : panels.openKind; },
     get taskIndex() { return tasks.index; },
     get mode() { return mode; },
+    /** The HUD size in use (interface.hudScale, at most 1.15 under 1100 px wide). */
+    get hudScale() { return hudScaleNow; },
+    /** The caption showing now: { text, seconds (its whole time), left } or null (the harness). */
+    get captionNow() { return caption.now; },
     setMode,
     newRun,
     showResult(res) { if (openPanel('result')) panels.openPanel?.show?.(res); },
@@ -786,4 +838,8 @@ export function createUI(ctx, deps) {
     reset,
     L,
   };
+  // Phase 5 (PHASE5.md §8.9): the other packages reach the hubs as ctx.ui (ctx.ui.openSettings, captureNextKey, openSaves,
+  // intro.reset …); main.js keeps its own reference too
+  ctx.ui = api;
+  return api;
 }

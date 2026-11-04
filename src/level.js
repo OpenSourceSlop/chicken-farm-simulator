@@ -119,6 +119,10 @@ export function createLevel(ctx, deps = {}) {
   const emitLevel = (p) => events?.emit(EV.LEVEL, { day: env.dayNumber, ...lvTag(), condition: condNow(), ...p });
   const checkpoint = (name, key = name, extra = {}) => { if (fired.has(key)) return; fired.add(key); emitLevel({ phase: 'checkpoint', name, ...extra }); };
   const inLevel = () => level.mode === 'level' && !ended;
+  // Phase 5 (PHASE5.md §4.1, package experience): the Time settings, read when used (never cached at start); every default
+  // is the Phase 4 clock (1x at a level start, signs stop the clock, ⅔ speed at a job's place, jobs held while he works)
+  const timeSet = (key, def) => { try { const v = ctx.settings?.get?.(`time.${key}`); return v == null ? def : v; } catch { return def; } };
+  const defaultFast = () => timeSet('defaultSpeed', '1x') === '4x';
   const uiAct = (id, args = {}) => events?.emit(EV.ACTION, { id, ...args, result: undefined });
 
   // ---------------- profile (skills kept across replays) ----------------
@@ -211,7 +215,9 @@ export function createLevel(ctx, deps = {}) {
     bad.wait = null;
     if (!inLevel() || free || ended) return;
     const max = lv().fail?.mortalityMaxPct, ld = levelDeaths();
-    if (max != null && ld.pct > max) { failAt = failAt || { day, pct: ld.pct }; end('mortality'); }
+    // Phase 5 (PHASE5.md §6.8.2): the level ends at the claim's close, 24:00 of that day (the stepper runs just after
+    // midnight): the result names day 0, 24:00, not day 1
+    if (max != null && ld.pct > max) { failAt = failAt || { day, hour: 24, pct: ld.pct, claim: true }; end('mortality'); }
   }
   function mortalityPct() {
     const placed = placedCount();
@@ -238,14 +244,15 @@ export function createLevel(ctx, deps = {}) {
     env.paused = false;
     const placing = is(def, LEVEL1) && engine.anchors.truck != null && !fired.has('placed') && env.dayNumber === LEVEL1.arrivalDay;
     const catching = !!farm.harvest?.started && !farm.harvest?.result; // the crew works on its own (PHASE3.md §2.3)
-    if (kind === 'sign') env.timeScale = C.sign;
+    // Phase 5: time.signStops off: a sign or an unfolded plate runs the panel clock instead of stopping it
+    if (kind === 'sign') env.timeScale = timeSet('signStops', true) === false ? C.panel : C.sign;
     // Phase 4: the house dark (no mains, no generator on the switch): every farm minute counts (carry speed)
     else if (dark()) env.timeScale = C[GENERATOR.clockWhileDark] ?? C.carry;
     else if (catching) env.timeScale = fast ? C.fast : C.work;
     else if (kind === 'panel') env.timeScale = C.panel;
     else if (CARRY_KINDS.has(props?.carrying) || placing) env.timeScale = C.carry;
     // PHASE4.md §15.2: slower at an open job's place (the farmer's 4x stays 4x)
-    else if (!fast && C.atJob != null && ui?.jobCard?.atAnyJob?.()) env.timeScale = C.atJob;
+    else if (!fast && C.atJob != null && timeSet('atJobSlow', true) !== false && ui?.jobCard?.atAnyJob?.()) env.timeScale = C.atJob;
     else env.timeScale = fast ? C.fast : C.work;
   }
 
@@ -261,6 +268,7 @@ export function createLevel(ctx, deps = {}) {
   }
   function holdJob(inst) {
     if (noHold > 0 || level.mode !== 'level' || ended || free || !ui || inst.def.hardClose) return false;   // hardClose: a claim's own deadline
+    if (timeSet('holdJobs', true) === false) return false;                          // Phase 5: Time → no held jobs
     if (panelShows(ui.openPanelId, inst)) return true;                              // (a) its panel is open
     for (const id of ui.backgroundPanelIds?.() || []) if (panelShows(id, inst)) return true; // (d) a machine job of it runs on
     if (ui.jobCard?.atJob?.(inst.key)) return true;                                 // (b) he stands at its place
@@ -356,11 +364,15 @@ export function createLevel(ctx, deps = {}) {
     const notPicked = onFloor > 0 ? ` (${onFloor.toLocaleString('en')} dead bird${onFloor === 1 ? '' : 's'} not picked up)` : '';
     // a bad batch: the chicks graded out on day 0 count as culls of the level unless the hatchery was told that day
     const unclaimed = F.claimedApart && bad.gradedOut > 0 && !(claimed > 0) ? `; the ${int(bad.gradedOut)} chicks graded out on day 0 count as culls: the hatchery was not told on day 0` : '';
-    const failText = deathsPct > F.mortalityMaxPct ? `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}${notPicked}${unclaimed}`
+    // Phase 5 (PHASE5.md §6.8.2): a bad batch that failed when the hatchery claim closed at 24:00 of day 0 says so
+    const atClaim = !!failAt?.claim && failAt.hour === 24;
+    const claimWords = unclaimed ? ` (the ${int(bad.gradedOut)} chicks graded out on day 0 count as culls: the hatchery was not told on day 0)` : '';
+    const failText = deathsPct > F.mortalityMaxPct ? (atClaim ? `deaths and culls reached ${two(deathsPct)} % by 24:00 of day ${failAt.day}, when the hatchery claim closed${claimWords}${notPicked}`
+      : `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}${notPicked}${unclaimed}`)
       : ratio != null ? `day 7 weight ${two(ratio)} × chick weight` : (fl.placed || 0) > 0 ? 'no day 7 weight' : 'no chicks were placed';
     const floor = records?.timeline?.()?.find?.((e) => e.day === 0)?.floorAtArrivalC ?? null;
-    const { day, hour } = splitDay(env.day);
-    return { pass, reason, early: reason === 'mortality', endedAt: `day ${day}, ${hhmm(hour)}`, day, hour,
+    const at = splitDay(env.day), day = atClaim ? failAt.day : at.day, hour = atClaim ? 24 : at.hour;
+    return { pass, reason, early: reason === 'mortality', endedAt: `day ${day}, ${atClaim ? '24:00' : hhmm(hour)}`, day, hour, ...(atClaim ? { failDay: failAt.day } : {}),
       ratio, weightG, weighedByHand: !!wr, chickWeightG: chick, chickSource: measured != null ? 'box' : 'delivery',
       deaths, placed, placedReal: (fl.placed || 0) > 0, countedDead: fl.countedDead || 0, deadOnFloor: onFloor, deadInBoxes: inBoxes, culls: fl.culls || 0,
       // uniformity only from a hand weighing of 10 birds or more (the scale gives no spread); FCR only
@@ -567,7 +579,7 @@ export function createLevel(ctx, deps = {}) {
   function resetLevelState() {
     fired = new Set(); points = []; weighs = []; signedEnd = false; ended = null; pending = null; failAt = null;
     startAt = null; reached.clear(); stoppedAt = null; bad = { gradedOut: 0, looked: 0, weak: 0, called: null, wait: null }; soonWarned.clear();
-    fast = false; userPaused = false; saveIn = null; lastSaveDay = null; tickAcc = 0;
+    fast = defaultFast(); userPaused = false; saveIn = null; lastSaveDay = null; tickAcc = 0;
   }
   function resetRun() {
     if (free) { env.setMaxDay?.(42); free = null; }
@@ -754,6 +766,9 @@ export function createLevel(ctx, deps = {}) {
       },
     },
     boot() {
+      // Phase 5: a level started or resumed before the boot finished (a harness's Continue right after a reload, while
+      // main.js still warms the shaders up) keeps running; the boot never drops it back to the sandbox or the title
+      if (level.mode === 'level' || level.mode === 'result' || level.mode === 'title') return;
       loadProfile();
       if (typeof navigator !== 'undefined' && navigator.webdriver) { level.mode = 'sandbox'; ui?.setMode?.('sandbox'); return; }
       level.toTitle();
@@ -867,7 +882,7 @@ export function createLevel(ctx, deps = {}) {
       seed = lv.seed ?? 1;
       inRun = !!lv.inRun;
       engine.restore(lv.jobs, d);
-      fired = new Set(lv.fired || []); points = lv.points || []; weighs = lv.weighs || []; signedEnd = !!(lv.signedEnd ?? lv.signed7); fast = !!lv.fast;
+      fired = new Set(lv.fired || []); points = lv.points || []; weighs = lv.weighs || []; signedEnd = !!(lv.signedEnd ?? lv.signed7); fast = !!lv.fast || defaultFast();
       failAt = lv.failAt ?? null; startAt = lv.startAt ?? env.day;
       if (lv.bad) bad = { gradedOut: lv.bad.gradedOut || 0, looked: lv.bad.looked || 0, weak: lv.bad.weak || 0, called: lv.bad.called ?? null, wait: lv.bad.wait ?? null };
       for (const k of lv.reached || []) reached.add(k);
@@ -883,6 +898,9 @@ export function createLevel(ctx, deps = {}) {
       return true;
     },
     continueSave() { const d = save?.load?.(); return d ? level.resume(d) : false; },
+    /** Phase 5 (PHASE5.md §8.9): save the level that runs now (the autosave of a run, else Phase 2's level save); false on
+     *  the title card, in the sandbox, on a result or in a free run (nothing to save), or when the write failed. */
+    saveNow() { try { return saveNow() === true; } catch (err) { console.error('saveNow failed', err); return false; } },
     toSandbox() {
       saveNow();
       resetRun();

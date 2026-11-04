@@ -88,12 +88,12 @@ const CSS = `
 .cond-lcd .lcd-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 16px; }
 .cond-lcd.cond-lcd--2 .lcd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 20px; }
 .cond-lcd .lcd-num { font-size: 21px; }
-.cond-lcd .lcd-k { font-size: 10.5px; letter-spacing: 0.08em; }
+.cond-lcd .lcd-k { font-size: 12px; letter-spacing: 0.08em; }
 .cond-top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; margin-top: 10px; }
 .cond-top--3 { grid-template-columns: auto auto minmax(0, 1fr); }
 .cond-gauge { display: grid; justify-items: center; gap: 2px; padding: 6px 8px 4px; border-radius: 8px; background: rgba(0, 0, 0, 0.18); }
 .cond-gauge svg { display: block; }
-.cond-gauge small { font: 600 11px/1.2 var(--font-display); letter-spacing: 0.04em; color: var(--key-sub); text-align: center; }
+.cond-gauge small { font: 600 12px/1.2 var(--font-display); letter-spacing: 0.04em; color: var(--key-sub); text-align: center; }
 .cond-lamps { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; }
 .cond-lamp { display: inline-flex; align-items: center; gap: 7px; font: 600 12.5px/1.25 var(--font-display); letter-spacing: 0.03em; color: var(--key-ink); }
 .cond-lamp .led { flex: none; }
@@ -102,7 +102,7 @@ const CSS = `
 .cond-switch .key { min-width: 96px; border-radius: 0; }
 .cond-switch .key:first-child { border-radius: 7px 0 0 7px; }
 .cond-switch .key:last-child { border-radius: 0 7px 7px 0; }
-.cond-switch-k { font: 600 10.5px/1.2 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--key-sub); margin-right: 6px; align-self: center; }
+.cond-switch-k { font: 600 11px/1.2 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--key-sub); margin-right: 6px; align-self: center; }
 .cond-row-bar { grid-column: 2 / -1; }
 .cond-row-bar .cyc-progress { margin-top: 0; height: 5px; }
 .cond-row-bar .cyc-progress > span { background: var(--sign-yellow); }
@@ -118,17 +118,17 @@ const CSS = `
 .cond-dial-btns .btn { white-space: normal; }
 .cond-tank .readout { min-width: 0; padding: 6px 10px; }
 .cond-tank .readout-v { font-size: 17px; }
-.cond-tank .readout-sub { font-size: 11px; }
+.cond-tank .readout-sub { font-size: 12px; }
 .cond-tank .equip-reads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 /* grading the stacks: six stacks of boxes, a key under each */
 .cond-stacks { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
 .cond-stack { display: grid; gap: 5px; align-content: start; padding: 7px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); text-align: center; min-width: 0; }
 .cond-stack.is-busy { box-shadow: inset 0 0 0 2px var(--sign-yellow); }
 .cond-stack-k { font: 700 11.5px/1.2 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; }
-.cond-stack-n { min-height: 2.6em; font: 500 11.5px/1.3 var(--font-body); color: var(--key-sub); }
+.cond-stack-n { min-height: 2.6em; font: 500 12px/1.3 var(--font-body); color: var(--key-sub); }
 .cond-stack-n b { color: var(--key-ink); font-weight: 600; }
 .cond-stack svg { display: block; width: auto; height: 74px; margin: 0 auto; }
-.cond-stack .key--wide { width: 100%; min-width: 0; height: auto; min-height: 34px; padding: 4px 6px; font-size: 10.5px; letter-spacing: 0.04em; white-space: normal; line-height: 1.15; }
+.cond-stack .key--wide { width: 100%; min-width: 0; height: auto; min-height: 34px; padding: 4px 6px; font-size: 12px; letter-spacing: 0.04em; white-space: normal; line-height: 1.15; }
 .cond-stack .cyc-progress { margin-top: 0; }
 .cond-stack .cyc-progress > span { background: var(--sign-yellow); }
 .cond-sum { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; margin-top: 10px; padding: 8px 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.2); }

@@ -1,0 +1,583 @@
+[
+ {
+  "wait": 800
+ },
+ {
+  "clearStorage": true
+ },
+ {
+  "reload": true
+ },
+ {
+  "wait": 1500
+ },
+ {
+  "eval": "__game.stop(), 'stopped: the look pass (PHASE5.md §6.4, p5-look)'"
+ },
+ {
+  "eval": "(() => {\n  const R = (e) => { if (!e || e.hidden || e.offsetParent === null) return null; const r = e.getBoundingClientRect(); return r.width > 0 ? r : null; };\n  const hit = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;\n  window.__look = () => {\n    const sel = { clock: '#hud .hud-tl .clock', gauges: '#hud .hud-tl .gauges', jobs: '#hud .hud-tr--level .ljobs', watch: '#hud .fw', timebar: '#hud .hud-bl .timebar', alarm: '#hud .alarm', prompt: '#hud .hud-bc .prompt:not([hidden])', intro: '#hud .intro-card' };\n    const has = !!document.querySelector('#hud .panel:not([hidden])') || !!document.querySelector('#hud .title:not([hidden])');\n    const c = {}; for (const [k, s] of Object.entries(sel)) { const r = has ? null : R(document.querySelector(s)); if (r) c[k] = r; }\n    const k = Object.keys(c), overlaps = [];\n    for (let i = 0; i < k.length; i++) for (let j = i + 1; j < k.length; j++) if (hit(c[k[i]], c[k[j]])) overlaps.push(k[i] + '/' + k[j]);\n    const clipped = [];\n    for (const e of document.querySelectorAll('#hud *')) {\n      if (!e.childNodes.length || e.offsetParent === null || !e.textContent.trim() || e.closest('.sr-only')) continue;\n      const cs = getComputedStyle(e);\n      if (cs.overflowX === 'visible' && cs.textOverflow !== 'ellipsis') continue;\n      if (e.scrollWidth > e.clientWidth + 1 && cs.whiteSpace === 'nowrap') clipped.push((e.getAttribute('class') || e.tagName).slice(0, 24) + ' \"' + e.textContent.trim().slice(0, 30) + '\"');\n    }\n    return { overlaps, clipped };\n  };\n  return 'look helpers ready';\n})()"
+ },
+ {
+  "eval": "__game.level.toTitle(), 'the title, a first visit'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'title-first: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'title-first: no HUD card over another'; })()",
+  "label": "title-first: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-title-first"
+ },
+ {
+  "eval": "__game.run.startRun({ seed: 1 }), __game.level.toTitle(), 'the title with a save'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'title-save: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'title-save: no HUD card over another'; })()",
+  "label": "title-save: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-title-save"
+ },
+ {
+  "eval": "__game.run.startRun({ seed: 1 }), __game.setState({ farmer: { x: -34.1, z: 28.6, yaw: 0 } }), 'the planning day at the office'"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'plan-office: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'plan-office: no HUD card over another'; })()",
+  "label": "plan-office: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-plan-office"
+ },
+ {
+  "eval": "__game.ui.openPanel('office-desk'), 'the record book on the desk'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'plan-sheet: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'plan-sheet: no HUD card over another'; })()",
+  "label": "plan-sheet: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-plan-sheet"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.level.debug.result(true), 'the plan result'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'result-plan: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'result-plan: no HUD card over another'; })()",
+  "label": "result-plan: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-result-plan"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.startLevel({ seed: 1 }), __game.setState({ farmer: { x: -14, z: 2.5, yaw: 0 } }), 'the prep day in the house'"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'prep-house: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'prep-house: no HUD card over another'; })()",
+  "label": "prep-house: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-prep-house"
+ },
+ {
+  "eval": "__game.level.debug.goto(0, 10.2, { auto: true }), __game.setState({ farmer: { x: -11.8, z: 10.6, yaw: 0 } }), 'day 0 at the chick table'"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'day0-table: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'day0-table: no HUD card over another'; })()",
+  "label": "day0-table: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-day0-table"
+ },
+ {
+  "eval": "__game.level.debug.goto(3, 22, { auto: true }), __game.setState({ farmer: { x: -14, z: 1, yaw: 0 } }), 'day 3 by night'"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'day3-night: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'day3-night: no HUD card over another'; })()",
+  "label": "day3-night: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-day3-night"
+ },
+ {
+  "eval": "__game.level.debug.result(true), 'the brooding week result'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'result-brooding: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'result-brooding: no HUD card over another'; })()",
+  "label": "result-brooding: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-result-brooding"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.run.startLevel('week2', { from: 'standard' }), __game.level.debug.goto(10, 10, { auto: true }), __game.setState({ farmer: { x: 0, z: 1, yaw: 0 } }), 'week 2 day 10 at the curtain'"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'week2-curtain: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'week2-curtain: no HUD card over another'; })()",
+  "label": "week2-curtain: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-week2-curtain"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.run.startLevel('week3', { from: 'standard' }), __game.level.debug.goto(16, 15, { auto: true }), __game.setState({ farmer: { x: -6, z: 1, yaw: 0 } }), 'week 3 day 16 afternoon'"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'week3-afternoon: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'week3-afternoon: no HUD card over another'; })()",
+  "label": "week3-afternoon: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-week3-afternoon"
+ },
+ {
+  "eval": "__game.level.debug.result(true), 'the week 3 result'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'result-week3: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'result-week3: no HUD card over another'; })()",
+  "label": "result-week3: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-result-week3"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.run.startRun({ seed: 1, at: 'level1', condition: 'hot' }), __game.run.startLevel('weeks45', { from: 'standard', condition: 'hot' }), __game.level.debug.goto(30, 14, { auto: true }), __game.setState({ farmer: { x: 6, z: 1, yaw: 0 } }), 'the hot season, day 30 14:00'"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'hot-day30: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'hot-day30: no HUD card over another'; })()",
+  "label": "hot-day30: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-hot-day30"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.run.startRun({ seed: 1, at: 'level1', condition: 'rainy' }), __game.run.startLevel('weeks45', { from: 'standard', condition: 'rainy' }), __game.level.debug.goto(33, 15, { auto: true }), __game.setState({ farmer: { x: -30, z: 12, yaw: 0 } }), 'the rainy season, day 33'"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'rainy-storm: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'rainy-storm: no HUD card over another'; })()",
+  "label": "rainy-storm: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-rainy-storm"
+ },
+ {
+  "eval": "__game.farm.debug.power(false), 'the power cut'"
+ },
+ {
+  "advance": 1.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'rainy-cut: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'rainy-cut: no HUD card over another'; })()",
+  "label": "rainy-cut: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-rainy-cut"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.run.startRun({ seed: 1, at: 'level1', condition: 'badChicks' }), __game.level.debug.goto(0, 10.05, { auto: true }), __game.setState({ farmer: { x: -11.8, z: 10.6, yaw: 0 } }), __game.ui.openPanel('chick-table'), 'the bad batch at the chick table: ' + __game.ui.openPanelId"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'bad-grading: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'bad-grading: no HUD card over another'; })()",
+  "label": "bad-grading: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-bad-grading"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.run.startRun({ seed: 1, at: 'level1', condition: 'water' }), __game.run.startLevel('weeks45', { from: 'standard', condition: 'water' }), __game.level.debug.goto(26, 15, { auto: true }), __game.setState({ farmer: { x: -32.2, z: -9.8, yaw: 0 } }), __game.ui.openPanel('water-tank'), 'the water tank: ' + __game.ui.openPanelId"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'water-tank: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'water-tank: no HUD card over another'; })()",
+  "label": "water-tank: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-water-tank"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.run.startRun({ seed: 1, at: 'level1' }), __game.run.startLevel('finish', { from: 'standard' }), __game.level.debug.goto(41, 22.5, { auto: true }), __game.setState({ farmer: { x: -12, z: 9, yaw: 0 } }), 'the catching night: ' + !!__game.farm.harvest?.started"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'catching: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'catching: no HUD card over another'; })()",
+  "label": "catching: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-catching"
+ },
+ {
+  "eval": "__game.level.debug.result(true), 'the finish result'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'result-finish: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'result-finish: no HUD card over another'; })()",
+  "label": "result-finish: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-result-finish"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.run.startLevel('cleanout', { from: 'standard' }), __game.level.debug.goto(44, 10, { auto: true }), __game.setState({ farmer: { x: -27, z: 12, yaw: 0 } }), 'the wash bay'"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'washbay: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'washbay: no HUD card over another'; })()",
+  "label": "washbay: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-washbay"
+ },
+ {
+  "eval": "__game.setState({ farmer: { x: -6, z: 1, yaw: 0 } }), 'the clean house'"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'clean-house: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'clean-house: no HUD card over another'; })()",
+  "label": "clean-house: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-clean-house"
+ },
+ {
+  "eval": "__game.level.debug.goto(49, 10, { auto: true }), __game.setState({ farmer: { x: -14, z: 9, yaw: 0 } }), 'a rest day: ' + __game.level.hudHooks.dayText()"
+ },
+ {
+  "advance": 0.5
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'rest-day: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'rest-day: no HUD card over another'; })()",
+  "label": "rest-day: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-rest-day"
+ },
+ {
+  "eval": "__game.level.debug.result(true), 'the clean-out result'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'result-cleanout: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'result-cleanout: no HUD card over another'; })()",
+  "label": "result-cleanout: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-result-cleanout"
+ },
+ {
+  "eval": "__game.ui.openPanel('summary'), 'the cycle summary: ' + __game.ui.openPanelId"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'summary: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'summary: no HUD card over another'; })()",
+  "label": "summary: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-summary"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.startLevel({ seed: 1 }), __game.ui.menu.open('hook'), 'the menu'"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'menu: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'menu: no HUD card over another'; })()",
+  "label": "menu: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-menu"
+ },
+ {
+  "eval": "__game.ui.openSettings('sound', { returnTo: 'menu' }), 'settings: sound'"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'settings-sound: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'settings-sound: no HUD card over another'; })()",
+  "label": "settings-sound: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-settings-sound"
+ },
+ {
+  "eval": "__game.ui.openSettings('time', { returnTo: 'menu' }), 'settings: time'"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'settings-time: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'settings-time: no HUD card over another'; })()",
+  "label": "settings-time: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-settings-time"
+ },
+ {
+  "eval": "__game.ui.openSettings('graphics', { returnTo: 'menu' }), 'settings: graphics'"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'settings-graphics: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'settings-graphics: no HUD card over another'; })()",
+  "label": "settings-graphics: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-settings-graphics"
+ },
+ {
+  "eval": "__game.ui.openSettings('camera', { returnTo: 'menu' }), 'settings: camera'"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'settings-camera: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'settings-camera: no HUD card over another'; })()",
+  "label": "settings-camera: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-settings-camera"
+ },
+ {
+  "eval": "__game.ui.openSettings('interface', { returnTo: 'menu' }), 'settings: interface'"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'settings-interface: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'settings-interface: no HUD card over another'; })()",
+  "label": "settings-interface: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-settings-interface"
+ },
+ {
+  "eval": "__game.ui.openSettings('keys', { returnTo: 'menu' }), 'settings: keys'"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'settings-keys: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'settings-keys: no HUD card over another'; })()",
+  "label": "settings-keys: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-settings-keys"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.ui.openSaves(), 'the saves'"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'saves: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'saves: no HUD card over another'; })()",
+  "label": "saves: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-saves"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.ui.map.open(), __game.ui.map.view('farm'), 'the map, the farm'"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'map-farm: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'map-farm: no HUD card over another'; })()",
+  "label": "map-farm: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-map-farm"
+ },
+ {
+  "eval": "__game.ui.map.view('house'), 'the map, the house'"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'map-house: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'map-house: no HUD card over another'; })()",
+  "label": "map-house: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-map-house"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), __game.ui.openGuide(), 'the guide'"
+ },
+ {
+  "advance": 0.2
+ },
+ {
+  "eval": "(() => { const c = __look(); return 'guide: ' + (c.clipped.length ? 'clipped: ' + c.clipped.slice(0, 6).join(' | ') : 'no clipped text') + (c.overlaps.length ? ' · overlaps: ' + c.overlaps.join(', ') : ''); })()"
+ },
+ {
+  "expect": "(() => { const c = __look(); return !c.overlaps.length && 'guide: no HUD card over another'; })()",
+  "label": "guide: the HUD cards clear of each other"
+ },
+ {
+  "shot": "p5-look-guide"
+ },
+ {
+  "eval": "__game.ui.closePanel({ all: true }), 'done'"
+ }
+]
