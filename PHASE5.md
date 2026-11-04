@@ -185,7 +185,8 @@ the roof]* (once per shower), *[Generator starting]*, *[Generator running]*, *[G
 it on entering the house or when it changes: *[Chicks peeping loudly]* (distress), *[Birds panting]*, *[Snicks and
 rattles in the flock]* (a breathing problem), *[The flock is quiet]* (lights out). These are the same words the look notes
 use (farm-problems `observe`); no caption is a verdict. Each key at most once per change and at most one caption every
-8 real seconds (audio-captions.js).
+8 real seconds (audio-captions.js); at integration the dark house's alarm skips that gap (a thunder caption just before
+the cut held it back up to 8 s), and the next caption waits 8 s after it.
 
 ### 2.4 Levels and checks (expected numbers)
 `scripts/p5-sound.json` (updated by the sound package: the volume now lives in Settings → Sound, reached through
@@ -397,7 +398,7 @@ messages are `role="status"`.
 | `graphics.showFps` | **false** / true | settings | a small *NN fps* readout on the time bar (perf.fps) |
 | `camera.rotateSpeed` | 0.5..2 (**1**) | settings (player.js) | × `ORBIT_PER_PX` and `KEY_TURN` |
 | `camera.zoomSpeed` | 0.5..2 (**1**) | settings (player.js) | × `WHEEL_ZOOM` and `KEY_ZOOM` |
-| `camera.invertRotate` / `camera.invertZoom` | **false** / true | settings (player.js) | the drag and the arrow keys / the wheel turn the other way |
+| `camera.invertRotate` / `camera.invertZoom` | **false** / true | settings (player.js) | the drag / the wheel turn the other way (integration decision: the arrow and + / − keys keep their names) |
 | `interface.hudScale` | 0.9 / **1** / 1.15 / 1.3 | experience (ui.js) | `--hud-scale` on `#hud`: the HUD cards scale from their corners (`transform: scale`), the left column re-stacked by `layoutLeft`; panels keep their size; under 1100 px wide at most 1.15 |
 | `interface.watch` | **shown** / folded / hidden | experience (ui-watch.js) | folded: the four or five dots; hidden: no card (its warnings still come as captions and notebook lines) |
 | `interface.soundCaptions` | **false** / true | experience (ui.js) shows, sound raises | §2.3 |
@@ -720,6 +721,17 @@ title card, the menu and the settings are usable at that width (one column).
    less in the hottest hours)* while `hotK` < 1; an intake under even that expectation warns as before. test-watch: the hot
    ideal's warning list (the allow-list) unchanged and no intake amber on days 21–41 caused by `fHot` alone.
 
+**Measured at integration** (main, after the four merges): (1) the water condition's ideal reads the Supply row steady on
+day 33 at 12:00 and 15:00 with the tank at 95.1 %; hour by hour from d32 18:00 to d34 06:00 no amber with a full tank
+(main before the fix: amber d32 20:00–d33 00:00, d33 05:00–07:00, d34 09:00–13:00 with the tank at 95 %);
+`waterPumpUnfixed` warns 6.8 farm hours before 20 %; the iron filter's intake row amber d24 09:00–d25 08:00 as on main, its
+cause naming the water supply's filter, plate and place from d24 09:00 to d25 06:00 (test-watch). (2) A bad batch failed at
+the claim's close: *by 24:00 of day 0*, *Ended day 0, 24:00*, `failDay` 0, never *day 1* (test-fixes). (3) The water
+condition's supply warning shows whole on the 288 px card, scrolling inside with *more below* where the card would reach
+the time bar, at 960 × 600 and 1280 × 800 (p5-hud 20 PASS at both). (4) The hot ideal 2,788 g against the normal 2,887 g,
+3.43 % lighter (seeds 2 and 3: 3.40 %), FCR 1.569, EPEF 416, day 35 2,230 g (101 % of the target); the normal season
+byte-identical (test-cycle's digest); p4-hot's cycle summary reads 2,784 g, FCR 1.57.
+
 ### 6.9 Docs
 ARCHITECTURE.md gets a **Phase 5 — as integrated** section at the merge (the integrator) and each package's notes in its
 report; PHASE5.md §6.8 and §9 get the measured numbers at integration; the in-game guide (§6.2) is the player guide.
@@ -1002,6 +1014,17 @@ automation, in code as a stub), `level.saveNow()`.
   watch folded → reduced motion on → the map's House view with the flock dots → the hot season day 30 at 13:00 (a standard
   start) with sound captions on and the sound off → the power cut of the rainy day 33 with *[Alarm in the house]* → no
   console or page errors; a real-input day of play under 6 minutes (the Phase 4 ceiling) with the menu and the map used.
+
+- **At integration** (main, 960 × 600 unless named; every run without console or page errors; ARCHITECTURE.md *Phase 5 —
+  as integrated* lists every file's count): `npm test` **427 ok** (all passed); `scripts/p5-play.json` **70 PASS** (the planning day by real
+  input with the map, the menu and the saves 3.26 min of play); `scripts/p5-cross.json` (the cross-panel pass) 61 PASS at
+  960 × 600 and 1280 × 800; the package files p5-sound 50, p5-sound-scenes 22, p5-saves 24, p5-saves-migrate 4, p5-settings
+  28, p5-gfx 7, p5-guide 11, p5-map 26 (both sizes), p5-first-play 19, p5-a11y 62 (both), p5-hud 20 (both), p5-look 35
+  (both), p5-boot 7, p5-design-stubs 20; every earlier file and play-through of this section passes with its count
+  (p3-cycle 140, p3-replay 16, p4-hot 43, p4-rainy 17, p4-bad 17, p4-water 15, p4-clarity 14, req-watch 13, req-clock 13,
+  req-bucket 18, req-deadmark 6, rv-hud 16, p2-level1 58, p2-level1-find 18, hotfix-steps 21, p4-design-stubs 10,
+  p3-design-stubs 5, phase1-jobs 4 of 4 jobs, the Phase 1 scenarios clean); `npm run perf` alone within every budget (each
+  condition's whole cycle 2.3–2.8 s, a weeks 4–5 24 h skip 41–48 ms).
 
 ## 10. Work packages (four, disjoint files, parallel worktrees)
 Each engineer works in `git worktree add ../cf5-<key> -b phase5/<key> main`, edits **only the files listed** (new files
