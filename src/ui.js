@@ -180,7 +180,8 @@ export function createUI(ctx, deps) {
   // top right in a level: the job card; captions and the floating reading
   const trL = h('div', { class: 'hud-tr hud-tr--level', hidden: true });
   root.appendChild(trL);
-  const caption = createCaption(root);
+  // every caption's seconds x interface.captionTime (PHASE5.md §4.1)
+  const caption = createCaption(root, { timeScale: () => parseFloat(setting('interface.captionTime', '1')) || 1 });
   // floor thermometer view (F, unlock floorOverlay): its °C legend, the same ramp props paints
   const rampCss = FLOOR_TEMP_RAMP.map(([t, c]) => `rgb(${c.map((v) => Math.round(v * 255)).join(' ')}) ${(((t - 24) / 12) * 100).toFixed(0)}%`).join(', ');
   const floorLegend = h('div', { class: 'floor-legend', hidden: true, role: 'img', 'aria-label': 'Floor thermometer view: litter surface temperature, blue 24 °C to orange 36 °C' },
@@ -712,6 +713,7 @@ export function createUI(ctx, deps) {
     if (views.comfort) { views.comfort = false; flock?.setOverlay?.('comfort', false); }
     mm.min = mm.max = null; hist.length = 0; histAcc = 0; lastFlows.length = 0; weigh = { day: null, list: [] };
     alarmMsg = ''; alarmT = 0; alarm.hidden = true;
+    lhelp.showAuto();   // interface.helpLegend 'always': at each level start (a start over a running level too)
   }
 
   let hudAcc = 0, fitAcc = 0;
@@ -725,7 +727,22 @@ export function createUI(ctx, deps) {
     if (window.innerWidth < 700) alarm.style.top = '';
     else if (!alarm.hidden) { alarm.style.top = `${Math.round(y + 8)}px`; y = alarm.getBoundingClientRect().bottom - top; }
     watchCard.setTop(Math.round(y + 8));
+    // PHASE5.md §6.8.3: the whole warning; the card's box scrolls inside when it would reach the time bar
+    watchCard.fit?.(bl.getBoundingClientRect().top);
   }
+  // Phase 5 (interface.hudScale, PHASE5.md §4.1): the HUD cards scale from their corners (panels keep their size); under
+  // 1100 px wide at most 1.15. The default (1) adds no transform at all: the Phase 4 HUD exactly
+  function applyHudScale() {
+    const want = parseFloat(setting('interface.hudScale', '1')) || 1;
+    const s = window.innerWidth < 700 ? 1 : window.innerWidth < 1100 ? Math.min(1.15, want) : want;
+    root.style.setProperty('--hud-scale', String(s));
+    root.classList.toggle('is-scaled', s !== 1);
+    hudScaleNow = s;
+  }
+  let hudScaleNow = 1;
+  applyHudScale();
+  window.addEventListener('resize', applyHudScale);
+  try { ctx.settings?.subscribe?.((c) => { if (c.key === 'hudScale') { applyHudScale(); hudAcc = 0; } }, 'interface'); } catch { /* no store */ }
   const api = {
     update(dt) {
       rt += dt;
@@ -780,6 +797,10 @@ export function createUI(ctx, deps) {
     get panelKind() { return title.open || intro.active ? 'paused' : panels.openKind; },
     get taskIndex() { return tasks.index; },
     get mode() { return mode; },
+    /** The HUD size in use (interface.hudScale, at most 1.15 under 1100 px wide). */
+    get hudScale() { return hudScaleNow; },
+    /** The caption showing now: { text, seconds (its whole time), left } or null (the harness). */
+    get captionNow() { return caption.now; },
     setMode,
     newRun,
     showResult(res) { if (openPanel('result')) panels.openPanel?.show?.(res); },
