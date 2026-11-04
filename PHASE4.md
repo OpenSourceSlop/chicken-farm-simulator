@@ -1257,3 +1257,153 @@ night round for the evening rule (§2.6) and writes ARCHITECTURE.md ("Phase 4 �
     September normal for you, and what do you do about it (more air, more husk, lime)?
 13. **Guide tags** stay provisional (PHASE3.md question 1): every Phase 4 line is general practice. May any of them carry
     a guide name?
+
+## 15. The farmer's requests during Phase 4 (after playing the Phase 3 build)
+
+The farmer played the published Phase 3 build and asked for four changes. **They override any earlier rule they
+conflict with** (here: the no-verdict rule for the flock watch's warnings, and the 4.5-minute day ceiling). Everything
+else in §0 holds: no lessons or quizzes, no "correct" / "wrong" words, no scores, facts on signs with their sources,
+earlier phases working. Each part below says what the farmer sees, the rules (model values are marked "model"; none of
+them is a sign fact), the modules, and how it is tested. Harness proofs by real input: `scripts/req-watch.json`,
+`req-clock.json`, `req-bucket.json`, `req-deadmark.json` (§15.5); node: `scripts/test-watch.mjs` (in `npm test`) and new
+cases in test-jobs and test-contracts.
+
+### 15.1 Early warning: the flock watch (request 1)
+*"Some way of understanding if we are doing something wrong, instead of just failing at the end."*
+
+**What he sees.** A small **Flock watch** card in the HUD, under the clock card, in every level with birds in the
+house (from the first tipped stack to the catch). Four rows, each with a calm dot — green *steady*, amber *watch*, red
+*alert* (the dot's word is its aria-label and tooltip) — and the measured value beside the level's line:
+
+| Row | Value shown | Green / amber / red (model) |
+| --- | --- | --- |
+| Weight | the bird scale now (it reads about 2 % high, as the level result's fallback) and today's point on the level's line; "on course for N g at the day D weigh-in (line L g)" | projected weigh-in weight P against the line L: P ≥ 1.04 L / 1.00–1.04 L / P < L |
+| Deaths | deaths and culls of the level as the level counts them, % of its limit; "on course for X %" | projected % at the level's end: under 75 % of the limit / 75–100 % / at or over the limit (or 80 % of it reached) |
+| Comfort | "Right", "Cold" or "Hot" with the hours of the last 8 farm hours and the felt °C | 0–1 / 2–3 / 4 or more of the last 8 hours cold or hot |
+| Intake | feed eaten and water drunk in the last 6 lit hours as % of what birds of this age and number take | both ≥ 88 % / 75–88 % / under 75 % |
+
+**Projections (model, `src/flock-watch.js`).** The watch keeps one sample per farm hour (an env stepper, so skips and
+goto(auto) count): age, scale weight, alive, deaths and culls (the level's own count), deaths by cause, comfort
+(`farm.comfort`: cold share, panting share, felt mean, the model's cold and heat death rates), feed eaten
+(`farm.flock.cumFeedKg`), the water meter odometer, the lights, the growth factors (`farm.flock.factors`: temperature,
+light, feed reach, water reach, air).
+- *Weight*: the level's line is Phase 2's `weightRatioMin × chick weight` on day 7, a week level's `minShare ×
+  weightAt(day)` on its weigh day, and the last week's harvest line `minShare × weightAt × shrink` at the booked
+  catch. Its curve runs along the model's ideal growth path ref(age) = weightAt(age) × the ideal's share of it in the
+  brooding week (0.99 at placement, 0.88 on days 1–2, 0.90 on days 3–4, 1.06 on day 7: the chicks start on their yolk
+  and catch up; 1.0 from day 8). The share s = scale / ref(age) is projected with half its change over the last 24 farm
+  hours (a whole day, so the lights' daily rhythm cancels) for up to 72 hours ahead: P = ref(D) × (s + ½ Δs₂₄ × min(h
+  left, 72) / 24).
+- *Deaths*: the level's % now + the last 24 hours' rate × the hours left in the level (capped at 72 hours).
+- *Comfort*: an hour is **cold** when half the birds feel 2 °C or more under their target (age under 14 days; older
+  birds: the model's cold deaths have started), **hot** when half the birds pant or the model's heat deaths have
+  started. Before the first tip and in an empty house the row is blank.
+- *Intake*: from 24 hours after the first tip (the chicks' first day of learning to eat is the crop check's job);
+  expected feed per lit hour = alive × the feed standard for the age (`config.feedStdGAt`) ÷ the lit hours of the light
+  program; water expected = that × 1.8 L/kg (the water sign's general figure); hours of the feed withdrawal and of the
+  heat-wave feeder lift are left out.
+
+**Warnings.** When a row turns red (weight on course under the line, deaths on course for the limit, 4 of 8 hours cold or
+hot, intake under 75 %), the watch raises one notice: a **caption** and a **notebook line** (kind `watch`, which the
+day's record row also shows under its notes), and the card keeps the last one under its rows. The same kind warns again
+only after it was green or amber for 6 farm hours, at most once per 12 farm hours. The notice says **what is happening,
+the likely cause from the model, and where to look** (the sign and the place), in plain words, e.g. *"Chicks felt cold
+for 5 of the last 8 hours (felt 30.4 °C, brooder sign row 33.0 °C): weight is on course for 158 g at the day 7 weigh-in
+(line 165 g). See the brooder sign; check the thermostat at the climate controller."* The likely cause is the model's
+weakest growth factor or the main cause of the last day's deaths, worded by `WATCH_CAUSES` (cold → brooder sign and
+the thermostat; heat → the brooder sign and thermostat in the brooding week, the heat sign, fan panel and pad pump
+later; water → the water lines sign, a flow test at the regulators and the water supply's filter; feed → the feeder
+lines plate at the feeder box and the pans' height; light → the light program sign or plate and the controller's lights;
+air → the minimum ventilation or air quality sign and the controller's ventilation; leg deaths → the legs sign;
+disease → the droppings sign and a bird check; sudden deaths → the light sign). Tone: factual, no "wrong", no scores
+(test-contracts checks every template). The watch is a reading of the model like a gauge; it never grades the farmer.
+
+**Contract.** `createFlockWatch({ env, farm, events, records })` → `{ attach(ctxFn), reset(), status(), warnings,
+serialize(), restore(d), step }`; level.js attaches `() => ({ active, def: lv(), deaths: levelDeaths(), chickG,
+catchAt })`, resets it at every level start, saves it with the level (`level.watch`). It emits `EV.WATCH { kind, state,
+text, cause, sign, place, day, hour }`; the ui shows the caption, records note it. `ui-watch.js` draws the card from
+`status()` every 0.5 s. **Test** (`scripts/test-watch.mjs`): the ideal brooding week through level.js raises no weight,
+deaths or comfort warning and passes; the brooding week with the thermostat 4 °C under the sign's row all week fails on
+deaths (day 4–5) and its first warning comes at least one farm day before; the same week with the thermostat put back
+to the sign's row at its first warning passes; a week-2 neglect (`noCare`) and a week-3 coccidiosis left untreated
+(`cocciUntreated`) warn at least a day before their ends; serialize → restore keeps the samples and the warning memory.
+
+### 15.2 Slower time; no job closes while the farmer is doing it (request 2)
+*"We should also slow down time progression a little since I find myself failing tasks while trying to accomplish them."*
+
+- **The default clock is 25 % slower**: `LEVEL1.clock` (every level) `work` 120 → **90** game s per real s (one farm
+  hour = 40 s instead of 30 s), `fast` 480 → **360** (still 4× the default). **Slower still at the job**: `panel` 30 →
+  **24** (an equipment or inspection panel open), `carry` 30 → **24** (boxes, barrow, sack, frame; the truck until the last
+  tip; the dark house), and a new **`atJob` 60** while the farmer stands at an open job's place (within 2.5 m of the
+  place the job marker would point to for that job, on the same side of the wall) and has not pressed 4×. Signs and
+  plates still stop the clock. The HUD's rate slot reads *1×*, *4×*, *⅔ speed* (at a job), *¼ speed* (panel, carrying,
+  dark house), *Stopped*.
+- **A job never closes while its panel is open or while he is doing it.** The job engine asks `hold(inst)` (level.js)
+  when an open job reaches its close: held while (a) the open panel shows that job's strip (`stripsAt`), (b) he stands
+  at the job's place, (c) he holds a bird for an open sampling job or carries the job's tool (the frame for a weigh
+  job, the barrow for the litter, the boxes while placing, the washer or sprayer), or (d) the panel finishes a machine
+  job of it in the background. A held job's close moves to now + **20 farm minutes** (`JOB_HOLD.graceMin`, model) each
+  time it comes, so after he stops he still has up to 20 farm minutes; then it is missed as before. Never during a
+  Next job skip or goto(auto) (no hold: test-level, test-sim, test-cycle and the profiles are unchanged).
+- **Warned ahead.** From 30 farm minutes before its close (`JOB_HOLD.warnMin`) an open job's line on the job card
+  carries a chip *"closes in 25 farm minutes"* (*"held open while you work · 20 farm minutes after"* when held); once,
+  as it crosses the 30-minute mark, a soft cue: the chip pulses (reduced motion: no pulse), a quiet click sounds and a
+  caption names it (*"Vent temperatures closes in 30 farm minutes (12:00)."*). `EV.JOB_SOON { key }`; skips never cue.
+- **Pacing.** The real-input days are re-timed with the slower clock (§15.6): the per-day ceiling of PHASE3.md (4.5
+  minutes) becomes **6 minutes** (4.5 × 120 / 90: the same farm hours at the farmer's slower clock), measured as before.
+
+### 15.3 The dead-bird bucket (request 3)
+*"I should be able to do tasks even if I'm picking up dead birds." "Can we set it down where we are?"*
+
+- **(a) The bucket blocks nothing that one hand can do**: panels, signs, plates, machines, more dead birds, the bin.
+  `props.handsBusy(kind)` = carrying something other than the bucket (and other than `kind`); every panel's *Take …*
+  key and every provider that asked for empty hands asks it instead (chick and sick-bird providers, box stacks, the
+  brushes, the tools, the barrow, the sack, the frame, the tape).
+- **(b) G sets it down at his feet** (`props.setBucketDown()`: a bucket on the litter, 0.4 m in front of him, with its
+  birds and causes); **E picks it up there** (the `bucket` interactable: *"Pick up the bucket (3 dead birds)"*, priority
+  7, 16 within 0.9 m). A small blue-grey marker floats over it and an edge chip *"Bucket · 3 birds · 12 m"* points to it
+  when it is off screen; G is in the help legend and a second prompt pill (*"G Set the bucket down"*) shows while he
+  carries it. A dead bird picked up while the bucket stands on the floor goes into that bucket (caption *"Dead bird into
+  the bucket you set down (4 in it)"*); the bin counts only a bucket in his hand. `dead-cleared` also needs no bucket
+  with birds on the floor; the dead job's marker and *Next* line point to it. The bucket on the floor is saved.
+- **(c) A two-handed task sets it down by itself**: every `props.startCarry(kind)` of another kind (a chick or bird for
+  the vent, crop, weighing or bird check, the catching frame, chick boxes, the barrow, a sack, a tool) and opening the
+  chick table's grading or the bird scale while carrying the bucket set it down at his feet first, with the caption
+  *"Bucket set down here"*. He is never locked out.
+- **(d) E acts on the chick job first.** While a job that needs birds in the hand is open (`level.chickJob`: the
+  sampling jobs — vent temperatures, crop check, weighing, the bird and droppings checks — the grading at the chick
+  table, a lame-bird job), **E never picks up a dead bird or the bucket**: it acts on the chick (or the panel, board or
+  machine) even with a dead bird closer. **Shift+E** picks up the dead bird (or the bucket) then, and the prompt shows it
+  as a second pill (*"Shift+E Pick up the dead bird"*). Outside chick jobs E picks up dead birds as before.
+
+### 15.4 Dead birds you can find (request 4)
+*"Dead birds should be more visible by including the distance pointer arrow to them, at least to the nearest dead bird."*
+
+Whenever dead birds lie on the floor (in a level, no panel open), an edge chip points to the **nearest** one with the
+count and its distance — *"3 dead birds · 12 m"* — at the screen edge while it is off screen and as a tag over it while
+it is on screen; it keeps clear of the job marker's pointer (both stay visible) and of the HUD cards. Every dead bird
+within **15 m** of the farmer gets a small floating marker (a muted red inverted pyramid 0.7 m over it, gently bobbing;
+one instanced mesh, at most 64). `src/ui-deadmarks.js` owns the chips and the markers; it reads `flock.dead.list`
+(positions) and `farm.flock.deadOnFloor` (the count).
+
+### 15.5 Harness proofs by real input (960 × 600)
+- `scripts/req-watch.json` — the brooding week at placement; at the climate controller the thermostat is turned 4 °C
+  under the brooder sign's row by real clicks; the clock runs; the Flock watch card turns amber then red, the warning
+  caption and its notebook line appear (cold hours, the cause and where to look) while the level is still running and
+  at least a farm day before a fail; the thermostat put back by real clicks; the card's comfort row returns to green.
+- `scripts/req-clock.json` — the default clock 90 and ⅔ speed at a job's place; a panel 24; a morning job opened at
+  11:45 at its panel stays open past 12:00 while the panel is open (held), closes 20 farm minutes after the panel
+  closes unless done; the *"closes in … farm minutes"* chip and caption from 11:30.
+- `scripts/req-bucket.json` — a chick job (vent temperatures) with a dead bird closer than the chick: E takes the chick;
+  Shift+E takes the dead bird; carrying the bucket, E on a chick sets the bucket down with its caption and takes the
+  chick; G sets the bucket down, its marker shows; E picks it up there (no chick job open); the bin counts it.
+- `scripts/req-deadmark.json` — dead birds on the floor: the chip shows the count and the nearest one's distance (checked
+  against the page's own sum), the markers float over the birds within 15 m and none farther, the job marker's pointer
+  still shows beside it.
+
+### 15.6 What it changes elsewhere
+- Steps files and play-throughs: fixed `advance` waits after timed panel actions are re-checked for the panel clock 24;
+  checks of `timeScale === 30` read `LEVEL1.clock.carry`; the real-input days are re-timed against the 6-minute ceiling.
+- test-jobs: the hold (a job held while its panel is open closes 20 farm minutes after; never in a skip), the closes-soon
+  event, `dead-cleared` with a bucket on the floor. test-contracts: the watch's texts and the new legend keys
+  verdict-free; G and Shift+E free of every other binding.
