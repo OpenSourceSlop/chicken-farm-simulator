@@ -165,7 +165,7 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     const blob = lean(full ?? level.saveBlob());
     const d = { version: RUN_SAVE.version, savedAt: Date.now(), run: serialize(), blob };
     memRun = clone(d);
-    const ok = store.save(d.run, blob);
+    const ok = store.save(d.run, blob, d.savedAt);   // (Phase 5: one time for the memory copy and the key)
     if (saveFns.size) told({ ok, kind: 'run', levelId: d.run.levelId });
     return ok;
   }
@@ -174,8 +174,9 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     if (!e.starts.includes(day)) e.starts.push(day);
     e.starts.sort((a, b) => a - b);
     const r = serialize(), blob = lean(level.saveBlob());
-    mem.set(startKey(id, day), clone({ version: RUN_SAVE.version, levelId: id, day, savedAt: Date.now(), run: r, blob }));
-    const ok = store.saveStart(id, day, r, blob);
+    const at = Date.now();
+    mem.set(startKey(id, day), clone({ version: RUN_SAVE.version, levelId: id, day, savedAt: at, run: r, blob }));
+    const ok = store.saveStart(id, day, r, blob, at);
     if (saveFns.size) told({ ok, kind: 'start', levelId: id });
   }
   function loadStart(id, day) {
