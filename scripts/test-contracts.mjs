@@ -392,6 +392,8 @@ test('review round: every lit toggle key shows a state with its lamp, never an a
     for (const m of src.matchAll(/stateText\('([^']+)'\)|toggleKey\('[^']+', '[^']+', [^\n]*?, '([^']+)'\);/g)) labels.push(m[1] || m[2]);
   }
   assert(calls >= 10 && labels.length === calls, `toggle keys ${calls}, state labels ${labels.length}: ${labels.join(' | ')}`);
+  // a lit key set by hand (setText beside aria-pressed) shows a state too, never 'Stop …'
+  for (const f of files) for (const m of readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8').matchAll(/setAttribute\('aria-pressed'[^\n]*setText\([^,]+, [^?]+\? '([^']+)'/g)) labels.push(m[1]);
   const VERB = /^(stop|start|open|close|shut|take|give|run|put|switch|turn)\b/i;
   for (const t of labels) assert(!VERB.test(t) && / · /.test(t) && !VERDICT.test(t), `a lit key's state label: "${t}"`);
 });

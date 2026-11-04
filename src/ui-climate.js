@@ -182,7 +182,10 @@ export function buildLevelControllerPanel(L) {
     setText(spOut, `${fmt1(env.heaterSetpoint)} °C`);
     setText(heatState, env.heatersOn ? 'Brooders burning' : 'Brooders off');
     setText(fanOut, `${env.fansManual ?? env.fansOn} / ${FAN_COUNT}`);
-    padBtn.setAttribute('aria-pressed', String(env.padOn)); setText(padBtn, env.padOn ? 'Stop the pad pump' : 'Start the pad pump');
+    // review round: lit, the key shows the pump's state; what a press does stays in its aria-label and title
+    const padAct = env.padOn ? 'Stop the pad pump' : 'Start the pad pump';
+    padBtn.setAttribute('aria-pressed', String(env.padOn)); setText(padBtn, env.padOn ? 'Pad pump · running' : padAct);
+    if (padBtn.getAttribute('aria-label') !== padAct) { padBtn.setAttribute('aria-label', padAct); padBtn.title = padAct; }
     setText(padState, `Pad pump: ${env.padOn ? 'on, water over the west end pad' : 'off'} · it cools the tunnel air of big birds in the heat`);
     setText(tFans, String(draft.fans)); setText(tOn, `${draft.onSec} s`); setText(tCycle, `${draft.cycleSec} s`);
     // the clarity round (PHASE4.md §6.2): the setting beside the need it is for, on screen with the keys

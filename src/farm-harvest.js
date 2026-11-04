@@ -51,7 +51,9 @@ export function bookCatch(farm, env, a) {
 /** load.ticket { truck } -> { crates, birds, grossKg, tareKg, gutKg, netKg, doa } (net = gross - empty truck - the plant's deduction). */
 export function ticket(farm, a) {
   const t = farm.harvest.trucks[Math.max(0, Math.min(HARVEST.trucks - 1, Math.round(a.truck ?? 0)))];
-  return { crates: t.crates, birds: t.birds, grossKg: Math.round(t.grossKg), tareKg: HARVEST.tareKg, gutKg: Math.round(t.gutKg || 0), netKg: Math.round(t.netKg), doa: t.doa };
+  // the printed ticket adds up in whole kilograms (review round: a rounded crop-fill deduction left net 1 kg off)
+  const grossKg = Math.round(t.grossKg), gutKg = Math.round(t.gutKg || 0);
+  return { crates: t.crates, birds: t.birds, grossKg, tareKg: HARVEST.tareKg, gutKg, netKg: t.grossKg > 0 ? grossKg - HARVEST.tareKg - gutKg : Math.round(t.netKg), doa: t.doa };
 }
 
 /** One step of the catch (cycle mode): the company's default time, the crew, the sections, the end. */

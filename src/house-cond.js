@@ -16,7 +16,7 @@ const FLAP = { w: 1.04, h: 0.34, hinge: 2.2 };      // the eave's shadow line: i
 const OPEN = -1.1;                                   // open: swung out about 63 degrees (a hood over the dark inlet gap)
 // review round: open and closed differ in shape and value from the yard: open, a galvanised hood over the dark gap with a
 // wet stain under it while it rains; closed, a flat plate in a light painted colour over the slot
-const FLAP_OPEN_C = new THREE.Color(0x9fa9b0), FLAP_SHUT_C = new THREE.Color(0xe9e4cf);
+const FLAP_OPEN_C = new THREE.Color(0x66717a), FLAP_SHUT_C = new THREE.Color(0xf4efdc);
 const PIPE_Y = 0.085;                                // drinker pipe centre above the nipple tip (house-drinkers.js)
 const RUST_LINE = 3;                                 // line 4 (PHASE4.md §4.4 iron-nipples, config line 3)
 
