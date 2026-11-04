@@ -2,9 +2,10 @@
 // The ideal farmer and every named mistake of CYCLE_TARGETS, through farm.act and the env setters only
 // (never other events: the run package's goto(auto) and standard starts call applyCycleRound in the browser).
 //
-//   cycleStops(fromDay, toDay) -> [{ d, h, r }]   the rounds to play, in time order: the routine rounds
+//   cycleStops(fromDay, toDay, condition) -> [{ d, h, r }]   the rounds to play, in time order: the routine rounds
 //     ('am' 06:15, 'pm' 13:15, 'night' 18:30, 'sign' 20:00), the fan plan's stops ('fans' at 09:00, 11:00,
-//     15:30, 21:00; the 'am' / 'pm' / 'night' rounds run it too), 'padcheck' (the pad plate's limit, at
+//     15:30, 21:00; the 'am' / 'pm' / 'night' rounds run it too), Phase 4's 'evening' (18:00 and 20:00 from day 28:
+//     the heat sign's evening line), a condition's own stops (farm-profiles-cond.js condStops), 'padcheck' (the pad plate's limit, at
 //     :30 from 11:30 to 17:30, days 22-41), and the dated ones ('curtain', 'check', 'vaccine', 'vaccine2',
 //     'change', 'change2', 'brooders', 'probe', 'feedersUp' / 'feedersDown', 'withdraw', 'catch', 'lines',
 //     'tickets', 'clean1'..'clean4', 'dry', 'swabs', 'close', 'lab', 'book'). 'sign' is the level's part
@@ -13,14 +14,14 @@
 //   runCycle (farm-profiles-cycle-run.js): the trace scripts/test-cycle.mjs checkCycle measures.
 // The ideal's fans and pads follow scripts/cycle-refs.mjs idealFans / idealPad (re-stated below: the
 // browser cannot import a script) at its stops, base controls only (no vent.stages).
-import { EQUIP, LIGHT_PRESETS, HARVEST, CLEAN, WEATHER, LEVEL1, PLAN_LEVEL, levelOfDay, feedStdGAt, flowTargetAt, nippleHeightCmAt, feederRimCmAt, targetTempAt, PLACEMENT_DAY, feedTypeForDay, HEAT } from './config.js';
+import { EQUIP, LIGHT_PRESETS, HARVEST, CLEAN, WEATHER, LEVEL1, PLAN_LEVEL, levelOfDay, feedStdGAt, flowTargetAt, nippleHeightCmAt, feederRimCmAt, targetTempAt, PLACEMENT_DAY, feedTypeForDay, HEAT, HEAT_P4 } from './config.js';
 import { signTimer } from './farm-profiles.js';
 import { feedLeftKg } from './farm-silos.js';
 
 /** Profile names (keys of CYCLE_TARGETS in scripts/test-cycle.mjs). */
 export const CYCLE_PROFILES = ['ideal', 'noDark', 'lateLift', 'noStep', 'poorVaccine', 'poorVaccineCocci', 'cocciUntreated', 'minVentW3',
   'crumbleOn', 'abruptChange', 'overfullSilo', 'dustOn', 'noTunnel', 'fansNoPad', 'padInHumid', 'fanUnfixed', 'noWithdrawal',
-  'longWithdrawal', 'brightCatch', 'wetDisinfect', 'litterLeft', 'shortRest', 'noCare', 'padWeek3', 'determinism'];
+  'longWithdrawal', 'brightCatch', 'wetDisinfect', 'litterLeft', 'shortRest', 'noCare', 'padWeek3', 'eveningFans3', 'padYoung1', 'determinism'];
 
 const IDEAL = {
   light: 'growing', curtain: { day: 10, hour: 8 }, vaccine: { thirstH: 1.5, stabiliser: true, walk: true }, timer: 'table',
@@ -54,6 +55,10 @@ const MODS = {
   shortRest: { restDays: 14 },
   noCare: { noCare: true },          // nothing at all is done (week 2 from its standard start): the level does not pass
   padWeek3: { padWeek3: true },      // the week 3 warm afternoon met with all six fans and the pad on 16-day-old birds
+  // Phase 4 (PHASE4.md §2.6): three fans and no pads in the evenings of days 29-41 (from 18:00 to the next morning's
+  // round; the night round turns the pads off), and the warm afternoon of day 16 met with the pad and one fan
+  eveningFans3: { eveningFans3: true },
+  padYoung1: { padYoung1: true },
 };
 export const cycleProfileOf = (name) => (typeof name === 'object' && name ? name : { ...IDEAL, ...(MODS[name] || {}), name: name || 'ideal' });
 
@@ -73,12 +78,14 @@ export function idealPad(env, fans) {
 }
 
 /** The rounds of each calendar day from fromDay to toDay (inclusive), in time order. */
-export function cycleStops(fromDay, toDay) {
+export function cycleStops(fromDay, toDay, condition = null) {
   const out = [];
   const add = (d, h, r) => out.push({ d, h, r });
   for (let d = Math.max(8, fromDay); d <= toDay; d++) {
     if (d <= 41) {
       add(d, 6.25, 'am');
+      // Phase 4: the heat sign's evening line for big birds (every fan and the pads while the outside is warm)
+      if (d >= HEAT_P4.padEveningFromAge && d <= 41) { add(d, 18, 'evening'); add(d, 20, 'evening'); }
       if ([10, 13, 16, 19, 23].includes(d)) add(d, 9.25, d === 23 ? 'probe' : 'check');
       if ([14, 21, 28, 35, 40].includes(d)) add(d, 9.5, 'weigh');
       for (const h of [9, 11, 15.5, 21]) add(d, h, 'fans');
@@ -105,8 +112,12 @@ export function cycleStops(fromDay, toDay) {
     if (d >= 49 && d <= 60) add(d, 7, 'lab');
     if (d <= 46) add(d, 20, 'sign');
   }
+  if (condition && COND_STOPS) out.push(...COND_STOPS(Math.max(8, fromDay), toDay, condition));
   return out.sort((a, b) => a.d + a.h / 24 - (b.d + b.h / 24));
 }
+// a condition's own stops (farm-profiles-cond.js registers them: no import cycle)
+let COND_STOPS = null;
+export const setCondStops = (fn) => { COND_STOPS = fn; };
 
 /** The keep-fed rule: stock of today's feed type for 3 days ahead, orders up to 5 days, to the type's end. */
 function keepFed(farm, env, act, day) {
@@ -145,7 +156,7 @@ function fanPlan(farm, env, act, P, day) {
   // the last stop of the evening (sign-heat): young birds want the tunnel fans off at night, so under four weeks
   // the fans go by the night's low
   if (env.hour >= 20.5 && age < 28) n = Math.min(n, Math.max(1, idealFans({ outsideTemp: nightLow(env), targetTemp: env.targetTemp }, age)));
-  if (P.fixes && heatFound(farm, env)) n = 6;
+  if (P.fixes && heatFound(farm, env)) n = P.padYoung1 && day === 16 ? 1 : 6;
   if (P.fixes && isState(farm, 'dusty-air', 'found') && P.dustAnswer) n = Math.max(n, 2);
   if (P.fixes && isState(farm, 'heat-wave', 'found', 'fixed') && day >= 30 && day <= 32) n = Math.max(n, idealFans(env, age));
   const atCatch = farm.harvest.started || (farm.harvest.catchAt != null && env.day >= farm.harvest.catchAt - 1 / 24);
@@ -155,8 +166,21 @@ function fanPlan(farm, env, act, P, day) {
   if (P.padInHumid && n >= 6 && day === 33 && env.hour >= 10 && env.hour < 18) pad = true;
   // padWeek3: the pad stays on with six fans through the warm afternoon of day 16 (the mistake under test)
   if (P.padWeek3 && day === 16 && n >= 6 && env.hour >= 11 && env.hour < 18) pad = true;
+  // padYoung1: the warm afternoon of day 16 met with the pad and one fan (the heat sign's young-birds line)
+  if (P.padYoung1 && day === 16 && P.fixes && heatFound(farm, env)) pad = true;
+  // Phase 4: the heat sign's evening line (from day 28, 18:00-21:00): every fan, the pads while the outside is warm
+  if (eveningOn(env, age, P)) { n = Math.max(n, eveningFans(farm, env)); pad = eveningPad(env, P); }
+  // eveningFans3: three fans and no pads from 18:00 to the next morning, days 29-41 (the heat wave's answer on days 30-32
+  // holds: the found heat wave has every fan by the plan)
+  const wave = P.fixes && isState(farm, 'heat-wave', 'found', 'fixed') && day >= 30 && day <= 32;
+  if (P.eveningFans3 && day >= 29 && day <= 41 && (env.hour >= 18 || env.hour < 6) && !wave) { n = 3; pad = false; }
   fansTo(act, env, n, pad);
 }
+/** The evening line (config HEAT_P4): big birds, 18:00 to 21:00. */
+const eveningOn = (env, age, P) => !P.noTunnel && age >= HEAT_P4.padEveningFromAge && env.hour >= 18 && env.hour < HEAT_P4.eveningUntil;
+const eveningFans = (farm, env) => 6;
+/** The pads on the evening line: while the outside air is at or over about 30 °C and the house RH at or under the pad plate's limit. */
+export const eveningPad = (env, P = {}) => P.pads !== 'never' && env.outsideTemp >= HEAT_P4.padEveningAboveC - 1e-9 && env.houseRH <= HEAT.padOffAboveRH;
 /** Tomorrow's 05:00 outside temperature (the weather's low and the level's weather events). */
 function nightLow(env) {
   const w = WEATHER[env.weather] || WEATHER.normal, t = env.dayNumber + 1 + 5 / 24;
@@ -262,8 +286,14 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
       if (day >= 15) act('fans.read', { fans: env.fansOn, houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH), speedMs: +env.airSpeed.toFixed(2) });
       answerProblems(farm, env, act, P, day);
       fanPlan(farm, env, act, P, day);
-      // the night: the pads off as the air cools, unless it is still 12 °C or more over the target (the fans carry on)
-      if (env.padOn && env.outsideTemp - env.targetTemp < 12 && !(P.padInHumid && day === 33)) fansTo(act, env, env.fansManual, false);
+      // the night: the pads off as the air cools, unless it is still 12 °C or more over the target (the fans carry on),
+      // or the evening line holds them (Phase 4: from day 28 while the outside is warm, until 21:00)
+      if (env.padOn && env.outsideTemp - env.targetTemp < 12 && !(P.padInHumid && day === 33) && !(eveningOn(env, age, P) && eveningPad(env, P)) && !P.eveningFans3) fansTo(act, env, env.fansManual, false);
+      return done;
+    }
+    case 'evening': {
+      if (!alive) return done;
+      fanPlan(farm, env, act, P, day);
       return done;
     }
     case 'curtain': {
@@ -344,6 +374,7 @@ function answerProblems(farm, env, act, P, day) {
   if (found('humid-heat') && !noTunnelOn(P, day)) { if (env.padOn) fansTo(act, env, Math.max(6, env.fansManual), false); else { env.setFans(6); act('vent.fans', { n: 6 }); } }
   // a heat problem found: every fan on, the pad by its plate (the switches pressed even when they were on)
   for (const id of ['warm-afternoon3', 'hot-afternoon', 'hot-finish']) if (found(id) && !noTunnelOn(P, day)) {
+    if (P.padYoung1 && id === 'warm-afternoon3') { env.setFans(1); act('vent.fans', { n: 1 }); env.setPad(true); act('vent.pad', { on: true }); continue; }
     env.setFans(6); act('vent.fans', { n: 6 });
     const pad = (P.padWeek3 && id === 'warm-afternoon3') || (P.pads !== 'never' && idealPad(envView(env), 6));
     if (pad !== env.padOn || pad) { env.setPad(pad); act('vent.pad', { on: pad }); }

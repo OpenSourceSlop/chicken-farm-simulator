@@ -24,6 +24,7 @@ const RANGE = {
   fansNoPad: ['weeks45', 'weeks45'], padInHumid: ['weeks45', 'weeks45'], fanUnfixed: ['weeks45', 'weeks45'], noWithdrawal: ['finish', 'finish'],
   longWithdrawal: ['finish', 'finish'], brightCatch: ['finish', 'finish'], wetDisinfect: ['cleanout', 'cleanout'], litterLeft: ['cleanout', 'cleanout'],
   shortRest: ['cleanout', 'cleanout'], noCare: ['week2', 'week2'], padWeek3: ['week3', 'week3'],
+  eveningFans3: ['weeks45', 'finish'], padYoung1: ['week3', 'week3'],
 };
 const CACHE = new Map();   // `${seed}:${levelId}` -> the ideal's state at that level's start (exact) and its trace so far
 const r3 = (v) => (Number.isFinite(v) ? Math.round(v * 1000) / 1000 : v);

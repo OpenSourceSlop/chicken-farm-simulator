@@ -37,7 +37,7 @@ import { createProblems, tickProblems, actionSymptoms, onNear, onListen, problem
 import { doAct } from './farm-act.js';
 import { absHumSat } from './sim.js';
 import { humidityTerm } from './farm-heat.js';
-import { waterPerKgP4, sensibleHeatK } from './farm-tuning.js'; // Phase 4: from Week 2 (PHASE4.md §9.1)
+import { waterPerKgP4, sensibleHeatK, TUNING } from './farm-tuning.js'; // Phase 4: from Week 2 (PHASE4.md §9.1)
 // Phase 3 (PHASE3.md §6, §13): the cycle state, its actions and the per-step model of Week 2 on
 import { installCycle, cycleAct } from './farm-cycle.js';
 import { installConditions, condAct } from './farm-cond.js'; // Phase 4 (PHASE4.md §10.5)
@@ -267,6 +267,7 @@ function stepFarm(farm, env, hrs, spill) {
     // Phase 4 (from Week 2): the birds drink by their comfort (waterPerKgP4 of the mean e), not by the weather
     const io = { feedAccess: feedAccess(feed, age, env.dayNumber), eat: (kg) => eat(feed, kg), waterPerKg: X ? waterPerKgP4(C.meanOver ?? 0) : waterPerKg(env.houseTemp) };
     if (X) cycleFactors(farm, env, age, hrs);
+    farm.lastRatio = io.waterPerKg;
     const r = stepFlock(farm, env, hrs, C, io);
     drunkL = r.drunkL; breathL = r.breathL;
     drink(water, drunkL, age, spill);
@@ -278,7 +279,10 @@ function stepFarm(farm, env, hrs, spill) {
   // litter, air
   // the litter integrates what fell on it every 5 game minutes (moisture changes over hours)
   const L = farm.litter, la = farm.litAcc;
-  la.h += hrs; la.drop += 0.5 * drunkL; la.leak += leakL;
+  // Phase 4 (from Week 2): the water hot birds drink over the comfort ratio leaves as breath (panting), not in the
+  // droppings (model; PHASE4.md §2.7): the droppings carry half the water at TUNING.water.base L/kg
+  const dropL = X && farm.lastRatio > TUNING.water.base ? (drunkL * TUNING.water.base) / farm.lastRatio : drunkL;
+  la.h += hrs; la.drop += 0.5 * dropL; la.leak += leakL;
   for (let i = 0; i < 4; i++) la.spill[i] += spill[i] || 0;
   if (la.h >= SLOW_H - 1e-9) {
     stepLitter(L, { hrs: la.h, droppingsL: la.drop, spill: la.spill, leakL: la.leak, leakCell: water.leak ? water.leak.cell : null,

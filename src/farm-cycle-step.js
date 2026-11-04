@@ -144,6 +144,9 @@ function dailyStats(farm, env, hrs, age) {
     if (g) {
       const dg = farm.feed.drawMix ? farm.feed.drawMix.grower : null; // the augers' draw: the valves' blend
       if (dg != null && dg >= 0.2 && dg <= 0.8 && d <= 20) st.blendH = (st.blendH || 0) + hrs;
+      // Phase 4 (PHASE4.md §6 item 9): the finisher's half-and-half (the augers draw 20-80 % finisher), days 28-36
+      const df = farm.feed.drawMix ? farm.feed.drawMix.finisher : null;
+      if (df != null && df >= 0.2 && df <= 0.8 && d >= 28 && d <= 36) st.blendFinH = (st.blendFinH || 0) + hrs;
       if (st.growerAt90 == null && (g.grower || 0) >= 0.9) st.growerAt90 = +env.day.toFixed(4);
       if (st.finisherAt90 == null && (g.finisher || 0) >= 0.9 && d >= 29) st.finisherAt90 = +env.day.toFixed(4);
     }

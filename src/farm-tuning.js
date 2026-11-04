@@ -37,7 +37,9 @@ export const TUNING = {
   // (the catch: the lines go up as the crew starts; the vaccine's thirst keeps its own 4 h rule).
   dry: { fromAge: 21, safeH: 6 },
   // Uniformity: the within-cohort CV growth per day after day 14 x this (the ideal's day-40 weighing 68-74 %).
-  cvGrowthAfter14: 0.8,
+  // Tuned 0.8 -> 0.5 by the sim package (PHASE4.md §2.7): the base growth (0.0002 a day) dominates after day 14; at
+  // 0.8 the ideal's flock reads 67.0 % at day 40, at 0.5 69.1 % (weighed 68 %)
+  cvGrowthAfter14: 0.5,
 };
 
 const lerpTable = (t, a) => {

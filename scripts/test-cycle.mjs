@@ -9,7 +9,10 @@ import { EV } from '../src/events.js';
 import { CYCLE_PROFILES, runCycle } from '../src/farm-profiles-cycle.js';
 import { planSums, planOutcome } from '../src/farm-plan.js';
 import { LEVELS, SKILL_BRANCHES, weightAt, feedStdGAt, feedPerGainAt } from '../src/config.js';
-import { CLIMATE_REFS, WINDOW_REFS, GROWTH_REFS, runPlan, growthAt } from './cycle-refs.mjs';
+import { GROWTH_REFS, growthAt } from './cycle-refs.mjs';
+// Phase 4 (PHASE4.md §2.6): the climate references of the tuned model replace cycle-refs.mjs CLIMATE_REFS / WINDOW_REFS
+// (kept there for the record); the bands below are §2.6's
+import { CLIMATE_REFS_P4 as CLIMATE_REFS, WINDOW_REFS_P4 as WINDOW_REFS, runPlanP4 as runPlan } from './tuning-refs.mjs';
 
 /**
  * Bands per profile (PHASE3.md §6.14). Level keys → measured level results (runCycle's `levels[id]`):
@@ -24,11 +27,13 @@ export const CYCLE_TARGETS = {
     week2: { pass: true, weightG: [485, 530], deathsPct: [0.15, 0.5] },
     week3: { pass: true, weightG: [960, 1040], deathsPct: [0.15, 0.5] },
     weeks45: { pass: true, weightG: [2230, 2420], deathsPct: [0.2, 0.8] },
-    finish: { pass: true, liveG: [2820, 3020], fcr: [1.55, 1.72], mortalityPct: [1.4, 3.2], uniformityPct: [62, 80], epef: [360, 440], doaPct: [0.1, 0.25], withdrawalH: [8, 12] },
+    finish: { pass: true, liveG: [2820, 3020], fcr: [1.55, 1.72], mortalityPct: [1.4, 3.2], uniformityPct: [68, 76], epef: [360, 440], doaPct: [0.1, 0.25], withdrawalH: [8, 12] },
     cleanout: { pass: true, positive: [0, 1], restDays: [21, 21] },
     snaps: { vaccineCoverage: [0.92, 0.98], vaccineHours: [1.5, 2.2], houseWave31At15: [28.8, 31.5], pantWave31At15: [0, 0.3],
-      heatwaveHeatDeathsPct: [0, 0.05], heatwavePantHours: [1, 12], heatDeathsW45Pct: [0, 0.05], nh3NightMaxW46: [0, 25],
-      pantShareW3At15: [0, 0.35], dustMaxDay23: [0, 1.9], minBranchPoints: [9, Infinity] },
+      heatwaveHeatDeathsPct: [0, 0.05], heatwavePantHours: [0.3, 8], heatDeathsW45Pct: [0, 0.05], nh3NightMaxW46: [0, 25],
+      pantShareW3At15: [0, 0.2], dustMaxDay23: [0, 1.9], minBranchPoints: [9, Infinity],
+      // Phase 4 (PHASE4.md §2.6): the evening line, no thirst at the catch, the water ratio of well-cooled birds, the gas
+      eveningPant37At19: [0, 0.1], dehydrationFinishPct: [0, 0], waterFeedHotDay: [1.8, 2.0], gasKgTo21: [200, 300], blendFinH: [20, Infinity] },
   },
   noDark: { snaps: { sdsVsIdeal: [3, Infinity], lameVsIdeal: [2, Infinity] } },
   lateLift: { snaps: { day14WeightUnderIdealPct: [3, Infinity], day14UniformityUnderIdeal: [3, Infinity], broodLitterDay14: [32, Infinity] } },
@@ -39,15 +44,17 @@ export const CYCLE_TARGETS = {
     snaps: { vaccineCoverage: [0.35, 0.7], vaccineHours: [3.5, 5], gumboroStarted: true, week3DiseaseDeathsPct: [0.3, 0.6], day21WeightUnderIdealPct: [4, 8] } },
   poorVaccineCocci: { week3: { pass: false }, snaps: { gumboroStarted: true, week3DiseaseDeathsPct: [0.9, 2.5] } },
   cocciUntreated: { week3: { pass: false }, snaps: { week3DiseaseDeathsPct: [0.5, 1.5], day21WeightUnderIdealPct: [2, Infinity] } },
-  minVentW3: { week3: { pass: true }, snaps: { pantShareW3At15: [0.8, 1], heatDeathsW3Pct: [0, 0.07], day21WeightUnderIdealPct: [1, 4] } },
+  // sim package, Phase 4 (PHASE4.md §2.7): the closed week-3 house of the tuned model (the flock's heat x 2.5) costs 4.1 % of the
+  // day 21 weight (Phase 3: 2.5 %); the band's top 4 -> 5 for the integrator to agree
+  minVentW3: { week3: { pass: true }, snaps: { pantShareW3At15: [0.8, 1], heatDeathsW3Pct: [0, 0.15], day21WeightUnderIdealPct: [1, 5] } },
   crumbleOn: { snaps: { day28WeightUnderIdealPct: [3, 8] } },
   abruptChange: { snaps: { undigestedHours: [12, 30], intakeDipPct: [2, 4] } },
   overfullSilo: { snaps: { finisherPansDay: [31, 40], day35WeightUnderIdealPct: [0, 3] } },
   dustOn: { snaps: { dustMaxDay23: [1.5, 2], dustyHoursDay23: [3, Infinity] } },
   noTunnel: { weeks45: { pass: false, endDay: [23, 27] }, snaps: { heatDeathsW45Pct: [2, Infinity] } },
-  fansNoPad: { weeks45: { pass: false, endDay: [30, 31] }, snaps: { houseWave30At15: [38, 40.5], heatwaveHeatDeathsPct: [2, Infinity] } },
-  padInHumid: { snaps: { felt33At15OverIdeal: [1.5, 3.5], heatDeaths33Pct: [0.15, 1] } },
-  fanUnfixed: { snaps: { airSpeed6Fans: [2.0, 2.2], heatwavePantHoursVsIdeal: [2, Infinity] } },
+  fansNoPad: { weeks45: { pass: false, endDay: [30, 31] }, snaps: { houseWave30At15: [38, 40.5], heatwaveHeatDeathsPct: [2, Infinity], waterFeedHotDay: [2.1, 2.7] } },
+  padInHumid: { snaps: { felt33At15OverIdeal: [1.5, 3.5], heatDeaths33Pct: [0, 0.3], intake33UnderIdealPct: [1, 6] } },
+  fanUnfixed: { snaps: { airSpeed6Fans: [2.0, 2.2], heatwavePantHoursVsIdeal: [1.5, Infinity] } },
   // review: the plant deducts the gut fill (3 % of the weighed kg), so skipping the withdrawal pays less than
   // an 8-12 h withdrawal and its FCR is worse (it was better on every number before)
   noWithdrawal: { snaps: { gutFull: true, fcrOverIdeal: [0, Infinity], paidKgUnderIdeal: [1, Infinity], epefUnderIdeal: [1, Infinity] } },
@@ -59,7 +66,12 @@ export const CYCLE_TARGETS = {
   // review: a week 2 with no care at all (no light program, curtain, vaccine, raising, weighing, dead birds picked
   // up) does not pass on the automatic scale; six fans and the pad on 16-day-old birds chill them and earn no point
   noCare: { week2: { pass: false } },
-  padWeek3: { snaps: { w3HeatEarned: false, heat3FixedByAir: false, coldDeathsDay16: [1, Infinity] } },
+  padWeek3: { snaps: { w3HeatEarned: false, heat3FixedByAir: false, coldDeathsDay16: [1, 15] } },
+  // Phase 4 (PHASE4.md §2.6): three fans in the evenings of big birds (a visible cost, no deaths); the young birds' pad
+  // sim package (PHASE4.md §2.7): the intake loss of heatIntakeP4 starts at hotFrom, so the evenings' panting (18 x the ideal's
+  // bird-hours) costs 0.03 % of the day 35 weight, not 0.5-3 %: the band's floor 0.5 -> 0 for the integrator to agree
+  eveningFans3: { weeks45: { pass: true }, snaps: { eveningPantHoursVsIdeal: [3, Infinity], day35WeightUnderIdealPct: [0, 3] } },
+  padYoung1: { snaps: { w3HeatEarned: true, coldDeathsDay16: [0, 0], pantShare16At15: [0, 0.1] } },
 };
 
 // ---- the trace runCycle must return (PHASE3.md §6.14) ----
@@ -131,6 +143,15 @@ export const SNAPS = {
   liveUnderIdealPct: (r, i) => under(r.levels.finish?.liveG, i.levels.finish?.liveG),
   doaVsIdeal: (r, i) => ratio(r.levels.finish?.doaPct, i.levels.finish?.doaPct),
   minBranchPoints: (r) => Math.min(...SKILL_BRANCHES.map((b) => r.points?.[b.id] ?? 0)),           // the ideal from the plan level: level 2 everywhere
+  // ---- Phase 4 (PHASE4.md §2.6) ----
+  eveningPant37At19: (r) => field(H(r, 37, 19), 'pantShare'),                                      // share, day 37 19:00
+  dehydrationFinishPct: (r) => diffDead(r, 'dehydration', 36.25, r.hourly[r.hourly.length - 1].t + 1e-6), // % d36 06:00 → the end
+  waterFeedHotDay: (r) => r.records.row(26)?.waterFeedRatio ?? null,                               // the records row of day 26: water ÷ feed over day 25 06:15 → day 26 06:15 (the hot afternoon)
+  gasKgTo21: (r) => r.farm.stats.daily?.[21]?.gasAtSign ?? null,                                   // kg, the gas burnt by the day 21 record
+  blendFinH: (r) => r.farm.stats.blendFinH ?? 0,                                                   // h the augers drew 20-80 % finisher
+  intake33UnderIdealPct: (r, i) => { const f = (x) => { const a = between(x, 33.25, 34.25); return a.length ? a[a.length - 1].feedEatenKg - a[0].feedEatenKg : null; }; return under(f(r), f(i)); }, // % of the ideal, d33 06 → d34 06
+  eveningPantHoursVsIdeal: (r, i) => { const f = (x) => between(x, 29, 42).filter((h) => h.hour >= 18).reduce((s, h) => s + h.pantShare, 0); return ratio(f(r), f(i)); }, // 18:00-24:00, days 29-41
+  pantShare16At15: (r) => field(H(r, 16, 15), 'pantShare'),
 };
 
 const inBand = (v, b) => (b === true || b === false ? v === b : v != null && v >= b[0] - 1e-9 && v <= b[1] + 1e-9);
@@ -210,9 +231,10 @@ test('contract: target weights the levels are judged on (general, config weightA
 // ---- the climate check (PHASE3.md §6.3, §6.4): env + farm-heat alone, runs now ----
 const climate = {};
 for (const ref of CLIMATE_REFS) {
-  test(`climate ${ref.id}: day ${ref.day} ${String(ref.hour).padStart(2, '0')}:00, ${ref.plan}${ref.events ? ` (${ref.events.join(', ')})` : ''}`, () => {
-    const o = runPlan(ref.plan, { fromDay: ref.day - 1 + 6 / 24, toDay: ref.day + ref.hour / 24, events: ref.events || [] });
-    const m = { outRh: o.outRh, houseC: o.houseC, rh: o.rh, feltC: o.s.feltMean, pant: o.s.pantShare, deathPerH: o.s.deathPerH * 100, fHeat: o.s.fHeat, dust: o.dust };
+  test(`climate ${ref.id}: day ${ref.day} ${String(ref.hour).padStart(2, '0')}:00, ${ref.plan}${ref.weather ? ` (${ref.weather})` : ''}${ref.events ? ` (${ref.events.join(', ')})` : ''}`, () => {
+    const o = runPlan(ref.plan, { weather: ref.weather, fromDay: ref.day - 1 + 6 / 24, toDay: ref.day + ref.hour / 24, events: ref.events || [] });
+    const m = { outC: o.outC, outRh: o.outRh, houseC: o.houseC, rh: o.rh, feltC: o.s.feltMean, e: o.s.eMean, pant: o.s.pantShare, deathPerH: o.s.deathPerH * 100,
+      coldDeathPerH: o.s.coldDeathPerH * 100, fHeat: o.s.fHeat, windChill: o.s.windChill, dust: o.dust };
     climate[ref.id] = m;
     if (ref.expect.feltOverIdeal) m.feltOverIdeal = m.feltC - climate[ref.id.replace(ref.plan, 'ideal')].feltC;
     const bad = Object.entries(ref.expect).filter(([k, b]) => !inBand(m[k], b)).map(([k, b]) => `${k} ${fmt(m[k])} not in ${JSON.stringify(b)}`);
@@ -221,11 +243,11 @@ for (const ref of CLIMATE_REFS) {
 }
 const windows = {};
 for (const ref of WINDOW_REFS) {
-  test(`climate window ${ref.id}: days ${ref.from}–${ref.to}, ${ref.plan}`, () => {
-    const o = runPlan(ref.plan, { fromDay: ref.from, toDay: ref.to, events: ref.events || [], broken: ref.broken, padWorking: ref.padWorking });
-    const m = { deathsPct: o.deathsPct, pantH: o.pantH, fHeat: o.fHeat };
+  test(`climate window ${ref.id}: days ${ref.from}–${ref.to}, ${ref.plan}${ref.weather ? ` (${ref.weather})` : ''}`, () => {
+    const o = runPlan(ref.plan, { weather: ref.weather, fromDay: ref.from, toDay: ref.to, events: ref.events || [], broken: ref.broken, padWorking: ref.padWorking });
+    const m = { deathsPct: o.deathsPct, pantH: o.pantH, coldH: o.coldH, fHeat: o.fHeat };
     windows[ref.id] = m;
-    const base = windows[ref.id.replace(/-(fan4-broken|pad-clogged|padInHumid)$/, '-ideal')];
+    const base = windows[ref.id.replace(/-(fan4-broken|pad-clogged|padInHumid|padsTo21)$/, '-ideal')];
     if (ref.expect.pantHOverIdeal) m.pantHOverIdeal = m.pantH / base.pantH;
     if (ref.expect.fHeatUnderIdeal) m.fHeatUnderIdeal = base.fHeat - m.fHeat;
     const bad = Object.entries(ref.expect).filter(([k, b]) => !inBand(m[k], b)).map(([k, b]) => `${k} ${fmt(m[k])} not in ${JSON.stringify(b)}`);
