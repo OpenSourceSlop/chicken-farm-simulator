@@ -4,11 +4,13 @@
 // change, so a click costs a few milliseconds whatever the number of trees, posts or walls.
 // This is what walks the farmer round to the house door when you click inside the house.
 import { resolve } from './player-collide.js';
+import { clock } from './clock.js';
 
 const CELL = 0.5;
 const TEST_SHRINK = 0.03; // a straight segment may graze an obstacle by this much (collision slides)
 const GROW_SHRINK = 0.04; // grid cells are blocked within (radius - this) of an obstacle
 const BUDGET_MS = 25; // give up (walk straight, stop when blocked) rather than stall a click
+const BUDGET_POPS = 400000; // the same give-up as a count of searched cells under the test harness (clock.virtual)
 const SQRT2 = Math.SQRT2;
 
 function segHitsBox(ax, az, bx, bz, c, e) {
@@ -200,7 +202,9 @@ function astar(G, start, goal) {
     if (closed[k] === stamp) continue;
     closed[k] = stamp;
     if (k === goal) return true;
-    if ((++pops & 2047) === 0 && performance.now() - t0 > BUDGET_MS) return false;
+    // the budget in real time; under the harness's fixed steps (clock.virtual) a fixed count, so a route never
+    // depends on the machine's load
+    if ((++pops & 2047) === 0 && (clock.virtual ? pops > BUDGET_POPS : performance.now() - t0 > BUDGET_MS)) return false;
     const i = k % nx, j = (k - i) / nx;
     const gk = g[k];
     for (let d = 0; d < 8; d++) {

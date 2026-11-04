@@ -22,7 +22,9 @@ export const clickUntil = (text, until, max = 80) => ({ clickTextUntil: text, un
 export const until = (advanceUntil, max = 60, step = 0.5) => ({ advanceUntil, max, step });
 export const next = () => [{ clickOn: '.ljobs-next' }, adv(0.4)];
 /** Next job until the clock reaches `h` (with a job still open the first press asks, the next one skips). */
-export const nextTo = (h) => [{ clickTextUntil: '', until: `__game.env.hour >= ${h}`, max: 5, in: '.ljobs-foot' }, adv(0.2)]; // its first button is Next job
+// (the button reads "Next job" while jobs are open, then the skip it confirms, "Skip to 13:00 — 1 job open")
+export const nextTo = (h) => [0, 1, 2].flatMap(() => [{ clickTextUntil: 'Next job', until: `__game.env.hour >= ${h}`, max: 1, in: '.ljobs-foot' },
+  { clickTextUntil: 'Skip to', until: `__game.env.hour >= ${h}`, max: 1, in: '.ljobs-foot' }]).concat([adv(0.2)]);
 /** E at an interactable and the panel it opens. */
 export const E = (id, label) => [press('e'), adv(0.25), exp(`__game.ui.openPanelId === '${id}' || ('open: ' + __game.ui.openPanelId + ', nearest ' + __game.interact.nearest(__game.player)?.id) && false`, label || `E opens ${id}`)];
 export const esc = () => [press('Escape'), adv(0.15)];

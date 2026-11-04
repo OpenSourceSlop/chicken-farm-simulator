@@ -9,6 +9,7 @@ import { equipShell, readout, stepper } from './ui-equipment.js';
 import { int, one, two, cropWords } from './ui-format.js';
 // Phase 3 (package "panels"): the weight spread chart in the weigh panel (unlock uniformityChart)
 import { spreadChart } from './ui-cycle-kit.js';
+import { clock } from './clock.js';
 
 // A chick drawn in 2D (top-left origin 0..60). flip = on its back, cull = gone.
 function chickSvg({ flip = false, size = 1 } = {}) {
@@ -36,7 +37,7 @@ export function buildGradingPanel(L) {
   const hockBtn = button({ class: 'btn btn--machine' }, 'Look at the hocks');
   const cullBtn = button({ class: 'btn btn--machine btn--cull' }, 'Cull');
   const sampleOf = (c) => { if (!c.sample) c.sample = L.act('sample.grade', { i: c.i }) || {}; return c.sample; };
-  flipBtn.addEventListener('click', () => { const c = chicks[sel]; if (c.culled) return; sampleOf(c); c.flipAt = performance.now(); c.rightedIn = null; draw(); });
+  flipBtn.addEventListener('click', () => { const c = chicks[sel]; if (c.culled) return; sampleOf(c); c.flipAt = clock.now(); c.rightedIn = null; draw(); });
   navelBtn.addEventListener('click', () => { const c = chicks[sel]; sampleOf(c); c.seen.navel = true; draw(); });
   hockBtn.addEventListener('click', () => { const c = chicks[sel]; sampleOf(c); c.seen.hocks = true; draw(); });
   cullBtn.addEventListener('click', () => { const c = chicks[sel]; if (c.culled) return; c.culled = true; L.act('chicks.cull', { n: 1, reason: 'grading' }); draw(); });
@@ -74,7 +75,7 @@ export function buildGradingPanel(L) {
     if (c.culled) lines.push(h('p', null, 'Culled: in the cull bucket.'));
     else {
       if (c.flipAt != null) {
-        const sec = c.rightedIn ?? (performance.now() - c.flipAt) / 1000;
+        const sec = c.rightedIn ?? (clock.now() - c.flipAt) / 1000;
         lines.push(h('p', null, c.rightedIn != null ? `Righted itself after ${one(sec)} s.` : `On its back… ${one(sec)} s`));
       }
       if (c.seen.navel) lines.push(h('p', null, `Navel: ${navelWords(c.sample?.navel)}.`));
@@ -87,7 +88,7 @@ export function buildGradingPanel(L) {
   return {
     el: shell.el,
     update() {
-      const now = performance.now();
+      const now = clock.now();
       let changed = false;
       for (const c of chicks) {
         if (c.flipAt != null && c.rightedIn == null) {

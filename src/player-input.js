@@ -3,6 +3,8 @@
 // E and Escape belong to the UI and are never used here. Only events on the canvas count for
 // the mouse, so HUD clicks never walk the farmer.
 
+import { clock } from './clock.js';
+
 const MOVE = { KeyW: 'f', KeyS: 'b', KeyA: 'l', KeyD: 'r' };
 const RUN = new Set(['ShiftLeft', 'ShiftRight']);
 const ROTATE = { ArrowLeft: 1, ArrowRight: -1 };
@@ -102,7 +104,7 @@ export function createInput(canvas) {
     if (!d || e.pointerId !== d.id) return;
     if (d.button === 0 && !d.moved && st.enabled) {
       // A quick second click near the first one means "run there".
-      const now = performance.now();
+      const now = clock.now(); // real time; under the harness's fixed steps the steps' own clock
       const lc = st.lastClick;
       const double = !!lc && now - lc.t < DOUBLE_MS && Math.hypot(e.clientX - lc.x, e.clientY - lc.y) < DOUBLE_PX;
       st.lastClick = double ? null : { t: now, x: e.clientX, y: e.clientY };

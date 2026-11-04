@@ -491,7 +491,10 @@ hour)` (`level.debug.freeRun`) and `config` (the config module: steps files read
   next 06:00; a skip of more than a day runs behind the busy card. `L.weighings()` reads the level's saved weighs of the
   day and counts places as the weigh job does (house sectors from day 8). The drawn flock's generator is reseeded from
   the level seed and the clock minute at every level start and restore (`flock-level reseed`), and the play-through
-  steps stop the loop before anything runs in real time. The notebook folds away the levels before the last one when a
+  steps stop the loop before anything runs in real time. Once the harness stops the loop (`__game.stop()`), the
+  double click ("run there"), the route search budget, the *Next job* confirm window, the brooder "Off and up"
+  confirm and the chick-righting time read `src/clock.js`, a clock that only `advance()` moves: a steps file gives
+  the same play-through on a busy or an idle machine (real time otherwise). The notebook folds away the levels before the last one when a
   level is entered (`records.compact`); day stats and notebook values are rounded in the save (`src/round.js`); the run
   key leaves out the blob's copy of the run: the run key at day 67 is about 175 KB (test-run asserts ≤ 250 KB). A
   standard start clears the later levels and their starts of the abandoned flock and keeps the player's entries of the

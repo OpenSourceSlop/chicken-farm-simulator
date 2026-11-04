@@ -54,6 +54,7 @@ import { planSums } from './farm-plan.js';
 import { ALL_MILESTONES } from './skills.js';
 import { hhmm, splitDay, two, int } from './ui-format.js';
 import { dayLabel } from './content.js';
+import { clock as stepClock } from './clock.js';
 
 const H = 1 / 24;
 const CARRY_KINDS = new Set(['boxes', 'barrow', 'sack', 'frame']);
@@ -385,7 +386,7 @@ export function createLevel(ctx, deps = {}) {
   function nextLabel() {
     if (free) return 'No jobs (free run)';
     if (!inLevel()) return 'Next job';
-    if (pending && performance.now() - pending.at < NEXT_CONFIRM_MS) return pending.label;
+    if (pending && stepClock.now() - pending.at < NEXT_CONFIRM_MS) return pending.label;
     if (engine.open().length) return 'Next job';
     return skipText(skipTarget([]));
   }
@@ -707,12 +708,12 @@ export function createLevel(ctx, deps = {}) {
       if (saveIn != null && (saveIn -= dt) <= 0) saveNow();
       if (lastSaveDay == null) lastSaveDay = env.day;
       else if (env.day - lastSaveDay >= 2 * H) saveNow();
-      if (pending && performance.now() - pending.at > NEXT_CONFIRM_MS) pending = null;
+      if (pending && stepClock.now() - pending.at > NEXT_CONFIRM_MS) pending = null;
     },
     nextJob() {
       if (!inLevel() || free) return null;
       const open = engine.open();
-      const now = performance.now();
+      const now = stepClock.now();
       if (open.length && !(pending && now - pending.at < NEXT_CONFIRM_MS)) {
         const c = engine.cycle();
         pending = { at: now, label: skipText(skipTarget(open), open.length) };

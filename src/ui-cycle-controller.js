@@ -12,6 +12,7 @@ import { h, button, setText, uniqueId, fmt1 } from './ui-dom.js';
 import { machineRow, stepper } from './ui-equipment.js';
 import { int } from './ui-format.js';
 import { heatBudgetOf, lineChart, historyOf, knownBirds } from './ui-cycle-kit.js';
+import { clock } from './clock.js';
 
 const FROM_DAY = 8;
 const signed = (v) => `${v > 0.05 ? '+' : v < -0.05 ? '−' : ''}${fmt1(Math.abs(v))}`;
@@ -23,7 +24,7 @@ export function cycleControllerParts(L, { draft, lp, refresh }) {
   const upBtn = button({ class: 'key key--wide' }, 'Off and up');
   let confirmAt = 0;
   upBtn.addEventListener('click', () => {
-    const now = performance.now();
+    const now = clock.now();
     if (now - confirmAt > 3000) { confirmAt = now; setText(upBtn, 'Press again'); return; }
     confirmAt = 0;
     L.act('heat.brooders', { up: true });
@@ -100,7 +101,7 @@ export function cycleControllerParts(L, { draft, lp, refresh }) {
     brooders.el.hidden = !show;
     const up = !!(env.broodersUp ?? farm.house?.broodersUp);
     upBtn.hidden = up;
-    if (performance.now() - confirmAt > 3000) setText(upBtn, 'Off and up');
+    if (clock.now() - confirmAt > 3000) setText(upBtn, 'Off and up');
     setText(brooders.small, up ? 'off and winched up' : 'off for good and winched up out of the way');
     brooders.led.classList.toggle('is-on', !up && !!env.heatersOn);
     calcBox.hidden = !skills?.unlocked?.('minVentCalc') || farm.mode !== 'level';

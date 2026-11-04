@@ -1,5 +1,6 @@
 // Boot, render loop and module wiring. Owner: integrator.
 import * as THREE from 'three';
+import { clock as inputClock } from './clock.js';
 import * as config from './config.js';
 import { HOUSE } from './config.js';
 import { createSim } from './sim.js';
@@ -212,7 +213,7 @@ function start(saved = {}) {
     // Run the simulation forward `seconds` of real time without rendering, at a fixed step.
     advance(seconds, dt = 1 / 30) {
       const n = Math.round(seconds / dt);
-      for (let i = 0; i < n; i++) step(dt);
+      for (let i = 0; i < n; i++) { if (inputClock.virtual) inputClock.ms += dt * 1000; step(dt); }
     },
     // Settle the flock at the current climate without moving the clock.
     settle(seconds = 20, dt = 1 / 30) {
@@ -252,7 +253,7 @@ function start(saved = {}) {
       out.fansBroken = env.fansBroken ?? [];
       return out;
     },
-    stop() { running = false; },
+    stop() { running = false; inputClock.virtual = true; inputClock.ms = performance.now(); },
   };
   window.__game = game;
 
