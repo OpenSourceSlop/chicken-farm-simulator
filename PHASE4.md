@@ -369,7 +369,57 @@ the fan panel on the 18:00 round and checks `night-comfort` done. `p3-replay.jso
 
 ### 2.7 Tuning log (filled at integration)
 The sim package records here every model constant it changes from §2.3 / §4, with the reason and the bands it moved
-(the integrator agrees a band change). *Empty until the sim package merges.*
+(the integrator agrees a band change). Filled by the sim package (branch `phase4/sim`); every Phase 2 number of the lone
+brooding week is byte-identical (the 17 profiles' farm, records and skills).
+
+**Wired as §2.3 / §9.1 say** (no constant changed): `windChillP4` from Week 2 through `env.setWindChillP4` (the farm's
+`syncEnv` with the cycle model); panting, heat deaths, intake and the cold deaths from day 14 in `farm-house.js
+houseComfort` (the per-cell arithmetic inlined with the age's thresholds read once per call, checked equal to the functions);
+the flock's sensible heat x `sensibleHeatK`; water by `waterPerKgP4(mean e)`; `dehydrationAllowed` on the hours with water
+access under 0.5; `farm.comfort.pantFrom / pantAll / feltMean` (also in the brooding week: Phase 2's mean + the damp).
+
+| # | Change | Why | Effect / bands |
+| --- | --- | --- | --- |
+| 1 | `TUNING.cvGrowthAfter14` 0.8 → **0.5** | the base CV growth (0.0002 a day, not scaled by `cvCycleK`) dominates after day 14: at 0.8 the ideal's flock read 67.0 % at day 40 | model 69.1 %, weighed 68 % at day 40 (band 68–76); 72 % at day 35 |
+| 2 | New model rule (farm.js): from Week 2 the droppings carry half the water at the comfort ratio (1.8 L/kg); the water drunk over it leaves as breath (panting) | with the hot ratio in the droppings and the evening pads (house 88–91 % RH, 18:00–21:00) the litter under the drinker lines passed 40 % from day 37 and caked a third of the floor (uniformity 64 %) | ideal litter 31.0 % at day 41 15:00, no cake; the records' water : feed 1.97 / 1.99 on the rows of days 25 / 26 |
+| 3 | `heatHandled` (farm-cycle-problems.js): never chilled; birds under 21 days may have the pad with **at most three** tunnel fans (`YOUNG_PAD_MAX_FANS`) | §2.2 row 23's "the pad with few fans allowed" read literally keeps test-jobs' Phase 3 case (16-day-olds, six fans and the pad: not handled) while the hot season's week-3 plan (two or three fans) and `padYoung1` are handled | test-cond: pad + 1 fan on day 16 e +0.46 handled, pad + 6 fans e −5.3 not |
+| 4 | The hot season's line water: the drinking factor (× (1 − 0.015 × (line °C − 30))) for birds of **21 days and older** (`LINE_WATER_FROM_AGE`); the line temperature is tracked from the prep day | the brooding house runs at 32–34 °C by design (lines 34–36 °C): chicks lost 7 % of their water access and 5 % of their day-7 weight (ratio 4.58); the flush job exists from day 22 | hot brooding ratio 4.83, day 14 497 g |
+| 5 | The tank (water condition): the pads draw their evaporation on the wet share **plus `padBleed` × the full pad's flow** (the pad pump sends it whatever the sheet's wetness) | with the bleed on the actual draw the farm's tank settled at 3–8 % in the unrepaired heat wave (the farm's birds drink less once the lines lose pressure): waterPumpUnfixed passed | tank 1.7 % on days 30–32 (env < 2 %); the level fails on day 32 |
+| 6 | Bad batch details (model, §4.3 gives none): the grading sample of ten shows weak chicks at 7.5 × the weak share (3–4 of 10); a weak chick's hazard × −ln(1 − 0.45) / 0.444 (Phase 2's week-1 hazard of the weak gives 35 %); yolk-sac deaths as cause `infection`; the claimed chicks out of the harvest's and the summary's mortality and base | §4.3's numbers | bad:ideal ratio 5.11, deaths + floor culls 0.58 %, 239 claimed (4.0 %), day 7 uniformity in 42–54 % |
+| 7 | Storm flaps: the timer air × 0.7 while closed (`env.setInletShare`); the rain-in strip x −12..12, the two southmost cell rows; the generator's test burns 10 minutes of fuel | §4.2's model values | rainyNoFlaps: the strip 45.9 % after the storms |
+
+**The profiles' plans** (farm-profiles-cond.js; the ideal farmer reads the fan panel's *Birds feel*): the hot ideal's
+tunnel fans with and without the pad come from the house balance the env integrates (`feelWith`: the pad on the tunnel air's
+share, the timer, the sun, the flock, the slab, the damp) — needed for week 2's own rainy spell (92 % outside RH in 36 °C
+air: the pad cannot cool) and weeks 4–5's dry spell (RH − 30 points: the pad with six fans chilled 23-day-olds to e −8);
+the young birds' pad stays to 20:00 and their hot nights get up to three fans by feel; a stop at 18:00 and 20:00 from day
+28 carries the evening line (all profiles); `eveningFans3` keeps the found heat wave's answer on days 30–32 (three fans in
+37 °C evenings killed 2 %); `rainyGenLeftOn` does the pinned *mains is back* job on the morning round after the restart.
+
+**Bands moved by the sim package** (the measured value; for the integrator to agree):
+
+| File · profile · band | §2.6 / §4 | Measured | Now |
+| --- | --- | --- | --- |
+| test-cycle · minVentW3 · `day21WeightUnderIdealPct` | [1, 4] | 4.1 (the closed week-3 house with the flock's heat × 2.5) | [1, 5] |
+| test-cycle · eveningFans3 · `day35WeightUnderIdealPct` | [0.5, 3] | 0.03 (`heatIntakeP4` costs feed only over hotFrom: the ramp's lower half is free; panting 18 × the ideal's) | [0, 3] |
+| test-cycle · ideal · `waterFeedHotDay` | row of day 25 | the meters are read at 06:15: the hot afternoon of day 25 is on the row of day 26 (ideal 1.99, fansNoPad 2.10) | row of day 26, bands as §2.6 |
+| test-cond · hot:ideal · finish `fcr` / `epef` | [1.6, 1.8] / [330, 420] | 1.574 / 428 (well cooled, the birds lose nothing to the heat; harvest 2,875 g) | [1.55, 1.8] / [330, 440] |
+| test-cond · bad:ideal · finish `mortalityPct` / `epef` | [2.3, 3.5] / [350, 420] | 2.21 / 425 (grading takes 90 % of the weak out: fewer weak deaths than a normal flock) | [2.0, 3.5] / [350, 440] |
+| test-cond · rainyNoStep · `day21UnderIdealPct` | [3, 6] | 7.96 (passes week 3; litter 34 %+, NH3 25 ppm+) | [3, 9] |
+| test-cond · waterPumpUnfixed · heat deaths | ≥ 2 % | 1.7 % by day 32; the level fails on its deaths 2.2 % (margin 0.2, not 0.5) | ≥ 1.5 % and the level's deaths ≥ 2.0 % |
+| test-cond · waterPumpLate · `day35UnderIdealPct` | [0.5, 4] | 0.38 | [0.2, 4] |
+
+**The audit re-run** (`npm run audit`, the normal ideal, seed 1): 199.8 / 497.6 / 985.1 / 1,625 / 2,307 / 2,919 g on days
+7 / 14 / 21 / 28 / 35 / 41 (1.03–1.057 × the table); water : feed 1.87 / 1.88 / 1.96 / 2.08 / 2.01 / 2.02 (the rows); uniformity
+73 / 70 / 72 / 70 / 72 %, 68 % at the day-40 weighing; litter 21.9 / 24.2 / 26.4 / 26.6 / 29.8 / 31.0 %; NH3 at most 7.2 ppm;
+day 18 15:00 panting 0.02; day 37 19:00 panting 0 (the evening line); heat-wave panting 2.4 bird-hours; gas to day 21 207 kg;
+`blendFinH` 21 h; deaths by level 0.63 / 0.25 / 0.44 / 0.57 / 0.39 %, no dehydration at the catch; harvest 2,883 g live,
+FCR 1.585, mortality 2.27 %, EPEF 426, DOA 0.10 %, withdrawal 10.9 h. The env's day-37 evening: three fans 96 / 78 / 53 /
+27 % panting at 19 / 20 / 21 / 22:00, six fans 37 % at 19:00 and none by 21:00, six fans with the pads none.
+**The conditions' ideals** (test-cond): hot ratio 4.83, day 14 497 g, day 35 2,292 g, harvest 2,875 g, no heat or cold death;
+rainy day 21 964 g, the cut 0.05 % (10 min), harvest 2,868 g, EPEF 422; bad batch ratio 5.11, harvest 2,884 g; water tank
+never under 90.6 %, the pump 2.40 / 2.11 bar at 06:15 on days 26 / 27, harvest 2,876 g. Speed (node, alone): a whole
+cycle 2.5–3.1 s in every condition, a 24 h skip 62–91 ms, `farm.step` 0.02–0.07 ms.
 
 ## 3. The conditions system
 
