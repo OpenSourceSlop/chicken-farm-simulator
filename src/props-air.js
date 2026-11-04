@@ -1,14 +1,15 @@
 // Dust in the house air (PHASE3.md §12 item 10, §6.4): motes drifting in the lamp light while
 // farm.air.dustIndex > 1 (more of them toward the rattle at 1.5), around the farmer inside the house.
-// One instanced mesh of small additive specks; nothing is drawn while the air is clear. Owner: "scene".
+// One instanced mesh of small dull specks; nothing is drawn while the air is clear. Owner: "scene".
 import * as THREE from 'three';
 import { HOUSE_BOUNDS } from './config.js';
 
 const N = 260;
 
 export function buildDust(group) {
-  const geo = new THREE.PlaneGeometry(0.035, 0.035);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xe9dcc0, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide });
+  // a dull grey-brown haze, normally blended (matte like the rest of the scene, never brighter than the litter)
+  const geo = new THREE.PlaneGeometry(0.05, 0.05);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xb8a888, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.NormalBlending, side: THREE.DoubleSide });
   const mesh = new THREE.InstancedMesh(geo, mat, N);
   mesh.name = 'props-dust';
   mesh.frustumCulled = false;

@@ -233,7 +233,8 @@ export function patchOcclusion(shader) {
   shader.uniforms.uPlayer = occlusion.uPlayer;
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', '#include <common>\nvarying vec3 vOccW;')
-    .replace('#include <project_vertex>', '#include <project_vertex>\n  vOccW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    // instanced meshes (the catch's crates and crew) test each instance where it stands
+    .replace('#include <project_vertex>', '#include <project_vertex>\n#ifdef USE_INSTANCING\n  vOccW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;\n#else\n  vOccW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#endif');
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', '#include <common>\n' + OCC_FRAG)
     .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + OCC_TEST);

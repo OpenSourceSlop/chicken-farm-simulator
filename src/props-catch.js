@@ -91,13 +91,14 @@ export function buildCatch(mats, group) {
   // ---- crates: both trucks' stacks and the ones being carried, one instanced mesh ----
   const cb = new Batch(); crate(cb);
   // (no shadows: the catch is at night, and the instanced shadow pass would be one more program)
-  const crates = instancedParts(cb.geometry(), mats.vc, SLOTS * 2 + CREW, { color: false, cast: false });
+  // the occlusion material (mats.out, instanced): a stack between the camera and the farmer dithers away
+  const crates = instancedParts(cb.geometry(), mats.out || mats.vc, SLOTS * 2 + CREW, { color: false, cast: false });
   crates.name = 'props-catch-crates';
   crates.visible = false;
   group.add(crates);
   // ---- crew: three baked poses, an instance per worker in the pose he is in ----
   const poses = ['walkA', 'walkB', 'catch'].map((p) => {
-    const m = instancedParts(crewGeometry(p), mats.vc, CREW, { color: false, cast: false });
+    const m = instancedParts(crewGeometry(p), mats.out || mats.vc, CREW, { color: false, cast: false });
     m.name = `props-crew-${p}`;
     m.visible = false;
     group.add(m);

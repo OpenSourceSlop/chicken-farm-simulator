@@ -83,5 +83,8 @@
   {"shot": "look-15-disinfected"},
   {"state": {"farmer": {"x": -24.5, "z": 12, "yaw": 0}, "cameraYaw": -0.3, "zoom": 14}},
   {"advance": 2},
-  {"shot": "look-16-wash-bay"}
+  {"shot": "look-16-wash-bay"},
+  {"state": {"farmer": {"x": -25.5, "z": 12.5, "yaw": 0}, "cameraYaw": 0, "zoom": 22}},
+  {"advance": 2},
+  {"shot": "look-17-wash-bay-default-camera"}
 ]

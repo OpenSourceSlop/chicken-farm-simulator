@@ -7,7 +7,9 @@ import { coconutPalm, bananaClump, mangoTree, rainTree, makeFoliageMaterial } fr
 
 // Hand-placed trees near the office and gate (kind, x, z, size)
 const PLACED = [
-  ['coconut', -26.6, 26.8, 8.5], ['coconut', -25.4, 21.5, 9.5], ['coconut', -24.2, 24.6, 7.2],
+  // the three office palms stand south-east of the office, off the default camera's line to the wash bay
+  // (SPOTS3.washBay / signClean: no tall tree south of them within 18 m) and to the planning sign
+  ['coconut', -22.0, 31.0, 8.5], ['coconut', -18.0, 29.0, 9.5], ['coconut', -24.0, 33.5, 7.2],
   ['banana', -27.0, 18.9, 1.0], ['banana', -33.2, 18.8, 0.9],
   ['mango', -19.5, 34.2, 1.05], ['banana', -4, 34.6, 0.9], ['banana', 9, 34.4, 1.0],
   ['coconut', 47, 24, 9], ['mango', 50, 30.5, 1.0], ['banana', 43, 32.5, 1.0],
