@@ -8,8 +8,10 @@
 import { h, button, setText, store } from './ui-dom.js';
 import { WATCH_STATES } from './flock-watch.js';
 
-const ROWS = ['weight', 'deaths', 'comfort', 'intake'];
-const LABEL = { weight: 'Weight', deaths: 'Deaths', comfort: 'Comfort', intake: 'Intake' };
+// the final check: a fifth row, the water supply (the tank, its pump and the meter), only where the farm has the water
+// condition's tank (the row and its compact dot are hidden while status() gives none)
+const ROWS = ['weight', 'deaths', 'comfort', 'intake', 'supply'];
+const LABEL = { weight: 'Weight', deaths: 'Deaths', comfort: 'Comfort', intake: 'Intake', supply: 'Supply' };
 const FOLD_KEY = 'chicken-farm.watch-folded';
 const narrowNow = () => typeof window !== 'undefined' && window.innerWidth <= 1100;
 
@@ -35,7 +37,7 @@ export function createWatchCard(root, ctx) {
   // the compact strip (narrow screens, all steady): the four dots and their labels
   const mini = h('button', { class: 'fw-mini', type: 'button', title: 'Open the flock watch', 'aria-label': 'Open the flock watch' },
     ROWS.map((id) => h('span', { class: 'fw-mini-i', 'data-row': id }, h('span', { class: 'fw-dot', role: 'img' }), LABEL[id])));
-  const miniDots = [...mini.querySelectorAll('.fw-dot')];
+  const miniDots = [...mini.querySelectorAll('.fw-dot')], miniItems = [...mini.querySelectorAll('.fw-mini-i')];
   const warnWhere = h('b', { class: 'fw-warn-where' }), warnWhat = h('span');
   const warn = h('p', { class: 'fw-warn', hidden: true }, h('span', { class: 'fw-warn-in' }, warnWhere, ' ', warnWhat));
   const card = h('section', { class: 'card fw', hidden: true, 'aria-label': 'Flock watch' },
@@ -67,6 +69,7 @@ export function createWatchCard(root, ctx) {
         const r = st.rows[id], R = rows[id];
         if (r && r.state !== 'green') calm = false;
         miniDots[i].className = `fw-dot is-${r ? r.state : 'none'}`;
+        if (miniItems[i].hidden !== !r) miniItems[i].hidden = !r;
         const sig = r ? `${r.state}|${r.value}|${r.detail}` : '';
         if (sig === R.sig) return;
         R.sig = sig;

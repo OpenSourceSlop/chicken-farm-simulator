@@ -164,6 +164,7 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 /* narrow screens, every row steady: a compact strip of the four dots (it opens on amber or red, and on a click) */
 .fw-mini { display: none; align-items: center; gap: 8px; margin: 0; padding: 0; border: 0; background: none; color: var(--ink-dim); font: 600 11px/1.2 var(--font-display); letter-spacing: 0.03em; cursor: pointer; }
 .fw-mini-i { display: inline-flex; align-items: center; gap: 4px; }
+.fw-mini-i[hidden] { display: none; }
 .fw.is-compact { width: auto; display: flex; align-items: center; gap: 10px; padding: 6px 10px; }
 .fw.is-compact .fw-sub, .fw.is-compact .fw-fold, .fw.is-compact .fw-rows, .fw.is-compact .fw-warn { display: none; }
 .fw.is-compact .fw-mini { display: flex; }
