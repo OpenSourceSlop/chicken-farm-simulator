@@ -675,7 +675,9 @@ export const HEAT_P4 = { padEveningAboveC: 29.5, padEveningFromAge: 28, eveningU
 
 // The generator and the well pump (general where a sign says so, else model; PHASE4.md §4.2, §4.4).
 export const GENERATOR = { fuelL: 150, litresPerH: 15, startMin: 2, testMin: 10, kva: 60 };
-export const WATER_TANK = { m3: 10, pumpM3h: 4.0, lowPct: 30, refillFromPct: 60 };
+// The tank feeds the drinker lines and the cooling pads (the pads draw about as much as the birds drink on a hot
+// afternoon, or more); the line pressure falls under linesFromPct, the pad runs dry under padFromPct (model).
+export const WATER_TANK = { m3: 6, pumpM3h: 1.2, lowPct: 30, linesFromPct: 20, padFromPct: 15, repairH: 2 };
 
 /**
  * The harder replay conditions (PHASE4.md §3-§4), offered after the first full cycle (skills profile cyclesDone)
@@ -688,6 +690,8 @@ export const WATER_TANK = { m3: 10, pumpM3h: 4.0, lowPct: 30, refillFromPct: 60 
  *               rain, `back` ends a power cut, `alarm` stops a skip at its symptom)
  *   target/fail fields merged into the level def's (the brooding week of a bad batch counts the chicks graded out
  *               at the table apart: `claimedApart`)
+ *   delivery    the brooding week's chick delivery as the condition has it (a bad batch: weight, spread, weak share,
+ *               the truck's hour), null = Phase 2's
  *   routineDays { [routine job id]: [fromDay, toDay] } the days a Phase 2/3 routine runs in this condition
  * cycleClimateFrom: the first level that runs the cycle climate (the hot and rainy seasons: the brooding week).
  * Condition jobs, signs and milestones: content-jobs-cond.js, content-signs-cond.js, skills-cond.js.
@@ -737,8 +741,12 @@ export const CONDITIONS = {
     summary: 'Chicks from a young parent flock after a long trip: small (about 36 g) and uneven, many weak ones. Grade them, cull the weak, brood them closer.',
     levels: {
       level1: {
-        problems: [{ id: 'weak-batch', day: 0, hour: 8 }],
+        problems: [{ id: 'weak-batch', day: 0, hour: 10 }],
         fail: { mortalityMaxPct: 2.5, claimedApart: true },   // the chicks graded out at the table are the hatchery's claim
+        // the delivery (model; Phase 2's are 41.5 g, CV 8 %, 0.8 % weak, 4 % red hocks, 08:00, 35 % of the weak die):
+        // the sim's delivery reads it, the run's truck anchor and the chick truck follow arrivalHour
+        delivery: { chickWeightG: 36, chickWeightSdG: 1.5, cv: 0.14, weakShare: 0.045, redHockShare: 0.1, arrivalHour: 10, roadH: 7, lateBase: 0.05, weakDeathShare: 0.45,
+          note: 'parent flock 25 weeks old, 7 h on the road' },
       },
     },
   },
@@ -749,7 +757,7 @@ export const CONDITIONS = {
       level1: { problems: [{ id: 'iron-water', day: -1, hour: 7 }] },
       week2: { problems: [{ id: 'iron-filter', day: 13, hour: 10, flowFactor: 0.6 }] },
       week3: { problems: [{ id: 'iron-nipples', day: 18, hour: 6, line: 3, flowFactor: 0.7 }] },
-      weeks45: { problems: [{ id: 'pump-wear', day: 26, hour: 6, lossPerDay: 0.08 }, { id: 'iron-filter', day: 31, hour: 10, flowFactor: 0.6 }] },
+      weeks45: { problems: [{ id: 'pump-wear', day: 26, hour: 6, lossPerDay: 0.1 }, { id: 'iron-filter', day: 31, hour: 10, flowFactor: 0.6 }] },
     },
   },
 };
@@ -761,12 +769,12 @@ export const conditionLabel = (id) => (id && CONDITIONS[id] ? CONDITIONS[id].lab
  * and added, its weather, target and fail rules and the routine days. Pure; the level def itself is never changed
  * (compare levels by `id`, never by object). No condition: the def's own `problems` array (same object).
  * @returns {{ condition: string|null, problems: object[], weather: string, target: object, fail: object,
- *   routineDays: object, cycleClimate: boolean }}
+ *   routineDays: object, cycleClimate: boolean, delivery: object|null }}
  */
 export function conditionLevel(def, condId) {
   const c = condId ? CONDITIONS[condId] : null;
   const ownClimate = def.id !== LEVEL1.id && def.id !== PLAN_LEVEL.id;
-  if (!c) return { condition: null, problems: def.problems || [], weather: def.weather, target: def.target, fail: def.fail, routineDays: {}, cycleClimate: ownClimate };
+  if (!c) return { condition: null, problems: def.problems || [], weather: def.weather, target: def.target, fail: def.fail, routineDays: {}, cycleClimate: ownClimate, delivery: null };
   const part = (c.levels && c.levels[def.id]) || {}, drop = new Set(part.drop || []);
   const problems = (def.problems || []).filter((p) => !drop.has(p.id))
     .map((p) => (part.replace && part.replace[p.id] ? { ...p, ...part.replace[p.id] } : p)).concat(part.problems || []);
@@ -775,7 +783,8 @@ export function conditionLevel(def, condId) {
   const routineDays = {};
   for (const l of LEVELS.slice(0, order.indexOf(def.id) + 1)) Object.assign(routineDays, (c.levels[l.id] || {}).routineDays || {});
   return { condition: condId, problems, weather: part.weather || c.weather || def.weather, target: { ...def.target, ...(part.target || {}) },
-    fail: { ...def.fail, ...(part.fail || {}) }, routineDays, cycleClimate: ownClimate || (from >= 0 && order.indexOf(def.id) >= from && def.id !== PLAN_LEVEL.id) };
+    fail: { ...def.fail, ...(part.fail || {}) }, routineDays, cycleClimate: ownClimate || (from >= 0 && order.indexOf(def.id) >= from && def.id !== PLAN_LEVEL.id),
+    delivery: part.delivery || null };
 }
 
 /**

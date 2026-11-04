@@ -583,3 +583,28 @@ anywhere still holds (test-contracts and test-jobs check the words), and every n
 - **Guide tags** stay provisional (PHASE3.md §5.1, open question 1).
 - **Phase 4:** the harder replay conditions (`config.CONDITIONS`, `available: false`) and the model tuning to the
   guides' numbers; **Phase 5:** sound, settings, save slots, the farm overview map.
+
+## Phase 4 — design (contracts in code; packages not merged yet)
+`PHASE4.md` is the spec: the tuning audit (§2), the four harder conditions (§3–§5), the clarity leftovers (§6), the
+contracts (§10) and the four packages `sim`, `run`, `panels`, `scene` (§12). In code now, with every Phase 1–3 number
+unchanged (`npm test` passes; the live farm still runs Phase 3's model):
+- **Tuning contract**: `src/farm-tuning.js` (wind chill by age, speed and air temperature; a 4 °C panting ramp; heat and
+  cold deaths of older birds; the flock's sensible heat × 2.5 from Week 2; water : feed from the birds' comfort; dry
+  hours before dehydration; the CV growth after day 14) with its env-only references `scripts/tuning-refs.mjs`, checked
+  by `scripts/test-tuning.mjs` (in `npm test`); the audit tool `scripts/tuning-audit.mjs` (`npm run audit`).
+- **Conditions** (`config.CONDITIONS`, `available: false` until the run merge; `conditionLevel(def, id)` merges a level's
+  problems, weather, target / fail, routine days, cycle climate and a bad batch's delivery; `SPOTS4`, `HEAT_P4`,
+  `GENERATOR`, `WATER_TANK`, `SIGN_FIGURES`; `OUTSIDE_WATER_GM3.hot` 22): contract data `content-jobs-cond.js` (the
+  condition jobs, `STATE_TEST_IDS_P4`, the clarity rules `DONE_P4`), `content-signs-cond.js` (every Phase 4 sign line,
+  all general), `skills-cond.js` (`MILESTONES_COND`).
+- **Stubs**: `src/farm-cond.js` (the farm's Phase 4 state and actions; `farm.act` routes there first; the power cut acts
+  on the env setters; storms from the condition's problems), `src/ui-cond-panels.js` (placeholder `generator`,
+  `water-tank`, `chick-grading` panels, registered by ui.js after the Phase 3 panels), `src/props-cond.js` (the
+  `generator` / `water-tank` interactables; built and updated by main.js), `run.state().condition`.
+- **Events / actions**: `EV.POWER`; `gen.start / stop / switch / test / fuel`, `inlets.storm`, `water.tank`,
+  `pump.fix`, `chicks.grade`, `brood.trays`, `phone.hatchery` (ui) in `ACTION_IDS`.
+- **UI contracts**: a toggle that is on is a lit switch (`.key[aria-pressed="true"]`, index.template.html); a job strip
+  row's bar may be `{ v, band, max }` (ui-jobstrip.js).
+- **Hooks**: `__game.conditions()`, `__game.setCondition(id)`, `__game.farm.debug.power(mainsOn)`.
+- **Tests**: test-contracts checks the conditions, the condition jobs, signs (general, verdict-free, every sign figure on
+  its board) and milestones; `scripts/p4-design-stubs.json` drives the stubs in the browser (6 PASS).

@@ -10,7 +10,8 @@
 //   farm.generator    { running, fuelL, hours, testedDay, startedAt }   (config GENERATOR)
 //   farm.weatherNow   { rain: 0..1, storm: bool, id: problem id | null }  (the scene's rain, the radio, look notes)
 //   farm.house.flapsClosed   the storm flaps on the south side-wall inlets (inlets.storm)
-//   farm.waterTank    { levelPct, pumpShare (0..1 of WATER_TANK.pumpM3h), fixing: bool, fixedAt }   (water condition)
+//   farm.waterTank    { levelPct, pumpShare (0..1 of WATER_TANK.pumpM3h), fixing: bool, fixedAt }   (water condition: the tank
+//                     feeds the lines and the pads)
 //   farm.brood        { trays: bool }   (feed trays and chick paper by the brooders, a bad batch)
 //   farm.flock.claimed   chicks graded out at the table (the hatchery's claim; not in the level's deaths + culls)
 //   farm.water.lineTempC  the water in the drinker lines, °C (the hot season's midday flush)

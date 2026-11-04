@@ -89,7 +89,8 @@ export const BOARDS_COND = {
   'water-tank': {
     title: 'Water tank and well pump', where: 'Water tank tower, north-west of the house', condition: 'water',
     items: [
-      it('The well pump fills the 10 m³ tank; the house draws on it most in the afternoon.'),
+      it('The well pump fills the 6 m³ tank; the drinker lines and the cooling pads draw on it, most in the afternoon.'),
+      it('On a hot afternoon the pads take about as much water as the birds drink, or more.'),
       it('Tank under about 30 % in the afternoon: the pump gives less than the birds drink. Check its pressure and current.'),
       it('A worn pump: pressure low, current high. Repair it in the morning, before the afternoon’s drinking.'),
     ],

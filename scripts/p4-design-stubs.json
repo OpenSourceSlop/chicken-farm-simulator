@@ -1,0 +1,22 @@
+[
+  {"wait": 800},
+  {"clearStorage": true},
+  {"eval": "__game.stop(), 'stopped: Phase 4 design check of the contract stubs (PHASE4.md §10)'"},
+  {"expect": "typeof __game.conditions === 'function' && typeof __game.setCondition === 'function' && __game.conditions().length === 4 && __game.conditions().every((c) => c.available === false) && 'four conditions, none available yet'", "label": "the Phase 4 hooks exist; the conditions wait for the run merge"},
+  {"eval": "__game.startLevel({ seed: 1 }), 'brooding week start: day ' + __game.env.dayNumber + ', condition ' + __game.farm.condition"},
+  {"expect": "__game.env.dayNumber === -1 && __game.farm.condition === null && __game.farm.power.on === true && 'Phase 2 prep day, no condition, power on'", "label": "startLevel({ seed }) is still Phase 2's prep day"},
+  {"eval": "__game.cycleAt(33, 15), __game.env.setFans(6), __game.setCondition('rainy'), 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ', ' + __game.farm.condition + ', fans ' + __game.env.fansManual"},
+  {"advance": 1},
+  {"expect": "__game.farm.weatherNow.storm === true && __game.farm.weatherNow.id === 'storm-33' && 'storm-33 rains now'", "label": "the stub rains in the rainy season's storm window"},
+  {"eval": "JSON.stringify(__game.farm.debug.power(false)) + ' fans ' + __game.env.fansManual"},
+  {"expect": "__game.farm.power.on === false && __game.env.fansManual === 0 && 'the power is off: no fans'", "label": "a power cut stops the fans (stub)"},
+  {"eval": "__game.ui.openPanel('generator'), 'generator panel open'"},
+  {"advance": 0.5},
+  {"clickText": "Start the generator"},
+  {"clickText": "House on the generator"},
+  {"advance": 0.5},
+  {"expect": "__game.farm.power.on === true && __game.farm.power.source === 'generator' && __game.env.fansManual === 6 && 'on the generator, six fans again'", "label": "start and switch at the generator placeholder bring the fans back"},
+  {"shot": "p4-generator-stub"},
+  {"eval": "__game.ui.closePanel ? __game.ui.closePanel() : null, __game.setCondition(null), 'condition cleared'"},
+  {"expect": "__game.farm.condition === null && 'normal season again'", "label": "setCondition(null)"}
+]
