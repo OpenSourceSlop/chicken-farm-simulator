@@ -207,7 +207,7 @@ export function afternoon({ day, whole, controller = [], inside = [], raise = fa
   // through the birds (with the bird checks of the day on the way), the squeezes, the dead birds, the door
   if (east) {
     return [
-      ...outToHouse(), ...east, ...(inside.length ? inside : [W(20, 0, 0.6), W(-8, 0, 0.6, 60)]), adv(2.3), ...ctl,
+      ...outToHouse(), ...east, ...(inside.length ? inside : [W(20, 0, 0.6), W(-8, 0, 0.6, 60)]), adv(2.8), ...ctl,
       ...(squeezed ? [] : inside.length // the bird checks end at the west end: the squeezes from there
         ? [W(-20, -1.95, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3), W(-4, 0.8, 0.5), press('q'), adv(0.3)]
         : [W(-4, 0.8, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3), W(-20, -1.95, 0.5), press('q'), adv(0.3)]),
