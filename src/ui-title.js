@@ -1,6 +1,7 @@
 // Title card over the farm at dawn (PHASE3.md §1): Start a new flock (Level 1, Plan the farm), Start at
 // the brooding week, Continue (with a run save, or a Phase 2 save), the Phase 1 sandbox, the skill tree,
-// and the run card (ui-run.js). Owner: package "run" (Phase 2: "level").
+// and the run card (ui-run.js). Owner: package "experience" (Phase 5: the first-run line, the key line from keys.js,
+// the package keys of addAction; PHASE5.md §6.1).
 import { LEVEL_TEXT, LEVEL_KEYS, dayLabel } from './content.js';
 import { h, button, setText, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
@@ -31,7 +32,13 @@ export function createTitle(root, o) {
   // sandbox, the skill tree and Harder flocks, in `order`
   const more = h('div', { class: 'title-more' }, sandbox, skills, harderKey);
   const actions = [];
-  const keys = h('p', { class: 'title-keys' }, LEVEL_KEYS.map((k) => h('span', null, h('kbd', { class: 'kbd' }, k.key), ` ${k.what}`)));
+  // the key line: each key as bound now (keys.js; drawn again on every show)
+  const keys = h('p', { class: 'title-keys' });
+  const keyLabel = (k) => { try { return o.keys?.label?.(k.id) || k.key; } catch { return k.key; } };
+  const drawKeys = () => keys.replaceChildren(...LEVEL_KEYS.map((k) => h('span', null, h('kbd', { class: 'kbd' }, keyLabel(k)), ` ${k.what}`)));
+  drawKeys();
+  // Phase 5 (PHASE5.md §6.1): a first-time player (no save, no settings stored) reads where the first morning starts
+  const firstRun = h('p', { class: 'title-first', hidden: true }, LEVEL_TEXT.firstRun);
   const runCard = createRunCard({ run: o.run, onReplay: (id, day) => o.onReplay(id, day),
     // Phase 4 (PHASE4.md §1.2, §3.1): a level's standard start with a flock choice; a new flock under a harder condition
     onStandard: (id, cond) => o.onStandard?.(id, cond), onStartCondition: (id) => o.onStartCondition?.(id) });
@@ -41,6 +48,7 @@ export function createTitle(root, o) {
       h('h1', { id: titleId, class: 'title-h' }, LEVEL_TEXT.title),
       h('p', { class: 'title-line' }, LEVEL_TEXT.line),
       h('div', { class: 'title-btns' }, cont, start, brooding),
+      firstRun,
       loadNote,
       saveNote,
       more,
@@ -91,6 +99,8 @@ export function createTitle(root, o) {
     saveNote.classList.toggle('is-off', !o.saveAvailable());
     runCard.refresh();
     harderKey.hidden = !o.run?.()?.harderOpen;
+    firstRun.hidden = !!info || !!o.settingsStored?.();
+    drawKeys();
     for (const a of actions) a.btn.hidden = !!(a.visible && !a.visible());
   }
   /** Phase 5 (PHASE5.md §8.6): a quiet title key { id, label, icon?, order (default 50), onClick(), visible?() }. */
