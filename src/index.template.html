@@ -1018,15 +1018,7 @@ body { margin: 0; background: var(--panel-solid); color: var(--ink); font-family
 .settings-head .icon, .saves-head .icon, .guide-head .icon, .map-head .icon { font-size: 26px; color: var(--accent); }
 .menu-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .menu-item { width: 100%; justify-content: flex-start; } .menu-item .menu-label { flex: 1; text-align: left; }
-.map-body { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 12px; align-items: start; }
-.map-svg { width: 100%; height: auto; background: #3f6b3a; border-radius: 6px; }
-.map-fence { fill: #4f7e45; stroke: #c9c1aa; stroke-width: 1; } .map-road { fill: none; stroke: #9c8f76; stroke-linejoin: round; stroke-linecap: round; }
-.map-house { fill: #c7b48f; stroke: #2e4337; stroke-width: 1.5; } .map-bld { fill: #7a8a94; stroke: #24362c; stroke-width: 1; }
-.map-label { font: 600 12px var(--font-display); fill: var(--ink); paint-order: stroke; stroke: rgba(12, 20, 16, 0.7); stroke-width: 3px; }
-.map-me circle, .map-me path { fill: var(--accent); stroke: #1e1305; stroke-width: 1.2; }
-.map-places { list-style: none; margin: 0; padding: 0; max-height: 460px; overflow: auto; display: grid; gap: 2px; }
-.map-place { width: 100%; justify-content: flex-start; min-height: 30px; padding: 4px 8px; font-size: 13px; }
-@media (max-width: 860px) { .map-body { grid-template-columns: minmax(0, 1fr); } .map-places { max-height: 200px; } }
+/* the farm map styles its own content (ui-map-style.js, #map-style) */
 /* Level 1 panels on mid-size and small screens */
 @media (max-width: 1100px) {
   .tree-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

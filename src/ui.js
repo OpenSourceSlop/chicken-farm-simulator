@@ -458,7 +458,7 @@ export function createUI(ctx, deps) {
   try { settingsUI = registerSettingsPanel(p5); } catch (err) { console.error('settings panel failed to register', err); }
   try { guideUI = registerGuidePanel(p5); } catch (err) { console.error('guide panel failed to register', err); }
   try { registerSavesPanel(p5); } catch (err) { console.error('saves panel failed to register', err); }
-  try { map = createMap(ctx, { register: reg, openPanel, closePanel }); } catch (err) { console.error('map failed', err); }
+  try { map = createMap(ctx, { register: reg, openPanel, closePanel, jobCard }); } catch (err) { console.error('map failed', err); }
   const intro = createIntro(ctx, { root });
   menu.add({ id: 'resume', label: 'Back to the farm', icon: 'play', hint: 'menu', order: 0, onSelect: () => {} });
   menu.add({ id: 'map', label: 'Farm map', icon: 'map', hint: 'map', order: 20, onSelect: (via) => map?.open(via) });
