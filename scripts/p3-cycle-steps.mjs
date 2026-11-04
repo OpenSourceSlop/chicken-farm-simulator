@@ -81,7 +81,7 @@ export const controllerRead = () => [W(-12, -4.6, 0.3), ...E('controller', 'E op
 /** The minimum ventilation timer to the vent sign's figure for the flock's weight (controller open). */
 export const minVent = () => [click('Ventilation'), adv(0.1),
   clickUntil('One second more', '__shownOn() >= __onSec()', 120), clickUntil('One second less', '__shownOn() <= __onSec()', 120),
-  click('Set the timer'), adv(0.2), ev(`'timer ' + JSON.stringify(__game.env.ventTimer) + ' for the sign figure ' + __onSec() + ' s'`)];
+  click('Send this setting to the timer'), adv(0.2), ev(`'timer ' + JSON.stringify(__game.env.ventTimer) + ' for the sign figure ' + __onSec() + ' s'`)];
 /** Four flow tests, one at each drinker line's regulator; optionally the winch to the sign's height. */
 export function drinkers({ raise = false, flow = true } = {}) {
   const out = [];
@@ -261,10 +261,10 @@ SEGMENTS.week2 = () => [
   W(10, 0, 0.6), until('__game.flock.debug.meanX() > -4', 120), shot('p3c-11-spread'), ...walkFloor({ whole: true }),
   exp(`__game.flock.debug.meanX() > -4.5 && 'the flock spreads: mean x ' + __game.flock.debug.meanX().toFixed(1)`, 'the birds walk out over the east half'),
   // day 12: vaccination in the drinking water at the water supply
-  ...autoTo(12, 6.05), ...gateToHouse(), W(-23.0, 5.45, 0.3), ...E('water-supply', 'E opens the water supply'), click('Vaccine'), adv(0.1), click('Main valve'), adv(0.2), ...esc(),
+  ...autoTo(12, 6.05), ...gateToHouse(), W(-23.0, 5.45, 0.3), ...E('water-supply', 'E opens the water supply'), click('Vaccine'), adv(0.1), click('Shut the main valve'), adv(0.2), ...esc(),
   exp(`__game.farm.health.mainClosed === true && 'main valve shut at ' + __t()`, 'day 12: the main valve shut (the birds go thirsty)'),
   ...walkFloor({ whole: true }), until('(__game.env.day - __game.farm.health.vaccine.thirstFrom) * 24 >= 1.5', 120),
-  W(-23.0, 5.45, 0.3), ...E('water-supply', 'back at the water supply'), click('Vaccine'), adv(0.1), click('Skim milk powder stabiliser'), click('Mix the vaccine'), adv(0.2), click('Main valve'), adv(0.2), shot('p3c-12-vaccine'), ...esc(),
+  W(-23.0, 5.45, 0.3), ...E('water-supply', 'back at the water supply'), click('Vaccine'), adv(0.1), click('Skim milk powder stabiliser'), click('Mix the vaccine'), adv(0.2), click('Open the main valve'), adv(0.2), shot('p3c-12-vaccine'), ...esc(),
   ...walkBirds(),
   until(`__game.farm.health.vaccine.state === 'drunk'`, 150),
   exp(`(() => { const v = __game.farm.health.vaccine; return v.state === 'drunk' && 'vaccine drunk in ' + v.hours.toFixed(1) + ' h, coverage ' + v.coverage.toFixed(2); })()`, 'the vaccine drunk (the record shows the hours)'),
@@ -288,7 +288,7 @@ export function birdChecks(n, btn, key, at = CHECK_AT) {
   }
   return out;
 }
-const fansAll = (pad) => [click('All six'), adv(0.2), ...(pad ? [{ pressIf: 'Escape', if: 'false' }, ev(`__game.env.padOn ? 'pad already on' : ([...document.querySelectorAll('#hud .panel:not([hidden]) button')].find((b) => /Pad pump (off|on)/.test(b.textContent))?.click(), 'pad pump ' + (__game.env.padOn ? 'on' : 'off'))`)] : [])];
+const fansAll = (pad) => [click('All six'), adv(0.2), ...(pad ? [{ pressIf: 'Escape', if: 'false' }, ev(`__game.env.padOn ? 'pad already on' : ([...document.querySelectorAll('#hud .panel:not([hidden]) button')].find((b) => /(Start|Stop) the pad pump/.test(b.textContent))?.click(), 'pad pump ' + (__game.env.padOn ? 'on' : 'off'))`)] : [])];
 /** The fan panel at the east end (fans.read after 2 s), with what to switch. */
 const atFans = (extra, label) => [W(22.4, -4.6, 0.35), ...E('fan-panel', label || 'E opens the fan panel'), adv(2.4), ...extra, ...esc()];
 /** The night ventilation at the controller by the door (r-vent-night): its tunnel fan keys to n fans. */
@@ -376,10 +376,10 @@ SEGMENTS.cleanout = () => [
   exp(`'washed ' + (__game.farm.clean.washShare * 100).toFixed(0) + ' % of the floor at ' + __t()`, 'three washer passes along the house'),
   ...houseOut(), W(-27.0, 11.6, 0.4), ...E('wash-bay', 'back at the wash bay'), click('Put the washer back'), adv(0.2), ...esc(),
   job('c-wash@44', 'the house washed with the pressure washer'),
-  ...outToHouse(), W(-23.0, 5.45, 0.3), ...E('water-supply', 'E opens the water supply'), click('Clean-out'), adv(0.1), click('No disinfectant'), adv(0.1),
-  click('Valve shut'), click('Valve shut'), click('Valve shut'), click('Valve shut'),
+  ...outToHouse(), W(-23.0, 5.45, 0.3), ...E('water-supply', 'E opens the water supply'), click('Clean-out'), adv(0.1), click('Put disinfectant in the tank'), adv(0.1),
+  click('Open flush valve'), click('Open flush valve'), click('Open flush valve'), click('Open flush valve'),
   ev(`document.querySelectorAll('#hud .panel:not([hidden]) .plate.is-open .plate-head').forEach((b) => b.click()), 'plate folded: the clock runs'`),
-  until('__game.farm.clean.lines.every((v) => v >= 1)', 120), click('Valve open'), click('Valve open'), click('Valve open'), click('Valve open'), shot('p3c-28-lines'), ...esc(),
+  until('__game.farm.clean.lines.every((v) => v >= 1)', 120), click('Close flush valve'), click('Close flush valve'), click('Close flush valve'), click('Close flush valve'), shot('p3c-28-lines'), ...esc(),
   adv(1.5), job('c-lines@44', 'the drinker lines flushed with disinfectant'),
   W(-18, -4.9, 0.35), ...E('feeder-box', 'E opens the feeder box'),
   ...[0, 1, 2].flatMap((i) => [click(`Wash the pans of line ${i + 1}`), until(`__game.farm.clean.pans[${i}]`, 60, 0.5)]), ...esc(),
@@ -400,8 +400,8 @@ SEGMENTS.cleanout = () => [
 /** Vaccinate at the water supply: by the vaccine plate (main shut 1.5 h, stabiliser, open, walk) or poorly (no thirst, no stabiliser). */
 export function vaccinate({ good }) {
   const out = [...gateToHouse(), W(-23.0, 5.45, 0.3), ...E('water-supply', 'E opens the water supply'), click('Vaccine'), adv(0.1)];
-  if (good) out.push(click('Main valve'), adv(0.2), ...esc(), ...walkFloor({ whole: true }), until('(__game.env.day - __game.farm.health.vaccine.thirstFrom) * 24 >= 1.5', 120),
-    W(-23.0, 5.45, 0.3), ...E('water-supply', 'back at the water supply'), click('Vaccine'), adv(0.1), click('Skim milk powder stabiliser'), click('Mix the vaccine'), adv(0.2), click('Main valve'), adv(0.2));
+  if (good) out.push(click('Shut the main valve'), adv(0.2), ...esc(), ...walkFloor({ whole: true }), until('(__game.env.day - __game.farm.health.vaccine.thirstFrom) * 24 >= 1.5', 120),
+    W(-23.0, 5.45, 0.3), ...E('water-supply', 'back at the water supply'), click('Vaccine'), adv(0.1), click('Skim milk powder stabiliser'), click('Mix the vaccine'), adv(0.2), click('Open the main valve'), adv(0.2));
   else out.push(click('Mix the vaccine'), adv(0.2));
   out.push(shot(good ? 'p3r-vaccine-plate' : 'p3r-vaccine-poor'), ...esc(), ...(good ? walkBirds() : walkFloor({ whole: true })), until(`__game.farm.health.vaccine.state === 'drunk'`, 200),
     exp(`(() => { const v = __game.farm.health.vaccine; return v.state === 'drunk' && 'vaccine drunk in ' + v.hours.toFixed(1) + ' h, coverage ' + v.coverage.toFixed(2) + ', stabiliser ' + v.stabiliser; })()`, good ? 'the vaccine by the plate: drunk' : 'the poor vaccination: drunk slowly'));

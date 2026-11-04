@@ -13,6 +13,8 @@ import { buildPlate } from './ui-boards.js';
 import { int, one } from './ui-format.js';
 // Phase 3 (package "panels"): feed withdrawal and pan wash, two silos and slide valves, fork and scraper
 import { cycleFeederParts, cycleSiloParts, cycleHeapParts } from './ui-cycle-equip.js';
+// the clarity round: the open job done here, its steps, the sign's target beside the live value
+import { createJobStrip } from './ui-jobstrip.js';
 
 /**
  * Machine case: header with icon, title and where; a dark working plate; plate columns at the side.
@@ -23,6 +25,7 @@ export function equipShell({ cls = '', icon, title, sub, plates = [], onClose, s
   const { el, closeBtn } = dialogShell(`equip ${cls}`, titleId, onClose);
   const main = h('div', { class: 'equip-main' });
   const plateEls = plates.map((id) => buildPlate(id));
+  /** The job strip at the top of the working plate (ui-jobstrip.js): the panel mounts it with its id. */
   // Phase 3: a link may name a board of the full cycle (content-signs-cycle.js BOARDS_CYCLE)
   const board = (id) => BOARDS[id] || BOARDS_CYCLE[id];
   const links = signLinks.length ? h('p', { class: 'equip-links' }, h('span', { html: ICONS.facts, 'aria-hidden': 'true' }),
@@ -51,12 +54,14 @@ export function equipShell({ cls = '', icon, title, sub, plates = [], onClose, s
   };
 }
 
-/** A labelled row of the working plate: led, label (+ small), controls. */
+/** A labelled row of the working plate: led, label (+ small), controls. `setState(text)` writes the control's
+ *  state beside the title ("Auger: off"): the keys name what pressing them does, the lamp and this word what is. */
 export function machineRow(title, sub, ...controls) {
   const led = h('span', { class: 'led', 'aria-hidden': 'true' });
   const small = typeof sub === 'string' ? h('small', null, sub) : sub;
-  const el = h('div', { class: 'ctrl-row' }, led, h('div', { class: 'ctrl-label' }, h('span', null, title), small), h('div', { class: 'ctrl-keys' }, controls));
-  return { el, led, small };
+  const state = h('span', { class: 'ctrl-state', hidden: true });
+  const el = h('div', { class: 'ctrl-row' }, led, h('div', { class: 'ctrl-label' }, h('span', null, title), state, small), h('div', { class: 'ctrl-keys' }, controls));
+  return { el, led, small, state, setState(text) { state.hidden = !text; setText(state, text || ''); } };
 }
 
 /** − value + with press-and-hold repeat. */
@@ -69,11 +74,13 @@ export function stepper(label, unit, onStep, { bigStep = 0 } = {}) {
   return { els: [minus, out, plus], set: (v) => setText(out, `${v}${unit ? ` ${unit}` : ''}`) };
 }
 
-/** A wide toggle key (aria-pressed). */
-export function toggleKey(onText, offText, onClick) {
-  const b = button({ class: 'key key--wide', 'aria-pressed': 'false' });
+/** A wide toggle key (aria-pressed) that names what pressing it does next: `whenOn` while the thing is on
+ *  ("Stop auger"), `whenOff` while it is off ("Start auger"). The state itself is the row's lamp and its state
+ *  word (machineRow setState), never the key's label. */
+export function toggleKey(whenOn, whenOff, onClick) {
+  const b = button({ class: 'key key--wide key--act', 'aria-pressed': 'false' });
   b.addEventListener('click', onClick);
-  return { el: b, set(on) { b.setAttribute('aria-pressed', String(on)); setText(b, on ? onText : offText); } };
+  return { el: b, set(on) { b.setAttribute('aria-pressed', String(on)); setText(b, on ? whenOn : whenOff); } };
 }
 
 /** A small LCD readout box with a caption, for a reading the farmer took. */
@@ -85,27 +92,43 @@ export function readout(label) {
 }
 
 // ---------------- feeder control box ----------------
+/** What the line's auger does now: the switch (automatic) and the control pan at the end of the line. */
+export const augerWord = (l) => (!l.running ? 'Auger: off' : l.turning ? 'Auger: turning, filling the pans' : l.noFeed ? 'Auger: on, no feed from the silo' : 'Auger: on, stopped by the control pan (pans full)');
 export function buildFeederPanel(L) {
   const { farm } = L;
   const shell = equipShell({ cls: 'equip--feeder', icon: ICONS.sliders, title: 'Feeder control box', sub: 'Three pan feeder lines · auger from the silos', plates: ['feeder-box'], onClose: L.close });
+  const strip = createJobStrip(L, 'feeder-box');
   const rows = FEEDER_LINES_Z.map((z, i) => {
     // a running auger fills the pans over farm time: the plate folds so the clock runs
-    const run = toggleKey('Running', 'Stopped', () => { const l = farm.feed.lines[i]; if (!l.running) shell.foldPlates(); L.act('feed.line', { line: i, running: !l.running }); refresh(); });
-    const flood = toggleKey('Flood on', 'Flood off', () => { const l = farm.feed.lines[i]; if (!l.flood) shell.foldPlates(); L.act('feed.line', { line: i, flood: !l.flood }); refresh(); });
+    const run = toggleKey('Stop auger', 'Start auger', () => { const l = farm.feed.lines[i]; if (!l.running) shell.foldPlates(); L.act('feed.line', { line: i, running: !l.running }); refresh(); });
+    const flood = toggleKey('Close flood windows', 'Open flood windows', () => { const l = farm.feed.lines[i]; if (!l.flood) shell.foldPlates(); L.act('feed.line', { line: i, flood: !l.flood }); refresh(); });
     const height = stepper(`Line ${i + 1} pan height`, 'cm', (d) => {
       const [lo, hi] = EQUIP.feederHeightCm;
       const cm = Math.max(lo, Math.min(hi, Math.round(farm.feed.lines[i].heightCm + d)));
       L.act('feed.line', { line: i, heightCm: cm }); refresh();
     }, { bigStep: 5 });
     const pan = h('span', { class: 'pan-pic', 'aria-hidden': 'true' });
-    const row = machineRow(`Line ${i + 1}`, h('small', null, pan), run.el, flood.el, ...height.els);
-    return { row, run, flood, height, pan };
+    const fill = h('span', { class: 'pan-fill' }), fillBar = h('span', { class: 'pan-bar', 'aria-hidden': 'true' }, h('span'));
+    const row = machineRow(`Line ${i + 1}`, h('small', null, h('span', { class: 'pan-read' }, pan, h('span', { class: 'pan-num' }, fill, fillBar))), run.el, flood.el,
+      h('span', { class: 'ctrl-keys-k' }, 'Pans: lower / raise'), ...height.els);
+    return { row, run, flood, height, pan, fill, fillBar };
   });
+  // one line on what each control does (the plate has the figures)
+  const legend = h('ul', { class: 'equip-legend' },
+    h('li', null, h('b', null, 'Start auger: '), 'the auger carries feed from the silo along the line into the pans. It stops by itself when the control pan at the end of the line is full, and starts again as the birds eat.'),
+    h('li', null, h('b', null, 'Flood windows: '), 'open windows in each pan so the feed piles up in and around it, where day-old chicks reach it.'),
+    h('li', null, h('b', null, 'Pans: lower / raise: '), 'the pan rim height above the litter (Shift: 5 cm a press).'));
+  const timeNote = h('p', { class: 'equip-note equip-note--time' }, 'The pans fill over farm time while the auger turns: about 25 farm minutes for flooded pans. Close the box and let the clock run (Next job works too).');
   const meter = readout('Feed meter');
   const readBtn = button({ class: 'btn btn--machine' }, h('span', { html: ICONS.eye, 'aria-hidden': 'true' }), 'Read the feed meter');
-  readBtn.addEventListener('click', () => { const r = L.act('feed.meter', {}); meter.set(`${int(r?.kg)} kg`, 'since the first fill'); });
+  readBtn.addEventListener('click', () => {
+    const prev = (L.records?.notebook || []).filter((n) => n.kind === 'feed.meter' && n.day < L.env.dayNumber).pop();
+    const r = L.act('feed.meter', {});
+    const was = prev && (typeof prev.value === 'object' ? prev.value.kg : prev.value);
+    meter.set(`${int(r?.kg)} kg`, Number.isFinite(was) ? `${int(r.kg - was)} kg since your reading of day ${prev.day}` : 'since the first fill');
+  });
   const cyc = cycleFeederParts(L, { foldPlates: () => shell.foldPlates() });
-  shell.main.append(h('div', { class: 'ctrl-rows' }, rows.map((r) => r.row.el), cyc.els[0]), h('div', { class: 'equip-reads' }, meter.el, readBtn), cyc.els[1]);
+  shell.main.append(strip.el, h('div', { class: 'ctrl-rows' }, rows.map((r) => r.row.el), cyc.els[0]), legend, timeNote, h('div', { class: 'equip-reads' }, meter.el, readBtn), cyc.els[1]);
 
   function panSvg(l) {
     // side view: litter line, pan at its rim height, feed heaped by fill (flood = heaped above the rim)
@@ -122,17 +145,21 @@ export function buildFeederPanel(L) {
     rows.forEach((r, i) => {
       const l = farm.feed.lines[i];
       r.run.set(!!l.running); r.flood.set(!!l.flood); r.height.set(fmt0(l.heightCm), 'cm');
-      r.row.led.classList.toggle('is-on', !!l.running);
+      // the lamp lights while the auger turns; the switch stays on (automatic) while the control pan has it stopped
+      r.row.led.classList.toggle('is-on', !!l.running && !!l.turning);
       r.row.led.classList.add('led--run');
+      r.row.setState(`${augerWord(l)} · flood windows ${l.flood ? 'open' : 'closed'}`);
+      setText(r.fill, `pans ${Math.round(Math.max(0, Math.min(1, l.panFill)) * 100)} % full`);
+      r.fillBar.firstChild.style.transform = `scaleX(${Math.max(0, Math.min(1, l.panFill)).toFixed(3)})`;
       const k = `${Math.round(l.heightCm)}|${l.flood}|${Math.round(l.panFill * 20)}`;
       if (r.pan.__k !== k) { r.pan.__k = k; r.pan.innerHTML = panSvg(l); }
     });
   }
   return {
     el: shell.el,
-    onOpen() { shell.refreshPlates(); },
-    onClose() { cyc.onClose(); },
-    update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.25; refresh(); cyc.update(); } },
+    onOpen() { shell.refreshPlates(); strip.onOpen(); },
+    onClose() { cyc.onClose(); strip.onClose(); },
+    update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.25; refresh(); cyc.update(); strip.update(); timeNote.hidden = !farm.feed.lines.some((l) => l.running && l.turning); } },
   };
 }
 

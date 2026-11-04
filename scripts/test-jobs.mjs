@@ -99,14 +99,19 @@ test('d7-weigh 08:00-18:00 on day 7, count with 5 sectors', () => {
   assert(L.logged.some((l) => l.key === 'd7-weigh@7' && l.result.n === 50 && l.result.values.length === 50), 'result logged with 50 readings');
 });
 
-test('each: four flow tests; skip past the window marks missed', () => {
+test('each: four flow tests near age + 20 (live part); skip past the window marks missed', () => {
   const L = makeLevel({ startDay: 2, startHour: 6 });
-  for (const line of [0, 1, 2]) L.act('water.flowtest', { line, result: { mlMin: 22 } });
+  // the farm keeps each line's last reading (farm-act water.flowtest); the drinker plate: 22 ml/min, nipples about 13 cm on day 2
+  const flow = (line, mlMin) => { const l = L.farm.water.lines[line]; l.lastFlow = { mlMin, at: L.env.day }; L.act('water.flowtest', { line, result: { mlMin } }); };
+  for (const l of L.farm.water.lines) l.heightCm = 13;
+  for (const line of [0, 1, 2]) flow(line, 22);
   const d = L.jobs.byKey('r-drinkers@2');
-  assert(d.status === 'open' && Math.abs(d.progress - 0.75) < 1e-9, `3 of 4: ${d.progress}`);
-  L.act('water.flowtest', { line: 1 }); assert(d.status === 'open', 'same line twice is not a fourth');
-  L.act('water.flowtest', { line: 3, result: { mlMin: 21 } }); assert(d.status === 'done', 'all four');
-  assert(d.result['0'].mlMin === 22, 'flows in the result');
+  const parts = L.jobs.parts(d);
+  assert(d.status === 'open' && Math.abs(parts[0].progress - 0.75) < 1e-9 && !parts[1].met, `3 of 4: ${parts[0].progress}`);
+  flow(1, 22); assert(d.status === 'open', 'same line twice is not a fourth');
+  flow(3, 12); assert(d.status === 'open', 'a low flow on line 4 keeps the job open (the farmer adjusts and tests again)');
+  flow(3, 21); assert(d.status === 'done', 'all four, all near 22 ml/min');
+  assert(d.result[0]['0'].mlMin === 22 && d.result[1].flowsMlMin[3] === 21, 'flows in the result');
   L.at(2, 13);
   assert(L.st('r-meter@2') === 'missed' && L.st('r-feeders@2') === 'missed', 'morning jobs missed after the skip');
   assert(L.st('r-walk-pm@2') === 'open', 'afternoon open');
@@ -207,8 +212,9 @@ test('record jobs on RECORD_CLOSED of the same day only', () => {
 
 test('events before a window opens do not count', () => {
   const L = makeLevel();
-  L.act('water.height', { line: 0, cm: 11 });
-  assert(L.jobs.byKey('prep-drinkers@-1').progress === 0.25, 'prep drinkers counts in its window');
+  for (const l of L.farm.water.lines) l.heightCm = 50;
+  L.farm.water.lines[0].heightCm = 11; L.jobs.tick();
+  assert(L.jobs.byKey('prep-drinkers@-1').progress === 0.25, 'prep drinkers: one line of four at 10–12 cm');
   L.act('water.flowtest', { line: 0, result: { mlMin: 20 } });
   assert(!L.jobs.byKey('r-drinkers@0'), 'tomorrow not created yet');
   L.at(0, 5.5);
@@ -264,7 +270,7 @@ test('serialize -> restore keeps instances, progress, anchors and rule state', (
   j2.restore(blob);
   assert(JSON.stringify(j2.serialize()) === JSON.stringify(L.jobs.serialize()), 'identical after restore');
   near(j2.anchors.placed, L.jobs.anchors.placed, 'anchor');
-  assert(j2.byKey('r-drinkers@0').st.seen['0'], 'rule state kept');
+  assert(j2.byKey('r-drinkers@0').st.parts[0].seen['0'], 'rule state kept');
 });
 
 test('every job def resolves its window or anchor; heaters exist for heater spots', () => {
@@ -348,14 +354,14 @@ test('stat anchor: the catch (default day 42 02:00), negative fromH, a booking m
   const w = L.jobs.byKey('f-withdraw@41'), lines = L.jobs.byKey('f-lines@42');
   assert(w && lines, 'catch jobs made, day 42 ones too');
   near(L.jobs.anchors.catch, 42 + 2 * H, 'the company\'s default');
-  near(w.opensAt, 42 + 2 * H - 14 * H, 'withdraw opens catch - 14 h'); near(w.closesAt, 42 + 2 * H - 6 * H, 'closes catch - 6 h');
+  near(w.opensAt, 42 + 2 * H - 13 * H, 'withdraw opens catch - 13 h'); near(w.closesAt, 42 + 2 * H - 9 * H, 'closes catch - 9 h');
   L.farm.harvest.catchAt = 42 + 4 * H; L.jobs.tick();
-  near(w.opensAt, 41 + 14 * H, 'the booking moved the window'); near(lines.opensAt, 42 + 3 * H, 'lines -1 h');
+  near(w.opensAt, 41 + 15 * H, 'the booking moved the window'); near(lines.opensAt, 42 + 3 * H, 'lines -1 h');
   near(L.jobs.nextOpening(41 + 6.1 * H), 41 + 13 * H, 'next opening: the afternoon round 13:00');
-  L.at(41, 14);
+  L.at(41, 15.5);
   assert(w.status === 'open', 'withdraw open');
   L.farm.harvest.catchAt = 42 + 5 * H; L.jobs.tick();
-  near(w.opensAt, 41 + 14 * H, 'an open job keeps its window');
+  near(w.opensAt, 41 + 15 * H, 'an open job keeps its window');
   L.act('feed.withdraw', { on: true, result: true });
   assert(w.status === 'done', 'withdrawn');
   const b = makeCycle(FINISH, { day: 37, hour: 7 });
@@ -413,10 +419,13 @@ test('count: sectorsOf house and used, match on the payload; each: has, clean.sw
   assert(dr.status === 'done' && dr.st.list.every((s) => s.s >= 10), `three house sectors (10..17): ${dr.status}`);
   const R = makeCycle(WEEK2, { day: 11, hour: 13 });
   const r = R.jobs.byKey('r-raise@11');
-  for (const line of [0, 1, 2, 3]) R.act('water.height', { line, cm: 22 });
-  for (const line of [0, 1, 2]) R.act('feed.line', { line, running: true });
-  assert(r.status === 'open', 'a feeder run toggle is not a height change (has heightCm)');
-  for (const line of [0, 1, 2]) R.act('feed.line', { line, heightCm: 12 });
+  // the plates' heights for day 11 (nipples about 21 cm, rims about 13 cm), ±3 cm
+  for (const l of R.farm.water.lines) l.heightCm = 22;
+  for (const l of R.farm.feed.lines) l.heightCm = 40;
+  R.jobs.tick();
+  assert(r.status === 'open', 'the drinker lines raised, the pans still high');
+  for (const l of R.farm.feed.lines) l.heightCm = 12;
+  R.jobs.tick();
   assert(r.status === 'done', `raised: ${r.status}`);
   const C = makeCycle(CLEANOUT, { day: 46, hour: 7 });
   const sw = C.jobs.byKey('c-swabs@46');

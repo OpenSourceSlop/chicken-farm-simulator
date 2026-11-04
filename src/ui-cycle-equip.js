@@ -20,7 +20,7 @@ export function cycleFeederParts(L, { foldPlates }) {
   const { env, farm } = L;
   const memo = { withdrawn: null };
   const withdrawnNow = () => !!farm.feed.withdrawn;
-  const wd = toggleKey('Feed taken away', 'Take the feed away', () => {
+  const wd = toggleKey('Give the feed back', 'Take the feed away', () => {
     const on = !withdrawnNow();
     foldPlates();
     L.act('feed.withdraw', { on });

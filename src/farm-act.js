@@ -33,7 +33,8 @@ export function doAct(farm, env, id, a) {
       const prevAir = air(farm.vent), nowAir = air(t);
       farm.vent = t;
       env.setVentTimer(t.fans > 0 && t.onSec > 0 ? t : null);
-      return { air: Math.round(nowAir * 1000) / 1000, prevAir: Math.round(prevAir * 1000) / 1000, stepUp: nowAir > 0 && nowAir >= prevAir - 1e-9 };
+      // a step up gives more air than the setting before (sending the same setting again is no step)
+      return { air: Math.round(nowAir * 1000) / 1000, prevAir: Math.round(prevAir * 1000) / 1000, stepUp: nowAir > prevAir + 1e-9 };
     }
     case 'light.program': {
       const p = { darkStart: a.darkStart ?? farm.light.darkStart, darkHours: Math.max(0, Math.min(12, a.darkHours ?? farm.light.darkHours)), dimmer: Math.max(0, Math.min(1, a.dimmer ?? farm.light.dimmer)) };
@@ -77,7 +78,10 @@ export function doAct(farm, env, id, a) {
     case 'water.height': lineOf(farm, a, water.lines).heightCm = clampHeight(a.cm ?? 11); updateAccess(water, farm.age); return true;
     case 'water.flowtest': {
       updateAccess(water, farm.age);
-      return { mlMin: r1(Math.max(0, lineOf(farm, a, water.lines).flowMlMin + (rng.next() - 0.5))) };
+      // the line keeps its last reading (r-drinkers: every line tested this round, near age + 20)
+      const l = lineOf(farm, a, water.lines), mlMin = r1(Math.max(0, l.flowMlMin + (rng.next() - 0.5)));
+      l.lastFlow = { mlMin, at: +env.day.toFixed(5) };
+      return { mlMin };
     }
     case 'water.meter': {
       const now = env.day, m24 = meterAt(water, now - 1, now), m48 = meterAt(water, now - 2, now);

@@ -33,6 +33,9 @@ import { EV, matchPayload } from './events.js';
 import { ALL_JOBS } from './content-jobs.js';
 import { feltNearTarget } from './farm-problems.js';
 import { heatHandled } from './farm-cycle-problems.js';
+import { FEED } from './farm-feed.js';
+import { ventNeed, ventInBand, VENT_BAND, nippleInBand, rimInBand, flowToday, brooderRowC, luxOfDimmer, fansWorking, NIPPLE_DAY0_CM, FLOW_BAND, CHICK_LUX, DARK_H,
+  CATCH_DIMMER_MAX, CATCH_FANS_MIN, LINES_UP_CM, PANS_UP_CM, PANS_ON_LITTER_CM } from './job-figures.js';
 
 const H = 1 / 24;
 /** The brooding week ends at 06:00 on day 8 at the latest (PHASE2.md §10). */
@@ -146,7 +149,7 @@ function ruleProgress(rule, st, ctx) {
       const cv = coverageOf(rule, st, ctx.env), c = Math.min(1, cv.seen / Math.max(1, cv.need));
       return rule.listen ? c * 0.85 + (st.listened ? 0.15 : 0) : c;
     }
-    case 'state': return st.met ? 1 : stateProgress(rule.test, ctx);
+    case 'state': return st.met ? 1 : stateProgress(rule.test, ctx, st);
     case 'all': return rule.of.reduce((a, r, i) => a + (st.met[i] ? 1 : ruleProgress(r, st.parts[i], ctx)), 0) / rule.of.length;
     case 'any': return Math.max(...rule.of.map((r, i) => (st.met[i] ? 1 : ruleProgress(r, st.parts[i], ctx))));
     default: return st.met ? 1 : 0;
@@ -207,19 +210,33 @@ function ruleEvent(rule, st, type, p, inst, ctx) {
 }
 
 /** State rules: evaluated on every tick. Returns true if something changed. */
-function ruleTick(rule, st, ctx) {
+function ruleTick(rule, st, ctx, inst) {
   if (rule.type === 'state') {
     if (st.met) return false;
-    const v = stateTest(rule.test, st, ctx);
+    const v = stateTest(rule.test, st, ctx, inst);
     if (v) { st.met = true; st.value = stateSnapshot(rule.test, ctx); return true; }
     return false;
   }
   if (rule.type === 'all' || rule.type === 'any') {
     let changed = false;
-    rule.of.forEach((r, i) => { if (!st.met[i] && ruleTick(r, st.parts[i], ctx)) { changed = true; if (ruleMet(r, st.parts[i], ctx)) st.met[i] = true; } });
+    rule.of.forEach((r, i) => { if (!r.live && !st.met[i] && ruleTick(r, st.parts[i], ctx, inst)) { changed = true; if (ruleMet(r, st.parts[i], ctx)) st.met[i] = true; } });
     return changed;
   }
   return false;
+}
+const liveCache = new WeakMap();
+const hasLive = (rule) => { if (!liveCache.has(rule)) liveCache.set(rule, !!rule.live || (rule.of || []).some(hasLive)); return liveCache.get(rule); };
+/** A `live` state part of an all / any rule does not latch: it is read again on every tick and before
+ *  every completion, so the outcome holds when the job is done (a timer stepped up and in the band). */
+function refreshLive(rule, st, ctx, inst) {
+  if (rule.type !== 'all' && rule.type !== 'any') return;
+  rule.of.forEach((r, i) => {
+    if (r.type === 'state' && r.live) {
+      const v = !!stateTest(r.test, st.parts[i], ctx, inst);
+      st.met[i] = v; st.parts[i].met = v;
+      if (v) st.parts[i].value = stateSnapshot(r.test, ctx);
+    } else refreshLive(r, st.parts[i], ctx, inst);
+  });
 }
 
 // Payloads go into the save: keep them small (no record rows, no functions).
@@ -239,6 +256,20 @@ function held(st, cond, env, min) {
   if (cond) { if (st.since == null) st.since = env.day; } else st.since = null;
   return st.since != null && env.day - st.since >= min / 1440 - EPS;
 }
+/** Game minutes a held test needs (the card and the strip show "12 of 30 farm minutes"). */
+export const HELD_MIN = { 'house-near-target': 30, 'rh-under': 60, 'air-clear': 120, 'heat-handled': 30, 'pad-humid-ok': 30, 'night-comfort': 30 };
+/** Minutes held so far of a held state part (0 while the condition does not hold). */
+export function heldSoFar(test, st, env) {
+  if (!(test in HELD_MIN) || !st) return null;
+  const m = st.met ? HELD_MIN[test] : st.since == null ? 0 : Math.max(0, Math.min(HELD_MIN[test], (env.day - st.since) * 1440));
+  return { min: m, of: HELD_MIN[test] };
+}
+const lightOf = (env, farm) => env.lightProgram || farm.light || {};
+/** The night in the house: what the birds feel between a little cool and where they start to pant (comfort). */
+function nightComfort(env, farm) {
+  const C = farm.comfort || {}, e = Number.isFinite(C.meanOver) ? C.meanOver : C.e;
+  return env.hour >= 18 && Number.isFinite(e) && e >= -1.5 && e <= (C.hotFrom ?? 1.5);
+}
 /** Litter cover over all 576 cells (farm.litter.cover is the brooding floor's share). */
 function houseCover(farm) {
   const g = farm.litter?.coverGrid;
@@ -257,15 +288,33 @@ function cakedShare(farm, env) {
   return n ? c / n : 0;
 }
 const ammonia = (farm) => farm.air?.ammoniaPpm ?? farm.litter?.ammoniaPpm ?? 0;
-const LIGHT_DARK_MIN_H = 4; // the light sign: about 4-6 hours of darkness in one block from day 8
 
-function stateTest(test, st, { env, farm, props }) {
+function stateTest(test, st, { env, farm, props }, inst) {
   const C = farm.clean || {};
   switch (test) {
-    case 'preheat-on': return env.heaterSetpoint >= 30 && !!env.heatersOn;
-    case 'litter-covered': return (farm.litter?.cover ?? 0) >= 0.95;
-    case 'pans-flooded': return farm.feed.lines.every((l) => l.flood && l.panFill >= 0.95);
-    case 'lines-flushed': return farm.water.lines.every((l) => l.flushClear >= 0.99);
+    // the brooder sign's day 0 row (34 °C) within 1 °C, and the brooders burning
+    case 'preheat-on': return Math.abs(env.heaterSetpoint - brooderRowC(0)) <= 1 + EPS && !!env.heatersOn;
+    // the brooding floor covered, at least the litter sign's 5 cm deep
+    case 'litter-covered': return (farm.litter?.cover ?? 0) >= 0.95 && (farm.litter?.depthCm ?? 0) >= 5 - EPS;
+    // every line flooded, full, and on the litter (rim at most 7 cm: the plate's about 5 cm)
+    case 'pans-flooded': return farm.feed.lines.every((l) => l.flood && l.panFill >= 0.95 && l.heightCm <= PANS_ON_LITTER_CM + EPS);
+    // every line ran clear and its flush valve is closed again
+    case 'lines-flushed': return farm.water.lines.every((l) => l.flushClear >= 0.99 && !l.flushing);
+    // ---- the clarity round: the outcome a job works toward (job-figures.js) ----
+    case 'vent-in-band': return ventInBand(env, farm);
+    case 'nipples-at': return farm.water.lines.every((l) => l.heightCm >= NIPPLE_DAY0_CM[0] - EPS && l.heightCm <= NIPPLE_DAY0_CM[1] + EPS);
+    case 'lines-raised': return farm.water.lines.every((l) => nippleInBand(l.heightCm, env)) && farm.feed.lines.every((l) => rimInBand(l.heightCm, env));
+    case 'lines-up': return farm.water.lines.every((l) => l.heightCm >= LINES_UP_CM - EPS);
+    case 'all-up': return farm.water.lines.every((l) => l.heightCm >= LINES_UP_CM - EPS) && farm.feed.lines.every((l) => l.heightCm >= PANS_UP_CM - EPS) && !!(env.broodersUp ?? farm.house?.broodersUp);
+    case 'night-comfort': return held(st, nightComfort(env, farm), env, HELD_MIN['night-comfort']);
+    case 'catch-ready': return (lightOf(env, farm).dimmer ?? 1) <= CATCH_DIMMER_MAX + EPS && (env.fansEffective ?? 0) >= CATCH_FANS_MIN;
+    case 'chick-lights': { const p = lightOf(env, farm), lux = luxOfDimmer(p.dimmer); return (p.darkHours ?? 1) <= 1 + EPS && lux >= CHICK_LUX[0] - 0.5 && lux <= CHICK_LUX[1] + 0.5; }
+    case 'feeders-checked': return farm.feed.lines.every((l) => l.running && l.panFill >= FEED.accessFill - EPS && (env.dayNumber < 4 || rimInBand(l.heightCm, env)));
+    case 'flows-in-band': {
+      // every line tested since the job opened, its last reading within ±3 ml/min of age + 20, its nipples at the day's height
+      const from = inst?.opensAt ?? -Infinity, want = flowToday(env);
+      return farm.water.lines.every((l) => l.lastFlow && l.lastFlow.at >= from - EPS && Math.abs(l.lastFlow.mlMin - want) <= FLOW_BAND + EPS && nippleInBand(l.heightCm, env));
+    }
     case 'all-placed': return farm.flock.inBoxes === 0 && farm.flock.placed > 0;
     case 'dead-cleared': return farm.flock.deadOnFloor === 0 && props?.carrying !== 'bucket';
     case 'house-near-target':
@@ -286,8 +335,10 @@ function stateTest(test, st, { env, farm, props }) {
       // done by doing what the heat sign and the pad plate say (farm-cycle-problems heatHandled: the rule the
       // farm fixes the problem by): few birds panting and none chilled, or for big birds every fan and the pad
       return held(st, heatHandled(farm, env), env, 30);
-    case 'dark-period': return ((env.lightProgram?.darkHours ?? farm.light?.darkHours) ?? 0) >= LIGHT_DARK_MIN_H;
-    case 'pad-humid-ok': return held(st, (!env.padOn || env.houseRH <= HEAT.padOffAboveRH) && env.fansEffective >= 5, env, 30);
+    // the light sign: about 4–6 hours of darkness in one block
+    case 'dark-period': { const d = (env.lightProgram?.darkHours ?? farm.light?.darkHours) ?? 0; return d >= DARK_H[0] - EPS && d <= DARK_H[1] + EPS; }
+    // the pad plate: above about 90 % the pump off and all the fans (every fan that turns)
+    case 'pad-humid-ok': return held(st, (!env.padOn || env.houseRH <= HEAT.padOffAboveRH) && env.fansEffective >= fansWorking(env), env, 30);
     case 'house-empty': return !!farm.harvest?.started && farm.flock.alive === 0;
     case 'litter-removed': return houseCover(farm) <= 0.05;
     case 'house-washed': return (C.washShare ?? 0) >= 0.95;
@@ -299,14 +350,29 @@ function stateTest(test, st, { env, farm, props }) {
     default: return false;
   }
 }
-function stateProgress(test, { env, farm }) {
+function stateProgress(test, { env, farm, props }, st) {
   const C = farm.clean || {};
+  const hs = heldSoFar(test, st, env);
+  if (hs) return hs.of ? hs.min / hs.of : 0;
+  const share = (list, ok) => list.filter(ok).length / Math.max(1, list.length);
   switch (test) {
-    case 'litter-covered': return clamp01((farm.litter?.cover ?? 0) / 0.95);
-    case 'pans-flooded': return farm.feed.lines.filter((l) => l.flood && l.panFill >= 0.95).length / farm.feed.lines.length;
-    case 'lines-flushed': return farm.water.lines.reduce((a, l) => a + clamp01(l.flushClear), 0) / farm.water.lines.length;
+    case 'nipples-at': return share(farm.water.lines, (l) => l.heightCm >= NIPPLE_DAY0_CM[0] - EPS && l.heightCm <= NIPPLE_DAY0_CM[1] + EPS);
+    case 'lines-raised': return share([...farm.water.lines.map((l) => nippleInBand(l.heightCm, env)), ...farm.feed.lines.map((l) => rimInBand(l.heightCm, env))], Boolean);
+    case 'lines-up': return share(farm.water.lines, (l) => l.heightCm >= LINES_UP_CM - EPS);
+    case 'all-up': return share([...farm.water.lines.map((l) => l.heightCm >= LINES_UP_CM - EPS), ...farm.feed.lines.map((l) => l.heightCm >= PANS_UP_CM - EPS), !!(env.broodersUp ?? farm.house?.broodersUp)], Boolean);
+    case 'feeders-checked': return share(farm.feed.lines, (l) => l.running && l.panFill >= FEED.accessFill - EPS && (env.dayNumber < 4 || rimInBand(l.heightCm, env)));
+    case 'dead-cleared': return farm.flock.deadOnFloor === 0 ? (props?.carrying === 'bucket' ? 0.7 : 1) : 0;
+    case 'lame-cleared': return (farm.flock.lameOnFloor ?? 0) === 0 ? 1 : 0;
+    case 'house-empty': return farm.harvest?.started ? clamp01(1 - farm.flock.alive / Math.max(1, farm.flock.alive + (farm.flock.caught || 0))) : 0;
+    case 'vent-in-band': { const v = ventNeed(env, farm); return ventInBand(env, farm) ? 1 : Math.min(0.95, v.share <= 1 ? v.share / VENT_BAND[0] : VENT_BAND[1] / v.share); }
+    case 'chick-lights': { const p = lightOf(env, farm), lux = luxOfDimmer(p.dimmer); return ((p.darkHours ?? 1) <= 1 + EPS ? 0.5 : 0) + (lux >= CHICK_LUX[0] - 0.5 && lux <= CHICK_LUX[1] + 0.5 ? 0.5 : 0); }
+    case 'catch-ready': return ((lightOf(env, farm).dimmer ?? 1) <= CATCH_DIMMER_MAX + EPS ? 0.5 : 0) + Math.min(0.5, ((env.fansEffective ?? 0) / CATCH_FANS_MIN) * 0.5);
+    case 'flows-in-band': { const want = flowToday(env); return share(farm.water.lines, (l) => l.lastFlow && Math.abs(l.lastFlow.mlMin - want) <= FLOW_BAND + EPS && nippleInBand(l.heightCm, env)); }
+    case 'pans-flooded': return farm.feed.lines.reduce((a, l) => a + (l.flood ? 0.2 : 0) + (l.heightCm <= PANS_ON_LITTER_CM + EPS ? 0.2 : 0) + 0.6 * clamp01(l.panFill / 0.95), 0) / farm.feed.lines.length;
+    case 'lines-flushed': return farm.water.lines.reduce((a, l) => a + 0.9 * clamp01(l.flushClear) + (l.flushClear >= 0.99 && !l.flushing ? 0.1 : 0), 0) / farm.water.lines.length;
     case 'all-placed': { const d = farm.flock.delivered || LEVEL1.chicksPlaced; return clamp01(farm.flock.placed / d); }
-    case 'preheat-on': return env.heaterSetpoint >= 30 ? 0.5 : 0;
+    case 'preheat-on': return (Math.abs(env.heaterSetpoint - brooderRowC(0)) <= 1 + EPS ? 0.5 : 0) + (env.heatersOn ? 0.5 : 0);
+    case 'litter-covered': return clamp01((farm.litter?.cover ?? 0) / 0.95) * ((farm.litter?.depthCm ?? 0) >= 5 - EPS ? 1 : 0.9);
     case 'house-ready': return clamp01(houseCover(farm) / 0.95);
     case 'litter-removed': return clamp01((1 - houseCover(farm)) / 0.95);
     case 'house-washed': return clamp01((C.washShare ?? 0) / 0.95);
@@ -341,6 +407,12 @@ function stateSnapshot(test, { env, farm }) {
     case 'house-disinfected': return { sprayPct: Math.round((C.sprayShare ?? 0) * 100) };
     case 'house-dry': return { wetPct: Math.round((C.wetShare ?? 0) * 100) };
     case 'rest-done': return { bookedDay: C.bookedDay ?? null, closedDay: C.closedDay ?? null };
+    case 'vent-in-band': { const v = ventNeed(env, farm); return { airM3h: Math.round(v.air), needM3h: Math.round(v.need), birds: v.birds, weightG: Math.round(v.weightG) }; }
+    case 'nipples-at': case 'lines-up': return { nipplesCm: farm.water.lines.map((l) => l.heightCm) };
+    case 'lines-raised': case 'all-up': return { nipplesCm: farm.water.lines.map((l) => l.heightCm), pansCm: farm.feed.lines.map((l) => l.heightCm) };
+    case 'flows-in-band': return { flowsMlMin: farm.water.lines.map((l) => l.lastFlow?.mlMin ?? null) };
+    case 'chick-lights': case 'catch-ready': { const p = lightOf(env, farm); return { darkHours: p.darkHours ?? null, dimmer: p.dimmer ?? null, fans: env.fansEffective ?? 0 }; }
+    case 'night-comfort': return { houseC: +env.houseTemp.toFixed(1), fans: env.fansEffective ?? 0 };
     default: return { at: env.day };
   }
 }
@@ -372,7 +444,7 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
   let lastDay = null;
   let currentKey = null;
   let started = false;
-  const ctx = { env, farm, props, get def() { return def; } };
+  const ctx = { env, farm, props, records, get def() { return def; } };
   const emit = (t, p) => events && events.emit(t, p);
   const order = jobs.map((j) => j.id);
   const rank = (inst) => order.indexOf(inst.id);
@@ -487,7 +559,9 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
   function evalOpen(type, p) {
     for (const inst of list) {
       if (inst.status !== 'open') continue;
-      if (ruleEvent(inst.def.done, inst.st, type, p, inst, ctx)) {
+      // a job with a live part is read again on every event (its outcome may have changed with the action)
+      if (ruleEvent(inst.def.done, inst.st, type, p, inst, ctx) || (type === EV.ACTION && hasLive(inst.def.done))) {
+        refreshLive(inst.def.done, inst.st, ctx, inst);
         inst.progress = ruleProgress(inst.def.done, inst.st, ctx);
         if (ruleMet(inst.def.done, inst.st, ctx)) finishInst(inst);
       }
@@ -522,7 +596,8 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
     windows();
     for (const inst of list) {
       if (inst.status !== 'open') continue;
-      ruleTick(inst.def.done, inst.st, ctx);
+      ruleTick(inst.def.done, inst.st, ctx, inst);
+      refreshLive(inst.def.done, inst.st, ctx, inst);
       inst.progress = ruleProgress(inst.def.done, inst.st, ctx);
       if (ruleMet(inst.def.done, inst.st, ctx)) finishInst(inst);
     }
@@ -622,6 +697,17 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
     endAt,
     /** A walk's cells seen and needed (the job card's text). */
     coverage(inst) { return inst?.def.done.type === 'coverage' ? coverageOf(inst.def.done, inst.st, env) : null; },
+    /** The parts of a job for the card and the panel strip: one entry per part of an all / any rule (one for a
+     *  single rule) -> [{ label, met, live, progress 0..1, held: { min, of } | null, test, rule, st }].
+     *  Labels are the rules' own `label` (content-jobs); a live part is met only while its outcome holds. */
+    parts(inst) {
+      if (!inst) return [];
+      const r = inst.def.done, st = inst.st, done = inst.status === 'done';
+      const one = (rule, s, met) => ({ label: rule.label || null, met: done || !!met, live: !!rule.live, progress: done || met ? 1 : ruleProgress(rule, s, ctx),
+        held: rule.type === 'state' ? heldSoFar(rule.test, s, env) : null, test: rule.test || null, rule, st: s });
+      if (r.type === 'all' || r.type === 'any') return r.of.map((p, i) => one(p, st.parts[i], st.met[i]));
+      return [one(r, st, st.met)];
+    },
     stats() {
       const c = { waiting: 0, open: 0, done: 0, missed: 0 };
       for (const i of list) c[i.status]++;

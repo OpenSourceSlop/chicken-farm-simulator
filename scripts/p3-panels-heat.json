@@ -8,7 +8,7 @@
   {"expect": "(() => { const t = __open().querySelector('.lcd-grid').textContent; return /House/.test(t) && /Humidity in/.test(t) && 'LCD: ' + t.replace(/\\s+/g, ' ').trim(); })()", "label": "the fan panel shows house °C and humidity side by side"},
   {"expect": "!__chill() && 'no wind chill readout before Heat & Ventilation level 1'", "label": "the wind chill line is absent before the unlock"},
   {"clickText": "Fan 6 switch", "in": ".panel:not([hidden])"},
-  {"clickText": "Pad pump off", "in": ".panel:not([hidden])"},
+  {"clickText": "Start the pad pump", "in": ".panel:not([hidden])"},
   {"advance": 0.3},
   {"expect": "__game.env.fansManual === 6 && __game.env.padOn === true && __acts.some((a) => a.id === 'vent.fans' && a.n === 6) && __acts.some((a) => a.id === 'vent.pad' && a.on === true) && 'six fans and the pad: env.fansManual 6, env.padOn'", "label": "six fans and the pad: env.fansManual === 6 && env.padOn"},
   {"advance": 2.5},

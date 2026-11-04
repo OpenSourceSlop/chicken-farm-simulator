@@ -27,7 +27,8 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
     memo.shut = shut; memo.at = env.day;
     sync();
   };
-  const mainRow = (sub) => { const t = toggleKey('Main valve shut', 'Main valve open', valveToggle); const r = machineRow('Main valve', sub, t.el); r.led.classList.add('led--pad'); return { ...r, t }; };
+  // the key names what pressing it does: shut while the valve is open, open while it is shut
+  const mainRow = (sub) => { const t = toggleKey('Open the main valve', 'Shut the main valve', valveToggle); const r = machineRow('Main valve', sub, t.el); r.led.classList.add('led--pad'); return { ...r, t }; };
   const mainLines = mainRow('water to the header tank and the lines');
   mainLines.el.hidden = true;
   linesSec.prepend(mainLines.el);
@@ -60,7 +61,7 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
   // ---------- Medicine ----------
   // the farm's medication state (farm.health.medication)
   const medNow = () => !!farm.health.medication.on;
-  const med = toggleKey('Medicator on', 'Medicator off', () => {
+  const med = toggleKey('Stop the medicine', 'Start the medicine', () => {
     const on = !medNow();
     L.act('water.medicate', { on });
     sync();
@@ -71,11 +72,11 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
   const medPlate = buildPlate('medicator');
   tabs.secs[2].append(medRow.el, medState, medPlate.el);
   // ---------- Clean-out ----------
-  const dis = toggleKey('Disinfectant in', 'No disinfectant', () => { L.act('water.disinfect', { on: !farm.clean?.disinfectant }); sync(); });
+  const dis = toggleKey('Run the tank clean', 'Put disinfectant in the tank', () => { L.act('water.disinfect', { on: !farm.clean?.disinfectant }); sync(); });
   const disRow = machineRow('Header tank', 'disinfectant mixed as its label says', dis.el);
   disRow.led.classList.add('led--pad');
   const flushes = DRINKER_LINES_Z.map((z, i) => {
-    const t = toggleKey('Valve open', 'Valve shut', () => {
+    const t = toggleKey('Close flush valve', 'Open flush valve', () => {
       const on = !(farm.water.lines[i].flushing || memo.flush[i]);
       if (on) foldAll();
       L.act('water.flush', { line: i, on });
@@ -97,7 +98,7 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
     mainLines.el.hidden = !on;
     testBox.hidden = !on || !skills?.unlocked?.('waterTest');
     const shut = mainShut(farm);
-    for (const m of [mainLines, mainVac]) { m.t.set(shut); m.led.classList.toggle('is-on', !shut); }
+    for (const m of [mainLines, mainVac]) { m.t.set(shut); m.led.classList.toggle('is-on', !shut); m.setState(shut ? 'Main valve: shut, no water to the lines' : 'Main valve: open, water reaches the lines'); }
     for (const m of [mainLines, mainVac]) setText(m.small, shut ? `shut${memo.at != null ? ` since ${whenText(memo.at)}` : ''}: no water reaches the lines` : 'water to the header tank and the lines');
     const v = farm.health?.vaccine || { state: 'none' };
     const since = (t) => hoursText((env.day - t) * 24);
@@ -115,14 +116,14 @@ export function cycleWaterParts(L, { linesSec, foldPlates }) {
     setText(tank, mixed ? `${litres != null ? `${int(litres)} L of vaccine water` : 'Vaccine water'}${v.stabiliser ? ' with stabiliser' : ''}, mixed ${whenText(v.mixedAt)}.` : 'Empty: mix the vaccine for about 2 hours of drinking.');
     const m = farm.health?.medication || {};
     const medOn = medNow();
-    med.set(medOn); medRow.led.classList.toggle('is-on', medOn);
+    med.set(medOn); medRow.led.classList.toggle('is-on', medOn); medRow.setState(`Medicator: ${medOn ? 'on' : 'off'}`);
     const from = m.from;
     setText(medState, medOn ? `Medicine in the water since ${whenText(from)} (${hoursText((env.day - from) * 24)}).` : m.days ? `Off. The last course ran ${one(m.days)} days.` : 'Off.');
-    dis.set(!!farm.clean?.disinfectant); disRow.led.classList.toggle('is-on', !!farm.clean?.disinfectant);
+    dis.set(!!farm.clean?.disinfectant); disRow.led.classList.toggle('is-on', !!farm.clean?.disinfectant); disRow.setState(`Header tank: ${farm.clean?.disinfectant ? 'disinfectant in' : 'clean water'}`);
     flushes.forEach((f, i) => {
       const fl = !!(farm.water.lines[i].flushing || memo.flush[i]);
       if (!farm.water.lines[i].flushing && memo.flush[i] && !farm.clean?.disinfectant) memo.flush[i] = false;
-      f.t.set(fl); f.r.led.classList.toggle('is-on', fl);
+      f.t.set(fl); f.r.led.classList.toggle('is-on', fl); f.r.setState(`Flush valve: ${fl ? 'open' : 'closed'}`);
       setText(f.r.small, (farm.clean?.lines?.[i] ?? 0) >= 1 ? 'disinfectant through the line' : fl ? 'flushing' : 'not flushed with disinfectant');
     });
   }

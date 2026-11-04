@@ -144,7 +144,7 @@ export function buildWaterSupplyPanel(L) {
   // flush valves
   const valves = DRINKER_LINES_Z.map((z, i) => {
     const tube = h('span', { class: 'tube', 'aria-hidden': 'true' }, h('span', { class: 'tube-water' }));
-    const t = toggleKey('Valve open', 'Valve shut', () => {
+    const t = toggleKey('Close flush valve', 'Open flush valve', () => {
       const on = !farm.water.lines[i].flushing;
       if (on) shell.foldPlates();
       L.act('water.flush', { line: i, on }); refresh();
@@ -184,6 +184,7 @@ export function buildWaterSupplyPanel(L) {
     valves.forEach((v, i) => {
       const l = farm.water.lines[i], clear = Math.max(0, Math.min(1, l.flushClear));
       v.t.set(!!l.flushing);
+      v.row.setState(`Flush valve: ${l.flushing ? 'open, water running through the line' : 'closed'}`);
       v.row.led.classList.add('led--pad');
       v.row.led.classList.toggle('is-on', !!l.flushing);
       v.tube.style.setProperty('--clear', clear.toFixed(2));

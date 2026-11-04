@@ -16,6 +16,8 @@ import { h, button, setText, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { createMarker } from './ui-marker.js';
 import { hhmm, splitDay } from './ui-format.js';
+import { heldText } from './job-strips.js';
+import { flowToday, nippleCmToday, rimCmNow, nippleInBand, rimInBand, ventNeed, luxOfDimmer, brooderRowC, LINES_UP_CM, PANS_UP_CM, NIPPLE_DAY0_CM } from './job-figures.js';
 
 const BOARD_SPOT = {
   'sign-gate': SPOTS.signGate, 'sign-brooder': SPOTS.signBrooder, 'sign-water': SPOTS2.signWater, 'sign-vent': SPOTS2.signVent,
@@ -83,14 +85,44 @@ function progressText(inst, ctx) {
       if (r.test === 'house-dry') return `floor wet ${Math.round((C.wetShare ?? 0) * 100)} %`;
       if (r.test === 'lines-disinfected') return `${(C.lines || []).filter((v) => v >= 1).length} / 4 lines disinfected`;
       if (r.test === 'pans-grower' || r.test === 'pans-finisher') { const t = r.test.slice(5); return `${t} in the pans ${Math.round((f.feed?.panType?.[t] ?? 0) * 100)} %`; }
-      return '';
+      return stateText(r.test, inst, ctx);
     }
-    case 'all': return `${st.met.filter(Boolean).length} / ${r.of.length}`;
+    case 'all': case 'any': {
+      // every part by its name (content-jobs labels), done or not yet; a part that must hold says for how long
+      const parts = ctx.level?.engine?.parts?.(inst) || [];
+      if (!parts.some((p) => p.label)) return `${st.met.filter(Boolean).length} / ${r.of.length}`;
+      return parts.map((p) => (p.held && !p.met ? `○ ${heldText(p)}` : `${p.met ? '✓' : '○'} ${p.label || ''}`)).join('\n');
+    }
     default: return '';
   }
 }
-const BAR_TESTS = ['litter-covered', 'lines-flushed', 'pans-flooded', 'all-placed', 'house-ready', 'litter-removed', 'house-washed', 'house-disinfected', 'house-dry', 'lines-disinfected', 'pans-grower', 'pans-finisher'];
-const hasBar = (inst) => { const t = inst.def.done.type; return t === 'each' || t === 'count' || t === 'coverage' || t === 'all' || (t === 'state' && BAR_TESTS.includes(inst.def.done.test)); };
+/** The card's line for the clarity round's state tests (and the ones that had no bar). */
+function stateText(test, inst, ctx) {
+  const f = ctx.farm, env = ctx.env, W = f.water.lines, F = f.feed.lines, held = ctx.level?.engine?.parts?.(inst)?.[0];
+  if (held?.held) return heldText({ ...held, label: held.label || 'Near the target' });
+  const n = (list, ok) => list.filter(ok).length;
+  switch (test) {
+    case 'preheat-on': return `thermostat ${env.heaterSetpoint.toFixed(1)} °C (brooder sign, day 0: ${brooderRowC(0)} °C) · brooders ${env.heatersOn ? 'burning' : 'off'}`;
+    case 'nipples-at': return `${n(W, (l) => l.heightCm >= NIPPLE_DAY0_CM[0] && l.heightCm <= NIPPLE_DAY0_CM[1])} / 4 lines at 10–12 cm`;
+    case 'lines-raised': return `drinker lines ${n(W, (l) => nippleInBand(l.heightCm, env))} / 4 near ${Math.round(nippleCmToday(env))} cm · pans ${n(F, (l) => rimInBand(l.heightCm, env))} / 3 near ${Math.round(rimCmNow(env))} cm`;
+    case 'lines-up': return `${n(W, (l) => l.heightCm >= LINES_UP_CM)} / 4 lines lifted to ${LINES_UP_CM} cm or more`;
+    case 'all-up': return `drinker lines up ${n(W, (l) => l.heightCm >= LINES_UP_CM)} / 4 · pans up ${n(F, (l) => l.heightCm >= PANS_UP_CM)} / 3 · brooders ${env.broodersUp ? 'up' : 'down'}`;
+    case 'dead-cleared': { const d = f.flock.deadOnFloor ?? 0; return d > 0 ? `dead birds on the floor: ${d}${ctx.props?.carrying === 'bucket' ? ' · bucket in your hand' : ''}` : ctx.props?.carrying === 'bucket' ? 'bucket in your hand: count them at the bin' : 'no dead birds on the floor this round'; }
+    case 'lame-cleared': return `birds that cannot walk well, sitting apart: ${f.flock.lameOnFloor ?? 0}`;
+    case 'house-empty': return f.harvest?.started ? `birds still in the house: ${Math.round(f.flock.alive)} · tunnel fans running ${env.fansEffective ?? 0} (catch sign: at least three)` : 'the crew starts at the booked time';
+    case 'vaccine-drunk': return ({ none: 'main valve open, no vaccine yet', thirst: 'main valve shut: the birds get thirsty', mixed: 'vaccine in the header tank: open the main valve', drinking: 'the birds are drinking the vaccine: walk them up', drunk: 'header tank empty' })[f.health?.vaccine?.state] || '';
+    case 'feeders-checked': return `${n(F, (l) => l.running && l.panFill >= 0.3 && (env.dayNumber < 4 || rimInBand(l.heightCm, env)))} / 3 lines on, fed${env.dayNumber >= 4 ? `, rims near ${Math.round(rimCmNow(env))} cm` : ''}`;
+    case 'flows-in-band': return `flow target ${flowToday(env)} ml/min (age + 20)`;
+    case 'vent-in-band': { const v = ventNeed(env, f); return `timer air ${Math.round(v.air)} of about ${Math.round(v.need)} m³/h the table gives (${Math.round(v.share * 100)} %)`; }
+    case 'chick-lights': case 'catch-ready': case 'dark-period': { const p = env.lightProgram || f.light || {}; return `dark ${p.darkHours ?? 1} h · dimmer ${Math.round((p.dimmer ?? 1) * 100)} % ≈ ${Math.round(luxOfDimmer(p.dimmer))} lux`; }
+    default: return '';
+  }
+}
+const BAR_TESTS = ['litter-covered', 'lines-flushed', 'pans-flooded', 'all-placed', 'house-ready', 'litter-removed', 'house-washed', 'house-disinfected', 'house-dry', 'lines-disinfected', 'pans-grower', 'pans-finisher',
+  // the clarity round: every state with a measure of how far it is, and the ones that must hold for farm minutes
+  'preheat-on', 'nipples-at', 'lines-raised', 'lines-up', 'all-up', 'feeders-checked', 'dead-cleared', 'lame-cleared', 'house-empty', 'vaccine-drunk',
+  'house-near-target', 'rh-under', 'air-clear', 'heat-handled', 'pad-humid-ok', 'night-comfort', 'chick-lights', 'catch-ready', 'vent-in-band', 'flows-in-band'];
+const hasBar = (inst) => { const t = inst.def.done.type; return t === 'each' || t === 'count' || t === 'coverage' || t === 'all' || t === 'any' || (t === 'state' && BAR_TESTS.includes(inst.def.done.test)); };
 
 export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook, onSkills, nextLabel }) {
   const titleId = uniqueId('ljobs-title');
@@ -167,11 +199,14 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     const heater = () => ({ x: nearestHeater(p).x, z: nearestHeater(p).z, y: HEATER_HEIGHT + 1.0, gz: 0 });
     switch (d.id) {
       case 'prep-litter': if (carrying === 'barrow') { const c = uncoveredCell(p); return c ? ground(c, 1.6) : null; } break;
-      case 'prep-drinkers': case 'r-drinkers': { const left = d.done.values.find((v) => !(String(v) in st.seen)); return place(SPOTS2.drinkers[left ?? 0]); }
+      case 'prep-drinkers': { const left = ctx.farm.water.lines.findIndex((l) => l.heightCm < NIPPLE_DAY0_CM[0] || l.heightCm > NIPPLE_DAY0_CM[1]); return place(SPOTS2.drinkers[Math.max(0, left)]); }
+      case 'r-drinkers': { const seen = st.parts?.[0]?.seen || {}; const left = [0, 1, 2, 3].find((v) => !(String(v) in seen)); return place(SPOTS2.drinkers[left ?? 0]); }
+      case 'f-lines': case 'c-raise': case 'r-raise': { const left = ctx.farm.water.lines.findIndex((l) => (d.id === 'r-raise' ? !nippleInBand(l.heightCm, ctx.env) : l.heightCm < LINES_UP_CM)); return left >= 0 ? place(SPOTS2.drinkers[left]) : place(SPOTS2.feederBox); }
+      case 'c-brush': { const left = Object.entries(SPOTS3.brush).filter(([k]) => !ctx.farm.clean?.brushed?.[k]).map(([, v]) => v); return left.length ? ground(nearestOf(left, p), 1.6) : null; }
       case 'd0-place': return carrying === 'boxes' ? heater() : place(SPOTS2.boxStacks);
       case 'd7-weigh': if (carrying === 'frame') return heater(); break;
       case 'r-dips': return place(st.met[0] ? SPOTS.houseDoor : FARM.footDipGate);
-      case 'r-feeders': return place(st.met[0] ? SPOTS2.silo : SPOTS2.feederBox);
+      case 'r-feeders': return place(st.met[0] && !st.met[1] ? SPOTS2.silo : SPOTS2.feederBox);
       case 'p-wet-patch': if (carrying !== 'sack') return place(SPOTS2.litterHeap); break;
       case 'w2-ready': if (carrying === 'barrow') { const c = uncoveredCell(p); return c ? ground(c, 1.6) : null; } break;
       case 'c-litter': if (carrying === 'scraper') { const c = coveredCell(p); return c ? ground(c, 1.6) : null; } break;

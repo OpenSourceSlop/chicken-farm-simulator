@@ -28,16 +28,25 @@ export function createFeed() {
 
 export const panCap = (l) => (l.flood ? FEED.panKgFlood : FEED.panKgNormal);
 
+/** The control pan at the end of a line (what the feeder box shows): the line's switch stays on (automatic)
+ *  and its auger turns only while the pans have room; once the control pan is full it stops by itself and
+ *  starts again as the birds eat it down. `turning`: the auger ran for at least a quarter of this step;
+ *  `noFeed`: it wants to fill but no feed comes from the silo. The fill itself is unchanged. */
+export function augerState(l, kg, hrs, room, silo) {
+  l.turning = !!l.running && kg > 0 && kg >= 0.25 * FEED.augerKgH * hrs - 1e-9;
+  l.noFeed = !!l.running && room > 0.5 && !(silo > 0);
+}
+
 /** Augers fill the pans from the silo; the meter counts what leaves the silo. */
 export function stepAugers(feed, hrs) {
   for (const l of feed.lines) {
-    if (l.running && feed.siloKg > 0) {
-      const room = panCap(l) - l.kg;
-      if (room > 0) {
-        const kg = Math.min(room, FEED.augerKgH * hrs, feed.siloKg);
-        l.kg += kg; feed.siloKg -= kg; feed.meterKg += kg;
-      }
+    let kg = 0;
+    const room = panCap(l) - l.kg;
+    if (l.running && feed.siloKg > 0 && room > 0) {
+      kg = Math.min(room, FEED.augerKgH * hrs, feed.siloKg);
+      l.kg += kg; feed.siloKg -= kg; feed.meterKg += kg;
     }
+    augerState(l, kg, hrs, room, feed.siloKg);
     l.panFill = Math.min(1, l.kg / panCap(l));
   }
 }

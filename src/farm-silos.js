@@ -5,7 +5,7 @@
 // day 4 order change it; reconcileSilos books it as starter in silo 1), so the week is Phase 2's. From
 // Week 2 (farm.cyc.on) stepAugersCycle replaces Phase 2's augers and orders go by type.
 import { EQUIP, FEED_TYPES, feedTypeForDay, HEAT } from './config.js';
-import { FEED, panCap } from './farm-feed.js';
+import { FEED, panCap, augerState } from './farm-feed.js';
 
 // model constants
 export const SILO_MODEL = {
@@ -66,8 +66,9 @@ export function stepAugersCycle(feed, hrs) {
   const added = {};
   let addKg = 0;
   for (const l of feed.lines) {
+    const room0 = panCap(l) - l.kg, avail0 = reachable(feed), kg0 = l.kg;
     if (l.running && !feed.withdrawn) {
-      const room = panCap(l) - l.kg, avail = reachable(feed);
+      const room = room0, avail = avail0;
       if (room > 0 && avail > 0) {
         const kg = Math.min(room, FEED.augerKgH * hrs, avail);
         // the valves share the draw (an empty silo gives nothing, the other one gives it all)
@@ -78,6 +79,7 @@ export function stepAugersCycle(feed, hrs) {
         l.kg += got; feed.meterKg += got; addKg += got;
       }
     }
+    augerState(l, l.kg - kg0, hrs, room0, avail0); // the control pan (farm-feed.js): the feeder box shows it
     l.panFill = Math.min(1, l.kg / panCap(l));
   }
   feed.siloKg = sumSilos(feed);

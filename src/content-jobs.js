@@ -57,6 +57,10 @@ const CONTROLLER_READ = { type: 'action', id: 'controller.read' }; // ui: contro
 const GATE_DIP = { type: 'event', event: EV.FOOTDIP, match: { where: 'gate' } };
 const HOUSE_DIP = { type: 'event', event: EV.HOUSE_ENTER, match: { dipped: true } };
 const SIGNED = { type: 'event', event: EV.RECORD_CLOSED, match: { signed: true }, sameDay: true };
+/** A rule with the label the job card and the panel strip show for it (one part of an all / any rule). */
+export const lab = (label, rule) => ({ ...rule, label });
+/** A state part that does not latch: met only while it holds (job-engine refreshLive). */
+export const live = (label, test) => ({ type: 'state', test, live: true, label });
 
 // State predicates the engine evaluates twice a second (job-engine.js implements them):
 //   preheat-on       env.heaterSetpoint >= 30 and env.heatersOn
@@ -67,7 +71,23 @@ const SIGNED = { type: 'event', event: EV.RECORD_CLOSED, match: { signed: true }
 //   dead-cleared     farm.flock.deadOnFloor === 0 and props.carrying !== 'bucket'
 //   house-near-target  what the chicks feel (farm-problems feltNearTarget: comfort e at chick
 //                      level, wind chill included) within -1.5..+1.5 °C of the target for 30 game min
-export const STATE_TEST_IDS = ['preheat-on', 'litter-covered', 'pans-flooded', 'lines-flushed', 'all-placed', 'dead-cleared', 'house-near-target'];
+// The clarity round (every job completes on its outcome; the figures in job-figures.js, the strips in job-strips.js):
+//   preheat-on      the thermostat within 1 °C of the brooder sign's day 0 row (34 °C) and the brooders burning
+//   litter-covered  + the depth at least 5 cm (litter sign 5–10 cm)
+//   pans-flooded    + every rim at most 7 cm (the plate's "on the litter, about 5 cm")
+//   lines-flushed   + every flush valve closed again
+//   vent-in-band    the timer's air 90–130 % of the vent sign's table for the flock he knows (tomorrow's 6,000 chicks of 42 g on the prep day)
+//   nipples-at      every drinker line 10–12 cm (drinker plate, day 0)
+//   chick-lights    a dark period of at most 1 h and 30–40 lux at chick level (light plate)
+//   flows-in-band   every line flow-tested since the job opened, the last reading within ±3 ml/min of age + 20, nipples ±3 cm of the plate
+//   feeders-checked every line switched on, pans at least 30 % full, from day 4 every rim ±3 cm of the plate
+//   lines-raised    every drinker line ±3 cm of the plate's nipple height and every pan rim ±3 cm of the plate's rim height
+//   night-comfort   from 18:00 the birds' mean felt comfort between −1.5 °C and where they start to pant, or every working fan on, for 30 game min
+//   lines-up        every drinker line at or above 55 cm (catching)
+//   all-up          every drinker line at or above 55 cm, every pan at or above 40 cm, the brooders up (clean-out)
+//   catch-ready     the dimmer at most 20 % (about 10 lux) and at least 3 tunnel fans running (catch sign)
+export const STATE_TEST_IDS = ['preheat-on', 'litter-covered', 'pans-flooded', 'lines-flushed', 'all-placed', 'dead-cleared', 'house-near-target',
+  'vent-in-band', 'nipples-at', 'chick-lights', 'flows-in-band', 'feeders-checked', 'lines-raised', 'night-comfort', 'lines-up', 'all-up', 'catch-ready'];
 
 export const JOBS = [
   // ---------------- prep day (day -1, 07:00-24:00) ----------------
@@ -80,17 +100,19 @@ export const JOBS = [
     spot: 'litterHeap', signs: ['sign-litter'], branch: 'brooding',
     done: { type: 'state', test: 'litter-covered' } }),
   D('prep-drinkers', -1, 'prep', 'Lower the drinker lines to chick height', {
-    spot: 'drinkers.0', signs: ['sign-water'], branch: 'water',
-    done: { type: 'each', id: 'water.height', key: 'line', values: [0, 1, 2, 3] } }),
+    spot: 'drinkers.0', signs: ['sign-water', 'drinker'], branch: 'water',
+    done: { type: 'state', test: 'nipples-at' } }),
   D('prep-feeders', -1, 'prep', 'Fill the feeder pans for the chicks', {
     spot: 'feederBox', signs: ['feeder-box'], branch: null,
     done: { type: 'state', test: 'pans-flooded' } }),
   D('prep-silo', -1, 'prep', 'Check the feed in the silos', {
     spot: 'silo', signs: ['silo'], branch: null, done: { type: 'action', id: 'feed.silo' } }),
   D('prep-lights', -1, 'prep', 'Set the light program for the chicks', {
-    spot: 'controller', signs: ['controller-lights'], branch: 'brooding', done: { type: 'action', id: 'light.program' } }),
+    spot: 'controller', signs: ['controller-lights'], branch: 'brooding',
+    done: { type: 'all', of: [lab('Send a light program to the controller', { type: 'action', id: 'light.program' }), live('23 h of light, 30–40 lux at chick level (light plate)', 'chick-lights')] } }),
   D('prep-vent', -1, 'prep', 'Set the minimum ventilation timer', {
-    spot: 'controller', signs: ['sign-vent'], branch: null, done: { type: 'action', id: 'vent.timer' } }),
+    spot: 'controller', signs: ['sign-vent'], branch: null,
+    done: { type: 'all', of: [lab('Send a timer setting to the controller', { type: 'action', id: 'vent.timer' }), live('Timer air 90–130 % of what tomorrow’s chicks need (vent sign table)', 'vent-in-band')] } }),
   D('prep-flush', -1, 'prep', 'Flush the water lines', {
     window: [16, 26], spot: 'waterSupply', signs: ['sign-water'], branch: 'water', // 16:00-02:00 = 16-6 h before the truck
     done: { type: 'state', test: 'lines-flushed' } }),
@@ -119,7 +141,7 @@ export const JOBS = [
 
   // ---------------- every day: morning round 06:00-12:00 ----------------
   R('r-dips', ROUTINE, 'am', 'Enter through the foot dips', {
-    preTruck: true, spot: 'houseDoor', signs: ['sign-gate'], branch: null, done: { type: 'all', of: [GATE_DIP, HOUSE_DIP] } }),
+    preTruck: true, spot: 'houseDoor', signs: ['sign-gate'], branch: null, done: { type: 'all', of: [lab('Foot dip at the gate', GATE_DIP), lab('Foot dip at the house door', HOUSE_DIP)] } }),
   R('r-controller', ROUTINE, 'am', 'Read the climate controller: temperature, ventilation, lights', {
     preTruck: true, spot: 'controller', signs: ['sign-brooder', 'sign-vent', 'controller-lights'], branch: 'brooding', done: CONTROLLER_READ }),
   R('r-meter', ROUTINE, 'am', 'Read the water meter', {
@@ -128,11 +150,13 @@ export const JOBS = [
     spot: 'heater', signs: ['sign-health', 'sign-brooder'], branch: 'brooding',
     done: { type: 'coverage', frac: 0.5, sight: 2, listen: true, area: 'used', maxCells: 150 } }), // 150 cells = week 1's half of 300
   R('r-drinkers', ROUTINE, 'am', 'Check drinker flow and height', {
-    onDays: FLOW_DAYS, spot: 'drinkers.0', signs: ['sign-water'], branch: 'water',
-    done: { type: 'each', id: 'water.flowtest', key: 'line', values: [0, 1, 2, 3] } }),
+    onDays: FLOW_DAYS, spot: 'drinkers.0', signs: ['sign-water', 'drinker'], branch: 'water',
+    done: { type: 'all', of: [lab('A flow test on every line', { type: 'each', id: 'water.flowtest', key: 'line', values: [0, 1, 2, 3] }),
+      live('Every line’s last flow within 3 ml/min of age + 20, nipples at the plate’s height', 'flows-in-band')] } }),
   R('r-feeders', ROUTINE, 'am', 'Check the feeders and the silo level', {
     onDays: SILO_DAYS, spot: 'feederBox', signs: ['feeder-box', 'silo'], branch: null,
-    done: { type: 'all', of: [{ type: 'action', id: 'feed.meter' }, { type: 'action', id: 'feed.silo' }] } }),
+    done: { type: 'all', of: [lab('Read the feed meter (feeder box)', { type: 'action', id: 'feed.meter' }), lab('Read the silo gauge (outside)', { type: 'action', id: 'feed.silo' }),
+      live('Every line on, feed in every pan, rims at the birds’ backs from day 4', 'feeders-checked')] } }),
   R('r-dead-am', ROUTINE1, 'am', 'Pick up dead birds and count them at the bin', {
     spot: 'dead', signs: ['sign-health'], branch: null, done: { type: 'state', test: 'dead-cleared' } }),
 
@@ -159,7 +183,7 @@ export const JOBS = [
     done: { type: 'action', id: 'heat.relight', match: { result: { fixed: true } } } }),
   P('p-cold-night', 'Night check: a cold night is forecast', {
     problem: 'cold-night', window: [20, 24], spot: 'controller', signs: ['sign-brooder', 'sign-vent'], branch: 'brooding',
-    done: { type: 'all', of: [CONTROLLER_READ, { type: 'coverage', frac: 0.3, sight: 2 }] } }),
+    done: { type: 'all', of: [lab('Read the controller', CONTROLLER_READ), lab('Walk 30 % of the brooding floor and look for huddles', { type: 'coverage', frac: 0.3, sight: 2 })] } }),
   P('p-water-drop', 'Low water flow: find the cause', {
     problem: 'blocked-filter', spot: 'waterSupply', signs: ['sign-water', 'water-supply'], branch: 'water',
     done: { type: 'action', id: 'water.clearFilter', match: { result: { fixed: true } } } }),
@@ -177,8 +201,8 @@ export const JOBS = [
     // done once he changed the air or the heat (any of the controller's settings) and the air the
     // chicks feel is back near the target (not over it, not chilled under it) for 30 min
     done: { type: 'all', of: [
-      { type: 'any', of: [{ type: 'action', id: 'vent.timer' }, { type: 'action', id: 'heat.setpoint' }, { type: 'action', id: 'vent.fans' }, { type: 'action', id: 'vent.pad' }] },
-      { type: 'state', test: 'house-near-target' }] } }),
+      { type: 'any', label: 'Change the air or the heat at the controller', of: [{ type: 'action', id: 'vent.timer' }, { type: 'action', id: 'heat.setpoint' }, { type: 'action', id: 'vent.fans' }, { type: 'action', id: 'vent.pad' }] },
+      lab('The chicks feel near the target for 30 farm minutes', { type: 'state', test: 'house-near-target' })] } }),
   P('p-report', 'Report the deaths to the company vet', {
     problem: 'abnormal-deaths', spot: 'officeDesk', signs: ['sign-health'], branch: null,
     done: { type: 'action', id: 'phone.report' } }),
@@ -196,9 +220,9 @@ export const jobWhere = (id) => JOB_WHERE[id] || JOB_WHERE_CYCLE[id] || '';
 export const JOB_WHERE = {
   'prep-gate': 'Walk through the foot dip beside the gate sign.',
   'prep-preheat': 'Climate controller, inside on the north wall across from the door: the Temperature section.',
-  'prep-litter': 'Rice husk heap west of the door: pick a depth, take the barrow and push it over the whole floor.',
+  'prep-litter': 'Rice husk heap west of the door: pick a depth, take the barrow and push it over the brooding floor, wall to wall.',
   'prep-drinkers': 'Regulator at the west end of each drinker line: winch the line up or down.',
-  'prep-feeders': 'Feeder control box, north wall, between the water lines sign and the brooder sign: run and flood each line.',
+  'prep-feeders': 'Feeder control box, north wall, between the water lines sign and the brooder sign: pans down on the litter, flood windows open, auger on; the pans fill over farm time.',
   'prep-silo': 'Feed silos outside, north of the house: read the level gauge.',
   'prep-lights': 'Climate controller: the Lights section.',
   'prep-vent': 'Climate controller: the Ventilation section. The minimum ventilation sign hangs beside it.',
