@@ -5,6 +5,7 @@ import { int, one, hhmm } from './ui-format.js';
 import { knownFlock, ventNeed, nippleCmToday, rimCmNow, nippleInBand, rimInBand, luxOfDimmer, fansWorking, timerAirM3h, brooderRowC,
   LINES_UP_CM, PANS_UP_CM, CATCH_DIMMER_MAX, CATCH_FANS_MIN, DARK_H, HEIGHT_BAND_CM } from './job-figures.js';
 import { step, cmp, line, note, time, wait, pct, partRows, houseRow, birdsSeen, ventRows, lightAt, timerText, heldText } from './job-strips.js';
+import { medicineDays, blendHours, MED_DAYS, BLEND_H } from './job-engine.js';
 
 const cm = (v) => `${Math.round(v)} cm`;
 const list = (a) => a.map((v) => Math.round(v)).join(' · ');
@@ -118,10 +119,13 @@ export const STRIPS_CYCLE = {
   'r-fans-pm': { panels: { 'fan-panel': null }, title: 'Afternoon check: the fans and the house',
     rows(c, inst) {
       const on = c.env.fansManual ?? 0, broken = (c.env.fansBroken || []).filter((i) => i < on).length, pad = (c.records?.notebook || []).filter((n) => n.kind === 'pad' && n.day === c.env.dayNumber).pop();
-      return [step(on ? `Every fan you switched on turns: ${on - broken} of ${on} vanes turning (fan plate: lamp on and the blade still = broken belt)`
-        : 'No tunnel fans switched on (fan plate: a lamp on with the blade still = broken belt)', on > 0 && broken === 0),
+      // PHASE4.md §6.6: only the job's own rule is a step (the fan panel read); what the farmer sees are plain lines
+      const read = inst.status === 'done' || !!c.engine.parts(inst)[0]?.met;
+      return [line(on ? `Every fan you switched on: ${on - broken} of ${on} vanes turning (fan plate: lamp on and the blade still = broken belt)`
+        : 'No tunnel fans switched on (fan plate: a lamp on with the blade still = broken belt)'),
         houseRow(c, ' (tunnel air makes the birds feel cooler)'), line(`${birdsSeen(c)} | heat sign: big birds in the heat want all six fans and the pads.`),
-        line(`Pad: ${pad ? `checked ${hhmm(pad.hour)} today` : 'not checked today (pad pump outside the west end)'}.`), ...partRows(c, inst)];
+        line(`Pad: ${pad ? `checked ${hhmm(pad.hour)} today` : 'not checked today (pad pump outside the west end)'}. The afternoon walk is its own job (Walk the house again).`),
+        step(read ? 'Fan panel read into your notebook' : 'Keep the fan panel open a moment: it reads into your notebook', read)];
     } },
   'w45-pad': { panels: { 'pad-pump': null },
     rows: (c, inst) => [step(`Pump: ${c.env.padOn ? 'on: water runs over the pad' : 'off. Press Start the pump first: the check needs water running over the pad (pad plate: run the pump only while the tunnel fans run)'}`, c.env.padOn),
@@ -145,7 +149,13 @@ export const STRIPS_CYCLE = {
     rows: (c, inst) => [step(`Disinfectant in the header tank: ${c.farm.clean?.disinfectant ? 'yes' : 'not yet'}`, c.farm.clean?.disinfectant || c.engine.parts(inst)[0]?.met),
       step(`Lines flushed with it: ${(c.farm.clean?.lines || []).filter((x) => x >= 1).length} of 4: Open flush valve on each line (Clean-out tab), close it when the row says it is through`, (c.farm.clean?.lines || []).every((x) => x >= 1)), wait('Each line takes farm time with its flush valve open: let the clock run.')] },
   'p-blood': { panels: { 'office-desk': null, 'water-supply': null },
-    rows: (c, inst) => { const m = c.farm.health?.medication || {}; return [...partRows(c, inst), line(m.on ? `Medicator on since day ${Math.floor(m.from)} ${hhmm(((m.from ?? 0) % 1) * 24)}: the vet’s course, mixed fresh each day (medicator plate).` : 'The vet’s answer comes as a letter on the desk: it names the medicine and the days.')]; } },
+    rows: (c, inst) => {
+      const m = c.farm.health?.medication || {}, p = c.engine.parts(inst), n = Math.min(MED_DAYS, medicineDays(c.farm, c.env));
+      return [step(p[0]?.label || 'Call the vet', p[0]?.met), step(p[1]?.label || 'Start the medicine', p[1]?.met),
+        step(`The medicine in the water on ${MED_DAYS} days (the vet’s course): ${n ? `medicine day ${n} of ${MED_DAYS}` : 'not started'}`, p[2]?.met),
+        line(m.on ? `Medicator on since day ${Math.floor(m.from)} ${hhmm(((m.from ?? 0) % 1) * 24)}: the vet’s course, mixed fresh each day (medicator plate).` : 'The vet’s answer comes as a letter on the desk: it names the medicine and the days.'),
+        ...(p[2]?.met ? [] : [wait('The course runs over farm days: keep the medicine on and let the clock run (Next job skips ahead).')])];
+    } },
   'p-hunched': { panels: { 'office-desk': null },
     rows: (c, inst) => [line('Droppings sign: white and watery with hunched, sleepy birds: call the vet.'), step('Phone: call the vet about “Birds sitting hunched, white watery droppings”', inst.st.met),
       note('The vet’s answer comes as a letter on the desk.')] },
@@ -164,8 +174,10 @@ export const STRIPS_CYCLE = {
   'f-withdraw': { panels: { 'feeder-box': null }, title: 'Take the feed away before catching',
     rows(c, inst) {
       const at = c.farm.harvest?.catchAt ?? HARVEST.catchDefault.day + HARVEST.catchDefault.hour / 24, t = (x) => `day ${Math.floor(x)} ${hhmm((x % 1) * 24)}`;
+      const off = !!c.farm.feed?.withdrawn;
       return [line(`Catch: ${t(at)} (booked).`), cmp('Stop the lines', 'feed and catch signs: pans empty 8–12 h before the catch, so stop the lines about 9–13 h before', `${t(at - 13 / 24)} to ${t(at - 9 / 24)} · now ${c.env.timeLabel}`),
-        line('Water stays on until catching starts.'), step('Take the feed away (feeder box)', inst.st.met)];
+        line('Water stays on until catching starts. Feed taken away earlier counts once the window opens; the harvest page shows the hours without feed.'),
+        step(off ? 'The feed is taken away (feeder box: Give the feed back undoes it)' : 'Take the feed away (feeder box)', inst.status === 'done' || off)];
     } },
   'c-dry': { panels: { 'wash-bay': null, controller: 'top', 'fan-panel': null },
     rows: (c) => [line('Clean-out sign, step 4: disinfectant on a wet floor is too weak: let the house dry with the fans first.'),
@@ -185,9 +197,12 @@ export const STRIPS_CYCLE = {
 function changeRows(c, inst, type) {
   const f = c.farm.feed, v = f.valves || [1, 0], word = (x) => (x >= 1 ? 'Open' : x > 0 ? 'Half' : 'Shut');
   const s = (f.silos || []).map((x, i) => `silo ${i + 1} ${x.type}: about ${int(x.kg)} kg, slide valve ${word(v[i])}`).join(' · ');
+  // PHASE4.md §6.9: the rule's two parts are the steps: the half-and-half hours, then the pans 90 % new
+  const p = c.engine.parts(inst), hrs = blendHours(c.farm, type);
   return [line(`Feed sign: half from each silo for about 24 hours, then the new feed only.`), line(s),
-    step(`Pans: ${type} ${pct(f.panType?.[type])} (of the feed in them)`, (f.panType?.[type] ?? 0) >= 0.9),
-    step(`Slide valves at the silos (outside, north of the house): both Half for about 24 hours, then silo ${type === 'grower' ? 2 : 1} Open and silo ${type === 'grower' ? 1 : 2} Shut`, (f.panType?.[type] ?? 0) >= 0.9 || (v[type === 'grower' ? 1 : 0] ?? 0) > 0),
-    wait('The pans change as the birds eat and the augers refill them: about 24 farm hours. Let the clock run (Next job skips ahead).')];
+    line(`Slide valves at the silos (outside, north of the house): both Half for about 24 hours, then silo ${type === 'grower' ? 2 : 1} Open and silo ${type === 'grower' ? 1 : 2} Shut.`),
+    step(`Half from each silo: ${one(Math.min(hrs, 99))} of ${BLEND_H} farm hours so far with the augers drawing 20–80 % ${type}`, p[0]?.met),
+    step(`Pans: ${type} ${pct(f.panType?.[type])} of the feed in them (90 % or more)`, p[1]?.met),
+    ...(inst.status === 'done' ? [] : [wait('The pans change as the birds eat and the augers refill them: about 24 farm hours. Let the clock run (Next job skips ahead).')])];
 }
 export { CLEAN, timerAirM3h, brooderRowC, heldText, time, ventRows, timerText };

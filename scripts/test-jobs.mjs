@@ -14,6 +14,7 @@ import { JOBS_CYCLE, STATE_TEST_IDS_P3 } from '../src/content-jobs-cycle.js';
 import { STRIPS, partRows, stripRows } from '../src/job-strips.js';
 import { jobPlaces, nextPlace } from '../src/job-next.js';
 import { STRIPS_CYCLE } from '../src/job-strips-cycle.js';
+import { STRIPS_COND } from '../src/job-strips-cond.js';
 import { ventNeed } from '../src/job-figures.js';
 import { makeWorld } from '../src/farm-profiles-run.js';
 import { createLevel } from '../src/level.js';
@@ -891,6 +892,87 @@ test('Phase 4: a Next job skip stops at an EV.POWER { on: false } with no alarm 
   assert(N.env.day > n0 + 3 * H, 'a normal skip');
 });
 
+
+// ---------------- Phase 4: the strips of §6 and of the condition jobs ----------------
+const stripCtx = (L) => ({ env: L.env, farm: L.farm, records: { notebook: [] }, props: L.props, engine: L.jobs, minmax: () => ({ min: 20, max: 30 }),
+  weighings: () => ({ n: 0, sectors: 0, mean: null }), from: { x: -14, z: 0, inside: true }, paused: false });
+const rowText = (rows) => rows.map((r) => [r.text, r.what, r.sign, r.yours].filter(Boolean).join(' | ')).join('\n');
+
+test('Phase 4 strips: the vent bar objects at 70 / 110 / 170 %; the prep vent row reads "about 900" and "835–1,210"', () => {
+  const L = makeLevel({ startDay: -1, startHour: 8 });
+  const inst = L.jobs.byKey('prep-vent@-1'), c = stripCtx(L);
+  const need = ventNeed(L.env, L.farm).need;
+  for (const [share, words] of [[0.7, 'under the sign’s 90–130 %'], [1.1, null], [1.7, 'over the sign’s 90–130 %']]) {
+    L.env.setVentTimer({ fans: 1, onSec: Math.round((share * need * 300) / 36000), cycleSec: 300 });
+    const rows = stripRows(STRIPS['prep-vent'], c, inst, 'controller'), v = rows.find((r) => r.k === 'cmp' && /Air your flock needs/.test(r.what));
+    const real = ventNeed(L.env, L.farm).share;
+    assert(v && v.bar && typeof v.bar === 'object' && Math.abs(v.bar.v - real) < 1e-9 && v.bar.max === 1.6 && v.bar.band[0] === VENT_BAND[0] && v.bar.band[1] === VENT_BAND[1],
+      `${share}: the bar object ${JSON.stringify(v?.bar)}`);
+    assert(words ? v.yours.includes(words) : !/sign’s 90–130/.test(v.yours), `${share}: "${v.yours}"`);
+    if (share === 1.7) assert(v.bar.v > v.bar.max, 'over the scale: the bar draws its arrow');
+  }
+  const t = rowText(stripRows(STRIPS['prep-vent'], c, inst, 'controller'));
+  assert(/about 900 m³\/h \(the sign’s example: 6,000 chicks of 42 g\)/.test(t), `the sign column: ${t}`);
+  assert(/928 m³\/h worked out: 155 per 1,000 at 42 g/.test(t) && /90–130 % is 835–1,210 m³\/h/.test(t), `the worked figure and the band: ${t}`);
+  // a later vent job keeps the table row, with the same bar object
+  const M = makeCycle(WEEK2, { day: 9, hour: 6.2 });
+  M.farm.flock.placed = 6000; M.farm.flock.alive = 5960; M.farm.flock.meanWeightG = 260;
+  const mr = stripRows(STRIPS['r-minvent'], stripCtx(M), M.jobs.byKey('r-minvent@9'), 'controller').find((r) => r.k === 'cmp');
+  assert(mr && typeof mr.bar === 'object' && /vent sign table/.test(mr.what), `r-minvent row ${JSON.stringify(mr)}`);
+});
+
+test('Phase 4 strips: the feeder rows say when each line is finished; the done r-fans-pm strip has no unticked step', () => {
+  const L = makeLevel({ startDay: -1, startHour: 8 });
+  const t = rowText(stripRows(STRIPS['prep-feeders'], stripCtx(L), L.jobs.byKey('prep-feeders@-1'), 'feeder-box'));
+  assert(/finished when: rim about 5 cm \(7 at most\), flood windows open, pans 95 % full/i.test(t), `prep-feeders: ${t}`);
+  const D = makeLevel({ startDay: 5, startHour: 7 });
+  const r5 = rowText(stripRows(STRIPS['r-feeders'], stripCtx(D), D.jobs.byKey('r-feeders@5'), 'feeder-box'));
+  assert(/finished when: rim at the plate’s figure ± 3 cm \(about \d+ cm today\), auger on, feed in the pans/i.test(r5), `r-feeders day 5: ${r5}`);
+  const F = makeCycle(WEEK3, { day: 16, hour: 13.5 });
+  const inst = F.jobs.byKey('r-fans-pm@16');
+  F.env.setFans(0); F.act('fans.read', { fans: 0 }); F.jobs.tick();
+  assert(inst.status === 'done', `fans.read does r-fans-pm: ${inst.status}`);
+  const rows = stripRows(STRIPS_CYCLE['r-fans-pm'], stripCtx(F), inst, 'fan-panel');
+  const steps = rows.filter((r) => r.k === 'step');
+  assert(steps.length >= 1 && steps.every((r) => r.done), `the done strip shows only ticked steps: ${JSON.stringify(steps)}`);
+  assert(/No tunnel fans switched on/.test(rowText(rows)), 'no fans on: a plain line');
+});
+
+test('Phase 4 strips: the half-and-half, the medicine day, f-withdraw; every condition job of every condition builds its rows, neutral words', () => {
+  const C = makeCycle(WEEK3, { day: 15, hour: 9 });
+  C.farm.stats.blendH = 7; C.jobs.tick();
+  const ch = rowText(stripRows(STRIPS_CYCLE['w3-change'], stripCtx(C), C.jobs.byKey('w3-change@15'), 'silo'));
+  assert(/Half from each silo: 7\.0 of 20 farm hours/.test(ch), `w3-change: ${ch}`);
+  const B = makeCycle(WEEK3, { day: 17, hour: 9 });
+  B.events.emit(EV.FARM_PROBLEM, { id: 'coccidiosis', phase: 'symptom' });
+  B.act('phone.vet', { reason: 'blood in the droppings' }); B.farm.act('water.medicate', { on: true }); B.farm.health.medication.daysOn = 2; B.jobs.tick();
+  const bl = B.jobs.list().find((i) => i.id === 'p-blood');
+  assert(/medicine day 2 of 3/.test(rowText(stripRows(STRIPS_CYCLE['p-blood'], stripCtx(B), bl, 'water-supply'))), 'the strip reads "medicine day 2 of 3"');
+  const VERDICT = /correct|wrong|well done|good job|great job|mistake|perfect|excellent|match(es)? the/i;
+  const days = [['hot', null, 1, 14.5], ['hot', WEEK2, 9, 14], ['hot', WEEKS45, 22, 13.5], ['rainy', WEEKS45, 29, 7], ['rainy', WEEKS45, 33, 15.3], ['rainy', WEEK3, 19, 14], ['badChicks', null, -1, 8], ['badChicks', null, 0, 10.5],
+    ['badChicks', null, 2, 9], ['water', null, 1, 9], ['water', WEEKS45, 27, 7], ['water', WEEK3, 18, 7]];
+  const problems = { rainy: ['power-cut', 'mains-back', 'gen-dry', 'rain-in', 'damp-spell'], badChicks: ['weak-batch'], water: ['iron-filter', 'iron-nipples', 'pump-wear'] };
+  const seen = new Set();
+  for (const [cond, def, day, hour] of days) {
+    const L = def ? makeCycle(def, { day, hour, condition: cond }) : makeLevel({ startDay: day, startHour: hour, condition: cond });
+    for (const p of problems[cond] || []) L.events.emit(EV.FARM_PROBLEM, { id: p, phase: 'symptom' });
+    L.farm.water.lineTempC = [31, 32.5, 30, 29]; L.farm.stats.chickWeightMeasuredG = 36.2;
+    for (const inst of L.jobs.open().filter((i) => i.def.condition)) {
+      for (const panel of ['generator', 'water-tank', 'water-supply', 'controller', 'drinker-3', 'chick-table']) {
+        const rows = stripRows(STRIPS_COND[inst.id], { ...stripCtx(L), paused: true }, inst, panel);
+        assert(rows.length, `${inst.key}: rows`);
+        for (const r of rows) for (const t of [r.text, r.what, r.sign, r.yours]) if (t != null) { assert(typeof t === 'string' && !/undefined|NaN|\[object/.test(t), `${inst.key}: "${t}"`); assert(!VERDICT.test(t), `${inst.key}: verdict word in "${t}"`); }
+      }
+      seen.add(inst.id);
+    }
+  }
+  const missing = JOBS_COND.map((j) => j.id).filter((id) => !seen.has(id) && id !== 'p-rain-patch');
+  assert(!missing.length && Object.keys(STRIPS_COND).length === JOBS_COND.length, `every condition job has its strip and was built: missing ${missing.join(' ')}`);
+  // a weak batch's brooder row + 1 °C on days 0-3 (the strips' house row and b-warm)
+  const W = makeLevel({ startDay: 0, startHour: 9, condition: 'badChicks' });
+  const bw = rowText(stripRows(STRIPS_COND['b-warm'], stripCtx(W), W.jobs.byKey('b-warm@0'), 'controller'));
+  assert(/\+ 1\.0 °C = .*the sign’s row \+ 1 °C \(weak batch\)/.test(bw), `b-warm: ${bw}`);
+});
 
 let failed = 0;
 for (const t of tests) {

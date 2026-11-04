@@ -10,7 +10,7 @@
 //   wayText(from, place) "about 3 m south along the west wall" · "out through the house door, then about 14 m …"
 //   c = { env, farm, props, engine, flock? }   (the job strip's context)
 // Directions are compass words on the farm map (north = the silo side, west = the cooling pad end).
-import { SPOTS, SPOTS2, SPOTS3, FARM, HEATERS, BROOD_BOUNDS, BIRD_BOUNDS, DRINKER_LINES_Z, CLEAN, FLOOR_GRID } from './config.js';
+import { SPOTS, SPOTS2, SPOTS3, SPOTS4, FARM, HEATERS, BROOD_BOUNDS, BIRD_BOUNDS, DRINKER_LINES_Z, CLEAN, FLOOR_GRID } from './config.js';
 import { flowToday, nippleCmToday, nippleInBand, rimInBand, rimCmNow, LINES_UP_CM, PANS_UP_CM, NIPPLE_DAY0_CM, FLOW_BAND } from './job-figures.js';
 import { sectorOf } from './job-engine.js';
 
@@ -32,6 +32,10 @@ export const PLACES = {
   catchPanels: { at: SPOTS3.catchPanels, name: 'the catching panels', along: 'inside, by the door' },
   boxStacks: { at: SPOTS2.boxStacks, name: 'the chick boxes', along: 'by the truck, south of the door' },
   washBay: { at: SPOTS3.washBay, name: 'the wash bay', along: 'west of the house' },
+  // Phase 4 (config SPOTS4): the conditions' machines
+  generator: { at: SPOTS4.generator, name: 'the generator', along: 'west of the house, beside the farm road' },
+  waterTank: { at: SPOTS4.waterTank, name: 'the water tank gauge and well pump', along: 'north-west of the house' },
+  chickTable: { at: SPOTS2.chickTable, name: 'the chick sample table', along: 'outside the house door' },
 };
 const place = (id, todo, extra = {}) => ({ id, ...PLACES[id], todo, ...extra });
 const drinker = (i, todo) => ({ id: `drinkers.${i}`, at: SPOTS2.drinkers[i], name: `the line ${i + 1} regulator`, along: 'along the west wall', todo });
@@ -160,6 +164,14 @@ export function jobPlaces(inst, c) {
       !met[2] && drinker(0, 'a flow test on the line (1 farm minute)')].filter(Boolean);
     case 'f-ready': return [!met[0] && place('catchPanels', 'E puts them up'), parts[1] && !parts[1].met && place('controller', 'Lights: dimmer 20 % or less; at least 3 tunnel fans')].filter(Boolean);
     case 'p-blood': return [!met[0] && place('officeDesk', 'the phone: call the vet about blood in the droppings'), !met[1] && place('waterSupply', 'the Medicine tab: start the medicine')].filter(Boolean);
+    // Phase 4: the condition jobs that span several places
+    case 'h-brood-air': case 'h-young-heat': {
+      if (met[0] && env.padOn && (env.fansManual ?? 0) > 0) return [];
+      const fans = id === 'h-brood-air' || (env.dayNumber ?? 0) < 15 ? 'one tunnel fan' : 'two or three tunnel fans';
+      return [!env.padOn && place('padPump', 'start the pad pump'), !((env.fansManual ?? 0) > 0) && place('fanPanel', `switch on ${fans}`)].filter(Boolean);
+    }
+    case 'p-weak-batch': return [!met[0] && place('chickTable', 'the Grade the stacks tab: grade four stacks or more'), !met[1] && place('officeDesk', 'the phone: Call the hatchery')].filter(Boolean);
+    case 'p-nipples': return [!met[0] && place('waterSupply', 'open the line 4 flush valve (about 2 farm minutes)'), parts[1] && !parts[1].met && drinker(3, 'a flow test there (1 farm minute)')].filter(Boolean);
     case 'w2-vaccine': {
       const v = farm?.health?.vaccine || { state: 'none' };
       if (v.state === 'drinking' && (v.walked ?? 0) < 0.3) return [floor(-6, 0, 'the house floor', 'walk slowly through the house while the birds drink')];
@@ -252,5 +264,6 @@ export function nextPlace(inst, c, { from = null, skip = null } = {}) {
 }
 /** The id of the place a panel stands at (the strip's skip). */
 export const PANEL_PLACE = { 'feeder-box': 'feederBox', silo: 'silo', controller: 'controller', 'water-supply': 'waterSupply', 'fan-panel': 'fanPanel',
-  'pad-pump': 'padPump', 'office-desk': 'officeDesk', 'wash-bay': 'washBay', 'litter-heap': 'litterHeap', 'bird-scale': 'birdScale' };
+  'pad-pump': 'padPump', 'office-desk': 'officeDesk', 'wash-bay': 'washBay', 'litter-heap': 'litterHeap', 'bird-scale': 'birdScale',
+  generator: 'generator', 'water-tank': 'waterTank', 'chick-table': 'chickTable', 'chick-grading': 'chickTable' };
 export const panelPlace = (panelId) => (panelId?.startsWith('drinker-') ? `drinkers.${panelId.slice(8)}` : PANEL_PLACE[panelId] || null);

@@ -6,7 +6,7 @@
 // Phase 3 (PHASE3.md §3.2): headers for the planning day, the clean-out and the rest; the facts links read
 // the merged boards of the day; the cycle's spots (SPOTS3, the lame bird, the stopped fan, the next bait
 // station or swab place). Owner: package "run" (Phase 2: "level").
-import { CLEAN, DRINKER_LINES_Z, FARM, FLOOR_GRID, HEATERS, HEATER_HEIGHT, LEVEL1, ROUNDS, SPOTS, SPOTS2, SPOTS3 } from './config.js';
+import { CLEAN, DRINKER_LINES_Z, FARM, FLOOR_GRID, HEATERS, HEATER_HEIGHT, LEVEL1, ROUNDS, SPOTS, SPOTS2, SPOTS3, SPOTS4, CONDITIONS } from './config.js';
 import { BOARDS } from './content-signs.js';
 import { boardsForDay } from './content-signs-cycle.js';
 import { plateCondition } from './ui-boards.js'; // Phase 4: the run's condition for the merged boards
@@ -17,7 +17,8 @@ import { h, button, setText, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { createMarker } from './ui-marker.js';
 import { hhmm, splitDay } from './ui-format.js';
-import { heldText, waitsOnTime } from './job-strips.js';
+import { heldText, waitsOnTime, SHIFT_WORDS } from './job-strips.js';
+import { medicineDays, blendHours, MED_DAYS, BLEND_H } from './job-engine.js';
 // the steps hotfix: the next unfinished place of a job that spans several places (the card's Next line and the marker)
 import { jobPlaces, nextPlace } from './job-next.js';
 import { flowToday, nippleCmToday, rimCmNow, nippleInBand, rimInBand, ventNeed, luxOfDimmer, brooderRowC, LINES_UP_CM, PANS_UP_CM, NIPPLE_DAY0_CM } from './job-figures.js';
@@ -31,20 +32,25 @@ const BOARD_SPOT = {
   'sign-droppings': SPOTS3.signDroppings, 'sign-heat': SPOTS3.signHeat, 'sign-feed': SPOTS3.signFeed, 'sign-catch': SPOTS3.signCatch, 'sign-clean': SPOTS3.signClean,
   'guard-hut': SPOTS3.guardHut, 'plan-sheet': SPOTS2.officeDesk, vaccine: SPOTS2.waterSupply, medicator: SPOTS2.waterSupply, 'pad-pump': SPOTS3.padPump,
   'fan-panel': SPOTS3.fanPanel, 'gas-tank': SPOTS3.gasTank, 'bird-check': SPOTS2.birdScale, 'loading-bay': SPOTS3.loadingBay, 'wash-bay': SPOTS3.washBay,
+  // Phase 4 boards and plates (content-signs-cond.js BOARDS_COND)
+  'sign-power': SPOTS4.signPower, generator: SPOTS4.generator, 'water-tank': SPOTS4.waterTank, 'chick-grading': SPOTS2.chickTable,
 };
 /** The panel that shows a board or plate (a plate lives inside its machine). */
-export const BOARD_PANEL = { 'controller-lights': 'controller', drinker: 'drinker-0', vaccine: 'water-supply', medicator: 'water-supply', 'plan-sheet': 'office-desk' };
+export const BOARD_PANEL = { 'controller-lights': 'controller', drinker: 'drinker-0', vaccine: 'water-supply', medicator: 'water-supply', 'plan-sheet': 'office-desk',
+  generator: 'generator', 'water-tank': 'water-tank', 'chick-grading': 'chick-table' };
 const boardTitle = (id, day) => boardsForDay(day, plateCondition())[id]?.title ?? BOARDS[id]?.title ?? id;
 
 /** Round label for the card header. */
 export function roundLabel(env, anchors, farm = null) {
   const d = env.dayNumber, hr = env.hour;
+  // a bad batch's truck comes late (config CONDITIONS.badChicks delivery.arrivalHour)
+  const truckH = (farm?.condition && CONDITIONS[farm.condition]?.levels?.level1?.delivery?.arrivalHour) ?? LEVEL1.arrivalHour;
   if (d <= -2) return 'Planning day · no birds yet';
-  if (d < 0) return 'Prep day — chicks arrive tomorrow 08:00';
+  if (d < 0) return `Prep day — chicks arrive tomorrow ${hhmm(truckH)}`;
   if (d >= 43 && d <= 46) return `Clean-out day ${d - 42}`;
   if (d > 46) { const b = farm?.clean?.bookedDay; return `Rest day ${d - 46}${b != null ? ` · chicks booked for day ${b}` : ''}`; }
   if (d === 42) return 'Day 42 · the catch';
-  if (d === 0 && hr < LEVEL1.arrivalHour && hr >= 6) return 'Day 0 · Before the truck (08:00)';
+  if (d === 0 && hr < truckH && hr >= 6 && anchors.truck == null) return `Day 0 · Before the truck (${hhmm(truckH)})`;
   if (d === 0 && anchors.truck != null && anchors.placed == null) return 'Day 0 · The chicks are here';
   const R = LEVEL1.rounds;
   const span = (r) => `${r.label} ${hhmm(r.from)}–${hhmm(r.to)}`;
@@ -98,8 +104,20 @@ function progressText(inst, ctx) {
       // every part by its name (content-jobs labels), done or not yet; a part that must hold says for how long
       const parts = ctx.level?.engine?.parts?.(inst) || [];
       if (!parts.some((p) => p.label)) return `${st.met.filter(Boolean).length} / ${r.of.length}`;
-      return parts.map((p) => (p.held && !p.met ? `○ ${heldText(p)}` : `${p.met ? '✓' : '○'} ${p.label || ''}`)).join('\n');
+      return parts.map((p) => (p.held && !p.met ? `○ ${heldText(p)}` : `${p.met ? '✓' : '○'} ${p.label || ''}${p.met ? '' : partNote(p, ctx)}`)).join('\n');
     }
+    default: return '';
+  }
+}
+/** Phase 4: how far a part that grows over farm time has come ("medicine day 2 of 3", the half-and-half hours, the repair). */
+function partNote(p, ctx) {
+  const f = ctx.farm, env = ctx.env;
+  switch (p.test) {
+    case 'medicine-course': { const n = Math.min(MED_DAYS, medicineDays(f, env)); return n ? ` · medicine day ${n} of ${MED_DAYS}` : ''; }
+    case 'blend-24h': return ` · ${Math.round(Math.min(99, blendHours(f, p.rule?.feed)))} of ${BLEND_H} farm hours so far`;
+    case 'pump-ok': { const T = f.waterTank; return T?.fixing && T.fixUntil != null ? ` · the repair: about ${Math.max(0, Math.round((T.fixUntil - env.day) * 1440))} farm minutes left` : ''; }
+    case 'lines-cool': { const t = f.water?.lineTempC; return Array.isArray(t) && t.length ? ` · now ${t.map((v) => v.toFixed(1)).join(' · ')} °C` : ''; }
+    case 'power-on': return f.power?.on === false ? ' · no power now' : '';
     default: return '';
   }
 }
@@ -110,6 +128,9 @@ function stateText(test, inst, ctx) {
   const n = (list, ok) => list.filter(ok).length;
   switch (test) {
     case 'preheat-on': return `thermostat ${env.heaterSetpoint.toFixed(1)} °C (brooder sign, day 0: ${brooderRowC(0)} °C) · brooders ${env.heatersOn ? 'burning' : 'off'}`;
+    case 'brood-warmer': { const d = Math.max(0, env.dayNumber); return `thermostat ${env.heaterSetpoint.toFixed(1)} °C · brooder sign, day ${d}: ${brooderRowC(d)} °C + 1 °C (${SHIFT_WORDS})`; }
+    case 'feed-withdrawn': return f.feed?.withdrawn ? 'the feed is taken away' : 'feed in the pans';
+    case 'power-on': return f.power?.on === false ? 'no power in the house' : 'power on';
     case 'nipples-at': return `${n(W, (l) => l.heightCm >= NIPPLE_DAY0_CM[0] && l.heightCm <= NIPPLE_DAY0_CM[1])} / 4 lines at 10–12 cm`;
     case 'lines-raised': return `drinker lines ${n(W, (l) => nippleInBand(l.heightCm, env))} / 4 near ${Math.round(nippleCmToday(env))} cm · pans ${n(F, (l) => rimInBand(l.heightCm, env))} / 3 near ${Math.round(rimCmNow(env))} cm`;
     case 'lines-up': return `${n(W, (l) => l.heightCm >= LINES_UP_CM)} / 4 lines lifted to ${LINES_UP_CM} cm or more`;
@@ -128,7 +149,9 @@ function stateText(test, inst, ctx) {
 const BAR_TESTS = ['litter-covered', 'lines-flushed', 'pans-flooded', 'all-placed', 'house-ready', 'litter-removed', 'house-washed', 'house-disinfected', 'house-dry', 'lines-disinfected', 'pans-grower', 'pans-finisher',
   // the clarity round: every state with a measure of how far it is, and the ones that must hold for farm minutes
   'preheat-on', 'nipples-at', 'lines-raised', 'lines-up', 'all-up', 'feeders-checked', 'dead-cleared', 'lame-cleared', 'house-empty', 'vaccine-drunk',
-  'house-near-target', 'rh-under', 'air-clear', 'heat-handled', 'pad-humid-ok', 'night-comfort', 'chick-lights', 'catch-ready', 'vent-in-band', 'flows-in-band'];
+  'house-near-target', 'rh-under', 'air-clear', 'heat-handled', 'pad-humid-ok', 'night-comfort', 'chick-lights', 'catch-ready', 'vent-in-band', 'flows-in-band',
+  // Phase 4
+  'feed-withdrawn', 'brood-warmer', 'power-on'];
 const hasBar = (inst) => { const t = inst.def.done.type; return t === 'each' || t === 'count' || t === 'coverage' || t === 'all' || t === 'any' || (t === 'state' && BAR_TESTS.includes(inst.def.done.test)); };
 
 export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook, onSkills, nextLabel }) {
@@ -168,7 +191,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
   function nearestHeater(p) { let b = HEATERS[0], bd = Infinity; for (const ht of HEATERS) { const d = Math.hypot(ht.x - p.x, ht.z - p.z); if (d < bd) { bd = d; b = ht; } } return b; }
   function keySpot(k) {
     if (k.startsWith('drinkers.')) return SPOTS2.drinkers[+k.split('.')[1]];
-    return SPOTS[k] || SPOTS2[k] || SPOTS3[k] || FARM[k] || null;
+    return SPOTS[k] || SPOTS2[k] || SPOTS3[k] || SPOTS4[k] || FARM[k] || null;
   }
   function place(s) {
     if (!s) return null;
