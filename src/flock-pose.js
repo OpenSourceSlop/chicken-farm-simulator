@@ -8,14 +8,18 @@ const TAU = Math.PI * 2;
 function fract(v) { return v - Math.floor(v); }
 
 // stage = { M: n*16 instance matrices, A/B/C: n*4 pose vec4s, R: n bird scale (m) } (flock-render.js)
-export function poseAll(S, dt, stage) {
+// half (Phase 5, PHASE5.md §4.4, the reduced flock detail): { cx, cz, r2, parity, acc } — a bird farther than sqrt(r2) from
+// the camera (cx, cz) is drawn every second frame (its parity), its skipped time kept in acc[i]; what the flock's behaviour
+// reads (sitA: the steering; spawnT) is still updated every frame for every bird, so the flock moves exactly as at full detail.
+export function poseAll(S, dt, stage, half = null) {
   const mat = stage.M, animA = stage.A, animB = stage.B, animC = stage.C, rad = stage.R, E = stage.E;
   const n = S.n, t = S.time, L = S.L, base = S.baseSpeed;
   const { px, pz, fx, fz, act, arrived, therm, size, phase, sitA, wingA, hp, hl, ht, beak, stride } = S;
   // level only (all 0 in the sandbox): sick / lame birds, chicks tumbling out of a box, dazed after the tip
   const { sick, spawnT, lagT } = S;
-  const kHead = Math.min(1, dt * 14), kTurn = Math.min(1, dt * 4), kBeak = Math.min(1, dt * 12);
-  const kWing = Math.min(1, dt * 2.5);
+  const acc = half ? half.acc : null;
+  const kHead0 = Math.min(1, dt * 14), kTurn0 = Math.min(1, dt * 4), kBeak0 = Math.min(1, dt * 12);
+  const kWing0 = Math.min(1, dt * 2.5);
   for (let i = 0; i < n; i++) {
     const a = act[i], si = size[i], ph = phase[i], s = L * si;
     const hot = therm[i] === HOT;
@@ -32,6 +36,20 @@ export function poseAll(S, dt, stage) {
     const lame = sick[i] === 3, sk = lame ? 0 : sick[i];
     if (lagT[i] > 0) sitT = 1; // just tipped out: sits a moment, then gets up and goes
     sitA[i] += (sitT - sitA[i]) * Math.min(1, dt * (sitT > sitA[i] ? 1.6 : 5));
+    // the reduced detail: a far bird on its off frame keeps last frame's drawing (its state above is updated)
+    let kHead = kHead0, kTurn = kTurn0, kBeak = kBeak0, kWing = kWing0, dts = dt;
+    if (acc) {
+      const dx = px[i] - half.cx, dz = pz[i] - half.cz;
+      if (dx * dx + dz * dz > half.r2 && ((i ^ half.parity) & 1)) {
+        if (spawnT[i] > 0) spawnT[i] -= dt;
+        acc[i] += dt;
+        continue;
+      }
+      if (acc[i] > 0) {
+        dts = dt + acc[i]; acc[i] = 0;
+        kHead = Math.min(1, dts * 14); kTurn = Math.min(1, dts * 4); kBeak = Math.min(1, dts * 12); kWing = Math.min(1, dts * 2.5);
+      }
+    }
     // heat stress shows in degrees: wings held further out and harder panting the hotter the bird
     let heat = 0;
     if (hot) { heat = (S.tIdx[i] - S.heatRef) / 4; heat = heat < 0.3 ? 0.3 : heat > 1 ? 1 : heat; }
@@ -44,7 +62,7 @@ export function poseAll(S, dt, stage) {
     // a bird that has arrived and is only being jostled shuffles its feet but keeps its pose
     const walkRaw = Math.min(1, spd / (0.35 * base * si));
     const walk = arr ? (spd > 0.4 * base ? 0.5 * walkRaw : 0) : walkRaw;
-    stride[i] += dt * TAU * (spd / (0.3 * s));
+    stride[i] += dts * TAU * (spd / (0.3 * s));
     const st = stride[i];
 
     let pitch, lift, turn = 0, beakT = 0;

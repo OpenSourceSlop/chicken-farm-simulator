@@ -1,6 +1,7 @@
 // Follow camera: orbits around the farmer (yaw), zooms 6..45 m, pitch rises with distance.
 // Yaw convention matches the farmer: yaw 0 looks north (-Z) with the camera south of him.
 import * as THREE from 'three';
+import { reducedMotion } from './motion.js';
 
 export const ZOOM_MIN = 6;
 export const ZOOM_MAX = 45;
@@ -59,7 +60,9 @@ export function createCameraRig(camera) {
     update(dt, target, vel) {
       st.yaw += (st.yawT - st.yaw) * ease(YAW_RATE, dt);
       st.dist = Math.exp(Math.log(st.dist) + (Math.log(st.distT) - Math.log(st.dist)) * ease(ZOOM_RATE, dt));
-      goal.set(target.x + vel.x * LEAD, focusHeight(st.dist), target.z + vel.z * LEAD);
+      // Phase 5 (PHASE5.md §4.5): under reduced motion the view follows without the look-ahead lead
+      const lead = reducedMotion() ? 0 : LEAD;
+      goal.set(target.x + vel.x * lead, focusHeight(st.dist), target.z + vel.z * lead);
       st.focus.lerp(goal, ease(FOLLOW_RATE, dt));
       st.focus.y = focusHeight(st.dist);
       place();

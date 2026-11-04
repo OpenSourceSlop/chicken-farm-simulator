@@ -9,6 +9,7 @@ import { Batch, mat, canvasTexture, roundRect, smooth, clamp01, FONT } from './h
 import { TRUSS_Y } from './house-shell.js';
 import { nippleHeight } from './house-drinkers.js';
 import { powerOff, reducedMotion } from './world-cond.js';
+import { decal } from './world-util.js';
 
 const { xMin, xMax, zMin, zMax } = HOUSE_BOUNDS;
 // Boards hang on the side-wall columns at SPOTS (north wall when z < 0). IN points into the house.
@@ -106,7 +107,7 @@ export function buildFittings(kit) {
   stat.rod([cx - L * 0.02, cy - 0.3, cz], [cx - L * 0.02, 0.02, cz], 0.016, 0x80888e, 6);
   stat.box(0.25, 0.05, 0.012, cx, cy + 0.25, cz + IN * 0.088, 0x2f5d8a);    // brand strip
   const lcd = lcdCanvas();
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.27, 0.135), new THREE.MeshBasicMaterial({ map: lcd.t, toneMapped: false }));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.27, 0.135), decal(new THREE.MeshBasicMaterial({ map: lcd.t, toneMapped: false })));
   screen.position.set(cx, cy + 0.13, cz + IN * 0.095);
   screen.rotation.y = back;
   group.add(screen);
@@ -127,7 +128,7 @@ export function buildFittings(kit) {
   const sx = SPOTS.signBrooder.x, sy = 1.5;
   stat.box(1.12, 0.79, 0.04, sx, sy, FACE_Z + IN * 0.02, 0x9aa2a8);
   for (const dy of [-0.25, 0.25]) stat.box(1.0, 0.05, 0.03, sx, sy + dy, FACE_Z - IN * 0.005, 0x7c858c);   // mounting rails
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.08, 0.76), new THREE.MeshLambertMaterial({ map: signTexture() }));
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.08, 0.76), decal(new THREE.MeshLambertMaterial({ map: signTexture() })));
   sign.position.set(sx, sy, FACE_Z + IN * 0.042);
   sign.rotation.y = back;
   group.add(sign);

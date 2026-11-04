@@ -235,13 +235,23 @@ export function createFlock(ctx, { house } = {}) {
       if (prof.on) { const t3 = performance.now(); prof.grid += t1 - t0; prof.think += t2 - t1; prof.steer += t3 - t2; }
     }
     const t4 = prof.on ? performance.now() : 0;
-    poseAll(S, dt, render.stage);
+    // Phase 5: at reduced detail the birds over FAR_POSE m from the camera are drawn every second frame (dt 0: all)
+    let half = null;
+    if (detail === 'reduced' && dt > 0 && ctx.camera) {
+      const c = ctx.camera.position;
+      half = halfPose; half.cx = c.x; half.cz = c.z; half.parity = (poseFrame++) & 1;
+    }
+    poseAll(S, dt, render.stage, half);
     if (lv) lvl.afterPose(dt);
     if (prof.on) prof.pose += performance.now() - t4;
     render.markDirty();
   }
   // optional phase timing for the test tools: flock.profile.on = true, read the ms totals
   const prof = { on: false, grid: 0, think: 0, steer: 0, pose: 0, level: 0 };
+  // Phase 5 (PHASE5.md §4.4): the flock's detail ('full' | 'reduced'), set by gfx-quality.js through setDetail
+  const FAR_POSE = 25;
+  let detail = 'full', poseFrame = 0;
+  const halfPose = { cx: 0, cz: 0, r2: FAR_POSE * FAR_POSE, parity: 0, acc: new Float32Array(n) };
 
   // initial flock at the current climate
   applyDay(ctx.env, true);
@@ -259,6 +269,18 @@ export function createFlock(ctx, { house } = {}) {
      *  arrays (do not write; read them when the map opens): { n, x, z, size (the ±8 % spread), morph (0 chick .. 1 broiler,
      *  the whole flock's shape and colour) }. Dead birds are flock.dead's. */
     positions() { return { n: S.n, x: S.px.subarray(0, S.n), z: S.pz.subarray(0, S.n), size: S.size.subarray(0, S.n), morph: S.morph }; },
+    /** Phase 5 (PHASE5.md §4.4, package settings; gfx-quality.js calls it): 'full' | 'reduced'. Reduced draws the same
+     *  instances, colours and poses with a lighter bird (64 triangles far, the 113 of the distant bird near: the flock
+     *  meshes' own triangles fall by 43-63 %), and poses the birds over 25 m from the camera every second frame. The
+     *  flock's behaviour and metrics do not change (scripts/test-settings.mjs runs both and compares them). */
+    setDetail(level) {
+      detail = render.setDetail(level);
+      if (detail === 'full') halfPose.acc.fill(0);
+      return detail;
+    },
+    get detail() { return detail; },
+    /** The flock meshes' own triangles drawn now: index count / 3 x drawn instances, summed over the meshes. */
+    triangles() { let t = 0; for (const m of render.meshes) t += (m.geometry.index ? m.geometry.index.count / 3 : 0) * m.count; return t; },
     update,
     metrics() {
       if (!built) { grid.build(S.px, S.pz, S.n, S.maxR, S.perM2, S.bounds.zMax - S.bounds.zMin); built = true; }

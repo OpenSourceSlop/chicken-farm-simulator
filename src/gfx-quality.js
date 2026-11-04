@@ -3,25 +3,31 @@
 // moved here from main.js unchanged: if the median frame over 2 s is slower than about 28 fps it steps quality down,
 // high-DPI screens to a 1.0 pixel ratio first, then the cheaper sun shadow, and only below about 20 fps a 0.85 render
 // scale; it only steps down, waits 3 s between steps, and is off under automation (the harness renders in software).
-// Owner after the design round: package "settings" (it adds the flock and shadow-off steps, PHASE5.md §4.4).
+// Owner: package "settings". Phase 5 adds two steps at the end, only for parts left on auto: (4) the reduced flock,
+// (5) shadows off; then it stops. A part set by hand is pinned (the governor skips its steps); set back to auto, that
+// part starts again from the top (restart(part)).
 // Review round: no quality change compiles a shader. three 0.160 keys every program on shadowMap.enabled and
 // shadowMap.type (WebGLPrograms), so both stay as main.js set them (on, PCF soft) for the whole session: the simple shadow
 // is the same soft filter on a 1024 map (Phase 1's step 2 switched to PCF: a recompile of every lit material on exactly
 // the slow machines the governor serves), and 'off' is a 256 map rendered once with no caster (every fragment lit) and
 // then never again (shadowMap.autoUpdate false): the shadow pass costs nothing, the lit shaders stay the same programs.
+// A light's castShadow is in the program key too (numDirLightShadows): the sun keeps its own.
 //
 //   const quality = createQuality({ THREE, renderer, scene, world, perf, settings, flock, onResize })
 //   quality.pixelRatio()   what main.js's resize() renders at (min(devicePixelRatio, the cap))
 //   quality.frame(rawDt)   every frame (real seconds, before the cap): the fps readout and the governor
 //   quality.apply()        the graphics settings now (also on every change of the graphics group)
-//   quality.state()        { auto: { ratio, shadows, flock }, ratioCap, shadows: 'high'|'low'|'off', flockDetail, step, governing, fps }
+//   quality.restart(part?) part ('ratio' | 'shadows' | 'flock', or every auto part) from the top, the governor watching
+//   quality.state()        { auto: { ratio, shadows, flock }, ratioCap, shadows: 'high'|'low'|'off', flockDetail, step,
+//                            governing, fps, taken: [{ part, what, at }] }
+//   quality.stepsWords()   the governor's steps in effect in plain words ('shadows simple, sharpness 1'; '' for none)
 //   quality.debug.feed(dt, n)   n frames of dt seconds into the governor (tests; works under automation)
 import { GFX } from './config.js';
 
 export function createQuality({ THREE, renderer, scene, world, perf = {}, settings = null, flock = null, onResize = () => {} } = {}) {
   const G = GFX.governor;
-  const st = { ratioCap: GFX.maxPixelRatio, shadows: 'high', flockDetail: 'full', step: 0 };
-  const gov = { on: typeof navigator === 'undefined' || !navigator.webdriver, times: new Float32Array(120), n: 0, acc: 0, hold: G.firstHoldSec };
+  const st = { ratioCap: GFX.maxPixelRatio, shadows: 'high', flockDetail: 'full', step: 0, taken: [] };
+  const gov = { on: typeof navigator === 'undefined' || !navigator.webdriver, times: new Float32Array(120), n: 0, acc: 0, hold: G.firstHoldSec, clock: 0, fresh: true };
   const get = (k, d) => { try { return settings ? settings.get(`graphics.${k}`) : d; } catch { return d; } };
   const autoOf = () => ({ ratio: get('pixelRatio', 'auto') === 'auto', shadows: get('shadows', 'auto') === 'auto', flock: get('flockDetail', 'auto') === 'auto' });
 
@@ -53,34 +59,47 @@ export function createQuality({ THREE, renderer, scene, world, perf = {}, settin
     if (pr !== 'auto') st.ratioCap = Math.min(GFX.maxPixelRatio, parseFloat(pr) || 1);
     if (sh !== 'auto') setShadows(sh);
     if (fd !== 'auto') setFlock(fd);
+    // a part pinned by hand: the governor's steps of that part no longer count
+    const a = autoOf();
+    st.taken = st.taken.filter((t) => a[t.part]);
+    st.step = st.taken.length;
     if (resize) onResize();
   }
-  /** A setting went back to 'auto': that part starts again from the top and the governor watches again. */
-  function restart() {
-    const a = autoOf();
-    if (a.ratio) st.ratioCap = GFX.maxPixelRatio;
-    if (a.shadows) setShadows('high');
-    if (a.flock) setFlock('full');
-    st.step = 0;
+  /** A setting went back to 'auto': that part (every auto part with no argument) starts again from the top and the
+   *  governor watches again. */
+  function restart(part = null) {
+    const a = autoOf(), all = !part;
+    if (a.ratio && (all || part === 'ratio')) st.ratioCap = GFX.maxPixelRatio;
+    if (a.shadows && (all || part === 'shadows')) setShadows('high');
+    if (a.flock && (all || part === 'flock')) setFlock('full');
+    st.taken = st.taken.filter((t) => !all && t.part !== part);
+    st.step = st.taken.length;
     gov.on = typeof navigator === 'undefined' || !navigator.webdriver;
-    gov.hold = G.firstHoldSec; gov.n = 0; gov.acc = 0;
+    gov.hold = G.firstHoldSec; gov.n = 0; gov.acc = 0; gov.fresh = true;
     apply();
   }
 
+  // Phase 1's three steps, then Phase 5's two, each only for a part left on auto
   function stepDown(median) {
     const a = autoOf(), ratio = renderer.getPixelRatio();
     gov.hold = G.holdSec;
-    if (a.ratio && ratio > 1.01) st.ratioCap = 1;
-    else if (a.shadows && st.shadows === 'high') setShadows('low');
-    else if (a.ratio && ratio > 0.86 && median > G.verySlowSec) st.ratioCap = 0.85;
+    let t = null;
+    if (a.ratio && ratio > 1.01) { st.ratioCap = 1; t = { part: 'ratio', what: 'sharpness 1' }; }
+    else if (a.shadows && st.shadows === 'high') { setShadows('low'); t = { part: 'shadows', what: 'shadows simple' }; }
+    else if (a.ratio && ratio > 0.86 && median > G.verySlowSec) { st.ratioCap = 0.85; t = { part: 'ratio', what: 'sharpness 0.85' }; }
+    else if (a.flock && st.flockDetail === 'full') { setFlock('reduced'); t = { part: 'flock', what: 'flock detail reduced' }; }
+    else if (a.shadows && st.shadows === 'low') { setShadows('off'); t = { part: 'shadows', what: 'shadows off' }; }
     else { gov.on = false; return false; }
-    st.step++;
+    st.taken.push({ ...t, at: +gov.clock.toFixed(3) });
+    st.step = st.taken.length;
     onResize();
     return true;
   }
   function sample(rawDt, force = false) {
     if (!gov.on || (!force && typeof document !== 'undefined' && document.hidden)) return;
+    gov.clock += rawDt;
     if ((gov.hold -= rawDt) > 0) return;
+    gov.fresh = false;
     gov.times[gov.n++ % gov.times.length] = rawDt;
     if ((gov.acc += rawDt) < G.windowSec) return;
     const k = Math.min(gov.n, gov.times.length);
@@ -91,7 +110,11 @@ export function createQuality({ THREE, renderer, scene, world, perf = {}, settin
     stepDown(median);
   }
 
-  settings?.subscribe?.((c) => { if (c.value === 'auto' && c.key !== 'quality') restart(); else apply(); }, 'graphics');
+  const PART_OF = { pixelRatio: 'ratio', shadows: 'shadows', flockDetail: 'flock' };
+  settings?.subscribe?.((c) => {
+    if (c.value === 'auto' && PART_OF[c.key]) restart(PART_OF[c.key]);
+    else if (PART_OF[c.key]) apply();
+  }, 'graphics');
   apply({ resize: false });   // main.js sizes the canvas itself once the quality object exists
 
   const api = {
@@ -104,10 +127,19 @@ export function createQuality({ THREE, renderer, scene, world, perf = {}, settin
     },
     apply,
     restart,
-    state: () => ({ auto: autoOf(), ratioCap: st.ratioCap, shadows: st.shadows, flockDetail: st.flockDetail, step: st.step, governing: gov.on, fps: perf.fps || 0 }),
+    state: () => ({ auto: autoOf(), ratioCap: st.ratioCap, shadows: st.shadows, flockDetail: st.flockDetail, step: st.step, governing: gov.on, fps: perf.fps || 0,
+      taken: st.taken.map((t) => ({ ...t })) }),
+    stepsWords() {
+      const a = autoOf(), out = [];
+      if (a.shadows && st.shadows !== 'high') out.push(st.shadows === 'off' ? 'shadows off' : 'shadows simple');
+      if (a.ratio && st.ratioCap < GFX.maxPixelRatio) out.push(`sharpness ${st.ratioCap}`);
+      if (a.flock && st.flockDetail === 'reduced') out.push('flock detail reduced');
+      return out.join(', ');
+    },
     debug: {
       /** n frames of dt seconds into the governor (works under automation: it switches the governor on first). */
-      feed(dt, n = 1) { gov.on = true; gov.hold = Math.min(gov.hold, 0); for (let i = 0; i < n; i++) sample(dt, true); return api.state(); },
+      // (the first hold after a start or a restart is skipped; the 3 s between steps is kept)
+      feed(dt, n = 1) { gov.on = true; if (gov.fresh) gov.hold = 0; for (let i = 0; i < n; i++) sample(dt, true); return api.state(); },
     },
   };
   return api;

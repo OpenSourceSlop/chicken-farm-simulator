@@ -2,7 +2,7 @@
 // Owner: world agent.
 import * as THREE from 'three';
 import { COLORS, FARM, SPOTS } from './config.js';
-import { GeoBuilder, unitCone, unitCyl } from './world-util.js';
+import { GeoBuilder, unitCone, unitCyl, decal } from './world-util.js';
 import { F, GATE, CORRIDOR, PUBLIC_ROAD_Z, SPRAY_Z } from './world-layout.js';
 
 const CONCRETE = 0xbdb7aa, POST = 0xc9c3b6, STEEL = COLORS.steel, STEEL_DK = COLORS.steelDark;
@@ -183,7 +183,7 @@ export function buildGateArea(group, mats, colliders, signTex) {
     metal.boxMM(S.x + ox - 0.03, S.x + ox + 0.03, by + 0.12, by + 0.18, postZ, S.z + back - 0.05, STEEL_DK);
   }
   metal.add(new THREE.BoxGeometry(1, 1, 1), 0x2b3a33, { x: S.x, y: cy, z: S.z, sx: bw + 0.1, sy: bh + 0.1, sz: 0.06, rx: -tilt, order: 'XYZ' });
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), new THREE.MeshLambertMaterial({ map: signTex.gate }));
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), decal(new THREE.MeshLambertMaterial({ map: signTex.gate })));
   face.rotation.x = -tilt;
   face.position.set(S.x, cy + 0.035 * Math.sin(tilt), S.z + 0.035 * Math.cos(tilt));
   face.receiveShadow = true;

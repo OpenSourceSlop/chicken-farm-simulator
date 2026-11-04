@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { FARM, WATER_TANK } from './config.js';
 import { Batch, mat, canvasTexture, FONT } from './props-kit.js';
 import { reducedMotion } from './world-cond.js';
+import { decal } from './world-util.js';
 
 const T = FARM.waterTank;
 const TANK = { r: 1.45, y0: 7.3, y1: 9.8 };
@@ -85,9 +86,9 @@ export function buildWaterTank(group, parts, lit) {
   const fixed = b.mesh(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), { cast: true, receive: true });
   fixed.name = 'props-water-tank-parts';
   // faces: the gauge board (canvas) and the two dials (one canvas)
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(G.w, gh), new THREE.MeshLambertMaterial({ map: gaugeFace() }));
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(G.w, gh), decal(new THREE.MeshLambertMaterial({ map: gaugeFace() })));
   face.position.set(G.x, gy, G.z - 0.012);
-  const dials = new THREE.Mesh(new THREE.PlaneGeometry(DIAL.r * 2, DIAL.r * 2), new THREE.MeshLambertMaterial({ map: dialFace() }));
+  const dials = new THREE.Mesh(new THREE.PlaneGeometry(DIAL.r * 2, DIAL.r * 2), decal(new THREE.MeshLambertMaterial({ map: dialFace() })));
   const ug = dials.geometry.attributes.uv;
   for (let k = 0; k < ug.count; k++) ug.setX(k, ug.getX(k) * 0.5);
   dials.position.set(DIAL.bar.x, DIAL.bar.y, P.z + 0.078);
