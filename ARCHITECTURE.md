@@ -876,6 +876,28 @@ with (the no-verdict rule for the flock watch's warnings, the 4.5-minute day cei
   while the farmer stands there idle stays open (20 farm minutes at a time) until he leaves or skips; the watch's L1 growth
   path is the ideal's of seed 1 (a model table, `REF_SHARE`).
 
+- **Review round** (PHASE4.md §15.8; the fixer's changes on main):
+  - HUD: `ui.js layoutLeft()` places `.alarm` and `section.fw` under the real bottom of `.hud-tl` (the alarm in the left
+    column, never in the gauge row; `watchCard.setTop`); `level.hudHooks.weatherText()` names the hour's weather under the
+    hot and rainy seasons; `.hud-bl` z-index 8 (the help over the watch and the captions); the watch card is a compact strip
+    up to 1100 px while all is steady; the edge pointers avoid `.hud-tl .clock` / `.gauges` and the alarm, not the row.
+  - `ui.js panelNotice(text)`: a notice written at the top of the open panel's `.equip-main` (the automatic bucket set-down,
+    a flock watch warning while a panel is open; that warning's caption is queued to the panel's close).
+  - `flock-watch.js`: `status()` reads the comfort row's now / felt live; `causeOf(kind, age, watchState(env, farm))` (the
+    power, the tank, the hot season's sun, damp air, moving air, a bad batch's first days); `watch.quiet(on)` (run.js wraps a
+    standard start's auto play); saves `lastHour`, `t` / `age` at 1e-5 day; `level.resume` restores it after `enterMode`.
+  - `heatHandled` (`YOUNG_PANT_MAX` 0.25) and the state test `pad-few-fans` (STATE_TEST_IDS_P4); `job-strips-cycle.js
+    heatSignLine(age)`; `job-figures.js inletAirM3h(env, t)` / `flapsWords(env)` (the vent need counts the storm flaps' 70 %).
+  - The ideal: `fansForFeel` for the found warm afternoon of week 3 (and a day-16 17:00 fan stop), the rainy branch of
+    `condFanPlan`, the bad batch's `warmerEnd` round (day 3 22:00). `farm.start` clears a bad batch's delivery and growth
+    factors. `ui-equipment.js toggleKey(whenOn, whenOff, onClick, onText)` / `.stateText(t)`: a lit key shows its state.
+  - Scene: rain culled where the camera's ray through a streak meets the floor inside the house; the storm flaps' open and
+    closed looks, wet stains, line 4's rust sleeves; the alarm lamp's round glow. The generator panel's transfer switch
+    (`.key--throw`, lit only while live) and row order. records-cond's hot-season afternoon note; the result's House at
+    15:00 column (hot season) and deaths by cause (brooding week).
+  - Harness: `scripts/rv-hud.json` (`rv-hud-steps.mjs`); req-bucket / req-watch check the notice and the caption are seen;
+    p4-scene-look checks the rain over the litter and the flaps by pixels.
+
 
 ## Sound (branch feature/sound, ahead of Phase 5)
 The farmer asked for quiet sounds now and then "to let you know it's working". All procedural Web Audio (no audio

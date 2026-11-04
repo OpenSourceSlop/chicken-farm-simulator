@@ -21,8 +21,9 @@ const ventOpen = () => [
 const layDeadAhead = (d = 0.35) => ev(`(() => { const P = __game.player, y = P.yaw; const at = __game.flock.dead.layAt(P.position.x - Math.sin(y) * ${d}, P.position.z - Math.cos(y) * ${d}); __game.farm.flock.deadOnFloor++; __game.farm.flock.deadTotal++; return 'dead bird laid at ' + at.x.toFixed(2) + ',' + at.z.toFixed(2) + ', farmer at ' + P.position.x.toFixed(2) + ',' + P.position.z.toFixed(2); })()`);
 const nearestChickM = `(() => { const S = __game.flock._state, p = __game.player.position; let bd = 1e9; for (let i = 0; i < S.n; i++) { if (S.pen[i] || S.spawnT[i] > 0) continue; const d = Math.hypot(S.px[i] - p.x, S.pz[i] - p.z); if (d < bd) bd = d; } return bd; })()`;
 const nearestDeadM = `(() => { const p = __game.player.position, d = __game.flock.dead.near(p.x, p.z, 80); return d.length ? Math.hypot(d[0].x - p.x, d[0].z - p.z) : 1e9; })()`;
-/** Review round: the element at the centre of `sel` is inside it (seen, not covered by a panel or a card). */
-const seenAt = (sel) => `(() => { const e = document.querySelector('${sel}'); if (!e || e.hidden || !e.offsetParent) return false; const r = e.getBoundingClientRect(); const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!at && e.contains(at) && e.textContent.replace(/\\s+/g, ' ').trim(); })()`;
+/** Review round: the element at the centre of `sel` is inside it (seen, not covered by a panel or a card); a caption has
+ *  pointer-events none, so it takes them for the moment of the check. */
+const seenAt = (sel) => `(() => { const e = document.querySelector('${sel}'); if (!e || e.hidden || !e.offsetParent) return false; const r = e.getBoundingClientRect(), pe = e.style.pointerEvents; e.style.pointerEvents = 'auto'; const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); e.style.pointerEvents = pe; return !!at && e.contains(at) && e.textContent.replace(/\\s+/g, ' ').trim(); })()`;
 const captionHas = (re) => `(document.querySelector('#hud .caption:not([hidden]) .caption-text')?.textContent || '').match(${re})`;
 
 // ---------------- req-bucket.json (request 3) ----------------

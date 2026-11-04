@@ -1433,3 +1433,68 @@ one instanced mesh, at most 64). `src/ui-deadmarks.js` owns the chips and the ma
   the job pointer and the HUD cards).
 - Every earlier steps file and play-through passes (ARCHITECTURE.md lists the counts); `npm test` 356 ok; perf within budget.
 
+
+### 15.8 Review round (the fixer, after the farmer's requests)
+The reviewers' findings on the requests and the conditions, each confirmed first; what changed (model values marked model,
+sign lines general):
+- **The HUD's left column** (`ui.js layoutLeft`, every 0.1 s): the flock watch card and the alarm banner are placed under the
+  real bottom of the clock and gauge row (it wrapped under the longer condition labels at 960 × 600 and hid House, Outside
+  and Humidity); the alarm sits under the gauges in that column, never in the gauge row; the clock card names the hour's
+  weather under a season condition (`hudHooks.weatherText`: Storm, Rain, Heat wave, Hot sun, Damp air) instead of the season
+  twice, so the row fits at 960 px; the help legend (`.hud-bl`, z-index 8) lies over the watch card and the captions. Up
+  to 1100 px wide the watch card is a compact strip of the four dots while every row is steady and no warning is new; it
+  opens by itself on an amber or red row, or on a click. The warning box starts with where to look (bold), the clamp on an
+  inner span (5 lines, no leaked half line). `scripts/rv-hud.json` (from `rv-hud-steps.mjs`): every condition, the normal
+  season and the power cut at 960 × 600 and 1280 × 800: no gauge under the watch card or the alarm; the help's G row on
+  top (elementFromPoint); the alarm back after a reload inside the cut.
+- **Notices inside the open panel** (`ui.js panelNotice`): the HUD's captions sit under the panel scrim, so the automatic
+  "Bucket set down at your feet (N dead birds) …" is written at the top of the panel that opens (the chick in hand, the
+  grading table, the weigh frame), and a flock watch warning raised while a panel is open goes at the top of that panel,
+  its caption queued for the moment the panel closes. req-bucket and req-watch check the notice and the caption are seen
+  (elementFromPoint at their centre), not only present in the DOM.
+- **The flock watch** (`flock-watch.js`): the comfort row's "now" word and felt °C are read live from `farm.comfort` every
+  time the card asks (a green window with the birds hot or cold now reads amber "· hot now"); the card shows a new warning
+  at once (`status.last` after the warnings pass); `causeOf(kind, age, watchState(env, farm))` follows the house's state:
+  the power off names the power cut sign and the generator, the water condition's low tank or worn pump the water tank
+  plate and the well pump, the hot season's brooding heat the brooder sign's hot-season line and the pad pump with one
+  fan, young birds' heat the pad with one or two fans, damp air (house over 85 %) the tunnel fans with "the pad gives little
+  cooling", cold from moving air (wind chill over 1.5 °C or air over 0.5 m/s) the fan panel at any age, a bad batch's weak
+  deaths in days 0–1 the chick grading plate; a deaths warning keeps its own cause (disease, sudden deaths, legs, thirst,
+  breathing, the claim) over the comfort. A standard start's auto play is quiet (`watch.quiet`: no notebook line, no
+  caption). Save: `t` and `age` to 1e-5 day, `lastHour` saved; `level.resume` restores the watch after the mode is
+  `level` (the card shows at once after Continue).
+- **Heat handled** (`heatHandled`, `pad-few-fans`): young birds (under 21 days) under every fan without the pad count only
+  while the pad cannot work (outside 75 % or more, or the house over the pad plate's 90 %) and with at most a quarter of
+  them panting (`YOUNG_PANT_MAX` 0.25, model); `h-young-heat`'s first part is now the state "the pad on with 1–3 tunnel
+  fans" (a press of the fan switches no longer ticks it). Big birds keep "every fan with the pad" whatever the panting: the
+  hot season's day 38 leaves about 44 % panting under every fan and the pads, all the house can do. The heat strips say
+  the tuned heat sign's line for the age (`heatSignLine`: young birds the pad with one or two fans, three in week 3; big
+  birds every fan and the pads); test-jobs checks it against the sign's text.
+- **The ideal** (the reference play): the week-3 warm afternoon (day 16) with the fewest tunnel fans that bring what the
+  birds feel to the target + 1 °C (`fansForFeel`, read again at 15:30 and at a new 17:00 stop) instead of six (they chilled
+  3–5.6 °C under the target for about five hours); the rainy season's damp hours (house over 85 %) with tunnel fans by
+  feel (young birds by day, at most two in week 2 and four in week 3; big birds up to every fan), with the new rainy heat
+  sign line (general); a bad batch's warmer brooding ends at 22:00 on day 3 (the thermostat to day 4's row: the target
+  drops 1.4 °C at midnight). Results: the rainy ideal week 3 963.5 → 973.8 g, harvest 2,868 → 2,891 g, EPEF 422 → 426 (the
+  other conditions' cycles as before within 1 EPEF); test-cond 30 of 30 with the bands unchanged.
+- **Every warning of the ideal is a documented problem event** (test-watch, the whole cycle under each condition): normal
+  day 3 intake (the blocked filter) and day 33 humid heat; hot day 3; rainy day 3 and day 19 (coccidiosis, at the droppings
+  sign); water day 3, day 20 (coccidiosis), day 33; bad batch day 0 (the culls before the hatchery call), day 3, day 33.
+- **A new run after an abandoned bad batch** (found while testing): its delivery and its slow start (`farm.delivery`,
+  `gainK72`, `lateK`, `traysReach`) stayed on the farm, so the next run's brooding week grew 12 % slower and a standard
+  start failed week 2; `farm.start` now clears them (test-run).
+- **Smaller fixes**: rain streaks whose ray from the camera meets the floor inside the house are culled while the farmer is
+  inside (a pixel check in p4-scene-look); the storm flaps open as hoods over the dark inlet gap with a wet stain under
+  them in rain, closed as a light painted plate (a pixel check), line 4's rust as a 16 cm sleeve at each nipple and brown
+  drip cups; the controller's alarm glow a soft round glow on the lamp; the generator panel's engine and transfer switch
+  rows above the job strip, the transfer switch's thrown side marked and its lamp lit only while that source is live; a
+  lit toggle key shows its state ("Pad pump · running"), the action in its aria-label and title (test-contracts); the
+  alarm banner comes back after a reload inside a cut; the storm flaps shut count 70 % of the timer air in the vent need
+  (the controller says so); the feeder plate prints the brooding days' 7 cm; `heldText` drops the comma before "for N farm
+  minutes"; the result screen's brooding week shows the hot season's house at 15:00 with the pad and fans and the deaths
+  by cause, and the hot season's record rows note the afternoon; the dead-bird tag sits over the bird's marker, keeps off
+  the farmer's figure, moves one way past the visible clock and gauge cards and turns its arrow to the bird; the
+  bucket's marker draws over walls; the level speed tooltip says a farm hour takes 40 s.
+- **Not changed**: `b-warm` still counts on the first tick at row + 1 °C (a held three-day outcome would need a new held
+  rule and a re-cut of p4-bad); the hot season still costs the ideal flock work, not weight (a hot-night intake term would
+  move every hot band and COND_TARGETS; PHASE4.md §2.8 row 18 stands as an open tuning item).
