@@ -105,7 +105,7 @@ export function buildGenerator(api) {
     if (fuelDial.__k !== k) { fuelDial.__k = k; fuelDial.innerHTML = dial({ v: fuelL, lo: 0, hi: GENERATOR.fuelL, step: GENERATOR.fuelL / 4, label: 'FUEL', unit: `${fmt0(fuelL)} L`, size: 96, fmt: (x) => QUARTERS[x] ?? '' }); }
     setText(fuelSub, `about ${hoursText(left)} of fuel at full load`);
     // the engine
-    engine.led.classList.toggle('is-on', !!g.running);
+    engine.led.classList.toggle('is-on', !!g.running || testKey.running);
     engine.setState(startKey.running ? 'Engine: cranking, full power in about 2 farm minutes' : g.running ? `Engine: running${g.startedAt != null ? ` since ${whenText(g.startedAt)}` : ''}`
       : fuelL <= 0 ? 'Engine: stopped, the fuel tank is empty' : 'Engine: stopped');
     stopBtn.disabled = !g.running;
@@ -116,6 +116,7 @@ export function buildGenerator(api) {
     sw.setState(`House on the ${lv}: ${p.on ? 'the house has power' : 'no power to the house'}`);
     mainsLamp.set(!!p.mains, `Mains: ${p.mains ? 'on' : 'off'}`);
     setText(swSub, lv === 'generator' ? (g.running ? '· the generator feeds the house' : '· the generator is not running') : p.mains ? '· the grid feeds the house' : '· the grid gives no power now');
+    test.led.classList.toggle('is-on', testKey.running);
     test.setState(testKey.running ? 'Test run: the engine is running' : g.testedDay != null ? `Last test run: day ${g.testedDay}` : 'No test run in this flock yet');
     setText(test.small, `${GENERATOR.testMin} minutes every week (generator plate)`);
     fuel.setState(`${fmt0(fuelL)} L in the tank`);
