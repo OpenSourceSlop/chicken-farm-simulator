@@ -28,6 +28,7 @@ import { buildFanPanel, buildPadPump } from './ui-cycle-fans.js';
 import { buildCurtainWinch, buildGasTank } from './ui-cycle-house.js';
 import { buildLoadingBay } from './ui-cycle-harvest.js';
 import { buildWashBay, buildDeadBin } from './ui-cycle-clean.js';
+import { withJobStrip } from './ui-jobstrip.js';
 
 /** Panel ids of Phase 3, the plate each shows and its clock class (PHASE3.md §13.3 / §13.4). */
 export const CYCLE_PANELS = {
@@ -64,13 +65,13 @@ export function registerCyclePanels(api) {
   const built = {};
   L.cycle = { panel: (id) => built[id] ?? null, samples: sampleLog() };
   for (const [id, p] of Object.entries(CYCLE_PANELS)) {
-    api.register(id, () => {
+    api.register(id, withJobStrip(L, id, () => {
       const panel = p.build(api);
       built[id] = panel;
       // a panel removed by clearBuilt (a new run) is forgotten too
       const dispose = panel.dispose;
       panel.dispose = () => { if (built[id] === panel) delete built[id]; dispose?.(); };
       return panel;
-    }, { kind: p.kind });
+    }), { kind: p.kind });
   }
 }

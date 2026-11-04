@@ -105,3 +105,22 @@ export function createJobStrip(L, panelId, { section = null, ctx = () => ({}), l
     onClose() { sticky = new Map(); },
   };
 }
+
+/** Wrap a machine panel's factory so the built panel shows the job strip at the top of its working plate
+ *  (`.equip-main`), unless it mounts its own (the feeder box, the controller) or has none. The panel may give
+ *  `stripCtx()` (the drinker line it is). Its onOpen / onClose / update keep running as before. */
+export function withJobStrip(L, id, build) {
+  return (...args) => {
+    const panel = build(...args);
+    const main = panel?.el?.querySelector?.('.equip-main');
+    if (!main || panel.el.querySelector('.jstrip')) return panel;
+    const strip = createJobStrip(L, id, { ctx: () => panel.stripCtx?.() || {} });
+    main.prepend(strip.el);
+    const { onOpen, onClose, update } = panel;
+    let acc = 0;
+    panel.onOpen = function (...a) { const r = onOpen?.apply(this, a); strip.onOpen(); return r; };
+    panel.onClose = function (...a) { strip.onClose(); return onClose?.apply(this, a); };
+    panel.update = function (dt, force, ...a) { const r = update?.call(this, dt, force, ...a); acc -= dt; if (force || acc <= 0) { acc = 0.25; strip.update(); } return r; };
+    return panel;
+  };
+}

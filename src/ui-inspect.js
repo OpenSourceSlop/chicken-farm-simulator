@@ -37,7 +37,7 @@ export function buildGradingPanel(L) {
   const hockBtn = button({ class: 'btn btn--machine' }, 'Look at the hocks');
   const cullBtn = button({ class: 'btn btn--machine btn--cull' }, 'Cull');
   const sampleOf = (c) => { if (!c.sample) c.sample = L.act('sample.grade', { i: c.i }) || {}; return c.sample; };
-  flipBtn.addEventListener('click', () => { const c = chicks[sel]; if (c.culled) return; sampleOf(c); c.flipAt = clock.now(); c.rightedIn = null; draw(); });
+  flipBtn.addEventListener('click', () => { const c = chicks[sel]; if (c.culled) return; sampleOf(c); c.flipAt = clock.now(); c.rightedIn = null; c.seen.reflex = true; draw(); });
   navelBtn.addEventListener('click', () => { const c = chicks[sel]; sampleOf(c); c.seen.navel = true; draw(); });
   hockBtn.addEventListener('click', () => { const c = chicks[sel]; sampleOf(c); c.seen.hocks = true; draw(); });
   cullBtn.addEventListener('click', () => { const c = chicks[sel]; if (c.culled) return; c.culled = true; L.act('chicks.cull', { n: 1, reason: 'grading' }); draw(); });
@@ -50,10 +50,18 @@ export function buildGradingPanel(L) {
   });
   const boxRead = readout('Box scale');
   const weighBtn = button({ class: 'btn btn--machine' }, h('span', { html: ICONS.scale, 'aria-hidden': 'true' }), 'Weigh the box');
-  weighBtn.addEventListener('click', () => { const r = L.act('sample.box', {}) || {}; boxRead.set(`${two(r.weightKg)} kg`, `gross, ${int(r.chicks ?? LEVEL1.chicksPerBox)} chicks · box weight printed: ${two(r.boxKg ?? 0.35)} kg`); });
+  let box = null;
+  weighBtn.addEventListener('click', () => { const r = L.act('sample.box', {}) || {}; box = r; boxRead.set(`${two(r.weightKg)} kg`, `gross, ${int(r.chicks ?? LEVEL1.chicksPerBox)} chicks · box weight printed: ${two(r.boxKg ?? 0.35)} kg`); draw(); });
   const submit = button({ class: 'btn btn--machine btn--go' }, 'Hand in the sheet');
   const handed = h('p', { class: 'equip-note' });
-  submit.addEventListener('click', () => { L.uiAct('grade.submit', { sheet: { ...sheet } }); setText(handed, `Sheet handed in at ${L.env.timeLabel}: it goes into the record as your chick-quality note.`); });
+  // what is left before the sheet covers the box (the chick arrival sign: reflex, navel, hocks; the box weighed)
+  const left = () => ({ chicks: chicks.filter((c) => !c.culled && !(c.seen.reflex && c.seen.navel && c.seen.hocks)).length, weighed: !!box });
+  submit.addEventListener('click', () => {
+    const l = left(), complete = !l.chicks && l.weighed;
+    L.uiAct('grade.submit', { sheet: { ...sheet }, looked: 10 - l.chicks, weighed: l.weighed, complete });
+    setText(handed, complete ? `Sheet handed in at ${L.env.timeLabel}: it goes into the record as your chick-quality note.`
+      : `Sheet handed in at ${L.env.timeLabel} with ${l.chicks ? `${l.chicks} chick${l.chicks === 1 ? '' : 's'} not looked at` : ''}${l.chicks && !l.weighed ? ' and ' : ''}${l.weighed ? '' : 'the box not weighed'}: finish them and hand it in again.`);
+  });
   shell.main.append(h('div', { class: 'grade-grid' },
     h('div', null, grid, h('div', { class: 'grade-actions' }, flipBtn, navelBtn, hockBtn, cullBtn), look),
     h('div', { class: 'grade-sheet' }, h('p', { class: 'sheet-k' }, 'Grading sheet · sample box'), tallyRows,
@@ -84,9 +92,13 @@ export function buildGradingPanel(L) {
     }
     look.replaceChildren(...lines);
     cullBtn.disabled = flipBtn.disabled = c.culled;
+    const l = left();
+    setText(submit, l.chicks || !l.weighed ? `Hand in the sheet · ${[l.chicks ? `${l.chicks} chick${l.chicks === 1 ? '' : 's'} not looked at` : '', l.weighed ? '' : 'box not weighed'].filter(Boolean).join(', ')}` : 'Hand in the sheet');
   }
   return {
     el: shell.el,
+    // the job strip's figures (job-strips-cycle d0-grade): the looks done, the box, the farmer's own sheet
+    stripCtx: () => ({ grade: { n: (k) => chicks.filter((c) => c.seen[k]).length, culled: chicks.filter((c) => c.culled).length, box, sheet: { ...sheet } } }),
     update() {
       const now = clock.now();
       let changed = false;
@@ -115,8 +127,9 @@ export function buildChickInHandPanel(L) {
   const backBtn = button({ class: 'btn btn--machine' }, 'Put back');
   const tally = h('p', { class: 'equip-note' });
   let bird = null, done = false;
-  ventBtn.addEventListener('click', () => { if (!bird || done) return; const r = L.act('sample.vent', { x: bird.x, z: bird.z, index: bird.index }) || {}; out.set(`${one(r.tempC)} °C`, 'vent temperature'); done = true; sync(); });
-  cropBtn.addEventListener('click', () => { if (!bird || done) return; const r = L.act('sample.crop', { x: bird.x, z: bird.z, index: bird.index }) || {}; out.set(cropWords(r.crop), 'crop'); done = true; sync(); });
+  // the reading with the chick arrival sign's band beside it (the farmer compares; no verdict)
+  ventBtn.addEventListener('click', () => { if (!bird || done) return; const r = L.act('sample.vent', { x: bird.x, z: bird.z, index: bird.index }) || {}; out.set(`${one(r.tempC)} °C`, 'vent temperature · chick arrival sign: 39.4–40.5 °C comfortable, lower = cold, higher = hot'); done = true; sync(); });
+  cropBtn.addEventListener('click', () => { if (!bird || done) return; const r = L.act('sample.crop', { x: bird.x, z: bird.z, index: bird.index }) || {}; out.set(cropWords(r.crop), 'crop · chick arrival sign: at 24 hours at least 95 % of crops full and soft'); done = true; sync(); });
   cullBtn.addEventListener('click', () => {
     if (!bird) return;
     L.act('chicks.cull', { n: 1, reason: 'sick', index: bird.index });

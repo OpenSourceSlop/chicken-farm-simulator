@@ -71,6 +71,8 @@ export const BOARDS_CYCLE = {
       it('What the breathing sounds tell you.', 'week1-4'),
       it('Snicking or a rattle in the breathing: too much ammonia or dust in the air.'),
       it('Ammonia: if your eyes sting at bird height it is above about 20 ppm.'),
+      it('Quiet breathing and no sting in your eyes at bird height: ammonia under about 15 ppm.'),
+      it('Keep the house humidity at or under about 75 %: wet air wets the litter.'),
       it('Dust rises with dry litter, low humidity and busy birds, most in the hours after the lights come on; more air carries it out.'),
       it('Minimum ventilation brings fresh air in, moisture and ammonia out.', 'vent'),
       it('Run the minimum ventilation on cold days too.'),
@@ -204,8 +206,11 @@ export const BOARD_EXTRA_ITEMS = {
   ],
   'feeder-box': [
     { text: 'Raise the pans every few days to the height of the birds’ backs.', source: g, fromDay: 8 },
+    { text: 'Pan rim about 15 cm on day 13, 22 cm on day 20, 28 cm on day 27, 33 cm on day 34.', source: g, fromDay: 8 },
     { text: 'Before catching: stop the lines and winch the pans up once they are empty.', source: g, fromDay: 36 },
   ],
+  drinker: [{ text: 'Nipple tip about 24 cm on day 14, 31 cm on day 21, 37 cm on day 28, 42 cm on day 35.', source: g, fromDay: 8 },
+    { text: 'Catching: lift the lines to the top of the winch (55–60 cm) just before the crew starts.', source: g, fromDay: 36 }],
   silo: [{ text: 'Silo 1: starter crumble, later finisher pellets. Silo 2: grower pellets. Each holds 6 tonnes and empties from the bottom: the oldest feed comes out first.', source: g, fromDay: 13 }],
   'bird-scale': [
     { text: 'Weigh 50 birds from 5 places every week: days 14, 21, 28, 35 and before catching.', source: g, fromDay: 8 },

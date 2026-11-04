@@ -72,6 +72,7 @@ export const BOARDS = {
       { text: 'Fresh air per 1,000 birds: 150 m³/h at 40 g, 290 m³/h at 100 g, 480 m³/h at 200 g body weight.', source: 'general' },
       { text: 'Timer: on-seconds = cycle seconds × air needed ÷ (fans × 36,000 m³/h for one 50-inch fan). Cycle 300 s.', source: 'general' },
       { text: 'Example: 6,000 chicks of 42 g need about 900 m³/h: 1 fan, 8 s on in every 300 s.', source: 'general' },
+      { text: 'Set the timer to give about 90–130 % of the table’s air for your birds: less leaves the damp and the ammonia in, much more takes out heat the brooders must put back.', source: 'general' },
       { text: 'More fan time than needed on a cold night takes heat out faster than the brooders can put it back.', source: 'general' },
       { text: 'The timer fans draw the air in through the side inlets, which throw it up under the roof: it mixes with the warm house air before it reaches the chicks.', source: 'general' },
       { text: 'Hot afternoon in the brooding week: the brooders go off by themselves once the house is over the thermostat. Then give the timer more fan time, for example 2 fans, 120 s on in every 300 s, and set it back by the table when the afternoon cools.', source: 'general' },
@@ -118,7 +119,8 @@ export const BOARDS = {
     title: 'Feeder lines', where: 'Feeder control box, north wall, beside the water lines sign',
     items: [
       { text: 'Days 0–3: pans on the litter (rim about 5 cm) and flooded, so the feed is easy to reach.', source: 'general', pic: 'pan-on-litter' },
-      { text: 'From day 4: pan rim at the height of the birds’ backs.', source: 'general' },
+      { text: 'From day 4: pan rim at the height of the birds’ backs (about 9 cm on day 6).', source: 'general' },
+      { text: 'Each line’s auger stops by itself when the control pan at the end is full; the pans fill over farm time.', source: 'general' },
       { text: 'Feed per bird per day, days 0–7: 14, 18, 22, 26, 30, 34, 38, 42 g.', source: 'general' },
     ],
   },

@@ -17,6 +17,10 @@ const SUM_LINES = [
   { key: 'birdsPerM2', label: 'Birds per m² at catching', small: 'kg allowed per m² ÷ sale weight' },
   { key: 'floorM2', label: 'Floor for one week’s chicks, m²', small: 'chicks per week ÷ birds per m²' },
   { key: 'housesNeeded', label: 'Houses needed', small: 'floor × weeks a house is used ÷ floor of one house' },
+  // the clarity round: a line of his own for each contract term, so every term has his figure beside it
+  { key: 'salePerWeek', label: 'Birds for sale a week', small: 'chicks a week × (1 − losses)' },
+  { key: 'densityKgM2', label: 'kg of live bird per m² at catching', small: 'birds a house × sale weight ÷ floor of one house' },
+  { key: 'restDays', label: 'Rest days between flocks', small: 'days a house is used − 42 growing − 4 clean-out' },
 ];
 const C = PLAN_CONTRACT;
 const TERMS = [
@@ -123,11 +127,18 @@ export function buildPlanSheet(api) {
     if (p?.sentAt) setText(sent, `Sent: ${whenText(p.sentAt)}. The company’s reply comes to the desk about ${hhmm(splitDay(p.replyAt ?? p.sentAt + C.replyAfterH / 24).hour)}.`);
     else if (env.dayNumber !== CYCLE.planDay) setText(sent, 'The plan goes to the company on the planning day.');
     else if (env.hour >= C.sendBy) setText(sent, `The company takes plans until ${hhmm(C.sendBy)}.`);
-    else setText(sent, complete() ? `The company takes plans until ${hhmm(C.sendBy)}.` : 'Fill in your plan: houses, chicks per house, days per flock, losses and sale weight.');
+    else {
+      // sending is final: the lines of his own sums still blank are named before he sends
+      const blank = sums.filter((x) => value(x) == null).map((x) => x.f.label.toLowerCase());
+      setText(sent, complete() ? `Sending is final: the company answers about ${hhmm(C.sendBy - 3)}–${hhmm(C.sendBy + C.replyAfterH)} (an hour after you send) and takes plans until ${hhmm(C.sendBy)}.${blank.length ? ` Your sums still blank: ${blank.join(', ')}.` : ''}`
+        : 'Fill in your plan: houses, chicks per house, days per flock, losses and sale weight.');
+    }
   }
   let acc = 0;
   return {
     el: shell.el,
+    // the job strip (job-strips-cycle pl-sheet): each contract term beside his own figure
+    stripCtx: () => ({ plan: { sums: Object.fromEntries(sums.map((x) => [x.f.key, value(x)])), decisions: decisions() } }),
     onOpen() { shell.refreshPlates(); setUp(); refresh(); },
     update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.5; refresh(); } },
   };

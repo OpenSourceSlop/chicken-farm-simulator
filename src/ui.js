@@ -41,6 +41,7 @@ import { createBusyCard } from './ui-run.js';
 import { buildSummaryPanel } from './ui-summary.js';
 // Phase 3 (PHASE3.md §13.8): the panels package registers its panels here
 import { registerCyclePanels } from './ui-cycle-panels.js';
+import { withJobStrip } from './ui-jobstrip.js';
 import { boardsForDay } from './content-signs-cycle.js';
 import { sourceLabel } from './content-signs.js';
 
@@ -275,14 +276,16 @@ export function createUI(ctx, deps) {
   for (const id of Object.keys(BOARDS_CYCLE)) if (id.startsWith('sign-')) panels.register(id, () => buildBoardPanel(id, env, closePanel), { kind: 'sign' });
   panels.register('controller', lvl(() => buildLevelControllerPanel(L), () => buildControllerPanel(env, { onClose: closePanel, onSetpoint: () => tasks.notify('setpoint') })));
   panels.register('feeder-box', () => buildFeederPanel(L));
-  panels.register('silo', () => buildSiloPanel(L));
-  panels.register('litter-heap', () => buildHeapPanel(L));
-  panels.register('bird-scale', () => buildBirdScalePanel(L));
-  panels.register('water-supply', () => buildWaterSupplyPanel(L));
-  for (let i = 0; i < 4; i++) panels.register(`drinker-${i}`, () => buildDrinkerPanel(L, i));
-  panels.register('chick-table', () => buildGradingPanel(L));
-  panels.register('chick-in-hand', () => buildChickInHandPanel(L));
-  panels.register('weigh', () => buildWeighPanel(L));
+  // the job strip (ui-jobstrip.js): the open job done at a machine shows at the top of its panel
+  const js = (id, build) => withJobStrip(L, id, build);
+  panels.register('silo', js('silo', () => buildSiloPanel(L)));
+  panels.register('litter-heap', js('litter-heap', () => buildHeapPanel(L)));
+  panels.register('bird-scale', js('bird-scale', () => buildBirdScalePanel(L)));
+  panels.register('water-supply', js('water-supply', () => buildWaterSupplyPanel(L)));
+  for (let i = 0; i < 4; i++) panels.register(`drinker-${i}`, js(`drinker-${i}`, () => buildDrinkerPanel(L, i)));
+  panels.register('chick-table', js('chick-table', () => buildGradingPanel(L)));
+  panels.register('chick-in-hand', js('chick-in-hand', () => buildChickInHandPanel(L)));
+  panels.register('weigh', js('weigh', () => buildWeighPanel(L)));
   panels.register('office-desk', () => buildRecordsPanel(L), { kind: 'paused' });
   panels.register('notebook', () => buildNotebookPanel(L), { kind: 'paused' });
   panels.register('skilltree', () => buildSkillTreePanel(L), { kind: 'paused' });
@@ -357,6 +360,8 @@ export function createUI(ctx, deps) {
     const r = farm.act('floor.probe', { x: p.x, z: p.z }) || {};
     events.emit(EV.PROBE, { kind: 'floor', x: p.x, z: p.z, value: r.tempC });
     floatRead.show(`Floor ${one(r.tempC)} °C`);
+    // the brooder sign's figure beside the reading (the clarity round): the farmer compares
+    if (env.dayNumber <= 0) caption.show(`Floor ${one(r.tempC)} °C · brooder sign: 28–30 °C before the chicks arrive. A cold floor: raise the brooder thermostat (pre-heat).`);
   }
   // L: the light meter at bird level (lux at your feet); V: the air meter at bird height (PHASE3.md §6.12)
   function luxMeter() {
@@ -365,6 +370,7 @@ export function createUI(ctx, deps) {
     player.pose?.('reach', 2);
     const r = farm.act('light.lux', { x: p.x, z: p.z }) || {};
     floatRead.show(r.lux != null ? `${int(r.lux)} lux` : 'Light meter');
+    if (r.lux != null) caption.show(`Light ${int(r.lux)} lux at bird level · ${env.dayNumber >= 8 ? 'light sign: about 20 lux from week 2' : 'light plate: 30–40 lux at chick level in the first week'}.`);
   }
   function airMeter() {
     const p = player.position;
@@ -372,6 +378,7 @@ export function createUI(ctx, deps) {
     player.pose?.('reach', 2);
     const r = farm.act('air.probe', { x: p.x, z: p.z }) || {};
     floatRead.show(r.speedMs != null ? `${one(r.speedMs)} m/s · ${one(r.tempC)} °C · ${int(r.rh)} %` : 'Air meter');
+    if (r.speedMs != null) caption.show(`Air ${one(r.speedMs)} m/s at bird height with ${env.fansEffective ?? 0} tunnel fans · heat sign: all six fans about 2.5 m/s, each fan about 0.4 m/s.`);
   }
   // C / M: the views that come with a branch level (one floor overlay at a time)
   function toggleView(key) {

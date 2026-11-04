@@ -28,13 +28,13 @@
 //   closesAt, doneAt, progress (0..1), result, st (rule state, JSON) }   times as env.day floats.
 // Only events while an instance is open count. Completion never looks at the value: the result
 // is what was measured or set, written to records.logJob(key, day, result).
-import { BROOD_BOUNDS, CLEANOUT, CYCLE, DRINKER_LINES_Z, FAN_COUNT, FLOOR_GRID, HARVEST, HEAT, LEVEL1, ROUNDS, broodSector, houseSector, levelById } from './config.js';
+import { BROOD_BOUNDS, CLEANOUT, CYCLE, DRINKER_LINES_Z, EQUIP, FAN_COUNT, FLOOR_GRID, HARVEST, HEAT, LEVEL1, ROUNDS, broodSector, houseSector, levelById, flockAgeAt, feedStdGAt } from './config.js';
 import { EV, matchPayload } from './events.js';
 import { ALL_JOBS } from './content-jobs.js';
 import { feltNearTarget } from './farm-problems.js';
 import { heatHandled } from './farm-cycle-problems.js';
 import { FEED } from './farm-feed.js';
-import { ventNeed, ventInBand, VENT_BAND, nippleInBand, rimInBand, flowToday, brooderRowC, luxOfDimmer, fansWorking, NIPPLE_DAY0_CM, FLOW_BAND, CHICK_LUX, DARK_H,
+import { knownAliveOf, ventNeed, ventInBand, VENT_BAND, nippleInBand, rimInBand, flowToday, brooderRowC, luxOfDimmer, fansWorking, NIPPLE_DAY0_CM, FLOW_BAND, CHICK_LUX, DARK_H,
   CATCH_DIMMER_MAX, CATCH_FANS_MIN, LINES_UP_CM, PANS_UP_CM, PANS_ON_LITTER_CM } from './job-figures.js';
 
 const H = 1 / 24;
@@ -165,6 +165,7 @@ function ruleEvent(rule, st, type, p, inst, ctx) {
       st.met = true; st.payload = slim(p); return true;
     case 'action':
       if (st.met || type !== EV.ACTION || p.id !== rule.id || !matchPayload(p, rule.match)) return false;
+      if (rule.check && !ACTION_CHECKS[rule.check]?.(p, ctx)) return false;   // the action's outcome (an order that is enough)
       st.met = true; st.payload = slim(p); return true;
     case 'each':
       if (type !== EV.ACTION || p.id !== rule.id || !matchPayload(p, rule.match)) return false;
@@ -433,6 +434,27 @@ function ruleResult(rule, st, ctx) {
     default: return null;
   }
 }
+
+// ---------------- action checks: the outcome of an action (rule.check) ----------------
+const kgOf = (list) => (list || []).reduce((a, o) => a + (o.kg || 0), 0);
+const ACTION_CHECKS = {
+  /** A feed order that brings that feed's silo (with what is on its way) to at least 3 days of feed for the
+   *  birds by the feed sign's g per bird, or fills it (the silo plate: order below 2 days of feed). */
+  'order-days': (p, { env, farm }) => {
+    const f = farm.feed, birds = knownAliveOf(farm.flock) || LEVEL1.chicksPlaced, age = Math.max(0, flockAgeAt(env.day));
+    const need = Math.min((3 * birds * feedStdGAt(age + 1.5)) / 1000, EQUIP.siloCapacityKg - 50);
+    if (f.silos) { const i = p.result?.silo ?? (p.type === 'grower' ? 1 : 0); return f.silos[i].kg + kgOf((f.pending || []).filter((o) => o.silo === i)) >= need; }
+    return (f.siloKg || 0) + (f.order?.kg || 0) >= need;
+  },
+  /** The last order: feed to the withdrawal (about 11 h before the catch) and less than about 1.2 t left then (feed sign). */
+  'order-withdrawal': (p, { env, farm }) => {
+    const f = farm.feed, birds = knownAliveOf(farm.flock), age = Math.max(0, flockAgeAt(env.day));
+    const catchAt = farm.harvest?.catchAt ?? HARVEST.catchDefault.day + HARVEST.catchDefault.hour * H;
+    const days = Math.max(0, catchAt - 11 * H - env.day), eat = (birds * feedStdGAt(age + days / 2) * days) / 1000;
+    const left = (f.silos ? f.silos[0].kg + f.silos[1].kg : f.siloKg || 0) + kgOf(f.pending) - eat;
+    return left >= -100 && left <= Math.max(1200, left - (p.result?.kg ?? 0) + 1);
+  },
+};
 
 // ---------------- the engine ----------------
 export function createJobEngine({ events, env, farm, props, records, jobs = ALL_JOBS, level = LEVEL1 } = {}) {

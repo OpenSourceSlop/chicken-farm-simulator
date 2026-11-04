@@ -9,6 +9,7 @@ import { equipShell, machineRow, readout, stepper, toggleKey } from './ui-equipm
 import { int, one, signedPct, hhmm } from './ui-format.js';
 // Phase 3 (package "panels"): main valve, Vaccine / Medicine / Clean-out tabs, the water test kit
 import { cycleWaterParts } from './ui-cycle-water.js';
+import { nippleCmToday, NIPPLE_DAY0_CM, HEIGHT_BAND_CM } from './job-figures.js';
 
 const GAME_MIN = 1 / 1440;
 
@@ -72,6 +73,11 @@ export function buildDrinkerPanel(L, line) {
       <path d="M60 ${tip - 22}h150" stroke="var(--drinker, #dedede)" stroke-width="7" stroke-linecap="round"/>
       <path d="M118 ${tip - 22}v18" stroke="var(--drinker, #dedede)" stroke-width="3"/>
       <circle cx="118" cy="${tip}" r="4.5" fill="var(--hen-comb)"/>
+      ${(() => { // the drinker plate's height for today on the ruler (day 0: 10–12 cm at the chick's eye, later the plate's figure ±3 cm)
+        const [lo, hi] = env.dayNumber <= 0 ? NIPPLE_DAY0_CM : [nippleCmToday(env) - HEIGHT_BAND_CM, nippleCmToday(env) + HEIGHT_BAND_CM];
+        if (lo > TOP_CM) return '';
+        return `<rect x="14" y="${y(Math.min(hi, TOP_CM))}" width="22" height="${y(lo) - y(Math.min(hi, TOP_CM))}" fill="var(--sign-yellow)" opacity="0.35"/><text x="40" y="${y(Math.min(hi, TOP_CM)) - 3}" font-size="9" fill="var(--sign-yellow)" font-family="var(--font-display)">plate ${Math.round(lo)}–${Math.round(hi)} cm</text>`;
+      })()}
       <path d="M50 ${tip}h136" stroke="var(--accent)" stroke-width="1" stroke-dasharray="3 3"/>
       ${high ? `<text x="126" y="${tip + 17}" font-size="11" font-weight="700" fill="var(--accent)" font-family="var(--font-display)">▲ line at ${fmt0(l.heightCm)} cm</text>` : ''}
       <g transform="translate(96 ${eye}) scale(${chickS.toFixed(2)})">${(() => {
@@ -101,6 +107,7 @@ export function buildDrinkerPanel(L, line) {
   let acc = 0;
   return {
     el: shell.el,
+    stripCtx: () => ({ line }),
     onClose() { if (test) { test = null; flow.set('—', 'test stopped'); } },
     update(dt, force) {
       if (test) {

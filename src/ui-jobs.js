@@ -54,6 +54,7 @@ export function roundLabel(env, anchors, farm = null) {
 }
 
 // Text under the bar: what has been done of the job so far, in plain counts.
+const READ_UNIT = { 'floor.probe': ['tempC', '°C'], 'light.lux': ['lux', 'lux'], 'air.probe': ['speedMs', 'm/s'], 'sample.vent': ['tempC', '°C'] };
 const EACH_WORD = { line: 'lines', spot: 'places', part: 'parts', item: 'items', truck: 'tickets', axis: 'measures' };
 function progressText(inst, ctx) {
   const r = inst.def.done, st = inst.st;
@@ -63,6 +64,9 @@ function progressText(inst, ctx) {
       const parts = [`${st.list.length} / ${r.n}`];
       if (r.sectors) parts.push(`${new Set(st.list.map((x) => x.s)).size} / ${r.sectors} parts of the floor`);
       if (r.nearDrinker) parts.push(`${Math.min(r.nearDrinker, st.list.filter((x) => x.near).length)} / ${r.nearDrinker} under a line`);
+      // the readings themselves, for the measuring jobs (T, L, V, vent temperatures)
+      const unit = READ_UNIT[r.id];
+      if (unit) { const v = st.list.map((x) => x.r?.[unit[0]]).filter(Number.isFinite).slice(-6); if (v.length) parts.push(`${v.map((x) => (unit[1] === 'lux' ? Math.round(x) : x.toFixed(1))).join(' · ')} ${unit[1]}`); }
       return parts.join(' · ');
     }
     case 'coverage': {

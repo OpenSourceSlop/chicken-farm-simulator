@@ -131,7 +131,8 @@ export function heatHandled(farm, env) {
   return allFans && (young || env.padOn || env.houseRH > HEAT.padOffAboveRH);
 }
 const darkHoursOf = (farm, env) => (env.lightProgram?.darkHours ?? farm.light?.darkHours) ?? 0;
-export const padHumidOk = (farm, env) => (!env.padOn || env.houseRH <= HEAT.padOffAboveRH) && env.fansEffective >= 5;
+// the pad plate: above about 90 % the pump off and all the fans running (every fan that turns)
+export const padHumidOk = (farm, env) => (!env.padOn || env.houseRH <= HEAT.padOffAboveRH) && env.fansEffective >= 6 - (env.fansBroken || []).length;
 export const airClear = (farm) => farm.air.dustIndex <= 1 && farm.air.ammoniaPpm <= 15;
 
 /** Lab letter with more than two positive swabs: the swab-positive problem (wash and spray cleared). */

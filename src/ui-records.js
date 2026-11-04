@@ -18,6 +18,7 @@ import { dayLabel } from './content.js';
 import { sourceLabel } from './content-signs.js';
 import { planPage, harvestPage, cleanPage, lettersPage } from './ui-letters.js';
 import { graphsPage } from './ui-summary.js';
+import { createJobStrip } from './ui-jobstrip.js';
 
 // What "Today" lists, in job order: [note kind(s), label]
 const TODAY_LINES = [
@@ -68,6 +69,8 @@ export function buildRecordsPanel(L) {
   const tabBtns = TABS.map((t) => button({ class: 'book-tab', role: 'tab', 'aria-selected': 'false' }, t.label));
   const pages = TABS.map(() => h('div', { class: 'book-page', role: 'tabpanel' }));
   let tab = 0, weekTab = null;
+  // the open job done on the phone (orders, the vet): its strip at the top of the Phone page
+  const phoneStrip = createJobStrip(L, 'office-desk');
   const show = (i) => { tab = i; tabBtns.forEach((b, j) => b.setAttribute('aria-selected', String(i === j))); pages.forEach((p, j) => { p.hidden = i !== j; }); render(); };
   tabBtns.forEach((b, i) => b.addEventListener('click', () => show(i)));
   const sub = h('p');
@@ -141,7 +144,8 @@ export function buildRecordsPanel(L) {
   function phonePage() {
     const d = env.dayNumber;
     const type = feedType || feedTypeForDay(Math.max(0, d)).id;
-    const out = [];
+    phoneStrip.update();
+    const out = [phoneStrip.el];
     // feed mill
     const typeBtns = FEED_TYPES.map((t) => { const b = button({ class: 'btn btn--paper', 'aria-pressed': String(t.id === type) }, t.label); b.addEventListener('click', () => { feedType = t.id; render(); }); return b; });
     const kgBtns = kgOpts.map((k) => { const b = button({ class: 'btn btn--paper', 'aria-pressed': String(k === kg) }, `${int(k)} kg`); b.addEventListener('click', () => { kg = k; render(); }); return b; });
@@ -205,8 +209,9 @@ export function buildRecordsPanel(L) {
   return {
     el,
     kind: 'paused',
-    onOpen() { setText(forecast, ''); weekTab = null; show(tab); },
-    update(dt, force) { if (force) render(); },
+    onOpen() { setText(forecast, ''); weekTab = null; phoneStrip.onOpen(); show(tab); },
+    onClose() { phoneStrip.onClose(); },
+    update(dt, force) { if (force) render(); else if (TABS[tab].id === 'phone') phoneStrip.update(); },
     showTab: (i) => show(typeof i === 'string' ? Math.max(0, TABS.findIndex((t) => t.id === i || t.label === i)) : i),
   };
 }

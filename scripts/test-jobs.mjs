@@ -8,6 +8,9 @@ import { createJobEngine, BROOD_CELLS, LEVEL_END_DAY, windowHours } from '../src
 import { JOBS } from '../src/content-jobs.js';
 import { BROOD_BOUNDS, HEATERS, LEVEL1, CYCLE, CLEAN, PLAN_LEVEL, WEEK2, WEEK3, FINISH, CLEANOUT, levelOfDay } from '../src/config.js';
 import { JOBS_CYCLE, STATE_TEST_IDS_CYCLE } from '../src/content-jobs-cycle.js';
+import { STRIPS, partRows } from '../src/job-strips.js';
+import { STRIPS_CYCLE } from '../src/job-strips-cycle.js';
+import { ventNeed } from '../src/job-figures.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -556,6 +559,62 @@ test('every cycle job def resolves its window or its level anchor', () => {
     const lv = levelOfDay(day);
     assert(j.round === 'rel' ? lv.anchors && j.rel.anchor in lv.anchors : windowHours(j, lv.rounds), `${j.id} window in ${lv.id}`);
   }
+});
+
+// ---------------- the clarity round: job strips and the outcome rules ----------------
+test('job strips: every open job of every level builds its rows, neutral words only', () => {
+  const VERDICT = /correct|wrong|well done|good job|great job|mistake|perfect|excellent|match(es)? the/i;
+  const days = [[null, -1, 8], [null, -1, 17], [null, 0, 9], [null, 2, 6.5], [null, 6, 14], [WEEK2, 8, 9], [WEEK2, 9, 13.5], [WEEK2, 12, 7], [WEEK3, 16, 13.5], [WEEK3, 18, 9],
+    [FINISH, 36, 7], [FINISH, 41, 15], [CLEANOUT, 44, 14]];
+  let n = 0;
+  for (const [def, day, hour] of days) {
+    const L = def ? makeCycle(def, { day, hour }) : makeLevel({ startDay: day, startHour: hour });
+    const c = { env: L.env, farm: L.farm, records: { notebook: [] }, props: L.props, engine: L.jobs, minmax: () => ({ min: 20, max: 30 }), weighings: () => ({ n: 0, sectors: 0, mean: null }) };
+    for (const inst of L.jobs.open()) {
+      const S = STRIPS[inst.id] || STRIPS_CYCLE[inst.id];
+      const rows = S ? S.rows({ ...c, inst }, inst) : partRows(c, inst);
+      assert(Array.isArray(rows), `${inst.key}: rows`);
+      for (const r of rows) for (const t of [r.text, r.what, r.sign, r.yours]) if (t != null) { assert(typeof t === 'string' && !/undefined|NaN|\[object/.test(t), `${inst.key}: "${t}"`); assert(!VERDICT.test(t), `${inst.key}: verdict word in "${t}"`); }
+      n++;
+    }
+  }
+  assert(n > 40, `strips built for ${n} open jobs`);
+});
+
+test('outcome rules: prep-vent in the band only, r-minvent a real step up, the feeders on the litter, the night held', () => {
+  const L = makeLevel({ startDay: -1, startHour: 8 });
+  const v = L.jobs.byKey('prep-vent@-1');
+  const send = (t) => L.farm.act('vent.timer', t);
+  send({ fans: 1, onSec: 0, cycleSec: 300 }); L.jobs.tick();
+  assert(v.status === 'open', 'the timer switched off is no setting');
+  send({ fans: 1, onSec: 20, cycleSec: 300 }); L.jobs.tick();
+  assert(v.status === 'open', `20 s (260 %) is not in the band: ${v.status}`);
+  send({ fans: 1, onSec: 8, cycleSec: 300 }); L.jobs.tick();
+  assert(v.status === 'done', `8 s for 6,000 chicks of 42 g (103 %): ${v.status}`);
+  // the pans: flooded and full but hanging at 40 cm is not on the litter
+  const f = L.jobs.byKey('prep-feeders@-1');
+  for (const l of L.farm.feed.lines) { l.flood = true; l.running = true; l.kg = 66; l.panFill = 1; l.heightCm = 40; }
+  L.jobs.tick(); assert(f.status === 'open', 'flooded pans at 40 cm');
+  for (const l of L.farm.feed.lines) l.heightCm = 5;
+  L.jobs.tick(); assert(f.status === 'done', 'flooded, full and on the litter');
+  const M = makeCycle(WEEK2, { day: 9, hour: 6.2 });
+  const m = M.jobs.byKey('r-minvent@9');
+  M.farm.flock.placed = 6000; M.farm.flock.alive = 5960; M.farm.flock.meanWeightG = 260;
+  const need = ventNeed(M.env, M.farm).need, on = (share) => Math.round((share * need * 300) / 36000);
+  M.farm.vent = { fans: 1, onSec: on(1.0), cycleSec: 300 }; M.env.setVentTimer(M.farm.vent); // yesterday's setting
+  M.farm.act('vent.timer', { fans: 1, onSec: on(1.0), cycleSec: 300 }); M.jobs.tick();
+  assert(m.status === 'open', 'the same setting again is no step up');
+  M.farm.act('vent.timer', { fans: 1, onSec: on(1.6), cycleSec: 300 }); M.jobs.tick();
+  assert(m.status === 'open', 'a step up past 130 % of the need');
+  M.farm.act('vent.timer', { fans: 1, onSec: on(0.8), cycleSec: 300 }); M.farm.act('vent.timer', { fans: 1, onSec: on(1.1), cycleSec: 300 }); M.jobs.tick();
+  assert(m.status === 'done', `a step up into the band: ${m.status}`);
+  const N = makeCycle(WEEK3, { day: 16, hour: 18.2 });
+  const night = N.jobs.byKey('r-vent-night@16');
+  N.farm.comfort.meanOver = 0.5; N.farm.comfort.hotFrom = 2.8;
+  N.act('fans.read', { fans: 1 }); N.jobs.tick();
+  N.at(16, 18.2 + 20 / 60); N.farm.comfort.meanOver = 0.5; N.jobs.tick();
+  const p = N.jobs.parts(night)[1];
+  assert(night.status === 'open' && p.held && p.held.min >= 0, `held part reports its minutes: ${JSON.stringify(p.held)}`);
 });
 
 let failed = 0;

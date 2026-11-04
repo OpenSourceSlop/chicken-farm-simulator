@@ -128,7 +128,7 @@ export const JOBS = [
     done: { type: 'state', test: 'all-placed' } }),
   D('d0-grade', 0, 'rel', 'Grade a sample box of chicks', {
     rel: { anchor: 'truck', fromH: 0, toH: 6 }, pin: true, spot: 'chickTable', signs: ['sign-chicks'], branch: 'brooding',
-    done: { type: 'action', id: 'grade.submit' } }),
+    done: { type: 'action', id: 'grade.submit', match: { complete: true } } }), // every chick looked at (or culled), the box weighed
   D('d0-vent', 0, 'rel', 'Take vent temperatures of the chicks', {
     rel: { anchor: 'placed', fromH: 2, toH: 3.5 }, pin: true, spot: 'heater', signs: ['sign-chicks'], branch: 'brooding',
     done: { type: 'count', id: 'sample.vent', n: 5, sectors: 3 } }),
@@ -195,7 +195,7 @@ export const JOBS = [
     done: { type: 'action', id: 'litter.patch', match: { result: { onLeak: true } } } }),
   P('p-order-feed', 'Order feed for the silos', {
     problem: 'low-silo', spot: 'officeDesk', signs: ['silo', 'feeder-box'], branch: null,
-    done: { type: 'action', id: 'feed.order' } }),
+    done: { type: 'action', id: 'feed.order', check: 'order-days' } }), // the silo to 3 days of feed (job-engine ACTION_CHECKS)
   P('p-warm', 'The house is above its target this afternoon', {
     problem: 'warm-afternoon', spot: 'controller', signs: ['sign-vent', 'sign-brooder'], branch: null,
     // done once he changed the air or the heat (any of the controller's settings) and the air the

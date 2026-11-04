@@ -1,6 +1,6 @@
 // Job strips of the Phase 3 jobs (job-strips.js has the API, the rows and the brooding week's strips). Pure
 // logic. Figures from the signs and plates (named in each row) and the farmer's own readings; neutral words.
-import { HARVEST, HEAT, CLEAN, flockAgeAt, feedStdGAt, weightAt } from './config.js';
+import { HARVEST, HEAT, CLEAN, PLAN_CONTRACT, flockAgeAt, feedStdGAt, weightAt } from './config.js';
 import { int, one, hhmm } from './ui-format.js';
 import { knownFlock, ventNeed, nippleCmToday, rimCmNow, nippleInBand, rimInBand, luxOfDimmer, fansWorking, timerAirM3h, brooderRowC,
   LINES_UP_CM, PANS_UP_CM, CATCH_DIMMER_MAX, CATCH_FANS_MIN, DARK_H, HEIGHT_BAND_CM } from './job-figures.js';
@@ -41,9 +41,30 @@ const weighRows = (c, inst) => {
 };
 const birdCount = (inst, n, parts) => { const L = inst.st.list || [], s = new Set(L.map((x) => x.s)).size; return step(`${L.length} of ${n} birds, ${s} of ${parts} parts of the house`, L.length >= n && s >= parts); };
 
+const GRADE = { panels: { 'chick-table': null }, title: 'Grade the sample box (chick arrival sign: reflex, navel, hocks, uniformity)',
+  rows(c, inst) {
+    const g = c.grade;
+    if (!g) return partRows(c, inst);
+    const b = g.box, net = b ? b.weightKg - (b.boxKg ?? 0.35) : null;
+    return [step(`Looked at: reflex ${g.n('reflex')}/10 · navel ${g.n('navel')}/10 · hocks ${g.n('hocks')}/10 · culled ${g.culled}`, ['reflex', 'navel', 'hocks'].every((k) => g.n(k) + g.culled >= 10)),
+      step(b ? `Box: ${one(b.weightKg)} kg gross − ${one(b.boxKg ?? 0.35)} kg box = ${one(net)} kg ÷ ${b.chicks ?? 100} = ${one((net * 1000) / (b.chicks ?? 100))} g a chick (chick arrival sign)` : 'Weigh the box (the sign: chick weight = net weight ÷ 100)', !!b),
+      line(`Your sheet: ${g.sheet.navelBad} navel · ${g.sheet.redHocks} hocks · ${g.sheet.slowReflex} slow · ${g.sheet.culled} culled`), step('Hand in the sheet', inst.status === 'done')];
+  } };
 const WEIGH = { panels: { 'bird-scale': null, weigh: null }, title: 'Weigh sample birds', rows: weighRows };
 const HEAT_STRIP = { panels: { 'fan-panel': null, 'pad-pump': null }, rows: heatRows };
+const PLAN_TERMS = (C) => [['salePerWeek', 'Birds for sale a week', `contract ${int(C.salePerWeek)}, at most ${int(Math.round((C.salePerWeek * C.saleMaxPct) / 100))}`, (v) => v >= C.salePerWeek && v <= (C.salePerWeek * C.saleMaxPct) / 100],
+  ['lossesPct', 'Losses, %', `at least ${C.lossesMinPct} %`, (v) => v >= C.lossesMinPct], ['densityKgM2', 'kg of live bird per m² at catching', `at most ${C.densityMaxKgM2}`, (v) => v <= C.densityMaxKgM2],
+  ['restDays', 'Rest days between flocks', `at least ${C.restMinDays}`, (v) => v >= C.restMinDays], ['birdsPerHouse', 'Chicks a house', `at most ${int(C.houseBirds)}`, (v) => v <= C.houseBirds]];
 export const STRIPS_CYCLE = {
+  'pl-sheet': { panels: { 'plan-sheet': null }, title: 'The contract’s terms beside your own figures',
+    rows(c) {
+      const P = c.plan, C = PLAN_CONTRACT;
+      if (!P) return [];
+      const mine = { ...P.sums, lossesPct: P.decisions.lossesPct, birdsPerHouse: P.decisions.birdsPerHouse };
+      return [...PLAN_TERMS(C).map(([k, what, term, ok]) => { const v = mine[k]; return step(`${what}: yours ${Number.isFinite(v) ? (k === 'densityKgM2' || k === 'lossesPct' ? one(v) : int(v)) : '— (not worked out yet)'} | contract: ${term}`, Number.isFinite(v) && ok(v)); }),
+        note('Sending is final: the company’s reply comes to the desk about an hour later.')];
+    } },
+  'd0-grade': GRADE,
   'd7-weigh': WEIGH, 'w2-weigh': WEIGH, 'w3-weigh': WEIGH, 'w45-weigh28': WEIGH, 'w45-weigh35': WEIGH, 'f-weigh': WEIGH,
   'w2-lights': { panels: { controller: 'lights' }, title: 'Light program for growing birds', rows: (c, inst) => [...darkRows(c), ...partRows(c, inst)] },
   'p-sds': { panels: { controller: 'lights' }, rows: (c, inst) => [line('Light sign: a dark period every night lowers sudden deaths.'), ...darkRows(c), ...partRows(c, inst)] },

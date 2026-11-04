@@ -224,9 +224,13 @@ export function afternoon({ day, whole, controller = [], inside = [], raise = fa
 /** The evening: the office desk at 16:00 or later, the record signed. */
 /** From day 15: Next job to 18:00, the night ventilation at the controller by the door, then the office desk
  *  for the record (one walk to the office instead of two). */
+// the night ventilation is done once the birds have been comfortable (or every fan on) for 30 farm minutes after the
+// setting (night-comfort): checked at the office, after the walk there and the clock run on to it
 export const nightThenRecord = (day, n, atDesk = []) => [...nextTo(18), ev(`'Next job -> ' + __t()`), ...outToHouse(),
-  ...nightAtController(n, `day ${day} evening: the ventilation for the night at the controller`), job(`r-vent-night@${day}`),
-  ...houseOut(), ...outToOffice(), exp(`'at the office ' + __t() + ': ' + (__missed(${day}) || 'nothing open')`, `day ${day}: at the office`),
+  ...nightAtController(n, `day ${day} evening: the ventilation for the night at the controller`),
+  ...houseOut(), ...outToOffice(), until(`__game.level.jobs.byKey('r-vent-night@${day}')?.status === 'done'`, 40),
+  job(`r-vent-night@${day}`, `r-vent-night@${day}: the birds comfortable 30 farm minutes after the night setting`),
+  exp(`'at the office ' + __t() + ': ' + (__missed(${day}) || 'nothing open')`, `day ${day}: at the office`),
   ...signRecord(atDesk), ...esc()];
 export const evening = (day, atDesk = []) => [...outToOffice(), exp(`'at the office ' + __t() + ': ' + (__missed(${day}) || 'nothing open')`, `day ${day}: at the office`),
   // Next job to 16:00; with a job still open (the drying fans) the first press asks, the second skips
@@ -348,7 +352,8 @@ SEGMENTS.finish = () => [
   ...nextTo(13), ev(`'Next job -> ' + __t()`),
   ...afternoon({ day: 37, whole: true, east: atFans(fansAll(true), 'day 37 afternoon: the fan panel') }),
   // the crew booked on the phone at the evening visit to the office desk (3 days' notice: the window runs to day 39 06:00)
-  ...nightThenRecord(37, 3, [click('Phone'), adv(0.1), click('Book the crew and the trucks'), adv(0.2), shot('p3c-21-phone'), job('f-book@37', 'the catching crew and trucks booked on the phone')]),
+  // big birds on a warm night: every fan (the strip shows them panting under three; the heat sign: big birds still want tunnel air)
+  ...nightThenRecord(37, 6, [click('Phone'), adv(0.1), click('Book the crew and the trucks'), adv(0.2), shot('p3c-21-phone'), job('f-book@37', 'the catching crew and trucks booked on the phone')]),
   ev(`__timerEnd('day 37')`), ev(`'not done on day 37: ' + (__missed(37) || 'none')`), exp(`__missed(37) === '' && 'every job of day 37 done'`, 'day 37 played by real input: every job done'),
   // the catching night (day 42 from 02:00): watched from the house, the tickets read at the loading bay
   ...autoTo(41, 20), ...autoTo(42, 1.95), ev(`'catch at ' + __game.farm.harvest.catchAt + ', now ' + __t() + ', farmer at ' + __game.player.position.x.toFixed(1) + ',' + __game.player.position.z.toFixed(1)`),

@@ -19,6 +19,8 @@ const R = (id, days, round, title, rest) => ({ id, kind: 'routine', days, round,
 const D = (id, day, round, title, rest) => ({ id, kind: 'dated', day, round, title, ...rest });
 const P = (id, title, rest) => ({ id, kind: 'problem', title, ...rest });
 const A = (id, match) => (match ? { type: 'action', id, match } : { type: 'action', id });
+/** An order whose amount is enough (job-engine ACTION_CHECKS: 'order-days' the silo to 3 days, 'order-withdrawal' to the withdrawal). */
+const ORDER = (type, check) => ({ type: 'action', id: 'feed.order', ...(type ? { match: { type } } : {}), check });
 const ANY = (...ids) => ({ type: 'any', of: ids.map((i) => A(i)) });
 const ALL = (...of) => ({ type: 'all', of });
 const ST = (test) => ({ type: 'state', test });
@@ -78,7 +80,7 @@ export const JOBS_CYCLE = [
   R('w2-check', [10, 13], 'am', 'Check ten birds in the hand: watch each one walk', { onDays: [10, 13], window: [8, 18], spot: 'birdScale', signs: ['sign-legs', 'bird-check'], branch: 'biosecurity',
     done: { type: 'count', id: 'sample.bird', match: { look: 'gait' }, n: 10, sectors: 3, sectorsOf: 'used' } }),
   D('w2-vaccine', 12, 'am', 'Vaccinate the flock in the drinking water', { window: [6, 16], pin: true, spot: 'waterSupply', signs: ['vaccine', 'water-supply'], branch: 'biosecurity', done: ST('vaccine-drunk') }),
-  D('w2-order', 13, 'am', 'Order grower pellets for the feed change', { window: [6, 16], spot: 'officeDesk', signs: ['sign-feed', 'silo'], branch: 'feed', done: A('feed.order', { type: 'grower' }) }),
+  D('w2-order', 13, 'am', 'Order grower pellets for the feed change', { window: [6, 16], spot: 'officeDesk', signs: ['sign-feed', 'silo'], branch: 'feed', done: ORDER('grower', 'order-days') }),
   R('r-raise', [8, 34], 'pm', 'Raise the drinker and feeder lines for the birds’ size', { onDays: [8, 11, 14, 17, 20, 24, 28, 32], spot: 'drinkers.0', signs: ['drinker', 'feeder-box'], branch: 'water', done: RAISE }),
   D('w2-weigh', 14, 'am', 'Weigh sample birds', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
   P('p-damp', 'The air in the house feels damp', { problem: 'rainy-spell', spot: 'controller', signs: ['sign-vent', 'sign-air'], branch: 'moisture',
@@ -91,7 +93,8 @@ export const JOBS_CYCLE = [
   R('w3-droppings', [16, 19], 'am', 'Check the droppings on five birds', { onDays: [16, 19], window: [8, 18], spot: 'birdScale', signs: ['sign-droppings', 'bird-check'], branch: 'feed',
     done: { type: 'count', id: 'sample.bird', match: { look: 'droppings' }, n: 5, sectors: 3, sectorsOf: 'house' } }),
   D('w3-topup', 18, 'am', 'Fork over caked litter and top it up under the drinker lines', { window: [8, 18], spot: 'litterHeap', signs: ['sign-litter', 'sign-droppings'], branch: 'moisture',
-    done: { type: 'count', id: 'litter.patch', n: 4, nearDrinker: 4, sectors: 2, sectorsOf: 'house' } }),
+    done: ALL(L('Fork over the caked patches (caked litter 2 % or less of the floor in use)', ST('caked-cleared')),
+      L('Four sacks of fresh husk under the drinker lines, in two parts of the house', { type: 'count', id: 'litter.patch', n: 4, nearDrinker: 4, sectors: 2, sectorsOf: 'house' })) }),
   D('w3-weigh', 21, 'am', 'Weigh sample birds', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
   P('p-pad-wet', 'Wet litter at the pad end: find what wets it', { problem: 'pad-overflow', spot: 'padPump', signs: ['pad-pump', 'sign-litter'], branch: 'moisture',
     done: A('pad.fixFloat', { result: { fixed: true } }) }),
@@ -115,7 +118,7 @@ export const JOBS_CYCLE = [
   D('w45-air', 23, 'am', 'Measure the air speed at bird height (V)', { window: [8, 18], spot: 'fanPanel', signs: ['sign-heat'], branch: 'ventilation',
     done: { type: 'count', id: 'air.probe', n: 3, sectors: 3, sectorsOf: 'house' } }),
   D('w45-pad', 24, 'am', 'Check the cooling pad: water on every section', { window: [8, 18], spot: 'padPump', signs: ['pad-pump'], branch: 'ventilation', done: A('pad.check', { result: { flowing: true } }) }),
-  D('w45-order', 27, 'am', 'Order finisher pellets', { window: [6, 16], spot: 'officeDesk', signs: ['sign-feed'], branch: 'feed', done: A('feed.order', { type: 'finisher' }) }),
+  D('w45-order', 27, 'am', 'Order finisher pellets', { window: [6, 16], spot: 'officeDesk', signs: ['sign-feed'], branch: 'feed', done: ORDER('finisher', 'order-days') }),
   D('w45-weigh28', 28, 'am', 'Weigh sample birds', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
   D('w45-change', 29, 'am', 'Change the feed lines to finisher pellets', { window: [6, 42], spot: 'silo', signs: ['sign-feed', 'silo'], branch: 'feed', done: ST('pans-finisher') }),
   D('w45-weigh35', 35, 'am', 'Weigh sample birds', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
@@ -131,7 +134,7 @@ export const JOBS_CYCLE = [
     done: ALL(L('Switch the pad or the fans', ANY('vent.pad', 'vent.fans')), L('Pad off above 90 % humidity, every fan on, for 30 farm minutes', ST('pad-humid-ok'))) }),
 
   // ---------------- Level 6: Finishing and harvest (days 36-42) ----------------
-  D('f-order', 36, 'am', 'Order the last feed for the flock', { window: [6, 16], spot: 'officeDesk', signs: ['sign-feed', 'silo'], branch: 'planning', done: A('feed.order') }),
+  D('f-order', 36, 'am', 'Order the last feed for the flock', { window: [6, 16], spot: 'officeDesk', signs: ['sign-feed', 'silo'], branch: 'planning', done: ORDER(null, 'order-withdrawal') }),
   // to day 39 06:00: the latest catch the crew takes (day 42 06:00) is then still 3 days ahead (sign-catch)
   D('f-book', 37, 'am', 'Book the catching crew and the trucks', { window: [6, 54], spot: 'officeDesk', signs: ['sign-catch'], branch: 'planning', done: A('phone.bookCatch', { result: { booked: true } }) }),
   D('f-weigh', 40, 'am', 'Weigh sample birds before catching', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
