@@ -30,9 +30,10 @@ import { at, pState, stateOf, levelDef, levelFor, condDef, isOwn, isOn, condFind
 import { powerFresh, stepGen, stepRainy, powerAct, powerSymptoms, powerBus, powerZones, setPowerEnv, powerStart } from './farm-cond-power.js';
 import { waterFresh, stepWater, waterAct, waterSymptoms, waterBus, waterStart, waterInstall } from './farm-cond-water.js';
 import { chicksFresh, chicksPre, stepChicks, chicksAct, chicksSymptoms, chicksBus, chicksZones, chicksInstall } from './farm-cond-chicks.js';
+import { freshCondStats, stepCondStats, noteOutside } from './farm-cond-stats.js';
 
 const fresh = () => ({ ...powerFresh(), ...waterFresh(), ...chicksFresh() });
-const freshX = () => ({ day0Culls: 0, hatcheryAt: null, flushMin: [0, 0, 0, 0], tankDays: {}, gauges: [], genTests: [] });
+const freshX = () => ({ day0Culls: 0, hatcheryAt: null, flushMin: [0, 0, 0, 0], tankDays: {}, gauges: [], genTests: [], st: freshCondStats() });
 export { pState, stateOf, levelDef, levelFor, condDef, isOwn, isOn, condFind, condFix };
 
 /** A condition problem starts (silently, EV.FARM_PROBLEM start); alarm problems emit their symptom at once. */
@@ -187,6 +188,7 @@ export function stepCondPost(farm, env, hrs) {
   if (!farm.condition || farm.mode !== 'level') return;
   if (farm.condition === 'water') stepWater(farm, env, hrs, true);
   if (farm.delivery) stepChicks(farm, env, hrs);
+  stepCondStats(farm, env, hrs);
 }
 
 /** Phase 4 actions (undefined: not one of them, farm.act goes on to the Phase 3 / Phase 2 actions). */
@@ -201,6 +203,8 @@ export function condAct(farm, env, id, a = {}) {
 export function condSymptoms(farm, env, id, a, result) {
   if (!farm.condition || farm.mode !== 'level') return;
   powerSymptoms(farm, env, id, a, result); waterSymptoms(farm, env, id, a, result); chicksSymptoms(farm, env, id, a, result);
+  // the outside air he read off the controller or the fan panel (the records' "Outside 40.6 °C at 15:10")
+  if (id === 'controller.read' || id === 'fans.read') noteOutside(farm, env, Number.isFinite(a.outsideC) ? a.outsideC : env.outsideTemp);
 }
 /** What the farm hears on the bus in a condition run (listen stops, EV.NEAR in a condition zone). */
 export function condBus(farm, env, type, p = {}) {

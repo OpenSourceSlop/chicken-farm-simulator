@@ -14,12 +14,15 @@
 //   (a replay that lifts day7-weight from tier 0 to tier 1 emits +2, not +3), and EV.SKILL_UNLOCK
 //   when a branch level is reached. A milestone is kept per profile; a replay can only raise it.
 //   Milestone texts are what the player sees: results in plain words, never praise or verdicts.
-import { SKILL_BRANCHES, SKILL_LEVEL_POINTS, UNLOCKS } from './config.js';
+import { SKILL_BRANCHES, SKILL_LEVEL_POINTS, UNLOCKS, conditionLevel, levelById } from './config.js';
 import { EV } from './events.js';
 import { RULES } from './skills-rules.js';
 import { RULES_CYCLE } from './skills-rules-cycle.js';
 // Phase 3: the milestones of the whole cycle (contract data; rules come with package "sim", PHASE3.md §9)
-import { MILESTONES_CYCLE } from './skills-cycle.js';
+import { MILESTONES_CYCLE, needsProblemOf } from './skills-cycle.js';
+// Phase 4: the conditions' milestones (contract data) and their rules (PHASE4.md §7, §9.4)
+import { MILESTONES_COND } from './skills-cond.js';
+import { RULES_COND } from './skills-rules-cond.js';
 
 /**
  * @typedef {{ id: string, branch: string, checkpoint: string, text: string,
@@ -74,17 +77,36 @@ export const MILESTONES = [
 // ALL_MILESTONES when the cycle rules exist (the cycle milestones of level 'level1' count only in a run, at
 // the brooding week's level-end: ctx.run), package "run" its skill tree.
 export const ALL_MILESTONES = [...MILESTONES.map((m) => ({ ...m, level: 'level1' })), ...MILESTONES_CYCLE];
+// Phase 4: every milestone the skill tree shows and evaluate() weighs — the cycle's and the conditions' (MILESTONES_COND
+// carry `condition`: only in a run of that condition). ALL_MILESTONES stays Phase 2 + the cycle (scripts/test-contracts.mjs).
+export const ALL_MILESTONES_P4 = [...ALL_MILESTONES, ...MILESTONES_COND];
 const P2_IDS = new Set(MILESTONES.map((m) => m.id));
-const byId = new Map(ALL_MILESTONES.map((m) => [m.id, m]));
+const COND_IDS = new Set(MILESTONES_COND.map((m) => m.id));
+const byId = new Map(ALL_MILESTONES_P4.map((m) => [m.id, m]));
+// the problem ids of a level as a condition plays it (needsProblem: a milestone of a dropped problem is not evaluated)
+const PROBS = new Map();
+const levelProblems = (level, condition) => {
+  const k = `${level}|${condition || ''}`;
+  if (!PROBS.has(k)) { const def = levelById(level); PROBS.set(k, new Set(def ? conditionLevel(def, condition || null).problems.map((p) => p.id) : [])); }
+  return PROBS.get(k);
+};
+/** The milestone can be earned in a run of `condition`: its own condition, and the problem it measures on its level. */
+export function milestoneInPlay(m, condition) {
+  if (m.condition && m.condition !== (condition || null)) return false;
+  const need = needsProblemOf(m);
+  return !need || levelProblems(m.level, condition).has(need);
+}
 
 export function createSkills({ events, records, farm } = {}) {
   /** milestone id -> best tier index earned (profile, kept across replays) */
   const earned = new Map();
   let currentLevel = 'level1';      // the level of the bus checkpoints ('problem', 'day') and of checkpoints without one
+  // Phase 4 (PHASE4.md §3.1, §7): the profile's cycles finished (any run) and the condition cycles played under one condition
+  const profile = { cyclesDone: 0, conditionsDone: {} };
 
   const pointsOf = (branch) => {
     let p = 0;
-    for (const m of ALL_MILESTONES) {
+    for (const m of ALL_MILESTONES_P4) {
       if (m.branch !== branch || !earned.has(m.id)) continue;
       p += m.tiers[earned.get(m.id)].points;
     }
@@ -100,7 +122,7 @@ export function createSkills({ events, records, farm } = {}) {
     level: levelOf,
     /** Milestones of a branch with what was earned: [{ ...milestone, tier: index|null, points }] */
     milestones(branch) {
-      return ALL_MILESTONES.filter((m) => m.branch === branch).map((m) => {
+      return ALL_MILESTONES_P4.filter((m) => m.branch === branch).map((m) => {
         const t = earned.has(m.id) ? earned.get(m.id) : null;
         return { ...m, tier: t, points: t == null ? 0 : m.tiers[t].points };
       });
@@ -117,12 +139,18 @@ export function createSkills({ events, records, farm } = {}) {
       const out = [];
       if (!farm || farm.mode !== 'level') return out;
       const level = ctx.level ?? currentLevel;
-      for (const m of ALL_MILESTONES) {
+      // Phase 4: the run's condition (the farm's: the only holder; checkpoints carry it as ctx.condition)
+      const condition = ctx.condition !== undefined ? ctx.condition : farm.condition ?? null;
+      for (const m of ALL_MILESTONES_P4) {
         if (m.level !== level) continue;
         if (checkpoint !== 'level-end' && m.checkpoint !== checkpoint) continue;
-        const p2 = P2_IDS.has(m.id);
-        if (!p2 && level === 'level1' && !(ctx.run && checkpoint === 'level-end')) continue;
-        const rule = p2 ? RULES[m.id] : RULES_CYCLE[m.id];
+        if (!milestoneInPlay(m, condition)) continue;
+        const p2 = P2_IDS.has(m.id), cond = COND_IDS.has(m.id);
+        // the cycle's and the conditions' milestones of the brooding week count only inside a run, at its level-end
+        // (a bad batch's are measured at their own checkpoints: placed, weighin, level-end)
+        if (!p2 && !cond && level === 'level1' && !(ctx.run && checkpoint === 'level-end')) continue;
+        if (cond && level === 'level1' && !ctx.run && !condition) continue;
+        const rule = p2 ? RULES[m.id] : cond ? RULES_COND[m.id] : RULES_CYCLE[m.id];
         let r = null;
         try { r = rule ? (p2 ? rule(farm, records) : rule(farm, records, { ...ctx, checkpoint })) : null; } catch (err) { console.error(`milestone ${m.id} rule failed`, err); }
         if (!r || r.tier == null) continue;
@@ -144,8 +172,25 @@ export function createSkills({ events, records, farm } = {}) {
       return true;
     },
     reset() { earned.clear(); },
-    serialize() { return { v: 1, earned: [...earned] }; },
-    restore(d) { earned.clear(); for (const [k, v] of (d && d.earned) || []) earned.set(k, v); },
+    /** Phase 4: the profile's cycles (the gate of the harder flocks) — { cyclesDone, conditionsDone: { [id]: n } } (a copy). */
+    get profile() { return { cyclesDone: profile.cyclesDone, conditionsDone: { ...profile.conditionsDone } }; },
+    /** The run raises it at a cycle's end: every finished run counts; `condition` once the run was played under that one
+     *  condition from its start level through the clean-out (PHASE4.md §3.1). Returns the profile. */
+    cycleDone({ condition = null, underOne = true } = {}) {
+      profile.cyclesDone += 1;
+      if (condition && underOne) profile.conditionsDone[condition] = (profile.conditionsDone[condition] || 0) + 1;
+      return skills.profile;
+    },
+    /** Set the profile's fields (a profile store without them reads 0: the run may pass lastCycle's 1). */
+    setProfile(p = {}) {
+      if (Number.isFinite(p.cyclesDone)) profile.cyclesDone = Math.max(0, Math.floor(p.cyclesDone));
+      if (p.conditionsDone && typeof p.conditionsDone === 'object') profile.conditionsDone = Object.fromEntries(Object.entries(p.conditionsDone).filter(([, n]) => Number.isFinite(n)));
+    },
+    serialize() { return { v: 1, earned: [...earned], ...(profile.cyclesDone || Object.keys(profile.conditionsDone).length ? { cyclesDone: profile.cyclesDone, conditionsDone: { ...profile.conditionsDone } } : {}) }; },
+    restore(d) {
+      earned.clear(); for (const [k, v] of (d && d.earned) || []) earned.set(k, v);
+      profile.cyclesDone = (d && Number.isFinite(d.cyclesDone)) ? d.cyclesDone : 0; profile.conditionsDone = d && d.conditionsDone ? { ...d.conditionsDone } : {};
+    },
   };
   // The bus drives the checkpoints (PHASE2.md §9): nobody else calls evaluate().
   if (events) {

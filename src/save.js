@@ -23,6 +23,17 @@ function storage() {
   }
 }
 
+/** The profile's cycle counts on the profile and in its skills (the larger of the two when both are there). */
+export function withCycles(p) {
+  const sk = p.skills && typeof p.skills === 'object' ? p.skills : null;
+  const cyclesDone = Math.max(Number.isFinite(p.cyclesDone) ? p.cyclesDone : 0, sk && Number.isFinite(sk.cyclesDone) ? sk.cyclesDone : 0);
+  const conditionsDone = { ...((sk && sk.conditionsDone) || {}) };
+  for (const [k, n] of Object.entries(p.conditionsDone || {})) if (Number.isFinite(n)) conditionsDone[k] = Math.max(n, conditionsDone[k] || 0);
+  const out = { ...p, cyclesDone, conditionsDone };
+  if (sk && (cyclesDone || Object.keys(conditionsDone).length)) out.skills = { ...sk, cyclesDone, conditionsDone };
+  return out;
+}
+
 export function createSaveStore({ key = SAVE.key, profileKey = SAVE.profileKey, version = SAVE.version } = {}) {
   const read = (k) => {
     try {
@@ -62,8 +73,15 @@ export function createSaveStore({ key = SAVE.key, profileKey = SAVE.profileKey, 
       const hour = d.env.hour ?? 0;
       return { day: Math.round(d.env.day - hour / 24), hour, savedAt: d.savedAt };
     },
-    loadProfile() { const p = read(profileKey); return p && p.version === version ? p : null; },
-    saveProfile(p) { return write(profileKey, { ...p, version }); },
+    // Phase 4 (PHASE4.md §3.1, §11.1): the profile's cyclesDone / conditionsDone ride in the skills' part (skills.serialize)
+    // and on the profile itself (the run's gate); a Phase 3 profile without them reads 0 / {} (the run may count its
+    // stored lastCycle as one cycle). Both places are kept in step on load and save.
+    loadProfile() {
+      const p = read(profileKey);
+      if (!p || p.version !== version) return null;
+      return withCycles(p);
+    },
+    saveProfile(p) { return write(profileKey, { ...withCycles({ ...p }), version }); },
   };
 }
 

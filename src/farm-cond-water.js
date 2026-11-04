@@ -138,9 +138,11 @@ export function waterSymptoms(farm, env, id, a, result) {
         farm.condX.filterK = null; condFix(farm, env, 'iron-filter', 'clean');
       }
       break;
-    case 'water.tank':
+    case 'water.tank': {
+      const S = farm.condX.st; if (S && !S.tankReadDays.includes(env.dayNumber)) S.tankReadDays.push(env.dayNumber);
       if (isActive(farm, 'pump-wear') && result && ((result.pumpOn && result.pumpBar <= WATER_TANK.wornBar) || result.lowPct < WATER_TANK.lowPct)) condFind(farm, env, 'pump-wear', result.lowPct < WATER_TANK.lowPct ? 'marker' : 'gauges');
       break;
+    }
     case 'water.meter': if (isActive(farm, 'pump-wear') && result && result.changePct != null && result.changePct <= -5) condFind(farm, env, 'pump-wear', 'meter'); break;
     case 'pump.fix': if (result && result.started) { const X = farm.condX; X.pumpFixStart = X.pumpFixStart ?? +env.day.toFixed(5); } break;
     default:
