@@ -276,6 +276,7 @@ SEGMENTS.week2 = () => [
   ...walkBirds(),
   until(`__game.farm.health.vaccine.state === 'drunk'`, 150),
   exp(`(() => { const v = __game.farm.health.vaccine; return v.state === 'drunk' && 'vaccine drunk in ' + v.hours.toFixed(1) + ' h, coverage ' + v.coverage.toFixed(2); })()`, 'the vaccine drunk (the record shows the hours)'),
+  until(`__game.level.jobs.byKey('w2-vaccine@12')?.status === 'done'`, 5, 0.25), // the job engine's next tick (twice a real second)
   job('w2-vaccine@12', 'vaccinated in the drinking water by real clicks'),
   ...autoTo(14, 21), passed('week2'), shot('p3c-13-week2-result'),
 ];

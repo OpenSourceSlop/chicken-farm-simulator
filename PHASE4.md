@@ -1317,6 +1317,12 @@ lines plate at the feeder box and the pans' height; light → the light program 
 air → the minimum ventilation or air quality sign and the controller's ventilation; leg deaths → the legs sign;
 disease → the droppings sign and a bird check; sudden deaths → the light sign). Tone: factual, no "wrong", no scores
 (test-contracts checks every template). The watch is a reading of the model like a gauge; it never grades the farmer.
+Measured: the ideal brooding week raises one warning (intake on day 3 at 16:00: the blocked filter's low water flow, which the
+ideal's day-4 morning round finds); the ideal cycle three in all, each at a level's problem (that one, day 33's humid heat;
+the conditions add their heat days and week 3's coccidiosis); a bad batch's graded-out chicks before the hatchery call read
+as deaths and culls over the limit with the cause "the chicks graded out at the table count as culls until the hatchery is
+told the same day". The deaths trend is the last day's deaths alone (culls are the farmer's own decisions). Hours with the
+main valve shut (the vaccine's thirst) are left out of the intake.
 
 **Contract.** `createFlockWatch({ env, farm, events, records })` → `{ attach(ctxFn), reset(), status(), warnings,
 serialize(), restore(d), step }`; level.js attaches `() => ({ active, def: lv(), deaths: levelDeaths(), chickG,
@@ -1348,7 +1354,9 @@ to the sign's row at its first warning passes; a week-2 neglect (`noCare`) and a
 - **Warned ahead.** From 30 farm minutes before its close (`JOB_HOLD.warnMin`) an open job's line on the job card
   carries a chip *"closes in 25 farm minutes"* (*"held open while you work · 20 farm minutes after"* when held); once,
   as it crosses the 30-minute mark, a soft cue: the chip pulses (reduced motion: no pulse), a quiet click sounds and a
-  caption names it (*"Vent temperatures closes in 30 farm minutes (12:00)."*). `EV.JOB_SOON { key }`; skips never cue.
+  caption names it (*"Take vent temperatures of the chicks: closes in 30 farm minutes (11:36)."*; the jobs of a round that all
+  close together make one caption, *"… and 6 more jobs: close in 30 farm minutes (12:00)."*, and one click).
+  `EV.JOB_SOON { key, keys }`; a skip never cues inside it (a skip that lands within 30 minutes of a close cues once after).
 - **Pacing.** The real-input days are re-timed with the slower clock (§15.6): the per-day ceiling of PHASE3.md (4.5
   minutes) becomes **6 minutes** (4.5 × 120 / 90: the same farm hours at the farmer's slower clock), measured as before.
 
@@ -1380,8 +1388,9 @@ to the sign's row at its first warning passes; a week-2 neglect (`noCare`) and a
 *"Dead birds should be more visible by including the distance pointer arrow to them, at least to the nearest dead bird."*
 
 Whenever dead birds lie on the floor (in a level, no panel open), an edge chip points to the **nearest** one with the
-count and its distance — *"3 dead birds · 12 m"* — at the screen edge while it is off screen and as a tag over it while
-it is on screen; it keeps clear of the job marker's pointer (both stay visible) and of the HUD cards. Every dead bird
+count and its distance — *"3 dead birds · 12 m"* (*"· at your feet"* under 1 m) — at the screen edge while it is off screen
+and as a tag over it while it is on screen (moved sideways off a HUD card, still by its bird); it keeps clear of the job
+marker's pointer (both stay visible) and of the HUD cards. Every dead bird
 within **15 m** of the farmer gets a small floating marker (a muted red inverted pyramid 0.7 m over it, gently bobbing;
 one instanced mesh, at most 64). `src/ui-deadmarks.js` owns the chips and the markers; it reads `flock.dead.list`
 (positions) and `farm.flock.deadOnFloor` (the count).

@@ -28,7 +28,7 @@
   {"advance": 0.3},
   {"expect": "(() => { const li = [...__open().querySelectorAll('.plate .plate-items > li')].map((x) => x.textContent); return li.some((t) => t.includes('about 90 %')) && 'the pad plate states the 90 % humidity limit'; })()", "label": "the pad plate's temperature + humidity limit: 90 %"},
   {"clickText": "Check the pad", "in": ".panel:not([hidden])"},
-  {"advance": 5},
+  {"advance": 6.25},
   {"expect": "__acts.some((a) => a.id === 'pad.check') && /Checked \\d\\d:\\d\\d: water running on \\d of 6 sections/.test(__open().textContent) && 'pad.check: ' + __open().querySelector('.cyc-box .cyc-line').textContent", "label": "the pad check walks the pad (pad.check) and draws its six sections"},
   {"shot": "p3-panels-pad"},
   {"eval": "__game.ui.openPanel('controller')"},

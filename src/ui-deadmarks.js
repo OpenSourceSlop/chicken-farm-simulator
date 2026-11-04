@@ -19,7 +19,7 @@ const DEAD_COLOR = 0xc8604a, BUCKET_COLOR = 0x86a9c6;
 export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
   const { THREE, scene, camera } = ctx;
   // ---- the 3D markers ----
-  const geo = new THREE.ConeGeometry(0.12, 0.24, 4, 1);
+  const geo = new THREE.ConeGeometry(0.15, 0.3, 4, 1);
   geo.rotateX(Math.PI); // point down at the bird
   const mat = new THREE.MeshBasicMaterial({ color: DEAD_COLOR, transparent: true, opacity: 0.92, depthWrite: false });
   const marks = new THREE.InstancedMesh(geo, mat, MAX_MARKS);
@@ -37,7 +37,7 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
     const text = h('span');
     const el = h('div', { class: `edge-pointer ${cls}`, hidden: true, 'aria-hidden': 'true' }, icon, text);
     root.prepend(el);
-    return { el, icon, text, last: '' };
+    return { el, icon, text, last: '', w: 0, h: 0 };
   };
   const deadChip = chip('edge-pointer--dead'), bucketChip = chip('edge-pointer--bucket');
   const ndc = new THREE.Vector3();
@@ -63,13 +63,20 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
     }
     if ((rectAge -= 1) <= 0) { rectAge = 20; rects = avoid ? avoid().map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0) : []; }
     const all = [...rects, ...extraAvoid];
-    for (let pass = 0; pass < 2; pass++) {
-      for (const r of all) if (px > r.left - 60 && px < r.right + 60 && py > r.top - 20 && py < r.bottom + 20) py = (r.top + r.bottom) / 2 < H / 2 ? r.bottom + 22 : r.top - 22;
+    // the chip's size is measured when its text changes (no layout read every frame)
+    if (text !== c.last || !c.w) { c.last = text; setText(c.text, text); c.el.hidden = false; c.w = c.el.offsetWidth || 120; c.h = c.el.offsetHeight || 28; }
+    const hw = c.w / 2 + 4, hh = c.h / 2 + 4;
+    for (let pass = 0; pass < 3; pass++) {
+      for (const r of all) {
+        if (!(px + hw > r.left && px - hw < r.right && py + hh > r.top && py - hh < r.bottom)) continue;
+        // a tag over the bird moves sideways off a HUD card (it stays by its bird); an edge chip moves along the edge
+        if (onScreen) px = (r.left + r.right) / 2 > W / 2 ? r.left - hw : r.right + hw;
+        else py = (r.top + r.bottom) / 2 < H / 2 ? r.bottom + hh : r.top - hh;
+      }
     }
-    px = Math.max(70, Math.min(W - 70, px)); py = Math.max(16, Math.min(H - 16, py));
+    px = Math.max(hw, Math.min(W - hw, px)); py = Math.max(hh, Math.min(H - hh, py));
     c.el.hidden = false;
     c.el.style.transform = `translate(${px.toFixed(0)}px, ${py.toFixed(0)}px) translate(-50%, -50%)`;
-    if (text !== c.last) { c.last = text; setText(c.text, text); }
     return { px, py, onScreen };
   }
   const rectOf = (el) => (el && !el.hidden ? [el.getBoundingClientRect()] : []);
@@ -107,7 +114,7 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
       const first = near[0];
       if (count > 0 && first) {
         const m = Math.round(Math.hypot(first.x - p.x, first.z - p.z));
-        const text = `${count} dead bird${count === 1 ? '' : 's'} · ${m} m`;
+        const text = `${count} dead bird${count === 1 ? '' : 's'} · ${m < 1 ? 'at your feet' : `${m} m`}`;
         const at = placeChip(deadChip, first.x, 0.6, first.z, text, rectOf(jobPointer?.()));
         shown.dead = { text, metres: m, count, x: first.x, z: first.z, onScreen: at.onScreen };
       } else { deadChip.el.hidden = true; shown.dead = null; }

@@ -542,6 +542,7 @@
   {"walkTo":[-22,4.4],"tol":0.7,"max":60},
   {"advanceUntil":"__game.farm.health.vaccine.state === 'drunk'","max":150,"step":0.5},
   {"expect":"(() => { const v = __game.farm.health.vaccine; return v.state === 'drunk' && 'vaccine drunk in ' + v.hours.toFixed(1) + ' h, coverage ' + v.coverage.toFixed(2); })()","label":"the vaccine drunk (the record shows the hours)"},
+  {"advanceUntil":"__game.level.jobs.byKey('w2-vaccine@12')?.status === 'done'","max":5,"step":0.25},
   {"expect":"(() => { const j = __game.level.jobs.byKey('w2-vaccine@12'); return j && j.status === 'done' && 'w2-vaccine@12 done at ' + __t(); })()","label":"vaccinated in the drinking water by real clicks"},
   {"eval":"(__game.level.debug.goto(14, 21, { auto: true }), 'goto(14, 21, auto) -> ' + __game.level.mode + ' ' + __t())"},
   {"advance":0.4},

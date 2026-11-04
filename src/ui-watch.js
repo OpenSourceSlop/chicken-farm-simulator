@@ -19,7 +19,7 @@ export function createWatchCard(root, ctx) {
     const value = h('span', { class: 'fw-value' });
     const detail = h('span', { class: 'fw-detail' });
     const li = h('li', { class: 'fw-row', 'data-row': id }, dot, h('span', { class: 'fw-k' }, LABEL[id]), h('span', { class: 'fw-v' }, value, detail));
-    rows[id] = { li, dot, value, detail, sig: '' };
+    rows[id] = { li, dot, value, detail, sig: 'new' };
     return li;
   }));
   const warn = h('p', { class: 'fw-warn', hidden: true });

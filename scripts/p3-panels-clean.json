@@ -39,7 +39,7 @@
   {"eval": "__game.ui.openPanel('feeder-box')"},
   {"advance": 0.3},
   {"clickText": "Wash the pans of line 1", "in": ".panel:not([hidden])"},
-  {"advance": 10},
+  {"advance": 12.5},
   {"expect": "__acts.some((a) => a.id === 'feed.wash' && a.line === 0) && 'feed.wash { line: 0 }'", "label": "feeder box in clean-out: Wash the pans → feed.wash { line }"},
   {"shot": "p3-panels-feeder-clean"},
   {"eval": "__game.ui.openPanel('litter-heap')"},

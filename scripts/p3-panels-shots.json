@@ -35,7 +35,7 @@
   {"shot": "p3-shot-fans-stages"},
   {"eval": "__game.farm.debug.set('house.padWorking', 0.67), __game.farm.debug.set('house.padFloatStuck', true), __game.env.setPad(true), __game.ui.openPanel('pad-pump')"},
   {"clickText": "Check the pad", "in": ".panel:not([hidden])"},
-  {"advance": 5},
+  {"advance": 6.25},
   {"expect": "(() => { const t = [...__open().querySelectorAll('.cyc-pad text')].map((x) => x.textContent); return t.filter((x) => x.endsWith('dry')).length === 2 && /water over the sump/.test(__open().textContent) && __fits() && 'sections ' + t.join(' · ') + \" (the stub's fan and pad thermostat may switch the pump)\"; })()", "label": "pad pump: a third of the pad dry and the sump over (the stub's fields set)"},
   {"shot": "p3-shot-pad"},
   {"eval": "__game.farm.debug.set('house.padWorking', 1), __game.farm.debug.set('house.padFloatStuck', false), __game.ui.openPanel('gas-tank')"},

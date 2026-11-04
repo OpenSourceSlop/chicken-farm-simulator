@@ -8,7 +8,7 @@ import { W, adv, ev, exp, shot, press, click, clickUntil, until, E, esc, START, 
 
 const pressKey = (k) => ({ press: k });
 /** Fold the open panel's unfolded plate (a real click on its head): the panel clock runs again. */
-const FOLD = { clickOn: '#hud .panel:not([hidden]) .plate.is-open .plate-head' };
+const FOLD = { clickText: 'Plate', in: '#hud .panel:not([hidden]) .plate.is-open' };
 const t = () => `' at ' + __t()`;
 /** A level of the brooding week (Phase 2's lone level) on day 0 just after the vent job opens; the farmer at the gate. */
 const ventOpen = () => [
@@ -86,7 +86,7 @@ export function deadmark() {
     // three dead birds: 4 m, 9 m and 22 m east of him
     ev(`(() => { const out = []; for (const dx of [4, 9, 22]) { out.push(__game.flock.dead.layAt(-12 + dx, 1.5)); __game.farm.flock.deadOnFloor++; __game.farm.flock.deadTotal++; } return 'dead birds at ' + out.map((d) => d.x.toFixed(1)).join(', '); })()`),
     adv(0.6),
-    exp(`(() => { const s = ${chip}, p = __game.player.position, n = __game.farm.flock.deadOnFloor; const near = __game.flock.dead.near(p.x, p.z, 80); const m = Math.round(Math.hypot(near[0].x - p.x, near[0].z - p.z)); return s.dead && s.dead.text === n + ' dead birds · ' + m + ' m' && 'chip "' + s.dead.text + '" (' + n + ' on the floor, nearest ' + m + ' m)'; })()`, 'the chip: the count and the nearest dead bird’s distance'),
+    exp(`(() => { const s = ${chip}, p = __game.player.position, n = __game.farm.flock.deadOnFloor; const near = __game.flock.dead.near(p.x, p.z, 80); const m = Math.round(Math.hypot(near[0].x - p.x, near[0].z - p.z)); return s.dead && s.dead.text === n + ' dead birds · ' + (m < 1 ? 'at your feet' : m + ' m') && 'chip "' + s.dead.text + '" (' + n + ' on the floor, nearest ' + m + ' m)'; })()`, 'the chip: the count and the nearest dead bird’s distance'),
     exp(`(() => { const s = ${chip}, p = __game.player.position; const within = __game.flock.dead.near(p.x, p.z, 80).filter((d) => Math.hypot(d.x - p.x, d.z - p.z) <= 15).length; return s.marks === within && within >= 2 && 'markers ' + s.marks + ' (the birds within 15 m: ' + within + ')'; })()`, 'a marker over each dead bird within 15 m, none farther'),
     exp(`(() => { const j = document.querySelector('.edge-pointer:not(.edge-pointer--dead):not(.edge-pointer--bucket)'); return __game.scene.getObjectByName('job-marker')?.visible && 'job marker shown' + (j && !j.hidden ? ' and its pointer' : ' on screen'); })()`, 'the job marker still shows with the dead-bird chip'),
     shot('rq-d-01-chip-on-screen'),

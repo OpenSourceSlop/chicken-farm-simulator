@@ -10,9 +10,15 @@ export function createCaption(root) {
   const queue = [];
   let left = 0;
   // now: replace the caption showing (feedback on what the farmer just did: the bucket set down, PHASE4.md §15.3)
-  function show(msg, seconds = 4.5, { now = false } = {}) {
+  // ifFree: only when no caption shows (the closes-soon cue: it never pushes another caption back)
+  // soft: any later caption replaces it at once (the closes-soon cue, the flock watch's warning: the card and the
+  //   notebook keep it), so the farmer's own feedback is never held back behind it
+  let soft = false;
+  function show(msg, seconds = 4.5, { now = false, ifFree = false, soft: isSoft = false } = {}) {
     if (!msg) return;
-    if (!now && !el.hidden && left > 1.2) { queue.push([msg, seconds]); if (queue.length > 3) queue.shift(); return; }
+    if (ifFree && (!el.hidden || queue.length)) return;
+    if (!now && !soft && !el.hidden && left > 1.2) { queue.push([msg, seconds, isSoft || ifFree]); if (queue.length > 3) queue.shift(); return; }
+    soft = !!(ifFree || isSoft);
     setText(text, msg); el.hidden = false; left = seconds;
     el.classList.remove('is-in'); void el.offsetWidth; if (!reducedMotion()) el.classList.add('is-in');
   }
@@ -22,7 +28,7 @@ export function createCaption(root) {
     update(dt) {
       if (el.hidden) return;
       left -= dt;
-      if (left <= 0) { el.hidden = true; const n = queue.shift(); if (n) show(n[0], n[1]); }
+      if (left <= 0) { el.hidden = true; soft = false; const n = queue.shift(); if (n) show(n[0], n[1], { soft: !!n[2] }); }
     },
   };
 }

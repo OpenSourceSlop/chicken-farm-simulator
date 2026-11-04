@@ -283,7 +283,9 @@ export function createUI(ctx, deps) {
     }
     if (p.id === 'dead.count') caption.show(`${int(p.n)} dead bird${p.n === 1 ? '' : 's'} counted at the bin.`);
   });
-  events.on(EV.LISTEN, (p) => { if (mode === 'level') caption.show(lookCaption(farm.observe(p.x, p.z), env.dayNumber >= 8 ? 'birds' : 'chicks'), 6); });
+  // a look note is soft (PHASE4.md §15: the slower clock makes listen stops land beside actions): the next caption, the
+  // result of what the farmer just did, replaces it at once (the notebook keeps the note)
+  events.on(EV.LISTEN, (p) => { if (mode === 'level') caption.show(lookCaption(farm.observe(p.x, p.z), env.dayNumber >= 8 ? 'birds' : 'chicks'), 6, { soft: true }); });
   events.on(EV.POWER, (p) => { if (mode === 'level' && p && p.on === false) raiseAlarm(p.mains === false && p.source == null ? ALARM['power-cut'] : 'The power is off in house 1.'); });
   events.on(EV.FARM_PROBLEM, (p) => { if (mode === 'level' && p && p.phase === 'symptom' && p.alarm) raiseAlarm(ALARM[p.id] || 'The controller’s alarm sounds.'); });
   events.on(EV.FARM_DELIVERY, (p) => { if (mode === 'level' && p.kind === 'feed' && p.phase === 'arrive') caption.show('The feed truck is filling the silos.'); });
@@ -304,7 +306,7 @@ export function createUI(ctx, deps) {
     if (!inst) return;
     const at = p.closesAt != null ? ` (${clockText(p.closesAt)})` : '';
     const more = (p.keys?.length || 1) - 1, m = Math.max(1, Math.round((p.closesAt - env.day) * 1440));
-    caption.show(more > 0 ? `${inst.def.title} and ${more} more job${more === 1 ? '' : 's'}: close in ${m} farm minutes${at}.` : `${inst.def.title}: closes in ${m} farm minutes${at}.`, 5);
+    caption.show(more > 0 ? `${inst.def.title} and ${more} more job${more === 1 ? '' : 's'}: close in ${m} farm minutes${at}.` : `${inst.def.title}: closes in ${m} farm minutes${at}.`, 5, { ifFree: true });
   });
   // a bird in the hand: from day 8 the bird check (panels' bird-check), in week 1 Phase 2's chick in hand
   events.on(EV.BIRD_PICK, (p) => {
@@ -394,7 +396,7 @@ export function createUI(ctx, deps) {
   const deadMarks = createDeadMarks(ctx, root, { avoid, jobPointer: () => jobCard.pointerEl });
   const watchCard = createWatchCard(root, ctx);
   // PHASE4.md §15.1: the flock watch's early warning as a caption (the notebook line comes from the watch itself)
-  events.on(EV.WATCH, (p) => { if (mode === 'level' && p?.text) caption.show(p.text, 10, { now: true }); });
+  events.on(EV.WATCH, (p) => { if (mode === 'level' && p?.text) caption.show(p.text, 9, { soft: true }); });
   const togglePanel = (id) => { if (panels.openId === id) closePanel(); else openPanel(id); };
 
   // ---- E, Q, T ----

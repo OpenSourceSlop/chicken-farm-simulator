@@ -795,6 +795,53 @@ The contracts of the design round (in code before the packages; all of them hold
   condition and the switch off), `needsProblem` and every branch reaching level 2 in every condition, and the milestones;
   `scripts/p4-design-stubs.json` drives the stubs in the browser.
 
+## The farmer's requests during Phase 4 (PHASE4.md §15) — as built on main
+The farmer played the published Phase 3 build and asked for four changes; they override the earlier rules they conflict
+with (the no-verdict rule for the flock watch's warnings, the 4.5-minute day ceiling). PHASE4.md §15 is the spec.
+- **Early warning — the flock watch** (`src/flock-watch.js`, pure; `src/ui-watch.js` the HUD card). level.js creates it
+  (`level.watch`), adds its env stepper (one sample per farm hour, skips and goto(auto) included), attaches the level's
+  side (`active`, the merged level def, `levelDeaths()`, the chick weight, `engine.endAt()`, the booked catch), resets it at
+  every start / enter and saves it with the level (`level.serialize().watch`, about 5 KB). `status().rows` = weight (the bird
+  scale against the level's line along the ideal's growth path, projected to the weigh-in), deaths (the level's count against
+  its limit, projected from the last day's deaths alone), comfort (cold / hot hours of the last 8: half the birds 2 °C under
+  their target under 14 days, the model's cold or heat deaths, half the flock panting), intake (the last 6 lit hours' feed
+  and water against the feed standard and 1.8 L/kg, from 24 h after the first tip; the withdrawal, the heat-wave lift, a cut
+  and the vaccine's thirst left out); each green / amber / red (`WATCH_STATES` steady / watch / alert). A row turning red
+  raises one warning (`EV.WATCH`: a caption, a notebook line of kind `watch` that the day's record row lists, a paper cue;
+  again only after 6 farm hours out of red and 12 since the last): what, the likely cause from the model (the comfort, the
+  weakest growth factor, the last day's main cause of death, a bad batch's unclaimed culls) and where to look (`causeOf`: the
+  sign and the place). The ideal cycle meets three warnings, each at a level problem (day 3's low water flow before the
+  day 4 round finds the filter, day 33's humid heat; the conditions' heat days and coccidiosis); test-watch checks the ideal
+  brooding week raises no weight, deaths or comfort warning.
+- **Slower time**: `LEVEL1.clock` = `{ work: 90, fast: 360, panel: 24, carry: 24, sign: 0, atJob: 60 }` (was 120 / 480 / 30 /
+  30); `atJob` while the job card's `atAnyJob()` (the farmer within `JOB_HOLD.placeM` 2.5 m of where an open job's marker would
+  point, same side of the wall) and not at 4×. The rate slot reads 1×, 4×, ⅔ speed, ¼ speed, Stopped. **Held jobs**: the
+  engine's `setHold(fn)`; level.js holds an open job reaching its close while its strip shows in the open panel (or a panel
+  finishing its machine job in the background, `ui.backgroundPanelIds()`), the farmer stands at its place, holds a bird for a
+  sampling job or carries its tool; the close moves `JOB_HOLD.graceMin` (20) farm minutes on each time (`inst.heldFrom` keeps the
+  window's end, saved for open jobs, `EV.JOB_HELD`); never during a skip or goto(auto) (`noHold`). **Warned ahead**:
+  `EV.JOB_SOON { keys }` once per job 30 farm minutes before its close (one event a tick: one caption, one click, the chips
+  pulse); the job card's chip reads "closes in N farm minutes" / "held open while you work · N farm min after".
+- **The bucket**: `props.handsBusy(kind)`, `props.bucketDown { x, z, n, causes, inside }`, `setBucketDown({ auto })`,
+  `pickUpBucket()`; every `startCarry` of another kind while carrying the bucket sets it down first (the chick for the vent,
+  crop, weighing and bird checks, the frame, boxes, the barrow, a sack, a tool), as does opening the chick table; a dead bird
+  picked up while the bucket stands on the floor goes into it. The `bucket` provider (priority 7, 16 within 0.9 m), its floor
+  mesh (`props-bucket-down`) and marker, the G key (ui.js, the help legend, a prompt pill), `EV.BUCKET` captions (shown at
+  once). `dead-cleared` also needs no bucket with birds on the floor (the marker and Next line point to it). **E in a chick
+  job** (`level.chickJob`: a sampling job, the grading at the chick table, a lame-bird job): ui.js's E target leaves out
+  `dead-bird` and `bucket`; Shift+E takes them (a second prompt pill). The chick and sick-bird providers, the box stacks,
+  the brushes and every Take key accept the bucket in hand.
+- **Dead birds you can find** (`src/ui-deadmarks.js`): the chip to the nearest dead bird with the farm's count and its
+  distance ("3 dead birds · 12 m", at the edge off screen, a tag over the bird on screen, kept off the HUD cards and the job
+  pointer), a marker over every dead bird within 15 m (one instanced mesh, at most 64), the bucket's chip and marker.
+  `flock.dead.layAt(x, z)` is a harness hook. `__game.ui.deadMarks()`, `promptAlts`, `promptId` for the steps files.
+- **Tests**: `scripts/test-watch.mjs` (npm test: the ideal week calm and passing; the thermostat 4 °C under the sign fails on
+  deaths with the first warning 4.3 farm days before; acting on it at that warning passes; week 2 `noCare` and week 3
+  `cocciUntreated` warned at least a day before their ends; the texts' what / why / where, verdict-free; save → resume), new
+  test-jobs cases (the hold, the grace, no hold in a skip, the soon cue, the clock speeds), test-contracts (every cause's sign
+  is a board, G bound only by ui.js, the legend). Harness proofs (`node scripts/req-steps.mjs` → `scripts/req-watch.json`,
+  `req-clock.json`, `req-bucket.json`, `req-deadmark.json`).
+
 ## Sound (branch feature/sound, ahead of Phase 5)
 The farmer asked for quiet sounds now and then "to let you know it's working". All procedural Web Audio (no audio
 files: the artifact CSP blocks media), in `src/audio*.js`; the hooks elsewhere are five lines in main.js (the import,
