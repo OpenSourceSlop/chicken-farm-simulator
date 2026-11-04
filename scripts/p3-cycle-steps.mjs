@@ -112,9 +112,10 @@ export const binCount = () => [{ pressIf: 'e', if: `__game.props.carrying === 'b
   ev(`__game.ui.openPanelId === 'dead-bin' ? ([...document.querySelectorAll('#hud .panel:not([hidden]) button')].find((b) => b.textContent.startsWith('Count them'))?.click(), 'counted at the bin panel') : 'counted at the bin: ' + __game.farm.flock.countedDead + ', on the floor ' + __game.farm.flock.deadOnFloor + ' at ' + __t()`), adv(0.2), { pressIf: 'Escape', if: '!!__game.ui.openPanelId' }];
 /** Walk the floor the birds use (lanes 2 m from the lines, sight 2 m) and stand still to listen. */
 export function walkFloor({ whole, pm = false }) {
-  const lanes = whole ? (pm ? [W(-22, 0, 0.5), W(14, 0, 0.6, 60)] : [W(-22, -2.6, 0.5), W(22, -2.6, 0.6, 60)])
+  // the whole house from day 10: one lane of about 37 m covers the walk's 150 cells (sight 2 m)
+  const lanes = whole ? (pm ? [W(-22, 0, 0.5), W(14, 0, 0.6, 60)] : [W(-22, -2.6, 0.5), W(15, -2.6, 0.6, 60)])
     : (pm ? [W(-22, 0, 0.5), W(1, 0, 0.6, 40)] : [W(-22, -2.6, 0.5), W(1, -2.6, 0.6, 40), W(1, 2.6, 0.5), W(-22, 2.6, 0.6, 40)]);
-  return [...lanes, adv(2.8)];
+  return [...lanes, adv(2.3)]; // standing still 2 s is a listen stop (props-triggers LISTEN_AFTER)
 }
 /** Walk the birds up to drink (the vaccine plate): four lanes the length of the house. */
 export const walkBirds = () => [W(-22, -4.4, 0.6), W(22, -4.4, 0.7, 60), W(22, -1.4, 0.6), W(-22, -1.4, 0.7, 60), W(-22, 1.4, 0.6), W(22, 1.4, 0.7, 60), W(22, 4.4, 0.6), W(-22, 4.4, 0.7, 60)];
@@ -206,7 +207,7 @@ export function afternoon({ day, whole, controller = [], inside = [], raise = fa
   // through the birds (with the bird checks of the day on the way), the squeezes, the dead birds, the door
   if (east) {
     return [
-      ...outToHouse(), ...east, W(20, 0, 0.6), ...(inside.length ? inside : [W(-8, 0, 0.6, 60)]), adv(2.8), ...ctl,
+      ...outToHouse(), ...east, ...(inside.length ? inside : [W(20, 0, 0.6), W(-8, 0, 0.6, 60)]), adv(2.3), ...ctl,
       ...(squeezed ? [] : inside.length // the bird checks end at the west end: the squeezes from there
         ? [W(-20, -1.95, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3), W(-4, 0.8, 0.5), press('q'), adv(0.3)]
         : [W(-4, 0.8, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3), W(-20, -1.95, 0.5), press('q'), adv(0.3)]),
