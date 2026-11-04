@@ -14,7 +14,7 @@
   {"advance": 2.2},
   {"eval": "'controller read + preheat: ' + __prep()"},
   {"eval": "[...document.querySelectorAll('.ctrl-tab')][2].click(), __click('Set the program')"},
-  {"eval": "[...document.querySelectorAll('.ctrl-tab')][1].click(); for (let i = 0; i < 8; i++) document.querySelector('.ctrl .key[aria-label=\"One second more\"]').click(); __click('Set the timer') + ', timer ' + JSON.stringify(__game.env.ventTimer)"},
+  {"eval": "[...document.querySelectorAll('.ctrl-tab')][1].click(); for (let i = 0; i < 8; i++) document.querySelector('.ctrl .key[aria-label=\"One second more\"]').click(); __click('Send this setting to the timer') + ', timer ' + JSON.stringify(__game.env.ventTimer)"},
   {"advance": 0.3},
   {"shot": "prep-1-controller-vent"},
   {"eval": "'lights + vent: ' + __prep()"},

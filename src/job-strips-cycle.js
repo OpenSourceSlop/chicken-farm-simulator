@@ -111,7 +111,8 @@ export const STRIPS_CYCLE = {
   'r-fans-pm': { panels: { 'fan-panel': null }, title: 'Afternoon check: the fans and the house',
     rows(c, inst) {
       const on = c.env.fansManual ?? 0, broken = (c.env.fansBroken || []).filter((i) => i < on).length, pad = (c.records?.notebook || []).filter((n) => n.kind === 'pad' && n.day === c.env.dayNumber).pop();
-      return [step(`Every fan you switched on turns: ${on - broken} of ${on} vanes turning (fan plate: lamp on and the blade still = broken belt)`, broken === 0),
+      return [step(on ? `Every fan you switched on turns: ${on - broken} of ${on} vanes turning (fan plate: lamp on and the blade still = broken belt)`
+        : 'No tunnel fans switched on (fan plate: a lamp on with the blade still = broken belt)', on > 0 && broken === 0),
         houseRow(c, ' (tunnel air makes the birds feel cooler)'), line(`${birdsSeen(c)} | heat sign: big birds in the heat want all six fans and the pads.`),
         line(`Pad: ${pad ? `checked ${hhmm(pad.hour)} today` : 'not checked today (pad pump outside the west end)'}.`), ...partRows(c, inst)];
     } },

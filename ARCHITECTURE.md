@@ -422,33 +422,28 @@ hour)` (`level.debug.freeRun`) and `config` (the config module: steps files read
   standard start, a poor vaccination by real clicks (no thirst, no stabiliser), week 3 with the coccidiosis
   left untreated fails, the fail screen offers *Replay Week 2* with "vaccine drunk in … h on day 12", week 2
   replayed with the vaccine by the plate, week 3 passes.
-- **Results on main** (960 × 600, seed 1): `p3-cycle.json` 154 PASS, 0 FAIL, no console or page errors — plan
-  3,611 birds a week at 28.0 kg/m² · brooding week 4.87 × · Week 2 492 g, 0.25 % · Week 3 985 g, 0.44 % · Weeks
-  4–5 2,294 g, 0.59 % · harvest 2,884 g live, FCR 1.58, EPEF 428, 2.28 % lost over the cycle · clean-out 0 of
-  10 swabs positive, 21 rest days · the cycle summary. `p3-replay.json` 16 PASS, 0 FAIL — the poor vaccine (4.5 h, coverage 0.39) and the untreated coccidiosis fail week 3 at 1.50 %; *Replay Week 2 from day 8* with "From Week 2: vaccine drunk in 4.5 h on day 12"; the vaccine by the plate (1.5 h, coverage 0.96); week 3 passes (980 g, 0.45 %).
-- **Every earlier run passes on main** (960 × 600, exit 0, no console errors): the Phase 1 `tour`, `cold-hot`,
-  `p2-hooks`, `phase1-jobs` (4 of 4), `p2-level1` (57/0, 4.87 ×), `p2-level1-find`, `p2-review2` and
-  `p2-review2-ui` (the skill tree check now expects the eleven earnable branches), every `p3-run-*`,
-  `p3-panels-*` and `p3-scene-*` file and `p3-design-stubs`. Scene budget on main: house view 118 draw calls,
-  570 k triangles, 55 shader programs (unchanged through a prop tour), frame step 1.9 ms.
+- **Results on main** (960 × 600, seed 1, after the clarity round): `p3-cycle.json` 140 PASS, 0 FAIL, no console or page
+  errors — plan 3,611 birds a week at 28.0 kg/m² · brooding week 4.87 × · Week 2 492 g, 0.25 % · Week 3 986 g, 0.44 % ·
+  Weeks 4–5 2,318 g, 0.61 % · harvest 2,880 g live, FCR 1.58, EPEF 427, 2.30 % lost over the cycle (5,862 of 6,000 sold,
+  16,902 kg) · clean-out 0 of 10 swabs positive, 21 rest days · the cycle summary. `p3-replay.json` 16 PASS, 0 FAIL — the
+  poor vaccine (4.5 h, coverage 0.49) and the untreated coccidiosis fail week 3 at 1.50 %; *Replay Week 2 from day 8* with
+  "From Week 2: vaccine drunk in 4.5 h on day 12"; the vaccine by the plate (1.5 h, coverage 0.96); week 3 passes (990 g,
+  0.45 %). `p2-level1.json` 58 PASS (the ten chicks graded), 4.88 ×.
 - **Play time of the real-input days** (the seconds the harness advanced the game — walking, panels and
   carrying at their clock speeds — plus 2 s per click or key press, 0.4 s when it repeats the press before):
 
   | Day | Jobs by real input | Play time | Game hours covered |
   | --- | --- | --- | --- |
-  | −2 planning day | 9 (walking, tape, sheet, reply, sign) | 2.6 min | 2.6 h (then Next job) |
-  | 8 | 17 (routine, lights, lux, timer, lines raised) | 5.0 min | 10.0 h |
-  | 16 | 15 (routine, 10 droppings checks, fans, night) | 7.5 min | 12.7 h |
-  | 25 | 14 (routine, hot afternoon fans and pad, night) | 5.4 min | 12.7 h |
-  | 37 | 15 (routine, the phone booking, fans, night) | 6.0 min | 12.7 h |
-  | 44 | 5 (three washer passes, lines, pans, drying fans) | 4.9 min | 10.0 h |
+  | −2 planning day | 9 (walking, tape, sheet, reply, sign) | 2.6 min | 2.7 h (then Next job) |
+  | 8 | 17 (routine, lights, lux, timer, lines raised) | 4.3 min | 10.0 h |
+  | 16 | 15 (routine, 5 droppings checks, fans, night) | 4.4 min | 12.8 h |
+  | 25 | 14 (routine, hot afternoon fans and pad, night) | 3.8 min | 12.8 h |
+  | 37 | 15 (routine, the phone booking, fans, night) | 3.8 min | 12.7 h |
+  | 44 | 5 (three washer passes, lines, pans, drying fans) | 4.0 min | 10.0 h |
 
-  Every flock day is over PHASE3.md's 4.5-minute ceiling. The time goes to walking (2.9–5 of the minutes: the
-  48 m house, the round to the silo and the bin, the office and back for the 18:00 fan check) and on day 16 to
-  the ten birds in the hand (about 2 min). **Before release (fewer `onDays`):** from Week 2 the four flow tests
-  every other morning (with `r-minvent`), the silo gauge on order days only, five birds instead of ten for the
-  droppings checks, and the evening ventilation job readable at the controller by the door; each of these saves
-  roughly 0.5–1 min. Not changed in Phase 3 (content for the farmer to confirm; PHASE3.md §17 question 14).
+  Every timed day is now under PHASE3.md's 4.5-minute ceiling (the `onDays` cuts of the review round and one walk per round).
+  A listen stop is 2 s standing still (`props-triggers` `LISTEN_AFTER`): the steps generator stands 2.8 s after a walk
+  that may end short of its point (the hot-day afternoon lane returns about 0.3 m short with the farmer still running).
 - **The model as played** (found by the real-input days): 16-day-old birds chill under six fans with the pad
   (house 28 °C, wind chill at 2.5 m/s: about 3 cold deaths an hour from 14:00) — the heat sign's "young birds:
   as few tunnel fans as the heat allows"; six fans without the pad keep them comfortable with no deaths. Two hours
@@ -505,6 +500,57 @@ hour)` (`level.debug.freeRun`) and `config` (the config module: steps files read
   (`SILO_DAYS`; `r-feedmeter` asks for the feed meter alone on the others), the
   droppings checks take five birds, the night ventilation is done at the controller by the door, and the afternoon
   walk rests on the quiet days 26 and 34.
+
+### The clarity round (the farmer's request after playing Level 1)
+The farmer asked that every job make clear **what to do and what the finished outcome is**. Showing a job's steps,
+the target from the signs and the progress toward it is wanted, and is not a verdict: no "correct" / "wrong" words
+anywhere still holds (test-contracts and test-jobs check the words), and every new figure is on a sign or plate
+(tagged general).
+- **`src/job-figures.js`** (pure): the figures a job works toward, read by the strip and the done rule alike. The flock
+  the farmer knows (`knownFlock`: on the prep day tomorrow's 6,000 chicks of about 42 g, the vent sign's example; later
+  his own count, placed less the dead he counted and his culls, and the automatic scale's weight); the vent sign's table
+  need and the timer's air (`ventNeed`, `VENT_BAND` 90–130 %, general, on the vent sign); the plates' line heights
+  (`nippleCmToday`, `rimCmNow`, ±3 cm: the skills' band; day 0 nipples 10–12 cm); flow age + 20 ±3 ml/min; the brooder row;
+  lux of the dimmer (luxMax 60 × dimmer); catching (dimmer ≤ 20 %, at least 3 fans; lines ≥ 55 cm, pans ≥ 40 cm).
+- **Done rules on the outcome** (job-engine state tests, content-jobs labels): `prep-vent` and `r-minvent` need the
+  timer 90–130 % of the need (r-minvent also more air than before: farm-act `stepUp` is strict, sending the same setting
+  is no step); `prep-drinkers` every line 10–12 cm; `prep-feeders` flooded, full **and** on the litter (rim ≤ 7 cm);
+  `prep-preheat` the thermostat within 1 °C of the day 0 row; `prep-litter` at least 5 cm deep; `prep-lights` ≤ 1 h dark and
+  30–40 lux; `prep-flush` clear and the valves closed; `r-drinkers` every line tested this round within 3 ml/min of age + 20
+  (the farm keeps each line's `lastFlow`); `r-feeders` the meter, the silo, and every line on with feed in the pans, rims at
+  the plate from day 4; `r-raise` / `f-lines` / `c-raise` by the heights reached, not by presses; `r-vent-night` the birds'
+  felt comfort between −1.5 °C and where they pant (or every working fan on) for 30 farm minutes after 18:00;
+  `w2-lights` / `p-sds` 4–6 h dark; `f-ready` the catching panels, dimmed to about 10 lux and 3 fans; `w45-pad` and the heat
+  wave's pad check with the pump on; `p-humid` (and the farm's `padHumidOk`) every working fan; `f-withdraw` 13–9 h before the
+  catch; `d0-grade` every chick looked at (or culled) and the box weighed; the feed orders by amount (`check`
+  'order-days': the silo to 3 days of feed by the feed sign; 'order-withdrawal': to the withdrawal with under 1.2 t left);
+  `w3-topup` also the caked patches forked; the vet calls by the reason the job names; `w2-check` retitled "watch each one
+  walk" (its rule counts the gait). A **live** part of an all / any rule (`{ live: true }`) does not latch: it is read again
+  on every tick and every action, so the outcome holds when the job completes. Held tests (`HELD_MIN`) report their minutes.
+  goto(auto) still completes every open job, so the profiles and test-level are unchanged; test-jobs covers the new rules.
+- **Job strips** (`src/job-strips.js`, `job-strips-cycle.js`: rows of plain text; `src/ui-jobstrip.js` draws them): the panel
+  where a job is done shows its steps with live values, *Sign / Yours* side by side ("Air your flock needs (vent sign table:
+  150 m³/h per 1,000 at 40 g): 928 m³/h | timer now 1 fan 8/300 s = 960 m³/h (103 %)"), and a note when it needs farm time
+  ("The auger fills the pans over farm time: about 25 farm minutes ... close the box and let the clock run"). Every machine
+  panel gets it through `withJobStrip` (ui.js and registerCyclePanels); the feeder box and the controller mount their own (the
+  controller: the read jobs above the tabs, each tab's jobs at its top, "Also open here" pointers); the records book's Phone
+  page shows the order and vet jobs. A job finished while the panel is open stays, marked done, until it closes.
+  Skill unlocks stay unlocks: the strip shows the need, never the seconds (minVentCalc), the felt temperature (windChill), the
+  days of feed left (siloDays) or the plan's live sums (planningCalc).
+- **Controls name their action**: `toggleKey(whenOn, whenOff)` labels say what a press does next (*Start auger* / *Stop
+  auger*, *Open flood windows*, *Open flush valve*, *Shut the main valve*, *Start the medicine*, *Put disinfectant in the
+  tank*, *Start the pad pump*, *Take the feed away* / *Give the feed back*); the state is the row's lamp and its state word
+  (`machineRow().setState`: "Auger: on, stopped by the control pan (pans full)"). The vent timer's key is *Send this setting
+  to the timer*, with "Timer now: …" apart from the draft; the controller rows say in one line what each control does.
+- **The control pan** (farm-feed `augerState`): a line's switch stays on (automatic) and its auger turns only while the pans
+  have room (`turning`: it ran a quarter of the step or more; `noFeed`: no feed from the silo). The fill arithmetic is
+  unchanged, so every profile and test-sim figure is the same; the feeder box's lamp lights only while the auger turns.
+- **The job card** names every part of an all / any rule (✓ / ○, the label), how long a held part has held ("12 of 30 farm
+  minutes so far: close the panel and let the clock run"), bars for the states that had none (dead birds, lame birds, the
+  catch, the vaccine), the readings of the measuring jobs (T, L, V, vent temperatures), and the c-brush / raise / f-lines
+  markers point to the next part or line not done. T, L, V and the chick in the hand show the sign's figure beside the value.
+- Not done: the sandbox tutorial's thermostat target (Phase 1's rule keeps the target on the brooder sign only); w3-change /
+  w45-change still complete on the pans' feed (the strip shows the feed sign's 24 h half-and-half, the rule does not log it).
 
 ### Open (Phase 4 and later)
 - **Day budget:** the `onDays` cuts of the review round are in (above); they are content for the farmer to confirm
