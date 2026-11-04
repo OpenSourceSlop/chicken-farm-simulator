@@ -81,7 +81,9 @@ function restoreSnap(world, snap, trace) {
 
 /** The farm's part of a save (what level.saveBlob carries from the sim: env values, farm, records, skills). */
 export const ENV_SAVE = ['day', 'hour', 'weather', 'houseTemp', 'slabTemp', 'houseRH', 'heaterSetpoint', 'heaterLevel', 'fansOn', 'fansManual', 'padOn', 'ventTimer',
-  'lightProgram', 'maxDay', 'curtainForced', 'cycleClimate', 'fansBroken', 'padWorking', 'fanStages', 'broodersUp'];
+  'lightProgram', 'maxDay', 'curtainForced', 'cycleClimate', 'fansBroken', 'padWorking', 'fanStages', 'broodersUp',
+  // Phase 4 (PHASE4.md §11.1; farm.restore rebuilds them from the farm's condition state too)
+  'powerOn', 'targetShiftC', 'targetShiftToDay', 'inletShare'];
 export function saveBlob(world) {
   const { env, farm, records, skills } = world;
   return JSON.parse(JSON.stringify({ env: Object.fromEntries(ENV_SAVE.map((k) => [k, env[k]])), farm: farm.serialize(), records: records.serialize(), skills: skills.serialize() }));

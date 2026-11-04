@@ -53,7 +53,15 @@ export function installConditions(farm, env) {
   farm.flock.claimed = 0;
   farm.house.flapsClosed = false;
   farm.delivery = null;
-  const start = farm.start, serialize = farm.serialize, restore = farm.restore, enterLevel = farm.enterLevel, trigger = farm.debug.trigger;
+  const start = farm.start, stop = farm.stop, serialize = farm.serialize, restore = farm.restore, enterLevel = farm.enterLevel, trigger = farm.debug.trigger;
+  // back to the sandbox: no condition, the env's power, target and inlets as Phase 1's
+  farm.stop = () => {
+    stop();
+    farm.condition = null; farm._lvCache = null; farm.delivery = null;
+    Object.assign(farm, fresh()); farm.condX = freshX();
+    env.setPower(true); env.setTargetShift(0); env.setInletShare(1);
+    delete farm.water.lineTempC; delete farm.water.supplyK;
+  };
   const forecast = farm.forecast, observe = farm.observe, zones = farm.problemZones;
   farm.start = (level = LEVEL1, opts = {}) => {
     // the condition first: the cycle's syncEnv inside start reads it (the cycle climate of the hot and rainy seasons)
@@ -232,6 +240,7 @@ function condObserve(farm, env, x, z, o) {
   if (!farm.power.on) { out.sounds = 'the house is dark and still: no fans'; return out; }
   if (farm.weatherNow.rain > 0) out.sounds = farm.weatherNow.storm && z > 3 && Math.abs(x) <= 12 && isOn(farm, 'rain-in') && !farm.house.flapsClosed ? 'rain blowing in at the inlets' : 'rain drumming on the roof';
   if (farm.condition === 'water' && env.hour >= 15 && farm.waterTank.levelPct < 20 && farm.flock.alive > 0) out.spread = 'birds crowding along the drinker lines';
+  if (farm.condition === 'water' && farm.water.access < 0.6 && farm.flock.alive > 0) out.droppings = 'dry, firm droppings';
   if (farm.condition === 'badChicks' && farm.flock.inBoxes > 0) out.spread = 'small chicks, many lying still';
   return out;
 }
