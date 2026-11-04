@@ -44,7 +44,7 @@ void EV;
  * heat-handled (Phase 3) changes with the sim package: never with the birds chilled (mean comfort under -1.5 °C); the
  * pad with one to three fans for birds under 21 days is allowed (the hot season's young birds, padYoung1).
  */
-export const STATE_TEST_IDS_P4 = ['power-on', 'brood-warmer', 'line-flow-ok', 'rh-under', 'blend-24h', 'medicine-course', 'feed-withdrawn', 'night-comfort', 'pump-ok', 'lines-cool', 'pad-few-fans'];
+export const STATE_TEST_IDS_P4 = ['power-on', 'brood-warmer', 'line-flow-ok', 'rh-under', 'blend-24h', 'medicine-course', 'feed-withdrawn', 'night-comfort', 'pump-ok', 'lines-cool', 'pad-few-fans', 'brood-warmer-held'];
 
 export const JOBS_COND = [
   // ---------------- the hot season ----------------
@@ -90,9 +90,11 @@ export const JOBS_COND = [
   P('p-weak-batch', 'Many weak chicks in the boxes', { condition: 'badChicks', problem: 'weak-batch', pin: true, window: [0, 24], hardClose: true, spot: 'chickTable', signs: ['sign-chicks', 'chick-grading'], branch: 'brooding',
     done: ALL(L('Grade four stacks or more at the chick table and cull the weak ones', { type: 'count', id: 'chicks.grade', n: 4 }),
       L('Tell the hatchery before 24:00 today (office phone): the graded-out chicks are claimed', { type: 'action', id: 'phone.hatchery', check: 'claim-open' })) }),
-  // day 0 06:00 to day 3 06:00 (78 h): env.targetTemp is the sign's row + 1 °C on days 0-3 (config delivery.targetShiftC)
+  // day 0 06:00 to day 3 06:00 (78 h): env.targetTemp is the sign's row + 1 °C on days 0-3 (config delivery.targetShiftC);
+  // the final check: done once the thermostat has been in the band for 54 of the window's 72 farm hours (the farm counts
+  // them, brood-warmer-held), not on the first tick
   D('b-warm', 0, 'am', 'Brood the small chicks 1 °C warmer', { condition: 'badChicks', window: [6, 78], spot: 'controller', signs: ['sign-brooder', 'sign-chicks'], branch: 'heating',
-    done: LIVE('Thermostat 0.5–1.5 °C over the brooder sign’s row of the day', 'brood-warmer') }),
+    done: L('Thermostat 0.5–1.5 °C over the brooder sign’s row of the day for 54 of the 72 farm hours to day 3 06:00', ST('brood-warmer-held')) }),
   D('b-crop48', 2, 'am', 'Check the crops again at 48 hours', { condition: 'badChicks', window: [8, 12], spot: 'birdScale', signs: ['sign-chicks'], branch: 'brooding',
     done: { type: 'count', id: 'sample.crop', n: 10, sectors: 3 } }),
 

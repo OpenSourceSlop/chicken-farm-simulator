@@ -3,7 +3,7 @@
 // day-0 claim once the hatchery is told the same day (phone.hatchery, ui), yolk-sac infection while weak chicks are in
 // the flock, feed trays and chick paper (brood.trays), the brooder sign's row + 1 °C on days 0-3 (env.setTargetShift).
 // Package "sim", pure logic. No delivery (every other condition, the normal season): nothing here acts.
-import { SPOTS4, LEVEL1 } from './config.js';
+import { SPOTS4, LEVEL1, targetTempAt } from './config.js';
 import { stateOf, isActive, isOn, condFind, condFix } from './farm-cond-core.js';
 import { killBirds } from './farm-flock.js';
 
@@ -17,6 +17,9 @@ export const CHICKS_P4 = {
   stacksForFix: 4, smallBelowG: 38, weakSeenMin: 2,
   weakDeathRef: 0.444,   // Phase 2's weak chicks' hazard over the week (35 % die): the delivery's share sets the factor
   infectionToAge: 7,
+  // the final check: a weak batch's warmer brooding held over b-warm's window (day 0 06:00 to day 3 06:00): the farm counts
+  // the hours with the thermostat 0.5-1.5 °C over the brooder sign's row of the day; b-warm is done at 54 of the 72 (model)
+  warmFromH: 6, warmToH: 78, warmHoldH: 54,
 };
 
 export const chicksFresh = () => ({ brood: { trays: false } });
@@ -49,6 +52,15 @@ export function stepChicks(farm, env, hrs) {
     }
   }
   if (!X.claimClosed && env.dayNumber >= 1) X.claimClosed = true;   // 24:00 of day 0: no call, no claim
+  // the warmer brooding's hours (b-warm): the step's part inside the window, with the thermostat in the band of the day
+  if (D.targetShiftC && hrs > 0) {
+    const a = Math.max(env.day - hrs / 24, CHICKS_P4.warmFromH / 24), b = Math.min(env.day, CHICKS_P4.warmToH / 24);
+    if (b > a) {
+      const over = env.heaterSetpoint - Math.round(targetTempAt(Math.max(0, env.dayNumber)) * 2) / 2;
+      X.warmOfH = +((X.warmOfH || 0) + (b - a) * 24).toFixed(4);
+      if (over >= 0.5 - 1e-9 && over <= 1.5 + 1e-9) X.warmH = +((X.warmH || 0) + (b - a) * 24).toFixed(4);
+    }
+  }
 }
 
 /** Grading a stack still in its boxes; the trays (PHASE4.md §10.3: answers at once, the panel waited its bar). */

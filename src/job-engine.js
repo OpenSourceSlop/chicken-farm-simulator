@@ -40,6 +40,7 @@ import { EV, matchPayload } from './events.js';
 import { ALL_JOBS } from './content-jobs.js';
 import { feltNearTarget } from './farm-problems.js';
 import { heatHandled, YOUNG_PAD_MAX_FANS } from './farm-cycle-problems.js';
+import { CHICKS_P4 } from './farm-cond-chicks.js';
 import { FEED } from './farm-feed.js';
 import { knownAliveOf, ventNeed, ventInBand, VENT_BAND, nippleInBand, rimInBand, flowToday, brooderRowC, luxOfDimmer, fansWorking, NIPPLE_DAY0_CM, FLOW_BAND, CHICK_LUX, DARK_H,
   CATCH_DIMMER_MAX, CATCH_FANS_MIN, LINES_UP_CM, PANS_UP_CM, PANS_ON_LITTER_CM } from './job-figures.js';
@@ -323,6 +324,8 @@ function stateTest(test, st, { env, farm, props }, inst, rule = {}) {
     // ---- Phase 4 (content-jobs-cond.js STATE_TEST_IDS_P4) ----
     case 'power-on': return farm.power ? !!farm.power.on : true;
     case 'brood-warmer': { const over = env.heaterSetpoint - brooderRowC(env.dayNumber); return over >= 0.5 - EPS && over <= 1.5 + EPS; }
+    // the final check: b-warm holds over its window (farm-cond-chicks counts the hours in the band, skips included)
+    case 'brood-warmer-held': return (farm.condX?.warmH ?? 0) >= CHICKS_P4.warmHoldH - EPS;
     case 'line-flow-ok': {
       const l = farm.water.lines[rule.line ?? 0], f = l?.lastFlow;
       return !!f && f.at >= (inst?.opensAt ?? -Infinity) - EPS && Math.abs(f.mlMin - flowToday(env)) <= FLOW_BAND + EPS;
@@ -413,6 +416,7 @@ function stateProgress(test, { env, farm, props }, st, rule = {}) {
     case 'lines-flushed': return farm.water.lines.reduce((a, l) => a + 0.9 * clamp01(l.flushClear) + (l.flushClear >= 0.99 && !l.flushing ? 0.1 : 0), 0) / farm.water.lines.length;
     case 'all-placed': { const d = farm.flock.delivered || LEVEL1.chicksPlaced; return clamp01(farm.flock.placed / d); }
     case 'preheat-on': return (Math.abs(env.heaterSetpoint - brooderRowC(0)) <= 1 + EPS ? 0.5 : 0) + (env.heatersOn ? 0.5 : 0);
+    case 'brood-warmer-held': return clamp01((farm.condX?.warmH ?? 0) / CHICKS_P4.warmHoldH);
     case 'litter-covered': return clamp01((farm.litter?.cover ?? 0) / 0.95) * ((farm.litter?.depthCm ?? 0) >= 5 - EPS ? 1 : 0.9);
     case 'house-ready': return clamp01(houseCover(farm) / 0.95);
     case 'litter-removed': return clamp01((1 - houseCover(farm)) / 0.95);
@@ -464,6 +468,7 @@ function stateSnapshot(test, { env, farm }) {
     // Phase 4
     case 'power-on': return { on: !!farm.power?.on, source: farm.power?.source ?? null, at: env.day };
     case 'brood-warmer': return { setpoint: env.heaterSetpoint, rowC: brooderRowC(env.dayNumber) };
+    case 'brood-warmer-held': return { heldH: +(farm.condX?.warmH ?? 0).toFixed(1), ofH: +(farm.condX?.warmOfH ?? 0).toFixed(1) };
     case 'line-flow-ok': return { flowsMlMin: farm.water.lines.map((l) => l.lastFlow?.mlMin ?? null) };
     case 'blend-24h': return { blendH: +(farm.stats?.blendH ?? 0).toFixed(1), blendFinH: +(farm.stats?.blendFinH ?? 0).toFixed(1) };
     case 'medicine-course': return { daysOn: medicineDays(farm, env) };

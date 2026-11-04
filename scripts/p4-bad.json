@@ -142,6 +142,7 @@
   {"advance":0.15},
   {"advanceUntil":"__game.level.jobs.byKey('b-warm@0')?.status === 'done'","max":60,"step":1},
   {"expect":"(() => { const j = __game.level.jobs.byKey('b-warm@0'); return j && j.status === 'done' && 'b-warm@0 done at ' + __t(); })()","label":"Brood the small chicks 1 °C warmer: the thermostat at the row + 1 °C"},
+  {"expect":"(() => { const h = __game.farm.condX.warmH || 0, sp = __game.env.heaterSetpoint, row = Math.round(__game.config.targetTempAt(0) * 2) / 2; return h > 3 && sp - row >= 0.5 && sp - row <= 1.5 && 'thermostat ' + sp + ' °C (row ' + row + ' °C), ' + h.toFixed(2) + ' farm hours in the band by ' + __t(); })()","label":"the farm counts the hours with the thermostat in the band (b-warm holds over days 0-3)"},
   {"eval":"__timerEnd('day 0')"},
   {"eval":"(__game.level.debug.goto(7, 21, { auto: true }), 'goto(7, 21, auto) -> ' + __game.level.mode + ' ' + __t())"},
   {"advance":0.4},

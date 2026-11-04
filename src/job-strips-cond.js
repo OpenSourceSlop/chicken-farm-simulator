@@ -8,6 +8,7 @@ import { GENERATOR, WATER_TANK, HEAT, HEAT_P4, flockAgeAt } from './config.js';
 import { int, one, hhmm } from './ui-format.js';
 import { step, cmp, line, note, wait, time, pct, partRows, houseRow, birdsSeen, ventRows, rowShiftC, SHIFT_WORDS } from './job-strips.js';
 import { brooderRowC, flowToday, fansWorking, FLOW_BAND } from './job-figures.js';
+import { CHICKS_P4 } from './farm-cond-chicks.js';   // b-warm's held hours (the final check)
 
 const C1 = (v) => `${one(v)} °C`;
 const ageOf = (env) => Math.max(0, Math.floor(flockAgeAt(env.day)));
@@ -86,8 +87,11 @@ export const STRIPS_COND = {
   'b-warm': { panels: { controller: 'temp' }, title: 'Brood the small chicks 1 °C warmer',
     rows(c, inst) {
       const d = Math.max(0, c.env.dayNumber), row = brooderRowC(d), sp = c.env.heaterSetpoint, sh = rowShiftC(c) || 1, over = sp - row, ok = over >= 0.5 - 1e-9 && over <= 1.5 + 1e-9;
+      const heldH = Math.min(CHICKS_P4.warmHoldH, c.farm.condX?.warmH ?? 0);
       return [cmp('Thermostat', `brooder sign, day ${d}: ${C1(row)} + ${one(sh)} °C = ${C1(row + sh)} (${SHIFT_WORDS})`, C1(sp)),
         step(ok ? `Thermostat ${C1(sp)}: ${one(over)} °C over the sign’s row` : `Press ${over < 0.5 ? 'Raise' : 'Lower'} the brooder thermostat (0.5 °C a press) to ${one(row + 0.5)}–${one(row + 1.5)} °C`, ok),
+        // the final check: the job holds over its window (farm-cond-chicks counts the hours in the band)
+        time(`Kept in the band ${Math.floor(heldH)} of ${CHICKS_P4.warmHoldH} farm hours so far (to day 3 06:00): the clock must run, follow the row each morning`, heldH / CHICKS_P4.warmHoldH),
         line('Until day 3 at 06:00; then back to the sign’s row.')];
     } },
   'b-crop48': { panels: { 'chick-in-hand': null },

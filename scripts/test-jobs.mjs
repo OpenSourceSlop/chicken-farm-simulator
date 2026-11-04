@@ -757,6 +757,8 @@ test('Phase 4: every new state test (STATE_TEST_IDS_P4) on a farm with its field
     ['lines-cool', {}, (L) => { L.farm.water.lineTempC = [28.5, 29.9, 30, 27]; }, 0, (L) => { L.farm.water.lineTempC = [28.5, 31.2, 30, 27]; }],
     // review round: the hot season's young birds: the pad with one to three fans, not six without it
     ['pad-few-fans', {}, (L) => { L.env.setFans(2); L.env.setPad(true); }, 0, (L) => { L.env.setFans(6); L.env.setPad(false); }],
+    // the final check: b-warm held over its window (the farm's count of hours in the band)
+    ['brood-warmer-held', {}, (L) => { (L.farm.condX ||= {}).warmH = 54; }, 0, (L) => { (L.farm.condX ||= {}).warmH = 40; }],
   ];
   assert(CASES.length + 1 === STATE_TEST_IDS_P4.length && CASES.every(([t]) => STATE_TEST_IDS_P4.includes(t)), 'a case for every Phase 4 state test (night-comfort below)');
   for (const [test, extra, yes, mins, no] of CASES) {

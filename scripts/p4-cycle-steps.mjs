@@ -181,6 +181,9 @@ export function bad() {
     clickUntil('Raise the brooder thermostat by 0.5 °C', `__game.env.heaterSetpoint >= Math.round(__game.config.targetTempAt(0) * 2) / 2 + 1`, 6), adv(0.2), shot('p4b-06-warmer'), ...esc(),
     until(`__game.level.jobs.byKey('b-warm@0')?.status === 'done'`, 60, 1),
     job('b-warm@0', 'Brood the small chicks 1 °C warmer: the thermostat at the row + 1 °C'),
+    // the final check: b-warm holds over its window (54 of its 72 farm hours in the band, counted by the farm; here the morning
+    // round of goto(auto) did the job): the hours in the band since the morning round's thermostat
+    exp(`(() => { const h = __game.farm.condX.warmH || 0, sp = __game.env.heaterSetpoint, row = Math.round(__game.config.targetTempAt(0) * 2) / 2; return h > 3 && sp - row >= 0.5 && sp - row <= 1.5 && 'thermostat ' + sp + ' °C (row ' + row + ' °C), ' + h.toFixed(2) + ' farm hours in the band by ' + __t(); })()`, 'the farm counts the hours with the thermostat in the band (b-warm holds over days 0-3)'),
     ev(`__timerEnd('day 0')`),
     ...autoTo(7, 21), passed('level1', ', ratio: r.ratio'), shot('p4b-07-result'),
     exp(`(() => { const r = __game.level.result; return r.ratio >= 4 && /A bad batch/.test(${panelText()}) && 'the day 7 weight ' + r.ratio.toFixed(2) + ' × the measured ' + __game.farm.stats.chickWeightMeasuredG.toFixed(1) + ' g; deaths ' + r.deathsPct.toFixed(2) + ' % (claimed apart ' + __game.farm.flock.claimed + ')'; })()`, 'the result against the measured chick weight, the claimed chicks apart, the condition named'),

@@ -129,6 +129,7 @@ function stateText(test, inst, ctx) {
   switch (test) {
     case 'preheat-on': return `thermostat ${env.heaterSetpoint.toFixed(1)} °C (brooder sign, day 0: ${brooderRowC(0)} °C) · brooders ${env.heatersOn ? 'burning' : 'off'}`;
     case 'brood-warmer': { const d = Math.max(0, env.dayNumber); return `thermostat ${env.heaterSetpoint.toFixed(1)} °C · brooder sign, day ${d}: ${brooderRowC(d)} °C + 1 °C (${SHIFT_WORDS})`; }
+    case 'brood-warmer-held': return `kept in the band ${Math.floor(Math.min(54, f.condX?.warmH ?? 0))} of 54 farm hours`;
     case 'feed-withdrawn': return f.feed?.withdrawn ? 'the feed is taken away' : 'feed in the pans';
     case 'power-on': return f.power?.on === false ? 'no power in the house' : 'power on';
     case 'nipples-at': return `${n(W, (l) => l.heightCm >= NIPPLE_DAY0_CM[0] && l.heightCm <= NIPPLE_DAY0_CM[1])} / 4 lines at 10–12 cm`;
@@ -151,7 +152,7 @@ const BAR_TESTS = ['litter-covered', 'lines-flushed', 'pans-flooded', 'all-place
   'preheat-on', 'nipples-at', 'lines-raised', 'lines-up', 'all-up', 'feeders-checked', 'dead-cleared', 'lame-cleared', 'house-empty', 'vaccine-drunk',
   'house-near-target', 'rh-under', 'air-clear', 'heat-handled', 'pad-humid-ok', 'night-comfort', 'chick-lights', 'catch-ready', 'vent-in-band', 'flows-in-band',
   // Phase 4
-  'feed-withdrawn', 'brood-warmer', 'power-on'];
+  'feed-withdrawn', 'brood-warmer', 'brood-warmer-held', 'power-on'];
 const hasBar = (inst) => { const t = inst.def.done.type; return t === 'each' || t === 'count' || t === 'coverage' || t === 'all' || t === 'any' || (t === 'state' && BAR_TESTS.includes(inst.def.done.test)); };
 
 export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook, onSkills, nextLabel }) {

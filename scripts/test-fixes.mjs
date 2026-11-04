@@ -79,9 +79,10 @@ test('1: a panel opened again with no job for it shows no strip (not the strip o
 });
 
 /** A bad batch at the truck: four stacks graded by hand at the table, every stack tipped, the hatchery not called yet. */
-function badBatchNoCall() {
+function badBatchNoCall({ morning = true } = {}) {
   const W = makeLevelJs('badChicks');
-  W.level.debug.goto(0, 10.05, { auto: true });             // the prep day and the morning as the ideal (the truck not yet)
+  if (morning) W.level.debug.goto(0, 10.05, { auto: true }); // the prep day and the morning as the ideal (the truck not yet)
+  else { W.level.debug.goto(-1, 22, { auto: true }); W.level.debug.goto(0, 10.05); }   // day 0's jobs left to the farmer
   assert(W.farm.flock.inBoxes > 0, `the late truck has come: ${W.farm.flock.inBoxes} in boxes`);
   W.farm.act('sample.box');                                 // the box weighing finds the weak batch: its job opens
   const TIPS = [[-16, -1], [-16, 1], [-10, -1], [-10, 1], [-4, -1], [-4, 1]];
@@ -190,6 +191,24 @@ test('3: the water condition\'s ideal (the pump read and repaired when worn): no
   N.run.startRun({ seed: 1, at: 'level1', condition: null });
   N.level.debug.goto(1, 12, { auto: true });
   assert(N.level.watch.status().on && !N.level.watch.status().rows.supply, 'no supply row in the normal season');
+});
+
+test('4: b-warm holds over its window: open after the thermostat is set, done at 54 farm hours in the band; set back at once, missed', () => {
+  const W = badBatchNoCall({ morning: false }); call(W);
+  W.env.setHeaterSetpoint(35);                              // day 0: the row 34 °C + 1
+  W.level.debug.goto(0, 14);
+  const key = 'b-warm@0', j = () => W.level.jobs.byKey(key);
+  assert(j()?.status === 'open', `open, not done on its first tick: ${j()?.status}`);
+  const parts = W.level.engine.parts(j());
+  assert(parts.length === 1 && !parts[0].met && j().progress > 0.05 && j().progress < 0.2, `the hours not yet: ${JSON.stringify(parts.map((p) => [p.label, p.met]))}, progress ${j().progress}`);
+  W.level.debug.goto(2, 12);
+  assert(j().status === 'open' && W.farm.condX.warmH > 40 && W.farm.condX.warmH < 54, `still open on day 2 at noon: ${j().status}, ${W.farm.condX.warmH} h`);
+  W.level.debug.goto(3, 5);
+  assert(j().status === 'done', `done once 54 farm hours in the band: ${j().status}, ${W.farm.condX.warmH} h`);
+  const X = badBatchNoCall({ morning: false }); call(X);
+  X.env.setHeaterSetpoint(35); X.level.debug.goto(0, 13);
+  X.env.setHeaterSetpoint(34); X.level.debug.goto(3, 7);   // back to the row at once
+  assert(X.level.jobs.byKey(key).status === 'missed', `missed: ${X.level.jobs.byKey(key).status}, ${X.farm.condX.warmH} h`);
 });
 
 let failed = 0;
