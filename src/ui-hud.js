@@ -19,13 +19,15 @@ function gauge(cls, icon, label, extra) {
 export function createHud(parent, env) {
   // ---- farm clock ----
   const day = h('div', { class: 'clock-day' });
+  // Phase 4 (PHASE4.md §1.2): the condition's name under the day ("Hot season"); empty in the normal season
+  const cond = h('div', { class: 'clock-cond', hidden: true });
   const time = h('div', { class: 'clock-time' });
   const sky = h('div', { class: 'clock-sky', 'aria-hidden': 'true' });
   const wIcon = h('span', { 'aria-hidden': 'true' });
   const wText = h('span');
   const rate = h('span', { class: 'clock-rate' });
   const clock = h('section', { class: 'card clock', 'aria-label': 'Farm clock' },
-    h('div', null, day, time), sky, h('div', { class: 'clock-weather' }, wIcon, wText, rate));
+    h('div', null, day, cond, time), sky, h('div', { class: 'clock-weather' }, wIcon, wText, rate));
 
   // ---- gauges ----
   const house = gauge('gauge--main', ICONS.thermometer, 'House');
@@ -92,6 +94,9 @@ export function createHud(parent, env) {
     // in a level the level names the day (PHASE3.md §2.3: "Planning day", "Day 42 · the catch", "Clean-out day 2")
     if (level?.dayText) setText(day, level.dayText());
     else if (env.dayNumber !== lastDay) { lastDay = env.dayNumber; setText(day, level && lastDay < 0 ? 'Prep day' : `Day ${fmt0(lastDay)}`); }
+    const ct = level?.conditionText ? level.conditionText() : '';
+    if (cond.hidden === !!ct) cond.hidden = !ct;
+    if (ct) { setText(cond, ct); setAttr(clock, 'aria-label', `Farm clock: ${day.textContent} · ${ct}`); }
     setText(time, env.timeLabel);
     if (!gauges) return;
     if (env.isNight !== lastNight) {

@@ -72,7 +72,7 @@ export const LEVEL_TEXT = {
   start: 'Start a new flock',
   startBrooding: 'Start at the brooding week',
   startAgain: (what) => `Start again — replaces your save (${what})`,
-  continueLabel: (where, time) => `Continue — ${where}, ${time}`,
+  continueLabel: (where, time, cond) => `Continue — ${where}, ${time}${cond ? ` · ${cond}` : ''}`,
   sandbox: 'Walk the Phase 1 farm (sandbox)',
   skills: 'Skill tree',
   noSave: 'Saving is off in this browser: replays start from a standard flock, and closing the page ends the run.',
@@ -110,7 +110,29 @@ export const RUN_CARD = {
   confirm: (short, d) => `Replay ${short} — your run goes back to ${d <= -2 ? 'the planning day' : d === -1 ? 'the prep day' : `day ${d}`}`,
   harder: 'Harder flocks (hot season, rainy season, a bad batch of chicks, a water problem) come in the next build.',
   noStorage: 'Saving is off in this browser: replays start from a standard flock.',
-  standard: (d) => `Getting the flock to day ${d} …`,
+  // Phase 4 (PHASE4.md §1.2, §3.1): the harder flocks and the level rows' condition choice
+  standard: (d, cond) => `Getting the flock to day ${d}${cond ? ` ${condIn(cond)}` : ''} …`,
+  playStandard: 'Play from a standard start',
+  conditionLabel: 'Flock',
+  harderHeading: 'Harder flocks',
+  harderShut: 'Harder flocks: after your first full cycle',
+  harderOff: 'Not in this build yet',
+  harderDone: (n) => `${n} cycle${n === 1 ? '' : 's'} finished under it`,
+  startIn: (id) => `Start a new flock ${condIn(id)}`,
+  newRunNote: 'Another flock than this run’s starts a new run from this level; the levels before it come from a standard start.',
+  confirmNew: (what) => `${what} — replaces this run`,
+  confirmStd: (short, d) => `Standard start of ${short} — your run goes back to ${d <= -2 ? 'the planning day' : d === -1 ? 'the prep day' : `day ${d}`}`,
+};
+/** "in the hot season", "with a bad batch of chicks" (a condition inside a sentence). */
+export function condIn(id) {
+  return { hot: 'in the hot season', rainy: 'in the rainy season', badChicks: 'with a bad batch of chicks', water: 'with a water problem' }[id] || '';
+}
+/** The harder flocks' cards (PHASE4.md §1.2): name, months (a season) and one line each. */
+export const HARDER = {
+  hot: { line: 'Afternoons of 37–38 °C with the sun on the roof, nights hardly under 28 °C, a heat wave to about 41 °C in week 5.' },
+  rainy: { line: 'Damp air day and night, storms every week, a power cut in week 5.' },
+  badChicks: { line: 'Small, uneven, many weak.' },
+  water: { line: 'Iron in the well water and an old pump.' },
 };
 
 // Keys of a level (title card and the help card). Physical keys, as in Phase 1.

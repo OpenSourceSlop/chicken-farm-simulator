@@ -2,8 +2,15 @@
 // pips, its points and what each level unlocks; the card picked shows its milestones (all of the
 // cycle, skills.js ALL_MILESTONES): the result in plain words, the level it is earned in, its points
 // and, once earned, the measured value. Points come from play only (PHASE3.md §9). Owner: package "run".
-import { SKILL_LEVEL_POINTS, UNLOCKS, LEVELS } from './config.js';
-import { ALL_MILESTONES } from './skills.js';
+// Phase 4 (PHASE4.md §7): the condition milestones (skills-cond.js MILESTONES_COND) under their branches, marked with
+// the condition's name ("Hot season"); they are earned only in a run of that condition.
+import { SKILL_LEVEL_POINTS, UNLOCKS, LEVELS, conditionLabel } from './config.js';
+import { ALL_MILESTONES as ALL_P3 } from './skills.js';
+import { MILESTONES_COND } from './skills-cond.js';
+
+/** Every milestone the tree lists: skills.js ALL_MILESTONES (with MILESTONES_COND once the sim package merges them) and
+ *  the condition ones it does not have yet. */
+const ALL_MILESTONES = [...ALL_P3, ...MILESTONES_COND.filter((m) => !ALL_P3.some((x) => x.id === m.id))];
 import { h, button, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
@@ -40,7 +47,7 @@ export function buildSkillTreePanel(L) {
   const miles = h('div', { class: 'tree-miles tree-miles--one' });
   el.append(h('div', { class: 'tree-case card' },
     h('header', { class: 'tree-head' }, h('span', { html: ICONS.tree, 'aria-hidden': 'true' }), h('div', null, h('h2', { id: titleId }, 'Skill tree'),
-      h('p', null, 'Points come from what happens on your farm, from the plan to the clean house. Each level of a branch unlocks a tool. Pick a branch to see its milestones.'))),
+      h('p', null, 'Points come from what happens on your farm, from the plan to the clean house. Each level of a branch unlocks a tool. Pick a branch to see its milestones; the harder flocks add their own, named by the flock.'))),
     grid, miles), closeBtn);
   let picked = null;
 
@@ -79,7 +86,8 @@ export function buildSkillTreePanel(L) {
       const detail = L.skillDetail(m.id);
       return h('li', { class: m.tier != null ? 'is-earned' : '' },
         h('span', { class: 'mile-pts' }, m.tier != null ? `${m.points}` : '0', h('small', null, `/${best}`)),
-        h('span', null, m.text, h('small', { class: 'mile-level' }, ` · ${LEVEL_SHORT[m.level] || m.level}`), m.tier != null && detail ? h('small', { class: 'mile-detail' }, detail) : null));
+        h('span', null, m.text, m.condition ? h('small', { class: 'mile-cond' }, ` · ${conditionLabel(m.condition)}`) : null,
+          h('small', { class: 'mile-level' }, ` · ${LEVEL_SHORT[m.level] || m.level}`), m.tier != null && detail ? h('small', { class: 'mile-detail' }, detail) : null));
     }));
     miles.replaceChildren(h('section', { class: 'branch-detail' }, h('h3', null, b.name), levels, h('p', { class: 'miles-k' }, 'Milestones · points · the level they come from'), list));
   }

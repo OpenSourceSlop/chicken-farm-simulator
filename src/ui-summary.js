@@ -1,7 +1,11 @@
 // The record book's graphs (unlocks: waterTrend, weightGraph, feedGraph, gasGraph, comfortGraph) and the
 // cycle summary after the clean-out (PHASE3.md §1 "Cycle summary", §8.5). Graphs draw the farmer's numbers
 // beside the plate's, in one ink: no good or bad colours. Owner: package "run".
-import { SKILL_BRANCHES, weightAt, feedStdGAt, flockAgeAt } from './config.js';
+// Phase 4 (PHASE4.md §1.2, §1.7, §3.3): the summary names the run's condition, draws the farmer's last normal-season
+// cycle beside a condition cycle (plain numbers, no verdict), marks the levels that came from a standard start and,
+// after a finished cycle, offers the Harder flocks (ui-run.js createHarderCards).
+import { SKILL_BRANCHES, weightAt, feedStdGAt, flockAgeAt, conditionLabel, levelById } from './config.js';
+import { createHarderCards } from './ui-run.js';
 import { h, button, uniqueId, nodes } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
@@ -104,6 +108,7 @@ export function buildSummaryPanel(L) {
   const body = h('div', { class: 'result-body' });
   el.append(h('div', { class: 'result-case card' }, body), closeBtn);
   let s = null;
+  const harder = createHarderCards({ run: () => L.run?.(), onStart: (id) => L.startCondition?.(id) });
   function render() {
     const run = L.run?.();
     s = s || run?.state()?.summary || (typeof L.records.cycleSummary === 'function' ? L.records.cycleSummary({ plan: run?.state()?.plan ?? null, levels: run?.state()?.levels ?? {} }) : null);
@@ -112,6 +117,17 @@ export function buildSummaryPanel(L) {
     const kv = (rows) => h('table', { class: 'ledger ledger--dark' }, h('tbody', null, rows.filter(Boolean).map(([k, ...v]) => h('tr', null, h('th', { scope: 'row' }, k), ...v.map((x) => h('td', null, x))))));
     const p = s.plan, a = s.actual || {};
     const dbl = deathsByLevelRows(s.deathsByLevel);
+    // Phase 4: the condition, the standard start's levels and the last normal-season cycle beside this one
+    const cond = s.condition ?? run?.state()?.runCondition ?? null, cname = cond ? conditionLabel(cond) : '';
+    const fs = new Set(s.fromStandard || []), cmpd = s.compare || null;
+    const fsNames = [...fs].map((id) => levelById(id)?.n).filter(Boolean);
+    const fsNote = fs.size ? `Levels ${Math.min(...fsNames)}–${Math.max(...fsNames)} ${s.standardNote || 'from a standard start'}: the ideal farmer played them${cname ? ` ${cname.toLowerCase()}` : ''}.` : null;
+    const was = (v, f) => (cmpd && v != null ? `last normal-season cycle: ${f(v)}` : null);
+    const dblRows = dbl.map((d) => {
+      const c = cmpd && !fs.has(d.id ?? d.level) ? deathsByLevelRows(cmpd.deathsByLevel).find((x) => x.name === d.name) : null;
+      return [d.name + (fs.has(d.id ?? d.level) || d.fromStandard ? ' (from a standard start)' : ''), `${two(d.pct)} %`,
+        d.deaths != null ? `${int(d.deaths)} dead, ${int(d.culls || 0)} culled${d.doa ? `, ${int(d.doa)} dead on arrival` : ''}` : '', ...(cmpd ? [c ? `${two(c.pct)} %` : '—'] : [])];
+    });
     const weights = (s.weights || []).filter((w) => w.targetG);
     const chart = dayChart({ title: 'Weight', series: [{ pts: weights.map((w) => [w.day, w.weighedG]), label: 'line: weighed' }, { kind: 'dots', pts: weights.map((w) => [w.day, w.weighedG]) },
       { pts: weights.map((w) => [w.day, w.targetG]), dash: true, ink2: true, label: 'dashed: the target' }] });
@@ -123,16 +139,22 @@ export function buildSummaryPanel(L) {
       button({ class: 'btn', onclick: () => L.openPanel('skilltree') }, h('span', { html: ICONS.tree, 'aria-hidden': 'true' }), 'Skill tree'),
       button({ class: 'btn', onclick: () => L.level()?.toTitle() }, 'Back to the title'));
     body.replaceChildren(...nodes(
-      h('header', { class: 'result-head' }, h('p', { class: 'sign-kicker' }, 'The whole cycle'), h('h2', { id: titleId }, 'Cycle summary')),
+      h('header', { class: 'result-head' }, h('p', { class: 'sign-kicker' }, cname ? `The whole cycle · ${cname}` : 'The whole cycle'), h('h2', { id: titleId }, cname ? `Cycle summary · ${cname}` : 'Cycle summary')),
       h('div', { class: 'bigs bigs--4' },
-        big('Birds sold', s.sold != null ? int(s.sold) : '—', `of ${int(s.placed)} chicks placed`),
-        big('Mean live weight', s.meanLiveG != null ? `${int(s.meanLiveG)} g` : '—', s.liveKg != null ? `${int(s.liveKg)} kg live in all` : null),
-        big('FCR', s.fcr != null ? two(s.fcr) : '—', s.epef != null ? `production efficiency ${int(s.epef)}` : null),
-        big('Deaths, culls, dead on arrival', s.mortalityPct != null ? `${two(s.mortalityPct)} %` : '—', 'of the chicks placed')),
+        big('Birds sold', s.sold != null ? int(s.sold) : '—', [`of ${int(s.placed)} chicks placed`, was(cmpd?.sold, int)].filter(Boolean).join(' · ')),
+        big('Mean live weight', s.meanLiveG != null ? `${int(s.meanLiveG)} g` : '—', [s.liveKg != null ? `${int(s.liveKg)} kg live in all` : null, was(cmpd?.meanLiveG, (v) => `${int(v)} g`)].filter(Boolean).join(' · ') || null),
+        big('FCR', s.fcr != null ? two(s.fcr) : '—', [s.epef != null ? `production efficiency ${int(s.epef)}` : null, was(cmpd?.fcr, two), was(cmpd?.epef, (v) => `efficiency ${int(v)}`)].filter(Boolean).join(' · ') || null),
+        big('Deaths, culls, dead on arrival', s.mortalityPct != null ? `${two(s.mortalityPct)} %` : '—', ['of the chicks placed', was(cmpd?.mortalityPct, (v) => `${two(v)} %`)].filter(Boolean).join(' · '))),
       btns,
+      fsNote ? h('p', { class: 'result-note' }, fsNote) : null,
+      cmpd ? [h('h3', { class: 'result-h' }, `${cname || 'This cycle'} beside your last normal-season cycle`),
+        kv([['', cname || 'This cycle', 'Last normal season'], ['Birds sold', s.sold != null ? int(s.sold) : '—', cmpd.sold != null ? int(cmpd.sold) : '—'],
+          ['Mean live weight', s.meanLiveG != null ? `${int(s.meanLiveG)} g` : '—', cmpd.meanLiveG != null ? `${int(cmpd.meanLiveG)} g` : '—'],
+          ['FCR', s.fcr != null ? two(s.fcr) : '—', cmpd.fcr != null ? two(cmpd.fcr) : '—'], ['Production efficiency', s.epef != null ? int(s.epef) : '—', cmpd.epef != null ? int(cmpd.epef) : '—'],
+          ['Deaths, culls, dead on arrival', s.mortalityPct != null ? `${two(s.mortalityPct)} %` : '—', cmpd.mortalityPct != null ? `${two(cmpd.mortalityPct)} %` : '—']])] : null,
       h('h3', { class: 'result-h' }, 'Weight against the target'), h('div', { class: 'graph graph--dark', html: chart }),
       h('h3', { class: 'result-h' }, 'Deaths by level'),
-      dbl.length ? kv(dbl.map((d) => [d.name, `${two(d.pct)} %`, d.deaths != null ? `${int(d.deaths)} dead, ${int(d.culls || 0)} culled${d.doa ? `, ${int(d.doa)} dead on arrival` : ''}` : ''])) : h('p', { class: 'result-note' }, 'Not in the record.'),
+      dbl.length ? kv([...(cmpd ? [['', cname || 'This cycle', '', 'Last normal season']] : []), ...dblRows]) : h('p', { class: 'result-note' }, 'Not in the record.'),
       h('h3', { class: 'result-h' }, 'Used'),
       kv([['Feed', s.feedKg != null ? `${int(s.feedKg)} kg` : '—'], ['Water', s.waterL != null ? `${int(s.waterL)} L` : '—'], ['Gas', s.gasKg != null ? `${int(s.gasKg)} kg` : '—'],
         ['Rest before the next chicks', s.restDays != null ? `${int(s.restDays)} days` : '—'], ['Swabs that grew bacteria', s.swabsPositive != null ? `${int(s.swabsPositive)} of 10` : '—']]),
@@ -141,10 +163,12 @@ export function buildSummaryPanel(L) {
         ['Sale weight', `${one(p.saleKg)} kg`, a.saleKg != null ? `${two(a.saleKg)} kg` : '—'],
         ['Birds for sale a week', p.salePerWeek != null ? int(p.salePerWeek) : '—', s.sold != null && a.cycleDays ? int((s.sold * 7) / a.cycleDays) : '—'],
         ['Days per flock', int(p.cycleDays), a.cycleDays != null ? int(a.cycleDays) : '—']])
-        : h('p', { class: 'result-note' }, 'This run started at the brooding week: no plan to compare with.'),
+        : h('p', { class: 'result-note' }, fs.size ? 'This run began from a standard start: no plan of yours to compare with.' : 'This run started at the brooding week: no plan to compare with.'),
       run?.state()?.plan?.outcome ? h('p', { class: 'result-note' }, `The company’s reply: ${replyLines(run.state().plan).join(' · ')}.`) : null,
       h('h3', { class: 'result-h' }, 'Skill points by branch'),
-      h('ul', { class: 'result-points' }, Object.entries(pts).map(([b, n]) => h('li', null, h('b', null, branchName(b)), ` · ${int(n)} ${n === 1 ? 'point' : 'points'}`)))));
+      h('ul', { class: 'result-points' }, Object.entries(pts).map(([b, n]) => h('li', null, h('b', null, branchName(b)), ` · ${int(n)} ${n === 1 ? 'point' : 'points'}`))),
+      run ? harder.el : null));
+    harder.refresh();
   }
   return { el, kind: 'paused', show(sum) { s = sum || null; render(); }, onOpen() { render(); }, update(dt, force) { if (force) render(); } };
 }

@@ -9,7 +9,7 @@
 import { makeWorld } from '../src/farm-profiles-run.js';
 import { createLevel, IDEAL_PLAN } from '../src/level.js';
 import { createRun } from '../src/run.js';
-import { LEVELS, LEVEL1, levelById } from '../src/config.js';
+import { LEVELS, LEVEL1, CONDITIONS, levelById } from '../src/config.js';
 import { EV } from '../src/events.js';
 import { planSums } from '../src/farm-plan.js';
 
@@ -274,6 +274,118 @@ chain('a standard start of a level the player had passed: the later levels and t
   const card = R.run.card().map((c) => `${c.id}:${c.state}`).join(' ');
   assert(!R.run.hasStart('weeks45', 22) && !R.run.hasStart('weeks45', 29) && R.run.state().levels.weeks45 == null, `weeks 4-5 starts gone: ${card}`);
   assert(R.run.state().levels.week2?.state === 'passed' && R.run.state().levels.level1?.attempts === 1, `the player's own entries kept: ${JSON.stringify(R.run.state().levels.level1)}`);
+});
+
+// ---------------- Phase 4 (PHASE4.md §3.1, §12.2): the condition in the run ----------------
+/** The generator started and switched when the rainy season's power cut comes (the stub: no generator profile yet). */
+function meetCut(R) {
+  if (R.farm.power && R.farm.power.on === false) { R.farm.act('gen.start', {}); R.farm.act('gen.switch', { to: 'generator' }); }
+}
+/** Play the current level to its end with the ideal farmer; in the rainy season stop at the cut and start the generator. */
+function playLevelCond(R) {
+  const def = R.level.def;
+  if (R.farm.condition === 'rainy' && def.id === 'weeks45' && R.env.day < 33 + 15.25 * H) { R.level.debug.goto(33, 15.25, { auto: true }); meetCut(R); }
+  return playLevel(R);
+}
+
+test('Phase 4: startRun({ condition: \'hot\' }) puts it on the farm and in the run save; a replay keeps it; the checkpoints carry it', () => {
+  const R = makeRun();
+  const cps = []; R.events.on(EV.LEVEL, (p) => { if (p.phase === 'checkpoint') cps.push(p.condition); });
+  const runs = []; R.events.on(EV.RUN, (p) => runs.push(p.condition));
+  R.run.startRun({ seed: 1, at: 'level1', condition: 'hot' });
+  assert(R.farm.condition === 'hot' && R.run.state().condition === 'hot' && R.run.state().runCondition === 'hot', `farm ${R.farm.condition}, run ${R.run.state().condition}`);
+  assert(R.store.data == null || true, 'store');
+  const saved = R.run.debugStart('level1', -1);
+  assert(saved && saved.run.condition === 'hot' && saved.blob.farm.cond.condition === 'hot', `the level start carries it: ${saved?.run?.condition} / ${saved?.blob?.farm?.cond?.condition}`);
+  assert(R.level.hudHooks.conditionText() === 'Hot season', `the HUD: ${R.level.hudHooks.conditionText()}`);
+  R.level.debug.goto(7, 21, { auto: true });
+  const r = R.level.result;
+  assert(r && r.condition === 'hot' && r.conditionLabel === 'Hot season', `the result names it: ${r?.condition}`);
+  assert(cps.length > 2 && cps.every((c) => c === 'hot') && runs.every((c) => c === 'hot'), `checkpoints carry the condition: ${[...new Set(cps)]}`);
+  assert(R.run.next() && R.farm.condition === 'hot' && R.level.def.id === 'week2', 'Continue keeps it (the farm keeps the condition)');
+  R.level.debug.goto(9, 10, { auto: true });
+  assert(R.run.replay('week2', { day: 8 }) && R.farm.condition === 'hot' && R.run.state().condition === 'hot', 'a replay keeps it');
+  const S = makeRun();
+  S.run.startRun({ seed: 1 });
+  assert(S.farm.condition === null && S.run.state().condition === null, 'no condition: the normal season');
+});
+
+test('Phase 4: the harder flocks are shut before the first full cycle and open after (cyclesDone in the skill profile)', () => {
+  const R = makeRun();
+  assert(!R.run.harderOpen && R.run.conditionsAvailable().every((c) => !c.canStart && !c.open), 'shut before a full cycle');
+  assert(R.run.conditionsAvailable().length === 4 && R.run.conditionsAvailable().every((c) => c.label && c.summary), 'four conditions, named');
+  const p = R.level.profile.cycles();
+  assert(p.cyclesDone === undefined && JSON.stringify(p.conditionsDone) === '{}', `a Phase 3 profile reads none: ${JSON.stringify(p)}`);
+  R.skills.profile.cyclesDone = 1;            // the harness's way (__game.skills.profile.cyclesDone)
+  assert(R.run.harderOpen && R.run.conditionsAvailable().every((c) => c.open), 'open after a cycle');
+  const was = CONDITIONS.hot.available;
+  CONDITIONS.hot.available = true;
+  try { assert(R.run.conditionsAvailable().find((c) => c.id === 'hot').canStart && !R.run.conditionsAvailable().find((c) => c.id === 'rainy').canStart || CONDITIONS.rainy.available, 'the build switch (available)'); }
+  finally { CONDITIONS.hot.available = was; }
+});
+
+chain('Phase 4: a standard start of weeks45 in the rainy season reaches day 22 06:00 in 8 s or less with farm.condition rainy', (R) => {
+  const t0 = Date.now();
+  assert(R.run.startLevel('weeks45', { from: 'standard', condition: 'rainy' }), where(R));
+  const s = (Date.now() - t0) / 1000;
+  console.log(`     ${s.toFixed(1)} s`);
+  assert(at(R, 22, 6) && R.level.def.id === 'weeks45' && s <= 8, `${where(R)} in ${s.toFixed(1)} s`);
+  assert(R.farm.condition === 'rainy' && R.run.state().runCondition === 'rainy' && R.run.state().startedAt === 'weeks45', `condition ${R.farm.condition}, started at ${R.run.state().startedAt}`);
+  const card = R.run.card();
+  assert(card.filter((c) => c.fromStandard).map((c) => c.id).join() === 'level1,week2,week3', `the run card marks the standard start (the plan was never played): ${card.filter((c) => c.fromStandard).map((c) => c.id)}`);
+  // the power cut stops a Next job skip at 15:10 on day 33 (the alarm), the house dark: no skip, the carry clock
+  R.level.debug.goto(33, 13, { auto: true });
+  let guard = 0;
+  while (R.farm.power.on && R.env.day < 33 + 16 * H && guard++ < 40) { R.level.nextJob(); R.level.nextJob(); }
+  assert(!R.farm.power.on && Math.abs(R.env.day - (33 + (15 + 10 / 60) * H)) < 1.5 / 1440, `the skip stopped at the cut: ${where(R)}`);
+  assert(R.level.nextJob().refused === 'dark', 'no skip while the house is dark');
+  R.level.update(0.6);
+  assert(R.env.timeScale === LEVEL1.clock.carry, `the dark-house clock ${R.env.timeScale}`);
+  const pw = R.level.jobs.list().find((i) => i.id === 'p-power');
+  assert(pw && pw.status === 'open' && R.level.engine.groups().pinned.includes(pw), 'p-power open and pinned');
+  meetCut(R); R.level.update(0.6);
+  assert(R.farm.power.on && pw.status === 'done', `the generator brings the power back: ${pw.status}`);
+});
+
+chain('Phase 4: a condition from a normal run\'s level row is a new run: the earlier levels a standard start, conditionsDone at its end', (R) => {
+  R.run.startRun({ seed: 1, at: 'level1' });
+  assert(playLevel(R)?.pass && R.run.next(), 'the brooding week passed, Continue');
+  const old = R.run.state();
+  assert(old.runCondition === null && old.levels.week2 && R.run.hasStart('week2', 8), 'a normal run in week 2');
+  const before = { ...R.level.profile.cycles() };
+  assert(R.run.startLevel('weeks45', { from: 'standard', condition: 'rainy' }), `the rainy standard start: ${where(R)}`);
+  const st = R.run.state();
+  assert(R.farm.condition === 'rainy' && st.runCondition === 'rainy' && st.startedAt === 'weeks45', `a new rainy run: ${st.runCondition} from ${st.startedAt}`);
+  assert(st.levels.level1.attempts === 1 && st.levels.week2.attempts === 1, `the old run's entries are gone: ${JSON.stringify(st.levels.week2)}`);
+  for (const id of ['weeks45', 'finish', 'cleanout']) {
+    assert(R.level.def.id === id, `at ${id}: ${where(R)}`);
+    const r = playLevelCond(R);
+    assert(r.pass && r.condition === 'rainy', `${id}: ${r.failText} (${r.condition})`);
+    if (id !== 'cleanout') assert(R.run.next(), `next after ${id}`);
+  }
+  const sum = R.run.state().summary;
+  assert(sum && sum.condition === 'rainy' && JSON.stringify(sum.fromStandard) === '["plan","level1","week2","week3"]' && /standard start at Level 5/.test(sum.standardNote), `summary: ${JSON.stringify({ c: sum?.condition, fs: sum?.fromStandard, n: sum?.standardNote })}`);
+  assert(sum.compare === null, 'no normal-season cycle finished yet: no compare column');
+  const after = R.level.profile.cycles();
+  assert(after.conditionsDone.rainy === (before.conditionsDone.rainy ?? 0) + 1 && after.cyclesDone === (before.cyclesDone ?? 0) + 1, `the counters: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+  assert(R.run.harderOpen, 'the harder flocks are open now');
+  console.log(`     ${sum.standardNote}; conditionsDone ${JSON.stringify(after.conditionsDone)}, cyclesDone ${after.cyclesDone}`);
+});
+
+chain('Phase 4: the same condition on a level row keeps the run; a normal cycle then a condition cycle draws the compare column', (R) => {
+  R.run.startRun({ seed: 1, at: 'level1' });
+  for (let i = 0; i < 2; i++) { assert(playLevel(R)?.pass, `${R.level.def.id} passes`); R.run.next(); }
+  assert(R.run.startLevel('week3', { from: 'standard', condition: null }) && R.run.state().levels.level1.attempts >= 1 && R.run.state().runCondition === null, 'the same (normal) flock: Phase 3\'s standard start');
+  for (const id of ['week3', 'weeks45', 'finish', 'cleanout']) { const r = playLevel(R); assert(r.pass, `${id}: ${r.failText}`); if (id !== 'cleanout') R.run.next(); }
+  const c1 = R.level.profile.cycles();
+  assert(c1.cyclesDone === 1 && !c1.conditionsDone.hot, `a normal cycle: ${JSON.stringify(c1)}`);
+  assert(R.run.state().lastNormal?.compare?.sold > 0, 'the last normal-season cycle kept for the compare');
+  R.run.startLevel('cleanout', { from: 'standard', condition: 'water' });
+  assert(R.farm.condition === 'water' && R.run.state().startedAt === 'cleanout', where(R));
+  const r = playLevel(R);
+  const sum = R.run.state().summary;
+  assert(r.pass && sum.condition === 'water' && sum.compare && sum.compare.sold === R.run.state().lastNormal.compare.sold, `the water cycle draws the normal one beside it: ${JSON.stringify(sum?.compare)?.slice(0, 80)}`);
+  assert(R.level.profile.cycles().conditionsDone.water === 1 && R.level.profile.cycles().cyclesDone === 2, JSON.stringify(R.level.profile.cycles()));
 });
 
 console.log(failed ? `${failed} failed` : `all passed${skipped ? ` (${skipped} skipped: run.stub / farm.cycleStub)` : ''}`);

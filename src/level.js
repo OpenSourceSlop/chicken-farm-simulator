@@ -97,7 +97,7 @@ export function createLevel(ctx, deps = {}) {
   const details = new Map();        // milestone -> measured detail (profile)
   let free = null;                  // { def, off } while debug.freeRun runs the farm (tools)
   let alarms = 0;                   // EV.POWER { on: false } and alarm symptoms so far (a Next job skip stops at a new one)
-  let bad = { gradedOut: 0, called: null };  // a bad batch: chicks graded out at the table, the hatchery call (day, hour)
+  let bad = { gradedOut: 0, looked: 0, weak: 0, called: null };  // a bad batch: the grading at the table, the hatchery call (env.day)
 
   /** The level as the farm's condition plays it (config conditionLevel: problems, target, fail, delivery, …). */
   const lv = () => (farm.levelFor ? farm.levelFor(def) : conditionLevel(def, farm.condition ?? null));
@@ -161,7 +161,7 @@ export function createLevel(ctx, deps = {}) {
       if (p.id === 'plan.reply' && is(def, PLAN_LEVEL)) checkpoint('plan');
       if (p.id === 'swab.read' && is(def, CLEANOUT)) checkpoint('swabs', `swabs@${farm.clean?.labDay ?? env.dayNumber}`);
       // a bad batch (PHASE4.md §3.4): the chicks graded out at the table and the call to the hatchery on day 0
-      if (p.id === 'chicks.grade' && Number.isFinite(p.result?.culled)) bad.gradedOut += p.result.culled;
+      if (p.id === 'chicks.grade' && Number.isFinite(p.result?.culled)) { bad.gradedOut += p.result.culled; bad.looked += p.result.looked || 0; bad.weak += p.result.weak || 0; }
       if (p.id === 'phone.hatchery' && bad.called == null) bad.called = env.day;
     });
     events.on(EV.RECORD_CLOSED, (p) => {
@@ -480,7 +480,7 @@ export function createLevel(ctx, deps = {}) {
   /** Everything of one level (a new level, a replay, a resume). */
   function resetLevelState() {
     fired = new Set(); points = []; weighs = []; signedEnd = false; ended = null; pending = null; failAt = null;
-    startAt = null; reached.clear(); stoppedAt = null; bad = { gradedOut: 0, called: null };
+    startAt = null; reached.clear(); stoppedAt = null; bad = { gradedOut: 0, looked: 0, weak: 0, called: null };
     fast = false; userPaused = false; saveIn = null; lastSaveDay = null; tickAcc = 0;
   }
   function resetRun() {
@@ -742,7 +742,7 @@ export function createLevel(ctx, deps = {}) {
       engine.restore(lv.jobs, d);
       fired = new Set(lv.fired || []); points = lv.points || []; weighs = lv.weighs || []; signedEnd = !!(lv.signedEnd ?? lv.signed7); fast = !!lv.fast;
       failAt = lv.failAt ?? null; startAt = lv.startAt ?? env.day;
-      if (lv.bad) bad = { gradedOut: lv.bad.gradedOut || 0, called: lv.bad.called ?? null };
+      if (lv.bad) bad = { gradedOut: lv.bad.gradedOut || 0, looked: lv.bad.looked || 0, weak: lv.bad.weak || 0, called: lv.bad.called ?? null };
       for (const k of lv.reached || []) reached.add(k);
       if (inRun && lv.run && runApi) runApi.adopt(lv.run);
       if (data.player && player) player.teleport(data.player.x, data.player.z, data.player.yaw);
@@ -836,6 +836,8 @@ export function createLevel(ctx, deps = {}) {
       return went < hrs - 1 / 60 && stoppedAt ? { skipped: went, stopped: 'alarm' } : { skipped: hrs };
     },
     nextLabel,
+    /** A bad batch's grading at the table so far ({ gradedOut, looked, weak, called }; the records book's hatchery call). */
+    badBatch() { return { ...bad }; },
     /** The last Next job skip an alarm stopped ({ at, alarms }) or null. */
     get skipStopped() { return stoppedAt; },
     /**
