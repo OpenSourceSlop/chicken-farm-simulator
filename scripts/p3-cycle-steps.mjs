@@ -256,8 +256,8 @@ SEGMENTS.week2 = () => [
   ...autoTo(10, 6.05), ev(`'day 10 morning at ' + __t() + ', curtain ' + (__game.env.broodCurtain ? 'down' : 'up')`),
   ...gateToHouse(), W(2.0, -4.7, 0.35), ...E('curtain-winch', 'E opens the curtain winch'), click('Wind the curtain up'), adv(1.5), shot('p3c-10-winch'), ...esc(),
   exp(`__game.env.broodCurtain === false && 'curtain up at ' + __t()`, 'day 10: the brooding curtain wound up at the winch'),
-  W(10, 0, 0.6), adv(30), shot('p3c-11-spread'), ...walkFloor({ whole: true }),
-  exp(`__game.flock.debug.meanX() > -4 && 'the flock spreads: mean x ' + __game.flock.debug.meanX().toFixed(1)`, 'the birds walk out over the east half'),
+  W(10, 0, 0.6), until('__game.flock.debug.meanX() > -4', 120), shot('p3c-11-spread'), ...walkFloor({ whole: true }),
+  exp(`__game.flock.debug.meanX() > -4.5 && 'the flock spreads: mean x ' + __game.flock.debug.meanX().toFixed(1)`, 'the birds walk out over the east half'),
   // day 12: vaccination in the drinking water at the water supply
   ...autoTo(12, 6.05), ...gateToHouse(), W(-23.0, 5.45, 0.3), ...E('water-supply', 'E opens the water supply'), click('Vaccine'), adv(0.1), click('Main valve'), adv(0.2), ...esc(),
   exp(`__game.farm.health.mainClosed === true && 'main valve shut at ' + __t()`, 'day 12: the main valve shut (the birds go thirsty)'),
