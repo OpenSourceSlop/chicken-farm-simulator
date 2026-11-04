@@ -17,6 +17,7 @@ export const SAVES_ID = 'saves';
 // the saves screen's own rules (PHASE5.md §8.11: each package styles its own screens; the frame is the template's)
 const SAVES_CSS = `
 .saves { --p5-w: 720px; }
+.saves .saves-head { padding-right: 132px; }
 .saves-blocked { margin: 0 0 10px; padding: 8px 10px; border-radius: 6px; background: rgba(231, 182, 70, 0.14); border: 1px solid rgba(231, 182, 70, 0.4); color: var(--ink); font-size: 13px; line-height: 1.4; }
 .saves-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .saves-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; padding: 9px 12px; border-radius: 6px; background: var(--panel-sunk); border: 1px solid transparent; }
@@ -85,7 +86,7 @@ function backupBox(saves, slot, { onDone } = {}) {
     built = r;
     setText(status, lengthWords(r.chars, r.parts.length));
     setText(what, farmOnly ? 'This farm only: the farm as it is now, without the level starts. After a restore, a Replay of an earlier level starts from that level’s standard start.'
-      : `The whole run: the farm now and every level start (${r.starts}), so every Replay on the run card works after a restore.`);
+      : `The whole run: the farm now and its ${r.starts} level start${r.starts === 1 ? '' : 's'}, so every Replay on the run card works after a restore.`);
     parts.replaceChildren(...r.parts.map((_, i) => {
       const b = button({ class: 'btn', 'data-copy-part': String(i + 1) }, r.parts.length > 1 ? `Copy part ${i + 1}` : 'Copy');
       b.addEventListener('click', () => copy(i, b));
@@ -251,7 +252,7 @@ export function registerSavesPanel({ register, openPanel, closePanel, ctx, menu 
     function keysOf(r) {
       const s = saves(), out = [], sandbox = mode() === 'sandbox', auto = autoRow();
       const key = (k, label, why, onClick, accent = false) => {
-        const b = button({ class: `btn${accent ? ' btn--accent' : ''}`, 'data-save-key': k, disabled: why || st.busy ? '' : null, title: why || null }, label);
+        const b = button({ class: `btn${accent && !why ? ' btn--accent' : ''}`, 'data-save-key': k, disabled: why || st.busy ? '' : null, title: why || null }, label);
         b.addEventListener('click', () => { if (!b.disabled) onClick(b); });
         out.push(b);
       };
