@@ -12,7 +12,7 @@ import { FARM, HOUSE_BOUNDS } from './config.js';
 import { SIGNS, LEVEL_HELP_KEYS, lookCaption } from './content.js';
 import { BOARDS } from './content-signs.js';
 import { EV } from './events.js';
-import { h, button, inFormControl, typingInControl } from './ui-dom.js';
+import { h, button, setText, inFormControl, typingInControl } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { createHud } from './ui-hud.js';
 import { createTasks } from './ui-tasks.js';
@@ -33,7 +33,7 @@ import { createTitle } from './ui-title.js';
 import { createJobCard } from './ui-jobs.js';
 import { createCaption, createFloatLabel } from './ui-caption.js';
 import { int, one, feelWords } from './ui-format.js';
-import { FLOOR_TEMP_RAMP, COMFORT_RAMP, MOISTURE_RAMP, levelById } from './config.js';
+import { FLOOR_TEMP_RAMP, COMFORT_RAMP, MOISTURE_RAMP, levelById, conditionLabel } from './config.js';
 import { sectorOf } from './job-engine.js';
 import { BOARDS_CYCLE } from './content-signs-cycle.js';
 import { RUN_CARD } from './content.js';
@@ -173,6 +173,13 @@ export function createUI(ctx, deps) {
   const busy = createBusyCard(root);
   const floatRead = createFloatLabel(root, ctx);
   const narrow = createNarrowNotice(root);
+  // Phase 4 (PHASE4.md §4.2): the alarm banner: every power cut and every alarm symptom; it stays while the house is dark
+  const alarmText = h('span', { class: 'alarm-text' });
+  const alarm = h('div', { class: 'alarm', role: 'alert', hidden: true }, h('span', { class: 'alarm-lamp', 'aria-hidden': 'true' }), h('span', { class: 'alarm-k' }, 'Alarm'), alarmText);
+  root.appendChild(alarm);
+  const ALARM = { 'power-cut': 'The power is off in house 1: the fans, the pad pump, the lights and the augers have stopped.', 'gen-dry': 'The house is dark again: the generator has stopped.' };
+  let alarmMsg = '', alarmT = 0;
+  const raiseAlarm = (msg) => { alarmMsg = msg; alarmT = 12; };
 
   // ---- what the level panels share (L) ----
   const uiAct = (id, args = {}) => events.emit(EV.ACTION, { id, ...args, result: undefined });
@@ -219,6 +226,11 @@ export function createUI(ctx, deps) {
     letters: [],
     lettersRead: new Set(),
     replayLevel: (id, day) => replayLevel(id, day),
+    standardLevel: (id, condition) => standardLevel(id, condition),
+    startCondition: (id) => startCondition(id),
+    /** The farm's condition (the only holder) and its name ('' in the normal season). */
+    condition: () => farm?.condition ?? null,
+    conditionName: () => (farm?.condition ? conditionLabel(farm.condition) : ''),
     // the steps hotfix: an action that waits on farm time runs a paused clock again (level hudHooks.resume)
     runClock: () => (mode === 'level' ? !!ctx.level?.hudHooks?.resume?.() : false),
     clockPaused: () => mode === 'level' && !!ctx.level?.hudHooks?.userPaused,
@@ -230,9 +242,18 @@ export function createUI(ctx, deps) {
     const run = ctx.run, def = levelById(id);
     if (!run || !def) return false;
     if (run.replay(id, { day })) return true;
-    busy.run(RUN_CARD.standard(def.startDay), () => run.startLevel(id, { from: 'standard' }));
+    busy.run(RUN_CARD.standard(def.startDay, run.state().runCondition), () => run.startLevel(id, { from: 'standard' }));
     return true;
   }
+  /** Phase 4 (PHASE4.md §3.1): a level's standard start with the flock chosen on its row (another flock: a new run). */
+  function standardLevel(id, condition = null) {
+    const run = ctx.run, def = levelById(id);
+    if (!run || !def) return false;
+    busy.run(RUN_CARD.standard(def.startDay, condition), () => run.startLevel(id, { from: 'standard', condition }));
+    return true;
+  }
+  /** A new flock under a harder condition (the Harder flocks cards): Plan the farm under it. */
+  const startCondition = (id) => (ctx.run ? ctx.run.startRun({ seed: (ctx.run.state().seed ?? 1), condition: id }) : false);
   // the controller's memory and chart: tracked in farm time, skips included
   env.addStepper((e, s) => {
     if (mode !== 'level') return;
@@ -256,6 +277,8 @@ export function createUI(ctx, deps) {
     if (p.id === 'dead.count') caption.show(`${int(p.n)} dead bird${p.n === 1 ? '' : 's'} counted at the bin.`);
   });
   events.on(EV.LISTEN, (p) => { if (mode === 'level') caption.show(lookCaption(farm.observe(p.x, p.z), env.dayNumber >= 8 ? 'birds' : 'chicks'), 6); });
+  events.on(EV.POWER, (p) => { if (mode === 'level' && p && p.on === false) raiseAlarm(p.mains === false && p.source == null ? ALARM['power-cut'] : 'The power is off in house 1.'); });
+  events.on(EV.FARM_PROBLEM, (p) => { if (mode === 'level' && p && p.phase === 'symptom' && p.alarm) raiseAlarm(ALARM[p.id] || 'The controller’s alarm sounds.'); });
   events.on(EV.FARM_DELIVERY, (p) => { if (mode === 'level' && p.kind === 'feed' && p.phase === 'arrive') caption.show('The feed truck is filling the silos.'); });
   events.on(EV.SKILL_POINTS, (p) => { if (p.detail) details.set(p.milestone, p.detail); });
   // a bird in the hand: from day 8 the bird check (panels' bird-check), in week 1 Phase 2's chick in hand
@@ -311,7 +334,9 @@ export function createUI(ctx, deps) {
   // Phase 4 panels (package "panels"; PHASE4.md §12.3), the same api
   try {
     registerCondPanels({
-      register: (id, build, opts) => panels.register(id, build, opts),
+      // the condition jobs' strips (job-strips-cond.js) at the top of each panel's working plate (a panel that mounts its
+      // own .jstrip keeps it: withJobStrip leaves it alone)
+      register: (id, build, opts) => panels.register(id, withJobStrip(L, id, build), opts),
       L, boards: (id) => boardsForDay(env.dayNumber, farm?.condition ?? null)[id] || null, sourceLabel,
       plate: (id, opts) => buildPlate(id, opts), openPanel: (id) => openPanel(id),
     });
@@ -325,6 +350,8 @@ export function createUI(ctx, deps) {
     onSandbox: () => ctx.level?.toSandbox(),
     onSkills: () => openPanel('skilltree'),
     onReplay: (id, day) => replayLevel(id, day),
+    onStandard: (id, cond) => standardLevel(id, cond),
+    onStartCondition: (id) => startCondition(id),
     saveInfo: () => (ctx.run ? ctx.run.info() : deps.save?.info?.() ?? null),
     saveAvailable: () => (ctx.run ? !!ctx.run.available : !!deps.save?.available),
     run: () => ctx.run ?? null,
@@ -473,6 +500,7 @@ export function createUI(ctx, deps) {
     root.classList.toggle('is-title', m === 'title');
     if (m === 'title') { panels.close(false); title.show(); } else title.hide();
     if (m !== 'level' && m !== 'result') jobCard.hide();
+    if (m !== 'level') { alarm.hidden = true; alarmT = 0; }
     if (m === 'sandbox') tasks.reset();
   }
   /** A new run of the level (start, replay, continue): no panel, chart, reading or sample of the
@@ -485,6 +513,7 @@ export function createUI(ctx, deps) {
     L.letters.length = 0; L.lettersRead.clear();
     if (views.comfort) { views.comfort = false; flock?.setOverlay?.('comfort', false); }
     mm.min = mm.max = null; hist.length = 0; histAcc = 0; lastFlows.length = 0; weigh = { day: null, list: [] };
+    alarmMsg = ''; alarmT = 0; alarm.hidden = true;
   }
 
   let hudAcc = 0, fitAcc = 0;
@@ -513,6 +542,12 @@ export function createUI(ctx, deps) {
       moistureLegend.hidden = !(mode === 'level' && props?.overlay?.moisture);
       caption.update(dt);
       floatRead.update(dt);
+      // the alarm banner: while the house is dark, and a while after an alarm symptom
+      const dark = mode === 'level' && farm?.power && farm.power.on === false;
+      alarmT = Math.max(0, alarmT - dt);
+      const show = mode === 'level' && (dark || alarmT > 0) && !!alarmMsg;
+      if (alarm.hidden === show) alarm.hidden = !show;
+      if (show) setText(alarmText, `${alarmMsg}${dark ? ' The farm clock runs slower while the house is dark (every farm minute counts); Next job does not skip.' : ''}${ctx.level?.skipStopped && Math.abs(ctx.level.skipStopped.at - env.day) < 2 / 1440 ? ' The Next job skip stopped here.' : ''}`);
       prompt.show(panels.openId || narrow.open || title.open || busy.open ? null : nearestTarget());
     },
     // hooks for level.js, the integrator and tests

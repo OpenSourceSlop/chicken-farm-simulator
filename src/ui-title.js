@@ -10,7 +10,8 @@ import { createRunCard, shortIn } from './ui-run.js';
 /**
  * @param {HTMLElement} root  #hud
  * @param {{ onStart(): void, onStartBrooding(): void, onContinue(): void, onSandbox(): void, onSkills(): void,
- *   onReplay(id, day): void, saveInfo(): ({day,hour,short?}|null), saveAvailable(): boolean, run(): any }} o
+ *   onReplay(id, day): void, saveInfo(): ({day,hour,short?}|null), saveAvailable(): boolean, run(): any,
+ *   onStandard?(id, condition): void, onStartCondition?(id): void }} o
  */
 export function createTitle(root, o) {
   const titleId = uniqueId('title');
@@ -21,7 +22,9 @@ export function createTitle(root, o) {
   const skills = button({ class: 'btn btn--quiet' }, h('span', { html: ICONS.tree, 'aria-hidden': 'true' }), LEVEL_TEXT.skills);
   const saveNote = h('p', { class: 'title-save' });
   const keys = h('p', { class: 'title-keys' }, LEVEL_KEYS.map((k) => h('span', null, h('kbd', { class: 'kbd' }, k.key), ` ${k.what}`)));
-  const runCard = createRunCard({ run: o.run, onReplay: (id, day) => o.onReplay(id, day) });
+  const runCard = createRunCard({ run: o.run, onReplay: (id, day) => o.onReplay(id, day),
+    // Phase 4 (PHASE4.md §1.2, §3.1): a level's standard start with a flock choice; a new flock under a harder condition
+    onStandard: (id, cond) => o.onStandard?.(id, cond), onStartCondition: (id) => o.onStartCondition?.(id) });
   const card = h('section', { class: 'card title-card', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId },
     h('div', { class: 'title-main' },
       h('p', { class: 'title-kicker' }, LEVEL_TEXT.kicker),
@@ -67,7 +70,7 @@ export function createTitle(root, o) {
   function sync() {
     const info = o.saveInfo();
     cont.hidden = !info;
-    if (info) setText(cont.lastChild, LEVEL_TEXT.continueLabel(where(info), hhmm(info.hour)));
+    if (info) setText(cont.lastChild, LEVEL_TEXT.continueLabel(where(info), hhmm(info.hour), info.conditionLabel || null));
     setText(saveNote, o.saveAvailable() ? LEVEL_TEXT.saveNote : LEVEL_TEXT.noSave);
     saveNote.classList.toggle('is-off', !o.saveAvailable());
     runCard.refresh();

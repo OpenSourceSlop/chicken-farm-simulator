@@ -26,12 +26,16 @@
 //
 // Instance: { key: 'r-meter@3', id, def, day, status: 'waiting'|'open'|'done'|'missed', opensAt,
 //   closesAt, doneAt, progress (0..1), result, st (rule state, JSON) }   times as env.day floats.
+// Phase 4 (PHASE4.md §3.2, §10.5): the engine reads the level as the farm's condition plays it (config conditionLevel(def,
+// farm.condition)): the merged problem ids, the routine days the condition moves, a bad batch's truck hour; a job with
+// `condition` (content-jobs-cond.js JOBS_COND) is made only in a run of that condition; rebuild() makes the jobs again
+// after farm.setCondition (level.rebuildJobs). The new state tests are content-jobs-cond.js STATE_TEST_IDS_P4.
 // Only events while an instance is open count. The clarity round (the farmer's request): a job completes
 // when its outcome is reached (state tests on the figures of job-figures.js, `live` parts of all/any that
 // must hold at completion, action `check`s such as an order that is enough); the panel shows the target
 // beside the live value (job-strips.js), never a verdict. The result is what was measured or set, written
 // to records.logJob(key, day, result). parts(inst) names each part for the card and the strip.
-import { BROOD_BOUNDS, CLEANOUT, CYCLE, DRINKER_LINES_Z, EQUIP, FAN_COUNT, FLOOR_GRID, HARVEST, HEAT, LEVEL1, ROUNDS, broodSector, houseSector, levelById, flockAgeAt, feedStdGAt } from './config.js';
+import { BROOD_BOUNDS, CLEANOUT, CYCLE, DRINKER_LINES_Z, EQUIP, FAN_COUNT, FLOOR_GRID, HARVEST, HEAT, HEAT_P4, LEVEL1, ROUNDS, broodSector, houseSector, levelById, flockAgeAt, feedStdGAt, conditionLevel } from './config.js';
 import { EV, matchPayload } from './events.js';
 import { ALL_JOBS } from './content-jobs.js';
 import { feltNearTarget } from './farm-problems.js';
@@ -70,11 +74,12 @@ export function levelEndAt(def = LEVEL1, farm = null) {
   return def.endDay + 1 + 6 * H;
 }
 
-/** Does the job exist on calendar day `day`? (routines: inside `days`, and on `onDays` if given) */
-export function jobOnDay(def, day) {
+/** Does the job exist on calendar day `day`? (routines: inside `days`, and on `onDays` if given). `routineDays`
+ *  (Phase 4, conditionLevel): { [routine id]: [from, to] } the days a routine runs in the farm's condition. */
+export function jobOnDay(def, day, routineDays = null) {
   if (def.kind === 'problem') return false;
   if (def.kind === 'dated') return def.day === day;
-  const [a, b] = def.days || [def.day, def.day];
+  const [a, b] = (routineDays && routineDays[def.id]) || def.days || [def.day, def.day];
   if (day < a || day > b) return false;
   return !def.onDays || def.onDays.includes(day);
 }
@@ -152,7 +157,7 @@ function ruleProgress(rule, st, ctx) {
       const cv = coverageOf(rule, st, ctx.env), c = Math.min(1, cv.seen / Math.max(1, cv.need));
       return rule.listen ? c * 0.85 + (st.listened ? 0.15 : 0) : c;
     }
-    case 'state': return st.met ? 1 : stateProgress(rule.test, ctx, st);
+    case 'state': return st.met ? 1 : stateProgress(rule.test, ctx, st, rule);
     case 'all': return rule.of.reduce((a, r, i) => a + (st.met[i] ? 1 : ruleProgress(r, st.parts[i], ctx)), 0) / rule.of.length;
     case 'any': return Math.max(...rule.of.map((r, i) => (st.met[i] ? 1 : ruleProgress(r, st.parts[i], ctx))));
     default: return st.met ? 1 : 0;
@@ -217,7 +222,7 @@ function ruleEvent(rule, st, type, p, inst, ctx) {
 function ruleTick(rule, st, ctx, inst) {
   if (rule.type === 'state') {
     if (st.met) return false;
-    const v = stateTest(rule.test, st, ctx, inst);
+    const v = stateTest(rule.test, st, ctx, inst, rule);
     if (v) { st.met = true; st.value = stateSnapshot(rule.test, ctx); return true; }
     return false;
   }
@@ -236,7 +241,7 @@ function refreshLive(rule, st, ctx, inst) {
   if (rule.type !== 'all' && rule.type !== 'any') return;
   rule.of.forEach((r, i) => {
     if (r.type === 'state' && r.live) {
-      const v = !!stateTest(r.test, st.parts[i], ctx, inst);
+      const v = !!stateTest(r.test, st.parts[i], ctx, inst, r);
       st.met[i] = v; st.parts[i].met = v;
       if (v) st.parts[i].value = stateSnapshot(r.test, ctx);
     } else refreshLive(r, st.parts[i], ctx, inst);
@@ -262,6 +267,8 @@ function held(st, cond, env, min) {
 }
 /** Game minutes a held test needs (the card and the strip show "12 of 30 farm minutes"). */
 export const HELD_MIN = { 'house-near-target': 30, 'rh-under': 60, 'air-clear': 120, 'heat-handled': 30, 'pad-humid-ok': 30, 'night-comfort': 30 };
+/** Phase 4: the vet's course (medicine-course) and the half-and-half hours (blend-24h). */
+export const MED_DAYS = 3, BLEND_H = 20;
 /** Minutes held so far of a held state part (0 while the condition does not hold). */
 export function heldSoFar(test, st, env) {
   if (!(test in HELD_MIN) || !st) return null;
@@ -269,11 +276,28 @@ export function heldSoFar(test, st, env) {
   return { min: m, of: HELD_MIN[test] };
 }
 const lightOf = (env, farm) => env.lightProgram || farm.light || {};
-/** The night in the house: what the birds feel between a little cool and where they start to pant (comfort). */
-function nightComfort(env, farm) {
+/** The night in the house (PHASE4.md §2.4, re-defined): after 18:00 no more than about a quarter of the birds pant
+ *  (HEAT_P4.nightPantMax) and none are chilled (mean felt comfort >= -1.5 °C), or, for big birds (from day
+ *  HEAT_P4.padEveningFromAge) while the outside air is at or over HEAT_P4.padEveningAboveC, every working fan runs with the
+ *  pad on (or the pad off over HEAT.padOffAboveRH house humidity): the heat sign's evening line. */
+export function nightComfortNow(env, farm) {
+  if (env.hour < 18) return false;
   const C = farm.comfort || {}, e = Number.isFinite(C.meanOver) ? C.meanOver : C.e;
-  return env.hour >= 18 && Number.isFinite(e) && e >= -1.5 && e <= (C.hotFrom ?? 1.5);
+  const calm = (C.pantShare ?? 0) <= HEAT_P4.nightPantMax + EPS && Number.isFinite(e) && e >= -1.5 - EPS;
+  if (calm) return true;
+  const big = flockAgeAt(env.day) >= HEAT_P4.padEveningFromAge - EPS, warm = (env.outsideTemp ?? 0) >= HEAT_P4.padEveningAboveC - EPS;
+  return big && warm && (env.fansEffective ?? 0) >= FAN_COUNT - (env.fansBroken || []).length && (!!env.padOn || env.houseRH > HEAT.padOffAboveRH);
 }
+const nightComfort = nightComfortNow;
+/** The vet's course: calendar days with the medicine in the water, counting the first (farm.health.medication.daysOn;
+ *  until the farm counts them, the days from its start while it is on). */
+export function medicineDays(farm, env) {
+  const m = farm.health?.medication || {};
+  if (Number.isFinite(m.daysOn)) return m.daysOn;
+  return m.on && m.from != null ? Math.floor(env.day + EPS) - Math.floor(m.from + EPS) + 1 : 0;
+}
+/** Hours the augers drew half from each silo (20-80 % new) during this change (farm.stats blendH grower, blendFinH finisher). */
+export const blendHours = (farm, feed) => (feed === 'finisher' ? farm.stats?.blendFinH : farm.stats?.blendH) ?? 0;
 /** Litter cover over all 576 cells (farm.litter.cover is the brooding floor's share). */
 function houseCover(farm) {
   const g = farm.litter?.coverGrid;
@@ -293,9 +317,21 @@ function cakedShare(farm, env) {
 }
 const ammonia = (farm) => farm.air?.ammoniaPpm ?? farm.litter?.ammoniaPpm ?? 0;
 
-function stateTest(test, st, { env, farm, props }, inst) {
+function stateTest(test, st, { env, farm, props }, inst, rule = {}) {
   const C = farm.clean || {};
   switch (test) {
+    // ---- Phase 4 (content-jobs-cond.js STATE_TEST_IDS_P4) ----
+    case 'power-on': return farm.power ? !!farm.power.on : true;
+    case 'brood-warmer': { const over = env.heaterSetpoint - brooderRowC(env.dayNumber); return over >= 0.5 - EPS && over <= 1.5 + EPS; }
+    case 'line-flow-ok': {
+      const l = farm.water.lines[rule.line ?? 0], f = l?.lastFlow;
+      return !!f && f.at >= (inst?.opensAt ?? -Infinity) - EPS && Math.abs(f.mlMin - flowToday(env)) <= FLOW_BAND + EPS;
+    }
+    case 'blend-24h': return blendHours(farm, rule.feed) >= BLEND_H - EPS;
+    case 'medicine-course': return medicineDays(farm, env) >= MED_DAYS;
+    case 'feed-withdrawn': return !!farm.feed?.withdrawn;
+    case 'pump-ok': { const T = farm.waterTank; return !!T && !T.fixing && (T.pumpShare ?? 1) >= 0.99; }
+    case 'lines-cool': { const t = farm.water?.lineTempC; return Array.isArray(t) && t.length ? t.every((v) => !(v > 30 + EPS)) : true; }
     // the brooder sign's day 0 row (34 °C) within 1 °C, and the brooders burning
     case 'preheat-on': return Math.abs(env.heaterSetpoint - brooderRowC(0)) <= 1 + EPS && !!env.heatersOn;
     // the brooding floor covered, at least the litter sign's 5 cm deep
@@ -328,7 +364,7 @@ function stateTest(test, st, { env, farm, props }, inst) {
       return held(st, feltNearTarget(env, farm), env, 30);
     // ---- Phase 3 (PHASE3.md §3.1) ----
     case 'house-ready': return houseCover(farm) >= 0.95;
-    case 'rh-under': return held(st, env.houseRH <= 75, env, 60);
+    case 'rh-under': return held(st, env.houseRH <= (rule.max ?? 75), env, 60);
     case 'lame-cleared': return (farm.flock.lameOnFloor ?? 0) === 0;
     case 'vaccine-drunk': return farm.health?.vaccine?.state === 'drunk';
     case 'pans-grower': return (farm.feed?.panType?.grower ?? 0) >= 0.9;
@@ -354,7 +390,7 @@ function stateTest(test, st, { env, farm, props }, inst) {
     default: return false;
   }
 }
-function stateProgress(test, { env, farm, props }, st) {
+function stateProgress(test, { env, farm, props }, st, rule = {}) {
   const C = farm.clean || {};
   const hs = heldSoFar(test, st, env);
   if (hs) return hs.of ? hs.min / hs.of : 0;
@@ -386,6 +422,13 @@ function stateProgress(test, { env, farm, props }, st) {
     case 'pans-grower': return clamp01((farm.feed?.panType?.grower ?? 0) / 0.9);
     case 'pans-finisher': return clamp01((farm.feed?.panType?.finisher ?? 0) / 0.9);
     case 'vaccine-drunk': return ({ none: 0, thirst: 0.25, mixed: 0.5, drinking: 0.75, drunk: 1 })[farm.health?.vaccine?.state] ?? 0;
+    // Phase 4
+    case 'medicine-course': return clamp01(medicineDays(farm, env) / MED_DAYS);
+    case 'blend-24h': return clamp01(blendHours(farm, rule.feed) / BLEND_H);
+    case 'feed-withdrawn': return farm.feed?.withdrawn ? 1 : 0;
+    case 'pump-ok': { const T = farm.waterTank; return !T ? 0 : T.fixing && T.fixUntil != null ? clamp01(1 - (T.fixUntil - env.day) * 12) * 0.95 : clamp01(T.pumpShare ?? 0) * 0.5; }
+    case 'lines-cool': { const t = farm.water?.lineTempC || []; return t.length ? t.filter((v) => !(v > 30 + EPS)).length / t.length : 1; }
+    case 'power-on': return farm.power?.on === false ? 0 : 1;
     default: return 0;
   }
 }
@@ -416,7 +459,16 @@ function stateSnapshot(test, { env, farm }) {
     case 'lines-raised': case 'all-up': return { nipplesCm: farm.water.lines.map((l) => l.heightCm), pansCm: farm.feed.lines.map((l) => l.heightCm) };
     case 'flows-in-band': return { flowsMlMin: farm.water.lines.map((l) => l.lastFlow?.mlMin ?? null) };
     case 'chick-lights': case 'catch-ready': { const p = lightOf(env, farm); return { darkHours: p.darkHours ?? null, dimmer: p.dimmer ?? null, fans: env.fansEffective ?? 0 }; }
-    case 'night-comfort': return { houseC: +env.houseTemp.toFixed(1), fans: env.fansEffective ?? 0 };
+    case 'night-comfort': return { houseC: +env.houseTemp.toFixed(1), fans: env.fansEffective ?? 0, padOn: !!env.padOn, pantShare: +(farm.comfort?.pantShare ?? 0).toFixed(2), outsideC: +(env.outsideTemp ?? 0).toFixed(1) };
+    // Phase 4
+    case 'power-on': return { on: !!farm.power?.on, source: farm.power?.source ?? null, at: env.day };
+    case 'brood-warmer': return { setpoint: env.heaterSetpoint, rowC: brooderRowC(env.dayNumber) };
+    case 'line-flow-ok': return { flowsMlMin: farm.water.lines.map((l) => l.lastFlow?.mlMin ?? null) };
+    case 'blend-24h': return { blendH: +(farm.stats?.blendH ?? 0).toFixed(1), blendFinH: +(farm.stats?.blendFinH ?? 0).toFixed(1) };
+    case 'medicine-course': return { daysOn: medicineDays(farm, env) };
+    case 'feed-withdrawn': return { at: env.day };
+    case 'pump-ok': return { pumpShare: farm.waterTank?.pumpShare ?? null, fixedAt: farm.waterTank?.fixedAt ?? null };
+    case 'lines-cool': return { lineTempC: (farm.water?.lineTempC || []).map((v) => +(+v).toFixed(1)) };
     default: return { at: env.day };
   }
 }
@@ -479,7 +531,16 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
   const levelAnchors = () => def.anchors || {};
   const endAt = () => levelEndAt(def, farm);
   const inLevel = (d) => d >= def.startDay && d <= def.endDay;
-  const problemIds = () => new Set([...(def.problems || []).map((p) => p.id), ...RECURRING]);
+  // Phase 4: the level as the farm's condition plays it (config conditionLevel; farm.condition is the only holder)
+  const cond = () => farm?.condition ?? null;
+  let mc = null;
+  const merged = () => { const c = cond(); if (!mc || mc.def !== def || mc.c !== c) mc = { def, c, m: conditionLevel(def, c) }; return mc.m; };
+  const problemIds = () => new Set([...(merged().problems || []).map((p) => p.id), ...RECURRING]);
+  /** A condition job only in a run of its condition (content-jobs-cond.js). */
+  const madeHere = (jd) => !jd.condition || jd.condition === cond();
+  const onDay = (jd, d) => madeHere(jd) && jobOnDay(jd, d, merged().routineDays);
+  /** The truck: Phase 2's 08:00, or the hour a bad batch's delivery comes (conditionLevel delivery.arrivalHour). */
+  const truckAt = () => LEVEL1.arrivalDay + (merged().delivery?.arrivalHour ?? LEVEL1.arrivalHour) * H;
 
   function make(jd, day, opensAt, closesAt) {
     const key = `${jd.id}@${day}`;
@@ -496,7 +557,7 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
 
   function createDay(day) {
     for (const jd of jobs) {
-      if (!jobOnDay(jd, day)) continue;
+      if (!onDay(jd, day)) continue;
       if (jd.round === 'rel') { const [o, c] = relTimes(jd); make(jd, day, o, c); continue; }
       const w = windowHours(jd, rounds());
       if (!w) continue;
@@ -529,7 +590,7 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
   function openProblem(problemId) {
     const day = env.dayNumber;
     for (const jd of jobs) {
-      if (jd.kind !== 'problem' || jd.problem !== problemId) continue;
+      if (jd.kind !== 'problem' || jd.problem !== problemId || !madeHere(jd)) continue;
       if (list.some((i) => i.id === jd.id)) continue; // one instance per problem and level
       const w = jd.window;
       const opensAt = w ? Math.max(env.day, day + w[0] * H) : env.day;
@@ -575,8 +636,8 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
       // The farm announces the truck (stats.truckAt / EV.FARM_DELIVERY); with the contract stub, or if
       // nothing came within half an hour, it counts as there at 08:00 on day 0.
       if (anchors.truck == null && farm?.stats?.truckAt != null) setAnchor('truck', farm.stats.truckAt);
-      const grace = farm && farm.stub === false ? 0.5 * H : 0;
-      if (anchors.truck == null && env.day >= TRUCK_AT + grace - EPS) setAnchor('truck', TRUCK_AT);
+      const grace = farm && farm.stub === false ? 0.5 * H : 0, tAt = truckAt();
+      if (anchors.truck == null && env.day >= tAt + grace - EPS) setAnchor('truck', tAt);
       if (anchors.placed == null && farm?.stats?.firstTipAt != null) setAnchor('placed', farm.stats.firstTipAt);
     }
     for (const [name, a] of Object.entries(levelAnchors())) if (a.stat) { const v = statValue(a.stat); if (v != null) moveAnchor(name, v); }
@@ -601,7 +662,7 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
     if (isL1()) {
       if (type === EV.FARM_DELIVERY && p.kind === 'chicks' && p.phase === 'arrive') setAnchor('truck', env.day);
       if (anchors.placed == null && (type === EV.FARM_PLACED || type === EV.BOX_TIP || (type === EV.ACTION && p.id === 'chicks.tip'))) {
-        if (anchors.truck == null) setAnchor('truck', Math.min(env.day, TRUCK_AT));
+        if (anchors.truck == null) setAnchor('truck', Math.min(env.day, truckAt()));
         setAnchor('placed', env.day);
       }
     }
@@ -658,9 +719,9 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
     const take = (t) => { if (t != null && t > after + EPS && t < best) best = t; };
     for (const inst of list) if (inst.status === 'waiting' && afterOk(inst)) take(inst.opensAt);
     for (let d = Math.max(def.startDay, (lastDay ?? env.dayNumber) + 1); d <= def.endDay; d++) {
-      for (const jd of jobs) { if (!jobOnDay(jd, d)) continue; const w = windowHours(jd, rounds()); if (w) take(d + w[0] * H); }
+      for (const jd of jobs) { if (!onDay(jd, d)) continue; const w = windowHours(jd, rounds()); if (w) take(d + w[0] * H); }
     }
-    if (isL1() && anchors.truck == null) take(TRUCK_AT);
+    if (isL1() && anchors.truck == null) take(truckAt());
     for (const [name, a] of Object.entries(levelAnchors())) if (a.stat) take(anchors[name]);
     return best;
   }
@@ -687,9 +748,44 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
       // rel jobs on a level anchor for the level's later days are made now: a moved anchor (a catch
       // booked for the evening before) never leaves one created after its window
       const la = levelAnchors();
-      for (let d = day + 1; d <= def.endDay; d++) for (const jd of jobs) if (jd.round === 'rel' && jd.rel.anchor in la && jobOnDay(jd, d)) make(jd, d, ...relTimes(jd));
+      for (let d = day + 1; d <= def.endDay; d++) for (const jd of jobs) if (jd.round === 'rel' && jd.rel.anchor in la && onDay(jd, d)) make(jd, d, ...relTimes(jd));
       tick();
     },
+    /**
+     * Phase 4 (level.rebuildJobs, after farm.setCondition): the jobs of the level again for the farm's condition. A job
+     * still waiting or open that the condition does not make goes (another condition's job, the problem job of a dropped
+     * problem, a routine on a day the condition moves); today's jobs the condition adds are made; one whose window has
+     * already passed is left out (it never was the farmer's). Done and missed jobs stay as they are.
+     */
+    rebuild() {
+      if (!started) return false;
+      mc = null;
+      const pids = problemIds(), now = env.day;
+      const keep = (i) => {
+        if (i.status === 'done' || i.status === 'missed') return true;
+        const jd = i.def;
+        if (!madeHere(jd)) return false;
+        if (jd.kind === 'problem') return pids.has(jd.problem);
+        return onDay(jd, i.day);
+      };
+      list = list.filter(keep);
+      byKey.clear(); for (const i of list) byKey.set(i.key, i);
+      const before = new Set(list.map((i) => i.key));
+      const d0 = Math.max(def.startDay, env.dayNumber);
+      if (inLevel(d0)) createDay(d0);
+      const la = levelAnchors();
+      for (let d = d0 + 1; d <= def.endDay && d <= (lastDay ?? d0); d++) createDay(d);
+      for (let d = d0 + 1; d <= def.endDay; d++) for (const jd of jobs) if (jd.round === 'rel' && jd.rel.anchor in la && onDay(jd, d)) make(jd, d, ...relTimes(jd));
+      list = list.filter((i) => before.has(i.key) || !(i.closesAt != null && i.closesAt <= now + EPS));
+      byKey.clear(); for (const i of list) byKey.set(i.key, i);
+      if (currentKey && !byKey.has(currentKey)) currentKey = null;
+      tick();
+      return true;
+    },
+    /** The farm's condition the jobs were made for (null = the normal season). */
+    get condition() { return cond(); },
+    /** The level as the condition plays it (config conditionLevel; problems, routine days, target, fail, delivery). */
+    merged,
     tick,
     list: () => list,
     open: cardOrder,

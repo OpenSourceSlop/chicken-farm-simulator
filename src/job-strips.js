@@ -10,9 +10,11 @@
 //     'vent' | 'lights'; null = anywhere in the panel. A job without an entry shows its rule's parts
 //     (labels from content-jobs) in the panel its spot names (SPOT_PANEL).
 //   Row: { k: 'step', text, done } | { k: 'cmp', what, sign, yours, bar } | { k: 'line', text } |
-//        { k: 'note', text } | { k: 'time', text, bar }   (bar 0..1 or null)
+//        { k: 'note', text } | { k: 'time', text, bar }   (bar 0..1 or null; Phase 4, PHASE4.md §6.3: a cmp bar may be
+//        { v, band: [lo, hi], max }, the value and the sign's band on a 0..max scale, drawn by ui-jobstrip.js)
+//   Phase 4: the condition jobs' strips are job-strips-cond.js STRIPS_COND (stripsAt finds them too).
 //   c = { env, farm, records, skills, engine, props, line?, ventDraft?, weighings? } (ui-jobstrip builds it)
-import { EQUIP, LEVEL1, FAN_COUNT, MIN_VENT_PER_1000, flockAgeAt, feedStdGAt } from './config.js';
+import { EQUIP, LEVEL1, FAN_COUNT, MIN_VENT_PER_1000, CONDITIONS, flockAgeAt, feedStdGAt } from './config.js';
 import { FEED } from './farm-feed.js';
 import { int, one, hhmm } from './ui-format.js';
 import { ventNeed, ventTableRows, timerAirM3h, knownFlock, nippleCmToday, rimCmNow, nippleInBand, rimInBand, flowToday, brooderRowC, luxOfDimmer,
@@ -20,9 +22,22 @@ import { ventNeed, ventTableRows, timerAirM3h, knownFlock, nippleCmToday, rimCmN
 // the steps hotfix: the next place of a job that spans several places, and the clock's pause
 import { jobPlaces, nextPlace, panelPlace, flowTodo } from './job-next.js';
 import { HELD_MIN } from './job-engine.js';
+// Phase 4: the condition jobs' strips (they import the row helpers from here; nothing of theirs runs at load)
+import { STRIPS_COND } from './job-strips-cond.js';
 
 export const step = (text, done = false) => ({ k: 'step', text, done: !!done });
-export const cmp = (what, sign, yours, bar = null) => ({ k: 'cmp', what, sign, yours, bar: bar == null ? null : Math.max(0, Math.min(1, bar)) });
+export const cmp = (what, sign, yours, bar = null) => ({ k: 'cmp', what, sign, yours, bar: bar == null ? null : typeof bar === 'object' ? bar : Math.max(0, Math.min(1, bar)) });
+/** The vent row's bar (PHASE4.md §6.3): the share of the need on a 0–160 % scale with the sign's 90–130 % marked. */
+export const ventBar = (share) => ({ v: Math.max(0, share || 0), band: [...VENT_BAND], max: 1.6 });
+/** "over the sign's 90–130 %" / "under …" when the share is outside the band (else ''). */
+export const ventBandWords = (share) => (share > VENT_BAND[1] + 1e-9 ? ': over the sign’s 90–130 %' : share < VENT_BAND[0] - 1e-9 ? ': under the sign’s 90–130 %' : '');
+/** A bad batch brooded 1 °C warmer (config CONDITIONS.badChicks delivery targetShiftC on days 0..shiftDays, PHASE4.md
+ *  §4.3): the shift on this day, else 0. Every place that prints the brooder sign's row adds it with its label. */
+export function rowShiftC(c) {
+  const dl = c?.farm?.condition ? CONDITIONS[c.farm.condition]?.levels?.level1?.delivery : null, d = c?.env?.dayNumber ?? 0;
+  return dl && dl.targetShiftC && d >= 0 && d <= (dl.shiftDays ?? 3) ? dl.targetShiftC : 0;
+}
+export const SHIFT_WORDS = 'the sign’s row + 1 °C (weak batch)';
 export const line = (text) => ({ k: 'line', text });
 export const note = (text) => ({ k: 'note', text });
 export const time = (text, bar) => ({ k: 'time', text, bar: Math.max(0, Math.min(1, bar ?? 0)) });
@@ -35,7 +50,7 @@ const C1 = (v) => `${one(v)} °C`;
 /** The panel a job's spot names (the strip shows there when the job has no STRIPS entry). */
 export const SPOT_PANEL = { controller: 'controller', feederBox: 'feeder-box', waterSupply: 'water-supply', fanPanel: 'fan-panel', padPump: 'pad-pump',
   officeDesk: 'office-desk', silo: 'silo', litterHeap: 'litter-heap', birdScale: 'bird-scale', chickTable: 'chick-table', washBay: 'wash-bay',
-  loadingBay: 'loading-bay', curtainWinch: 'curtain-winch' };
+  loadingBay: 'loading-bay', curtainWinch: 'curtain-winch', generator: 'generator', waterTank: 'water-tank' };
 const spotPanel = (spot) => (spot?.startsWith('drinkers.') ? 'drinker' : SPOT_PANEL[spot] || null);
 
 /** The engine's parts of a job as step rows (and a time row for a part that must hold for farm minutes). */
@@ -68,16 +83,22 @@ export function ventRows(c, { purpose = true, example = false } = {}) {
   if (purpose) out.push(line('Minimum ventilation brings fresh air in and moisture and ammonia out, even on cold days (Broiler Ventilation).'));
   out.push(line(v.prep ? `Set it now for tomorrow’s flock: ${int(v.birds)} chicks of about ${int(v.weightG)} g (the vent sign’s example).`
     : `Your birds: ${int(v.birds)} (placed less your dead counts and culls), about ${int(v.weightG)} g (${v.weightFrom}).`));
-  out.push(cmp(`Air your flock needs (vent sign table: ${tableText(v)})`, `${int(v.need)} m³/h`, `timer now ${timerText(c.env.ventTimer)} = ${int(v.air)} m³/h (${pct(v.share)})`, v.need ? v.air / (v.need * VENT_BAND[1]) : 0));
+  // the prep day (PHASE4.md §6.5): the sign's own example beside the timer; the worked figure and the band under it
+  if (v.prep) {
+    out.push(cmp('Air your flock needs (vent sign)', `about 900 m³/h (the sign’s example: ${int(v.birds)} chicks of ${int(v.weightG)} g)`,
+      `timer now ${timerText(c.env.ventTimer)} = ${int(v.air)} m³/h (${pct(v.share)})${ventBandWords(v.share)}`, ventBar(v.share)));
+    out.push(line(`${int(v.need)} m³/h worked out: ${int(v.per1000)} per 1,000 at ${int(v.weightG)} g (the table’s ${int(MIN_VENT_PER_1000[0][1])} at ${int(MIN_VENT_PER_1000[0][0])} g, a little more at ${int(v.weightG)} g); 90–130 % is ${int(VENT_BAND[0] * v.need)}–${int(Math.round((VENT_BAND[1] * v.need) / 10) * 10)} m³/h.`));
+  } else out.push(cmp(`Air your flock needs (vent sign table: ${tableText(v)})`, `${int(v.need)} m³/h`, `timer now ${timerText(c.env.ventTimer)} = ${int(v.air)} m³/h (${pct(v.share)})${ventBandWords(v.share)}`, ventBar(v.share)));
   const d = c.ventDraft;
   if (d && timerText(d) !== timerText(c.env.ventTimer)) out.push(line(`This setting (not sent yet): ${timerText(d)} = ${int(timerAirM3h(d))} m³/h, ${pct(v.need ? timerAirM3h(d) / v.need : 0)} of the need.`));
   if (example) out.push(note('Worked example on the sign: 6,000 chicks of 42 g need about 900 m³/h: 1 fan, 8 s on in every 300 s.'));
   return out;
 }
-/** The house beside the brooder sign's row of today. */
+/** The house beside the brooder sign's row of today (a bad batch on days 0–3: the row + 1 °C, so labelled). */
 export function houseRow(c, extra = '') {
-  const d = Math.max(0, c.env.dayNumber);
-  return cmp('House now', `brooder sign, day ${d}: ${C1(brooderRowC(d))}${extra}`, C1(c.env.houseTemp));
+  const d = Math.max(0, c.env.dayNumber), sh = rowShiftC(c);
+  const sign = sh ? `brooder sign, day ${d}: ${C1(brooderRowC(d))} + ${one(sh)} °C = ${C1(brooderRowC(d) + sh)} (${SHIFT_WORDS})` : `brooder sign, day ${d}: ${C1(brooderRowC(d))}`;
+  return cmp('House now', `${sign}${extra}`, C1(c.env.houseTemp));
 }
 /** What the farmer sees of the birds' comfort: panting and huddling (an observation, like a look note). */
 export function birdsSeen(c) {
@@ -121,6 +142,8 @@ export const STRIPS = {
     rows(c) {
       const out = [line('Feeder lines plate: days 0–3 pans on the litter (rim about 5 cm) and flooded, so the feed is easy to reach. All three lines are on this box.')];
       c.farm.feed.lines.forEach((l, i) => { const todo = feederTodo(l, c.env, true); const r = step(`${feederLine(l, i, c.env)}${todo ? `: ${todo}` : ''}`, l.flood && l.panFill >= 0.95 && l.heightCm <= PANS_ON_LITTER_CM); r.bar = l.panFill; out.push(r); });
+      // PHASE4.md §6.8: the finished outcome of every line, in the plate's figures
+      out.push(line('Each line is finished when: rim about 5 cm (7 at most), flood windows open, pans 95 % full.'));
       if (!c.farm.feed.lines.every((l) => l.panFill >= 0.95)) out.push(wait('The auger fills the pans over farm time: about 25 farm minutes for flooded pans. Close the box and let the clock run (Next job works too).'));
       return out;
     } },
@@ -215,6 +238,8 @@ function feederCheckRows(c, inst, withSilo) {
     const todo = feederTodo(l, c.env), low = l.running && l.panFill < FEED.accessFill ? 'the pans fill over farm time while the auger turns' : '';
     const r = step(`${feederLine(l, i, c.env)}${todo || low ? `: ${[todo, low].filter(Boolean).join(' · ')}` : ''}`, l.running && l.panFill >= FEED.accessFill && (c.env.dayNumber < 4 || rimInBand(l.heightCm, c.env))); r.bar = l.panFill; out.push(r);
   });
+  out.push(line(c.env.dayNumber < 4 ? `Each line is finished when: auger on, feed in the pans (${pct(FEED.accessFill)} full or more).`
+    : `Each line is finished when: rim at the plate’s figure ± ${HEIGHT_BAND_CM} cm (about ${cm(rim)} today), auger on, feed in the pans.`));
   out.push(meterRow(c, inst.st), step('Press Read the feed meter (feeder box)', parts[0]?.met));
   if (withSilo) {
     const birds = knownFlock(c.env, c.farm).birds, g = feedStdGAt(Math.max(0, flockAgeAt(c.env.day) + 0.5));
@@ -280,7 +305,7 @@ export function stripsAt(engine, panelId, section, extra = {}) {
   const cur = engine.current?.(), out = [];
   const open = engine.open?.() || [];
   for (const inst of [...(cur ? [cur] : []), ...open.filter((i) => i !== cur)]) {
-    const S = STRIPS[inst.id] || extra[inst.id];
+    const S = STRIPS[inst.id] || extra[inst.id] || STRIPS_COND[inst.id];
     const panels = S ? S.panels : { [spotPanel(inst.def.spot)]: 'top' };
     if (!(want in panels)) continue;
     const sec = panels[want];

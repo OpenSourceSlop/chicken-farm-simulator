@@ -8,7 +8,10 @@
 //   Harvest, Clean-out, Letters  ui-letters.js; Graphs  ui-summary.js
 //   Phone     feed by type, the company vet, the catching crew, the hatchery: the bookings are farm.act
 //             calls and the line under them is what the phone answered (its reason, as given)
-import { LEVEL1, FEED_TYPES, HARVEST, PLAN_LEVEL, levelOfDay, weightAt, feedTypeForDay } from './config.js';
+// Phase 4 (PHASE4.md §3.3, §4.3): the header names the run's condition ("Flock record · House 1 · Hot season"); in the
+//             brooding week the Phone page has *Call the hatchery* (ui action phone.hatchery { chickWeightG, weakPct }:
+//             the chick quality on the day the chicks came; a bad batch's graded-out chicks are claimed once it is told)
+import { LEVEL1, FEED_TYPES, HARVEST, PLAN_LEVEL, levelOfDay, weightAt, feedTypeForDay, conditionLabel } from './config.js';
 import { h, button, setText, uniqueId, fmt0, nodes } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
@@ -41,9 +44,15 @@ const TODAY_LINES = [
   [['fans', 'fans.read'], 'Fan panel'],
   [['gas', 'gas.meter'], 'Gas tank'],
   [['weigh', 'sample.weigh'], 'Birds weighed'],
+  // Phase 4: the conditions' readings (shown on a day that has them)
+  [['tank', 'water.tank'], 'Water tank and pump'],
+  [['water.test'], 'Water test'],
+  [['generator', 'gen.test', 'gen.start', 'gen.stop', 'gen.switch'], 'Generator'],
+  [['chicks.grade'], 'Chicks graded'],
   [['look'], 'Look notes'],
 ];
-const OPTIONAL = new Set(['Filter gauges', 'Vent temperatures', 'Crop check', 'Birds weighed', 'Nipple heights', 'Light at bird level', 'Air at bird height', 'Birds in the hand', 'Fan panel', 'Gas tank']);
+const OPTIONAL = new Set(['Filter gauges', 'Vent temperatures', 'Crop check', 'Birds weighed', 'Nipple heights', 'Light at bird level', 'Air at bird height', 'Birds in the hand', 'Fan panel', 'Gas tank',
+  'Water tank and pump', 'Water test', 'Generator', 'Chicks graded']);
 const RECORD_JOBS = new Set(['r-record', 'prep-record', 'pl-record']);
 
 // The week tables of the cycle: one per level, weeks 4 and 5 as two (PHASE3.md §1 Level 5)
@@ -75,8 +84,9 @@ export function buildRecordsPanel(L) {
   const show = (i) => { tab = i; tabBtns.forEach((b, j) => b.setAttribute('aria-selected', String(i === j))); pages.forEach((p, j) => { p.hidden = i !== j; }); render(); };
   tabBtns.forEach((b, i) => b.addEventListener('click', () => show(i)));
   const sub = h('p');
+  const titleEl = h('h2', { id: titleId }, 'Flock record · House 1');
   const head = h('header', { class: 'book-head' }, h('span', { class: 'book-icon', html: ICONS.book, 'aria-hidden': 'true' }),
-    h('div', null, h('h2', { id: titleId }, 'Flock record · House 1'), sub));
+    h('div', null, titleEl, sub));
   el.append(h('div', { class: 'book-cover' }, head, h('div', { class: 'book-tabs', role: 'tablist' }, tabBtns), h('div', { class: 'book-paper' }, pages)), closeBtn);
 
   // ---- radio (top of Today) ----
@@ -134,7 +144,7 @@ export function buildRecordsPanel(L) {
   // ---- phone (PHASE3.md §13.3: the bookings are farm actions; the line under each is what the phone said) ----
   const kgOpts = [1000, 2000, 3000, 4000, 6000];
   let kg = 2000, feedType = null;
-  const phoneLines = { order: '', vet: '', report: '', crew: '', hatchery: '' };
+  const phoneLines = { order: '', vet: '', report: '', crew: '', hatchery: '', quality: '' };
   const say = (k, s) => { phoneLines[k] = s; render(); };
   function select(opts, value, onChange, label) {
     const s = h('select', { class: 'book-select', 'aria-label': label }, opts.map(([v, t]) => h('option', { value: String(v), ...(String(v) === String(value) ? { selected: true } : {}) }, t)));
@@ -173,6 +183,21 @@ export function buildRecordsPanel(L) {
     }); return b; });
     out.push(h('h3', { class: 'book-h' }, 'Company vet'), h('div', { class: 'book-row' }, report), h('p', { class: 'book-note', 'aria-live': 'polite' }, phoneLines.report));
     if (vetBtns.length) out.push(h('p', { class: 'book-note' }, 'Call the vet about:'), h('div', { class: 'book-row' }, vetBtns), h('p', { class: 'book-note', 'aria-live': 'polite' }, phoneLines.vet));
+    // Phase 4: the hatchery about the chicks that came (the brooding week; a bad batch's claim needs the call on day 0)
+    if (d >= 0 && d <= LEVEL1.endDay) {
+      const b = L.level()?.badBatch?.() || {}, w = farm.stats?.chickWeightMeasuredG ?? null;
+      const weakPct = b.looked > 0 ? (100 * b.weak) / b.looked : null;
+      const call = button({ class: 'btn btn--paper btn--ink' }, h('span', { html: ICONS.phone, 'aria-hidden': 'true' }), 'Call the hatchery about the chicks');
+      call.addEventListener('click', () => {
+        L.uiAct('phone.hatchery', { chickWeightG: w != null ? Math.round(w * 10) / 10 : null, weakPct: weakPct != null ? Math.round(weakPct * 10) / 10 : null });
+        say('quality', `You told the hatchery at ${env.timeLabel}, day ${d}: ${w != null ? `chicks of ${one(w)} g (your box weighing)` : 'the box not weighed'}${weakPct != null ? `, ${one(weakPct)} % weak at the grading (${int(b.gradedOut)} graded out)` : ''}.`);
+      });
+      out.push(h('h3', { class: 'book-h' }, 'Hatchery: the chicks that came'),
+        h('p', { class: 'book-note book-note--fact' }, 'Chicks you grade out on the day they come are counted apart and claimed back once the hatchery is told the same day.',
+          h('small', { class: 'book-src' }, `Source: ${sourceLabel('general')} · the chick sign`)),
+        h('p', { class: 'book-note' }, `What you tell them: ${w != null ? `${one(w)} g a chick (box weighing)` : 'no box weighed yet'}${weakPct != null ? ` · ${one(weakPct)} % weak at the grading` : ''}.`),
+        h('div', { class: 'book-row' }, call), h('p', { class: 'book-note', 'aria-live': 'polite' }, phoneLines.quality));
+    }
     // the catching crew and the trucks (the last week)
     if (d >= 36 && d <= 42) {
       const hv = farm.harvest;
@@ -207,6 +232,7 @@ export function buildRecordsPanel(L) {
   function render() {
     const d = env.dayNumber;
     setText(sub, `${int(LEVEL1.chicksPlaced)} chicks · ${dayLabel(d, { bookedDay: farm.clean?.bookedDay })} · the clock stops while the book is open`);
+    setText(titleEl, farm.condition ? `Flock record · House 1 · ${conditionLabel(farm.condition)}` : 'Flock record · House 1');
     TABS.forEach((t, i) => { tabBtns[i].hidden = t.when ? !t.when() : false; });
     if (tabBtns[tab].hidden) { tab = 0; tabBtns.forEach((b, j) => b.setAttribute('aria-selected', String(j === 0))); pages.forEach((p, j) => { p.hidden = j !== 0; }); }
     signBtn.disabled = !!records.row?.(d)?.signed || signWait();

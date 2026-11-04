@@ -14,6 +14,8 @@
 //             fan), 'bait' (the next bait station not done), 'swab' (the next swab place not done, CLEAN.swabSpots)
 // The Phase 2 routines continue to day 41 (content-jobs.js); these are the jobs only Phase 3 adds.
 import { EV } from './events.js';
+// Phase 4 (PHASE4.md §6 items 7, 9, 10): the clarity round's rules for the feed changes, the medicine and the withdrawal
+import { DONE_P4 } from './content-jobs-cond.js';
 
 const R = (id, days, round, title, rest) => ({ id, kind: 'routine', days, round, title, ...rest });
 const D = (id, day, round, title, rest) => ({ id, kind: 'dated', day, round, title, ...rest });
@@ -44,9 +46,15 @@ const FEEDMETER_DAYS = even(8, 41).filter((d) => d !== 36);
 //                 heat sign and the pad plate say, even while the weather still makes some birds pant
 //   pad-humid-ok  (pad off, or house RH <= HEAT.padOffAboveRH) and env.fansEffective >= 5, for 30 game min
 //   dark-period   the light program gives a dark block of at least 4 hours (the light sign: about 4-6 hours)
+// Phase 4 (content-jobs-cond.js STATE_TEST_IDS_P4, the clarity round's DONE_P4 rules these jobs now use):
+//   blend-24h { feed }  the augers drew 20-80 % new feed for at least 20 h of the change (farm.stats.blendH / blendFinH)
+//   medicine-course     the medicine in the water on 3 calendar days counting the first (farm.health.medication.daysOn)
+//   feed-withdrawn      the feed is off (farm.feed.withdrawn): an early withdrawal completes f-withdraw when it opens
 export const STATE_TEST_IDS_CYCLE = ['house-ready', 'rh-under', 'lame-cleared', 'vaccine-drunk', 'pans-grower', 'pans-finisher',
   'caked-cleared', 'air-clear', 'heat-handled', 'pad-humid-ok', 'house-empty', 'litter-removed', 'house-washed',
-  'house-disinfected', 'house-dry', 'lines-disinfected', 'rest-done', 'dark-period'];
+  'house-disinfected', 'house-dry', 'lines-disinfected', 'rest-done', 'dark-period', 'blend-24h', 'medicine-course', 'feed-withdrawn'];
+/** The Phase 3 state tests (test-jobs' case table): the list above less the Phase 4 ones the DONE_P4 rules brought in. */
+export const STATE_TEST_IDS_P3 = STATE_TEST_IDS_CYCLE.slice(0, 18);
 const SWABS = { type: 'each', id: 'clean.swab', key: 'spot', values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] }; // config CLEAN.swabSpots
 
 export const JOBS_CYCLE = [
@@ -89,7 +97,8 @@ export const JOBS_CYCLE = [
   P('p-sds', 'Big birds found dead on their backs', { problem: 'sudden-deaths', spot: 'controller', signs: ['sign-light', 'controller-lights'], branch: 'lighting', done: ALL(L('Read the controller', A('controller.read')), LIVE('A dark block of 4–6 hours (light sign)', 'dark-period')) }),
 
   // ---------------- Level 4: Week 3 (days 15-21) ----------------
-  D('w3-change', 15, 'am', 'Change the feed lines to grower pellets', { window: [6, 42], pin: true, spot: 'silo', signs: ['sign-feed', 'silo', 'feeder-box'], branch: 'feed', done: ST('pans-grower') }),
+  // Phase 4 (§6.9): the half-and-half day is part of the rule (DONE_P4: blend-24h, then the pans 90 % grower)
+  D('w3-change', 15, 'am', 'Change the feed lines to grower pellets', { window: [6, 42], pin: true, spot: 'silo', signs: ['sign-feed', 'silo', 'feeder-box'], branch: 'feed', done: DONE_P4['w3-change'] }),
   R('w3-droppings', [16, 19], 'am', 'Check the droppings on five birds', { onDays: [16, 19], window: [8, 18], spot: 'birdScale', signs: ['sign-droppings', 'bird-check'], branch: 'feed',
     done: { type: 'count', id: 'sample.bird', match: { look: 'droppings' }, n: 5, sectors: 3, sectorsOf: 'house' } }),
   D('w3-topup', 18, 'am', 'Fork over caked litter and top it up under the drinker lines', { window: [8, 18], spot: 'litterHeap', signs: ['sign-litter', 'sign-droppings'], branch: 'moisture',
@@ -100,8 +109,8 @@ export const JOBS_CYCLE = [
     done: A('pad.fixFloat', { result: { fixed: true } }) }),
   P('p-pad-patch', 'Put fresh litter on the wet strip', { problem: 'pad-overflow', after: 'p-pad-wet', spot: 'litterHeap', signs: ['sign-litter'], branch: 'moisture',
     done: A('litter.patch', { result: { onPad: true } }) }),
-  P('p-blood', 'Blood in the droppings', { problem: 'coccidiosis', spot: 'officeDesk', signs: ['sign-droppings', 'medicator'], branch: 'biosecurity',
-    done: ALL(L('Call the vet: blood in the droppings', A('phone.vet', { reason: VET_BLOOD })), L('Start the medicine (water supply, Medicine tab)', A('water.medicate', { on: true }))) }),
+  // Phase 4 (§6.10): the vet's course of 3 days is part of the rule (DONE_P4: medicine-course)
+  P('p-blood', 'Blood in the droppings', { problem: 'coccidiosis', spot: 'officeDesk', signs: ['sign-droppings', 'medicator'], branch: 'biosecurity', done: DONE_P4['p-blood'] }),
   P('p-heat3', 'Birds panting in the afternoon', { problem: 'warm-afternoon3', spot: 'fanPanel', signs: ['sign-heat', 'fan-panel'], branch: 'ventilation',
     done: ALL(L('Switch the fans or the pad', ANY('vent.fans', 'vent.pad')), L('Few birds panting and none chilled for 30 farm minutes', ST('heat-handled'))) }),
   P('p-hunched', 'Birds sitting hunched with white watery droppings', { problem: 'gumboro', spot: 'officeDesk', signs: ['sign-droppings', 'sign-health'], branch: 'biosecurity',
@@ -114,13 +123,13 @@ export const JOBS_CYCLE = [
   // at the controller by the door (its tunnel fan keys) or at the fan panel
   R('r-vent-night', [15, 41], 'night', 'Set the ventilation for the night', { spot: 'controller', signs: ['sign-heat', 'sign-vent'], branch: 'moisture',
     done: ALL(L('Read or set the fans (controller or fan panel)', ANY('fans.read', 'controller.read', 'vent.fans', 'vent.timer')),
-      L('The birds comfortable (or every fan on) for 30 farm minutes after 18:00', ST('night-comfort'))) }),
+      L('A quarter of the birds panting at most and none chilled for 30 farm minutes after 18:00 (from day 28, while the outside air is over about 30 °C: every fan and the pad)', ST('night-comfort'))) }),
   D('w45-air', 23, 'am', 'Measure the air speed at bird height (V)', { window: [8, 18], spot: 'fanPanel', signs: ['sign-heat'], branch: 'ventilation',
     done: { type: 'count', id: 'air.probe', n: 3, sectors: 3, sectorsOf: 'house' } }),
   D('w45-pad', 24, 'am', 'Check the cooling pad: water on every section', { window: [8, 18], spot: 'padPump', signs: ['pad-pump'], branch: 'ventilation', done: A('pad.check', { result: { flowing: true } }) }),
   D('w45-order', 27, 'am', 'Order finisher pellets', { window: [6, 16], spot: 'officeDesk', signs: ['sign-feed'], branch: 'feed', done: ORDER('finisher', 'order-days') }),
   D('w45-weigh28', 28, 'am', 'Weigh sample birds', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
-  D('w45-change', 29, 'am', 'Change the feed lines to finisher pellets', { window: [6, 42], spot: 'silo', signs: ['sign-feed', 'silo'], branch: 'feed', done: ST('pans-finisher') }),
+  D('w45-change', 29, 'am', 'Change the feed lines to finisher pellets', { window: [6, 42], spot: 'silo', signs: ['sign-feed', 'silo'], branch: 'feed', done: DONE_P4['w45-change'] }),
   D('w45-weigh35', 35, 'am', 'Weigh sample birds', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
   P('p-dust', 'Dusty air and birds breathing with a rattle', { problem: 'dusty-air', spot: 'fanPanel', signs: ['sign-air'], branch: 'moisture',
     done: ALL(L('More air: the timer or the tunnel fans', ANY('vent.timer', 'vent.fans')), L('Breathing quiet and the air fresh for 120 farm minutes', ST('air-clear'))) }),
@@ -139,8 +148,9 @@ export const JOBS_CYCLE = [
   D('f-book', 37, 'am', 'Book the catching crew and the trucks', { window: [6, 54], spot: 'officeDesk', signs: ['sign-catch'], branch: 'planning', done: A('phone.bookCatch', { result: { booked: true } }) }),
   D('f-weigh', 40, 'am', 'Weigh sample birds before catching', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
   // pans empty 8–12 h before the catch, the lines stopped about an hour before that (feed and catch signs): 13–9 h before
+  // Phase 4 (§6.7): done on the outcome, the feed off (an early withdrawal completes it when the window opens)
   D('f-withdraw', 41, 'rel', 'Take the feed away before catching', { rel: { anchor: 'catch', fromH: -13, toH: -9 }, spot: 'feederBox', signs: ['sign-feed', 'sign-catch'], branch: 'feed',
-    done: A('feed.withdraw', { on: true }) }),
+    done: DONE_P4['f-withdraw'] }),
   D('f-ready', 41, 'rel', 'Get the house ready for the catching crew', { rel: { anchor: 'catch', fromH: -3, toH: 0.5 }, spot: 'controller', signs: ['sign-catch', 'sign-light'], branch: 'comfort',
     done: ALL(L('Put up the catching panels by the door', A('catch.panels')), LIVE('Lights dimmed to about 10 lux, at least three tunnel fans running (catch sign)', 'catch-ready')) }),
   D('f-lines', 42, 'rel', 'Lift the drinker lines as the catching starts', { rel: { anchor: 'catch', fromH: -1, toH: 1 }, spot: 'drinkers.0', signs: ['sign-catch'], branch: 'water',

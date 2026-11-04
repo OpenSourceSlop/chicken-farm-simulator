@@ -3,6 +3,8 @@
 // passed: <the measurement>." and the buttons. In a run: Continue to <next> · Replay <level> (its saved
 // starts before the failing measurement) · Replay <previous level> with the record lines the failure
 // carried over, as plain facts · Skill tree · Back to the title. Titles come from def.title.
+// Phase 4 (PHASE4.md §3.3): the title names the run's condition ("Level 5 – Weeks 4 and 5 · Hot season") and the
+// limits are the level's as the condition has them (a bad batch's 2.5 %, the chicks claimed from the hatchery apart).
 // Owner: package "run" (Phase 2: "level").
 import { LEVEL1, flowTargetAt, nippleHeightCmAt, targetTempAt, minVentM3hPer1000, weightAt, EQUIP, levelById } from './config.js';
 import { SKILL_BRANCHES } from './config.js';
@@ -87,7 +89,10 @@ function cardsOf(res, def) {
         : big(res.early ? 'Ended early' : 'Day 7 weight', res.early ? `Day ${fmt0(res.day)}, ${hhmm(res.hour ?? 0)}` : 'not weighed', res.failText ? `${res.failText.charAt(0).toUpperCase()}${res.failText.slice(1)}. No day 7 weighing.` : 'No day 7 weighing.'),
       big('Deaths and culls', `${two(res.deathsPct)} %`, `${int(res.deaths)} of ${int(res.placed)} chicks ${res.placedReal === false ? 'delivered' : 'placed'}`,
         res.countedDead != null ? h('p', { class: 'big-sub' }, [`${int(res.countedDead)} counted at the bin`, `${int(res.deadOnFloor)} still lying in the house`,
-          res.deadInBoxes ? `${int(res.deadInBoxes)} dead in the boxes` : null, res.culls ? `${int(res.culls)} culled` : null].filter(Boolean).join(' · ')) : null),
+          res.deadInBoxes ? `${int(res.deadInBoxes)} dead in the boxes` : null, res.culls ? `${int(res.culls)} culled` : null,
+          // a bad batch (PHASE4.md §3.4): the chicks graded out on day 0 and claimed from the hatchery are counted apart
+          res.claimedApart && res.claimed ? `${int(res.claimed)} graded out on day 0, claimed from the hatchery (not counted here)` : null,
+          res.claimedApart && !res.claimed && res.gradedOut ? `${int(res.gradedOut)} graded out on day 0 counted as culls: the hatchery was not told that day` : null].filter(Boolean).join(' · ')) : null),
       res.uniformityPct != null ? big('Uniformity', `${fmt0(res.uniformityPct)} %`, 'birds within ±10 % of the mean, hand weighing') : null,
       res.fcr != null ? big('FCR', two(res.fcr), 'feed ÷ live weight so far') : null);
   }
@@ -125,11 +130,11 @@ function cardsOf(res, def) {
 
 /** What the level needs, in plain words (the outcome's second line). */
 function needsText(res, def) {
-  if (res.levelId === LEVEL1.id) return `The level needs at least ${LEVEL1.fail.weightRatioMin} × chick weight at day 7 and deaths and culls at or below ${LEVEL1.fail.mortalityMaxPct} % of the chicks placed.`;
+  if (res.levelId === LEVEL1.id) return `The level needs at least ${res.weightRatioMin ?? LEVEL1.fail.weightRatioMin} × chick weight at day 7 and deaths and culls at or below ${res.mortalityMaxPct ?? LEVEL1.fail.mortalityMaxPct} % of the chicks placed${res.claimedApart ? '; the chicks graded out on day 0 count apart once the hatchery is told the same day' : ''}.`;
   if (res.levelId === 'plan') return 'The level needs every term of the contract met in the company’s reply.';
   if (res.levelId === 'finish') return `The level needs a harvest live weight of at least ${int(def.target.minShare * 100)} % of the target at the catch age less the 2 % shrink, and deaths, culls and dead on arrival at or below ${def.fail.mortalityMaxPct} % of the birds alive on day ${def.startDay}.`;
   if (res.levelId === 'cleanout') return `The level needs ${def.target.maxPositive} or fewer of the 10 swabs to grow bacteria and at least ${def.target.restMinDays} days of rest before the next chicks.`;
-  return `The level needs at least ${int(def.target.minShare * 100)} % of the ${int(weightAt(def.target.day))} g target on day ${def.target.day} and deaths and culls at or below ${def.fail.mortalityMaxPct} % of the birds alive on day ${def.startDay}.`;
+  return `The level needs at least ${int((res.minShare ?? def.target.minShare) * 100)} % of the ${int(weightAt(def.target.day))} g target on day ${def.target.day} and deaths and culls at or below ${res.mortalityMaxPct ?? def.fail.mortalityMaxPct} % of the birds alive on day ${def.startDay}.`;
 }
 
 export function buildResultPanel(L) {
@@ -142,13 +147,14 @@ export function buildResultPanel(L) {
   function render() {
     if (!res) return;
     const def = levelById(res.levelId) || LEVEL1;
-    const title = res.title || def.title;
+    // the condition in the title (PHASE4.md §3.3): "Level 5 – Weeks 4 and 5 · Hot season"
+    const name = res.title || def.title, title = `${name}${res.conditionLabel ? ` · ${res.conditionLabel}` : ''}`;
     const R = res.run;   // the run's buttons and lines (run.js decorate); null for Phase 2's lone brooding week
     const outcome = res.pass
-      ? h('div', { class: 'outcome' }, h('h3', null, `${title} complete`), h('p', null, R
+      ? h('div', { class: 'outcome' }, h('h3', null, `${name} complete`), h('p', null, R
         ? (res.levelId === 'plan' && R.next ? 'The plan is in the book. Continue to the brooding week: house 1 gets the first flock of your plan.' : R.next ? `The level is in the book. ${R.next.label} on the same flock, or replay it to try other settings.` : 'The house rests clean. The cycle summary is the whole flock, from the plan to the next chicks.')
         : 'The week is in the book. Replay it to try other settings, or keep walking the farm on day 7.'))
-      : h('div', { class: 'outcome outcome--again' }, h('h3', null, `${title} not passed: ${res.failText}.`), h('p', null, needsText(res, def)));
+      : h('div', { class: 'outcome outcome--again' }, h('h3', null, `${name} not passed: ${res.failText}.`), h('p', null, needsText(res, def)));
     const pts = res.points || [];
     const run = () => L.run?.();
     const prev = R?.previous;

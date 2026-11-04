@@ -38,6 +38,8 @@
 //     { type: 'any', of: [rules] }               one of the rules
 import { EV } from './events.js';
 import { JOBS_CYCLE, JOB_WHERE_CYCLE } from './content-jobs-cycle.js';
+// Phase 4 (PHASE4.md §4, §5): the condition jobs, made only in a run of their condition (job-engine.js filters by farm.condition)
+import { JOBS_COND, JOB_WHERE_COND } from './content-jobs-cond.js';
 
 const R = (id, days, round, title, rest) => ({ id, kind: 'routine', days, round, title, ...rest });
 const D = (id, day, round, title, rest) => ({ id, kind: 'dated', day, round, title, ...rest });
@@ -82,7 +84,9 @@ export const live = (label, test) => ({ type: 'state', test, live: true, label }
 //   flows-in-band   every line flow-tested since the job opened, the last reading within ±3 ml/min of age + 20, nipples ±3 cm of the plate
 //   feeders-checked every line switched on, pans at least 30 % full, from day 4 every rim ±3 cm of the plate
 //   lines-raised    every drinker line ±3 cm of the plate's nipple height and every pan rim ±3 cm of the plate's rim height
-//   night-comfort   from 18:00 the birds' mean felt comfort between −1.5 °C and where they start to pant, or every working fan on, for 30 game min
+//   night-comfort   (Phase 4, PHASE4.md §2.4) for 30 game min after 18:00: a quarter of the birds panting at most (HEAT_P4.nightPantMax)
+//                   and none chilled (mean felt comfort >= −1.5 °C), or from day 28 every working fan with the pad while the outside air is
+//                   over about 30 °C (HEAT_P4; the pad off over 90 % house RH)
 //   lines-up        every drinker line at or above 55 cm (catching)
 //   all-up          every drinker line at or above 55 cm, every pan at or above 40 cm, the brooders up (clean-out)
 //   catch-ready     the dimmer at most 20 % (about 10 lux) and at least 3 tunnel fans running (catch sign)
@@ -209,12 +213,13 @@ export const JOBS = [
 ];
 
 /** Phase 3 (PHASE3.md §3.1): the one job list of every level (the engine makes only the jobs whose
- *  days lie inside its level, and problem jobs only for that level's problems). */
-export const ALL_JOBS = [...JOBS, ...JOBS_CYCLE];
+ *  days lie inside its level, and problem jobs only for that level's problems). Phase 4: the condition jobs too
+ *  (a job with `condition` only in a run of that condition, farm.condition). */
+export const ALL_JOBS = [...JOBS, ...JOBS_CYCLE, ...JOBS_COND];
 export const allJobs = () => ALL_JOBS;
 export const jobById = (id) => ALL_JOBS.find((j) => j.id === id) || null;
 /** The card's "where" line of any job (Phase 2's or the cycle's). */
-export const jobWhere = (id) => JOB_WHERE[id] || JOB_WHERE_CYCLE[id] || '';
+export const jobWhere = (id) => JOB_WHERE[id] || JOB_WHERE_CYCLE[id] || JOB_WHERE_COND[id] || '';
 
 // One line of "where" for the open job on the card: the place and the check, never the value.
 export const JOB_WHERE = {

@@ -16,13 +16,22 @@
 //   info()                the title card's Continue line: { levelId, title, day, hour } | null
 //   card()                the run card: one row per level (PHASE3.md §1)
 //   serialize() / restore(d)   the run's part of the save (PHASE3.md §11)
-// Events: EV.RUN { phase: 'start' | 'level-start' | 'level-end' | 'cycle-end', level, pass? }.
+// Events: EV.RUN { phase: 'start' | 'level-start' | 'level-end' | 'cycle-end', level, pass?, condition }.
+//
+// Phase 4 (PHASE4.md §3.1): one condition per run, held on the farm only: startRun({ seed, at, condition }) and
+// startLevel(id, { from, condition }) put it there through level.start -> farm.start(def, { condition }); replays carry it in
+// the saved farm. state().condition mirrors farm.condition (the run save writes it for the run card). A condition other
+// than the run's chosen on a level row starts a NEW run (the old one replaced as Start a new flock does) whose earlier
+// levels are the condition ideal's standard-start trace (summary.fromStandard). conditionsDone[id] rises for a run played
+// under one condition from the level it was started at through the clean-out; cyclesDone for every finished run (both in
+// the skill profile: level.profile.cycles()). The harder flocks open once cyclesDone >= 1 (harderOpen) and where
+// config CONDITIONS[id].available (the build switch).
 //
 // Saves (config RUN_SAVE): the run key { version 3, savedAt, run, blob } at the level's autosave moments
 // and at each level start and end; the level starts `<startPrefix><id>[.<day>]` (weeks 4-5: .22 and .29).
 // The store is save.js createRunStore() (package "sim"); every start is also kept in memory (node,
 // storage blocked: replays still work).
-import { LEVEL1, LEVELS, PLAN_LEVEL, RUN_SAVE, CONDITIONS, levelById, weightAt } from './config.js';
+import { LEVEL1, LEVELS, PLAN_LEVEL, RUN_SAVE, CONDITIONS, CONDITION_IDS, levelById, weightAt, conditionLabel } from './config.js';
 import { EV } from './events.js';
 import { createRunStore } from './save.js';
 import { RUN_CARD } from './content.js';
@@ -36,6 +45,14 @@ const clone = (o) => (o == null ? o : JSON.parse(JSON.stringify(o)));
 /** A level's short name inside a sentence: "the brooding week", "Week 2", "Plan the farm". */
 const inText = (def) => (def?.short || '').replace(/^The /, 'the ');
 const startKey = (id, day, def = levelById(id)) => `${RUN_SAVE.startPrefix}${id}${def && def.starts.length > 1 ? `.${day}` : ''}`;
+const validCond = (c) => (c && CONDITIONS[c] ? c : null);
+const before = (a, b) => RUN_ORDER.indexOf(a) < RUN_ORDER.indexOf(b);
+/** What the summary of a condition cycle draws beside the farmer's last normal-season cycle (PHASE4.md §3.3). */
+export function compareOf(sum) {
+  if (!sum) return null;
+  const { sold = null, meanLiveG = null, fcr = null, epef = null, mortalityPct = null } = sum;
+  return { sold, meanLiveG, fcr, epef, mortalityPct, deathsByLevel: clone(sum.deathsByLevel ?? null) };
+}
 
 /** The level's key number for the run card and the run state (what was measured, PHASE3.md §10). */
 export function keyOf(res) {
@@ -66,7 +83,7 @@ const VACCINE_DAY = 12; // content-jobs-cycle w2-vaccine (the vaccine plate: day
 function carriedLines({ def, farm, levels }) {
   const out = [];
   const prev = prevLevelId(def.id), prevDef = prev && levelById(prev);
-  if (!prevDef || def === LEVEL1 || def === PLAN_LEVEL) return out;
+  if (!prevDef || def.id === LEVEL1.id || def.id === PLAN_LEVEL.id) return out;
   const v = farm.health?.vaccine;
   const vDay = v?.startAt ?? v?.mixedAt ?? v?.thirstFrom;
   const inPrev = vDay != null && Math.floor(vDay) >= prevDef.startDay && Math.floor(vDay) <= prevDef.endDay;
@@ -95,9 +112,14 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   let seed = 1, levelId = null, plan = null, summary = null;
   let lastCycle = null;             // { plan, summary } of the last finished cycle (planCarry; kept across startRun)
   let conditions = [];
-  // Phase 4 (PHASE4.md §3.1): the run's condition (null = the normal season). STUB until the run package passes it to
-  // farm.start / level.start and the standard starts (the farm stub keeps farm.condition; nothing changes the model yet).
+  // Phase 4 (PHASE4.md §3.1): farm.condition is the only holder; `condition` is its mirror in the run save
   let condition = null;
+  let runCond = null;               // the condition the run was started under (conditionsDone counts it)
+  let startedAt = null;             // the first level the farmer played in this run
+  let standard = false;             // the levels before startedAt came from a standard start (the ideal farmer's trace)
+  let mixed = false;                // farm.condition was not the run's at a level start or end (a harness's setCondition)
+  let counted = false;              // this run has raised cyclesDone
+  let lastNormal = null;            // { compare } of the last finished normal-season cycle (the summary's compare column)
   const levels = {};
   const mem = new Map();            // level starts in memory: key -> { version, levelId, day, savedAt, run, blob }
   let memRun = null;                // the run save in memory (node, storage blocked)
@@ -105,11 +127,21 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   const emit = (p) => events?.emit(EV.RUN, p);
   const entry = (id) => levels[id] || (levels[id] = { state: 'reached', key: null, attempts: 0, starts: [], carried: [] });
 
-  function serialize() { return { v: 1, seed, levelId, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], condition, lastCycle: clone(lastCycle) }; }
+  /** farm.condition while the run has a level on the farm, else the saved mirror. */
+  const mirror = () => (levelId && farm ? farm.condition ?? null : condition);
+  function serialize() {
+    condition = mirror();
+    return { v: 1, seed, levelId, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], condition, lastCycle: clone(lastCycle),
+      runCond, startedAt, standard, mixed, counted, lastNormal: clone(lastNormal) };
+  }
   function adopt(d) {
     if (!d) return;
-    seed = d.seed ?? 1; levelId = d.levelId ?? null; plan = clone(d.plan) ?? null; summary = clone(d.summary) ?? null; conditions = [...(d.conditions || [])]; condition = d.condition && CONDITIONS[d.condition] ? d.condition : null;
+    seed = d.seed ?? 1; levelId = d.levelId ?? null; plan = clone(d.plan) ?? null; summary = clone(d.summary) ?? null; conditions = [...(d.conditions || [])]; condition = validCond(d.condition);
+    // a Phase 3 run save: no condition, started at its plan (or the brooding week when it has none)
+    runCond = 'runCond' in d ? validCond(d.runCond) : condition; startedAt = d.startedAt ?? (d.plan ? PLAN_LEVEL.id : LEVEL1.id);
+    mixed = !!d.mixed; counted = !!d.counted; standard = !!d.standard;
     lastCycle = clone(d.lastCycle) ?? lastCycle;
+    lastNormal = clone(d.lastNormal) ?? lastNormal;
     for (const k of Object.keys(levels)) delete levels[k];
     Object.assign(levels, clone(d.levels) || {});
   }
@@ -147,13 +179,33 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   /** A level of the run has started (fresh, entered or restored): the run's records and its start save. */
   function started(def, { restored = false } = {}) {
     levelId = def.id;
+    condition = farm?.condition ?? null;
+    if (condition !== runCond) mixed = true;
     const e = entry(def.id);
     e.state = 'reached'; e.attempts++; e.key = null;
     if (!restored) e.carried = carriedLines({ def, farm, levels });
-    emit({ phase: 'level-start', level: def.id });
+    emit({ phase: 'level-start', level: def.id, condition });
     if (!restored) saveStart(def.id, def.startDay);
     saveRun();
     return true;
+  }
+
+  /** The levels before the one the farmer started this run at: played by the ideal farmer (a standard start). */
+  const fromStandardIds = () => (standard && startedAt && startedAt !== PLAN_LEVEL.id ? RUN_ORDER.slice(0, RUN_ORDER.indexOf(startedAt)) : []);
+  /** The cycle summary (records.cycleSummary) with the run's condition, the compare column and the standard-start marks. */
+  function cycleSummary() {
+    const compare = runCond && lastNormal?.compare ? clone(lastNormal.compare) : null;
+    const s = records.cycleSummary({ plan, levels: clone(levels), condition: runCond, compare }) ?? null;
+    if (!s) return null;
+    const fs = fromStandardIds(), start = levelById(startedAt);
+    s.condition = s.condition !== undefined ? s.condition : runCond;
+    s.conditionLabel = s.condition ? conditionLabel(s.condition) : null;
+    if (s.compare === undefined) s.compare = compare;
+    s.startedAt = startedAt;
+    s.fromStandard = fs;
+    s.standardNote = fs.length && start ? `from a standard start at Level ${start.n}` : null;
+    if (Array.isArray(s.deathsByLevel)) s.deathsByLevel = s.deathsByLevel.map((r) => (r && fs.includes(r.level) ? { ...r, fromStandard: true } : r));
+    return s;
   }
 
   // the run's side of the level (level.attachRun)
@@ -168,11 +220,16 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       e.key = keyOf(res);
       if (id === 'level1') e.weightG = res.weightG ?? null;
       if (id === 'plan') plan = farm.plan ? clone({ decisions: farm.plan.decisions, sums: farm.plan.sums, outcome: farm.plan.outcome, measured: farm.plan.measured, sentAt: farm.plan.sentAt }) : null;
-      emit({ phase: 'level-end', level: id, pass: !!res.pass });
+      if ((farm?.condition ?? null) !== runCond) mixed = true;
+      emit({ phase: 'level-end', level: id, pass: !!res.pass, condition: farm?.condition ?? null });
       if (res.pass && !nextLevelId(id)) {
-        summary = records.cycleSummary({ plan, levels: clone(levels) }) ?? null;
-        lastCycle = { plan: clone(plan), summary: clone(summary) };
-        emit({ phase: 'cycle-end', level: id, pass: true });
+        const hadCycle = !!lastCycle;
+        summary = cycleSummary();
+        // the skill profile's counters (PHASE4.md §3.1): every finished run; a condition only for a run played under it alone
+        if (!counted) { counted = true; level.profile?.raiseCycle?.(runCond && !mixed ? runCond : null, hadCycle ? 1 : 0); }
+        lastCycle = { plan: clone(plan), summary: clone(summary), condition: runCond };
+        if (!runCond) lastNormal = { compare: compareOf(summary), seed };
+        emit({ phase: 'cycle-end', level: id, pass: true, condition: runCond });
       }
       api.decorate(res);
       saveRun();
@@ -204,10 +261,11 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   function standardStart(id, s) {
     const target = levelById(id);
     const snap = level.profile?.snapshot?.();
+    startedAt = id; standard = true;   // the levels before it are the ideal farmer's (saved with every start of the trace)
     // the player's own entries of the levels before (attempts, keys): the ideal farmer's play does not replace them
     const before = Object.fromEntries(RUN_ORDER.slice(0, Math.max(0, RUN_ORDER.indexOf(id))).filter((k) => levels[k]).map((k) => [k, clone(levels[k])]));
     try {
-      level.start({ seed: s, run: true });
+      level.start({ seed: s, run: true, condition: runCond });
       started(LEVEL1);
       let cur = LEVEL1;
       while (cur.id !== target.id) {
@@ -225,26 +283,49 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     } finally { if (snap) level.profile.restore(snap); }
   }
 
+  /** A new run (Start a new flock, or a level row's condition other than the run's): the old run and its starts go;
+   *  the last cycles (lastCycle, lastNormal) and the skill profile stay. */
+  function newRun({ seed: sd, condition: c, at }) {
+    seed = sd ?? seed ?? 1; plan = null; summary = null; conditions = []; levelId = null;
+    runCond = condition = validCond(c); startedAt = at; standard = false; mixed = false; counted = false;
+    clearStarts(RUN_ORDER[0]);
+    for (const k of Object.keys(levels)) delete levels[k];
+    emit({ phase: 'start', level: at, condition: runCond });
+  }
+  /** The harder flocks open after the first full cycle (skill profile cyclesDone; a Phase 3 profile without it: 1 if a
+   *  finished cycle is stored). */
+  let storedCycle;                  // a finished cycle in the stored run save (read once: the save is large)
+  function cyclesDone() {
+    const v = level.profile?.cycles?.()?.cyclesDone;
+    if (Number.isFinite(v)) return v;
+    if (lastCycle) return 1;
+    if (storedCycle === undefined) { try { storedCycle = !!store.load?.()?.run?.lastCycle; } catch { storedCycle = false; } }
+    return storedCycle ? 1 : 0;
+  }
   const run = {
     stub: false,
     store,
     get available() { return !!store.available; },
-    state() { return { levelId, seed, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], condition, lastCycle: clone(lastCycle) }; },
-    startRun(opts = {}) {
-      seed = opts.seed ?? 1; plan = null; summary = null; conditions = []; levelId = null;
-      condition = opts.condition && CONDITIONS[opts.condition] ? opts.condition : null;
-      clearStarts(RUN_ORDER[0]);
-      for (const k of Object.keys(levels)) delete levels[k];
-      const at = opts.at && levelById(opts.at) ? opts.at : PLAN_LEVEL.id;
-      emit({ phase: 'start', level: at });
-      return run.startLevel(at, { seed, from: 'standard' });
+    state() {
+      return { levelId, seed, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], condition: mirror(), lastCycle: clone(lastCycle),
+        runCondition: runCond, startedAt, lastNormal: clone(lastNormal), cyclesDone: cyclesDone(), conditionsDone: { ...(level.profile?.cycles?.()?.conditionsDone || {}) }, harderOpen: cyclesDone() >= 1 };
     },
+    startRun(opts = {}) {
+      const at = opts.at && levelById(opts.at) ? opts.at : PLAN_LEVEL.id;
+      newRun({ seed: opts.seed ?? 1, condition: opts.condition, at });
+      return run.startLevel(at, { seed, from: 'standard', condition: runCond });
+    },
+    /**
+     * Start one level of the run: its saved start, else a standard start. A `condition` other than the run's
+     * (PHASE4.md §3.1) starts a new run under it from this level (the levels before: the condition ideal's standard start).
+     */
     startLevel(id = LEVEL1.id, opts = {}) {
       seed = opts.seed ?? seed;
       const def = levelById(id);
       if (!def) throw new Error(`unknown level ${id}`);
-      if (def === PLAN_LEVEL) { level.start({ def: PLAN_LEVEL, seed, run: true }); return started(def); }
-      if (def === LEVEL1) { level.start({ seed, run: true }); return started(def); }
+      if ('condition' in opts && validCond(opts.condition) !== runCond) newRun({ seed, condition: opts.condition, at: id });
+      if (def.id === PLAN_LEVEL.id) { startedAt = id; standard = false; level.start({ def: PLAN_LEVEL, seed, run: true, condition: runCond }); return started(def); }
+      if (def.id === LEVEL1.id) { if (!startedAt || before(id, startedAt) || !plan) { startedAt = id; standard = false; } level.start({ seed, run: true, condition: runCond }); return started(def); }
       if (opts.from !== 'standard' && run.replay(id, { day: opts.day })) return true;
       return standardStart(id, seed);
     },
@@ -252,7 +333,8 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       const nid = levelId && nextLevelId(levelId);
       if (!nid) return false;
       const ndef = levelById(nid);
-      if (levelId === PLAN_LEVEL.id) level.start({ seed, run: true });   // a fresh farm and flock; the plan stays in the run
+      // a fresh farm and flock after the plan (the plan and the condition stay in the run)
+      if (levelId === PLAN_LEVEL.id) level.start({ seed, run: true, condition: farm?.condition ?? runCond });
       else if (!level.enter(ndef, { run: true })) return false;
       return started(ndef);
     },
@@ -261,15 +343,19 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       const def = levelById(id);
       if (!def) return false;
       const attempts = Object.fromEntries(Object.entries(levels).map(([k, v]) => [k, v.attempts]));
-      if (def === PLAN_LEVEL || def === LEVEL1) {
+      if (def.id === PLAN_LEVEL.id || def.id === LEVEL1.id) {
         clearStarts(nextLevelId(id));
-        if (def === PLAN_LEVEL) plan = null;
+        if (def.id === PLAN_LEVEL.id) plan = null;
         return run.startLevel(id, { seed });
       }
       const s = loadStart(id, day);
       if (!s) return false;
-      if (!level.resume(s.blob)) return false;
+      if (!level.resume(s.blob)) return false;   // the farm comes back with the condition it was saved under
+      const keep = { counted, lastNormal: clone(lastNormal), lastCycle: clone(lastCycle) };
       adopt(s.run);                       // the run as it was at that start
+      counted = counted || keep.counted; lastNormal = lastNormal ?? keep.lastNormal; lastCycle = lastCycle ?? keep.lastCycle;
+      // the farmer plays from here: a level before the one the run was started at is his now
+      if (!startedAt || before(id, startedAt)) startedAt = id;
       for (const [k, n] of Object.entries(attempts)) if (levels[k]) levels[k].attempts = Math.max(levels[k].attempts, n);
       clearStarts(nextLevelId(id));       // later levels and their starts are gone
       // this level's starts after the one restored are gone too (weeks 4-5 from day 22: the day 29 start)
@@ -299,7 +385,9 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       const e = d?.blob?.env;
       if (e && typeof e.day === 'number') {
         const hour = e.hour ?? 0, id = d.blob.level?.levelId ?? d.run?.levelId;
-        return { levelId: id, title: levelById(id)?.title ?? '', short: levelById(id)?.short ?? '', day: Math.round(e.day - hour / 24), hour, savedAt: d.savedAt, run: true };
+        const c = validCond(d.run?.condition);
+        return { levelId: id, title: levelById(id)?.title ?? '', short: levelById(id)?.short ?? '', day: Math.round(e.day - hour / 24), hour, savedAt: d.savedAt, run: true,
+          condition: c, conditionLabel: c ? conditionLabel(c) : null };
       }
       const p = save?.info?.();
       return p ? { ...p, levelId: LEVEL1.id, title: LEVEL1.title, short: LEVEL1.short, run: false } : null;
@@ -311,12 +399,24 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
         const state = !e ? 'not reached' : def.id === levelId && e.state === 'reached' ? 'playing' : e.state === 'passed' ? 'passed' : e.state === 'failed' ? 'not passed' : 'reached';
         return { id: def.id, n: def.n, title: def.title, short: def.short, days: RUN_CARD.days(def), target: RUN_CARD.target[def.id] || '', state,
           key: e?.key ?? null, keyText: e && e.state !== 'reached' ? keyText(def.id, e.key) : '', starts: e ? [...e.starts] : [], attempts: e?.attempts ?? 0,
-          canReplay: !!e };
+          canReplay: !!e,
+          // Phase 4: the saved starts replay under the run's condition; a standard start may take another (a new run)
+          condition: mirror(), conditionLabel: mirror() ? conditionLabel(mirror()) : null, fromStandard: !!e && fromStandardIds().includes(def.id) };
       });
     },
-    /** A whole cycle passed: the harder conditions come in Phase 4 (shown, nothing to click). */
+    /** A whole cycle passed in this run. */
     get cycleDone() { return levels.cleanout?.state === 'passed'; },
-    conditionsAvailable: () => Object.entries(CONDITIONS).map(([id, c]) => ({ id, ...c })),
+    /** Harder flocks (PHASE4.md §1.2): open after the first full cycle (the skill profile's cyclesDone). */
+    get harderOpen() { return cyclesDone() >= 1; },
+    cyclesDone,
+    /** The run's condition (farm.condition while a level is on the farm; the save's mirror otherwise). */
+    get condition() { return mirror(); },
+    /** The four conditions for the run card, the summary and __game.conditions(): open once a cycle is done and where
+     *  the build switch (CONDITIONS[id].available) is on; done = runs finished under it (conditionsDone). */
+    conditionsAvailable() {
+      const open = cyclesDone() >= 1, done = level.profile?.cycles?.()?.conditionsDone || {};
+      return CONDITION_IDS.map((id) => { const c = CONDITIONS[id]; return { id, label: c.label, months: c.months, summary: c.summary, available: !!c.available, open, canStart: open && !!c.available, done: done[id] ?? 0 }; });
+    },
     /** Is a start of this level saved (memory or storage)? */
     hasStart: (id, day) => !!loadStart(id, day),
     /** The saved start record { version, levelId, day, savedAt, run, blob } (tests, harness). */

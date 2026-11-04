@@ -6,12 +6,18 @@ import { createFarm } from '../src/farm.js';
 import { createEvents, EV } from '../src/events.js';
 import { createJobEngine, BROOD_CELLS, LEVEL_END_DAY, windowHours } from '../src/job-engine.js';
 import { JOBS } from '../src/content-jobs.js';
-import { BROOD_BOUNDS, HEATERS, LEVEL1, CYCLE, CLEAN, PLAN_LEVEL, WEEK2, WEEK3, FINISH, CLEANOUT, levelOfDay } from '../src/config.js';
-import { JOBS_CYCLE, STATE_TEST_IDS_CYCLE } from '../src/content-jobs-cycle.js';
+import { BROOD_BOUNDS, HEATERS, LEVEL1, CYCLE, CLEAN, PLAN_LEVEL, WEEK2, WEEK3, WEEKS45, FINISH, CLEANOUT, HEAT_P4, levelOfDay } from '../src/config.js';
+import { STATE_TEST_IDS_P4, JOBS_COND } from '../src/content-jobs-cond.js';
+import { nightComfortNow } from '../src/job-engine.js';
+import { flowToday, brooderRowC, VENT_BAND } from '../src/job-figures.js';
+import { JOBS_CYCLE, STATE_TEST_IDS_P3 } from '../src/content-jobs-cycle.js';
 import { STRIPS, partRows, stripRows } from '../src/job-strips.js';
 import { jobPlaces, nextPlace } from '../src/job-next.js';
 import { STRIPS_CYCLE } from '../src/job-strips-cycle.js';
+import { STRIPS_COND } from '../src/job-strips-cond.js';
 import { ventNeed } from '../src/job-figures.js';
+import { makeWorld } from '../src/farm-profiles-run.js';
+import { createLevel } from '../src/level.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -20,12 +26,12 @@ const near = (a, b, msg) => assert(a != null && Math.abs(a - b) < 1e-6, `${msg}:
 const H = 1 / 24;
 
 /** A level at 07:00 on the prep day, engine started. Grids set so no state job is done by itself. */
-function makeLevel({ startDay = -1, startHour = 7 } = {}) {
+function makeLevel({ startDay = -1, startHour = 7, condition = null } = {}) {
   const env = createSim();
   const events = createEvents();
   const farm = createFarm(env, { events });
   env.addStepper(farm.step);
-  farm.start(LEVEL1, { seed: 1 });
+  farm.start(LEVEL1, { seed: 1, condition });
   env.setDay(startDay); env.setHour(startHour);
   farm.litter.cover = 0; for (const l of farm.water.lines) l.flushClear = 0; for (const l of farm.feed.lines) { l.flood = false; l.panFill = 0; }
   farm.flock.inBoxes = 6000; farm.flock.placed = 0; farm.flock.deadOnFloor = 3;
@@ -287,12 +293,12 @@ test('every job def resolves its window or anchor; heaters exist for heater spot
 
 // ---------------- Phase 3 (PHASE3.md §3.1, §14.2) ----------------
 /** A later level of the run: the farm in level mode, the clock at (day, hour), the engine on `def`. */
-function makeCycle(def, { day = def.startDay, hour = def.startHour ?? 6, jobs: jobList, before } = {}) {
+function makeCycle(def, { day = def.startDay, hour = def.startHour ?? 6, jobs: jobList, before, condition = null } = {}) {
   const env = createSim();
   const events = createEvents();
   const farm = createFarm(env, { events });
   env.addStepper(farm.step);
-  farm.start(LEVEL1, { seed: 1 });
+  farm.start(LEVEL1, { seed: 1, condition });
   env.setMaxDay(CYCLE.lastDay);
   env.setDay(day); env.setHour(hour);
   const logged = [];
@@ -366,7 +372,8 @@ test('stat anchor: the catch (default day 42 02:00), negative fromH, a booking m
   assert(w.status === 'open', 'withdraw open');
   L.farm.harvest.catchAt = 42 + 5 * H; L.jobs.tick();
   near(w.opensAt, 41 + 15 * H, 'an open job keeps its window');
-  L.act('feed.withdraw', { on: true, result: true });
+  // Phase 4 (§6.7, DONE_P4): done on the outcome, the feed off at the feeder box (the farm's farm.feed.withdrawn)
+  L.farm.act('feed.withdraw', { on: true }); L.jobs.tick();
   assert(w.status === 'done', 'withdrawn');
   const b = makeCycle(FINISH, { day: 37, hour: 7 });
   b.act('phone.bookCatch', { day: 43, hour: 2, result: { booked: false, catchAt: 42 + 2 * H, reason: 'the crew catches between day 41 18:00 and day 42 06:00' } });
@@ -465,7 +472,7 @@ test('every Phase 3 state test, on the farm stub with its fields set (held ones 
     ['rest-done', (L) => { C(L).bookedDay = 20; }, 0, (L) => { C(L).bookedDay = 21; }],
     ['dark-period', (L) => { L.env.setLightProgram({ darkStart: 22, darkHours: 6 }); }, 0, (L) => { L.env.setLightProgram({ darkStart: 22, darkHours: 0 }); }],
   ];
-  assert(CASES.length === STATE_TEST_IDS_CYCLE.length && CASES.every(([t]) => STATE_TEST_IDS_CYCLE.includes(t)), 'one case per STATE_TEST_IDS_CYCLE entry');
+  assert(CASES.length === STATE_TEST_IDS_P3.length && CASES.every(([t]) => STATE_TEST_IDS_P3.includes(t)), 'one case per Phase 3 state test (STATE_TEST_IDS_P3)');
   for (const [test, yes, mins, no] of CASES) {
     const job = T(`t-${test}`, { type: 'state', test });
     const N = makeCycle(CLEANOUT, { day: 20, hour: 6, jobs: [job], before: no });
@@ -670,6 +677,301 @@ test('outcome rules: prep-vent in the band only, r-minvent a real step up, the f
   N.at(16, 18.2 + 20 / 60); N.farm.comfort.meanOver = 0.5; N.jobs.tick();
   const p = N.jobs.parts(night)[1];
   assert(night.status === 'open' && p.held && p.held.min >= 0, `held part reports its minutes: ${JSON.stringify(p.held)}`);
+});
+
+// ---------------- Phase 4 (PHASE4.md §12.2): conditions in the engine, the new state tests, the clarity rules ----------------
+test('Phase 4: a condition job is made only in its condition; routineDays move a routine; a dropped problem makes no job', () => {
+  const N = makeLevel({ startDay: 1, startHour: 6 }), Hh = makeLevel({ startDay: 1, startHour: 6, condition: 'hot' });
+  assert(!N.jobs.byKey('h-brood-air@1') && Hh.jobs.byKey('h-brood-air@1'), 'h-brood-air only in the hot season');
+  assert(!N.jobs.list().some((i) => i.def.condition), 'the normal season makes no condition job');
+  assert(Hh.jobs.list().filter((i) => i.def.condition).every((i) => i.def.condition === 'hot'), 'only the hot season\'s condition jobs');
+  near(Hh.jobs.byKey('h-brood-air@1').opensAt, 1 + 14 * H, 'h-brood-air opens 14:00'); near(Hh.jobs.byKey('h-brood-air@1').closesAt, 1 + 18 * H, 'closes 18:00');
+  const W = makeLevel({ startDay: 1, startHour: 6, condition: 'water' });
+  assert(W.jobs.byKey('w-test@1') && !Hh.jobs.byKey('w-test@1'), 'w-test only for a water problem');
+  // the hot season drops Phase 2's warm afternoon: no p-warm on its symptom; the normal season opens it
+  N.events.emit(EV.FARM_PROBLEM, { id: 'warm-afternoon', phase: 'symptom' });
+  Hh.events.emit(EV.FARM_PROBLEM, { id: 'warm-afternoon', phase: 'symptom' });
+  assert(N.jobs.list().some((i) => i.id === 'p-warm') && !Hh.jobs.list().some((i) => i.id === 'p-warm'), 'p-warm only where warm-afternoon is a problem');
+  // routineDays: the hot season's afternoon fan check and night ventilation from day 8 (Phase 3: day 15)
+  const n8 = makeCycle(WEEK2, { day: 8, hour: 6 }), h8 = makeCycle(WEEK2, { day: 8, hour: 6, condition: 'hot' });
+  assert(!n8.jobs.byKey('r-fans-pm@8') && h8.jobs.byKey('r-fans-pm@8') && h8.jobs.byKey('r-vent-night@8'), 'r-fans-pm and r-vent-night on day 8 in the hot season only');
+  assert(h8.jobs.byKey('h-young-heat@8') && !n8.jobs.byKey('h-young-heat@8'), 'h-young-heat in week 2 of the hot season');
+  // the rainy season's own problem opens its job; another condition's does not
+  const r = makeCycle(WEEKS45, { day: 33, hour: 15, condition: 'rainy' }), w = makeCycle(WEEKS45, { day: 33, hour: 15, condition: 'water' });
+  r.events.emit(EV.FARM_PROBLEM, { id: 'power-cut', phase: 'symptom', alarm: true }); w.events.emit(EV.FARM_PROBLEM, { id: 'power-cut', phase: 'symptom', alarm: true });
+  assert(r.jobs.list().some((i) => i.id === 'p-power' && i.status === 'open') && !w.jobs.list().some((i) => i.id === 'p-power'), 'p-power only in the rainy season');
+  assert(r.jobs.groups().pinned.some((i) => i.id === 'p-power'), 'p-power is pinned');
+  // a bad batch's truck comes at 10:00: the engine's truck hour follows the delivery (the farm announces the truck itself)
+  const B = makeLevel({ startDay: 0, startHour: 6, condition: 'badChicks' });
+  assert(B.jobs.merged().delivery?.arrivalHour === 10 && N.jobs.merged().delivery === null, 'the delivery of a bad batch: 10:00');
+});
+
+test('Phase 4: rebuild() after a condition change: the new condition\'s jobs come, the old one\'s go, done jobs stay', () => {
+  const L = makeLevel({ startDay: 1, startHour: 14.5 });
+  const done = L.jobs.byKey('r-dips-pm@1'); assert(L.jobs.complete('r-dips-pm@1'), 'r-dips-pm completed');
+  L.farm.setCondition('hot'); L.jobs.rebuild();
+  assert(L.jobs.byKey('h-brood-air@1')?.status === 'open', `h-brood-air made and open at 14:30: ${L.jobs.byKey('h-brood-air@1')?.status}`);
+  assert(done.status === 'done' && L.jobs.byKey('r-dips-pm@1') === done, 'done jobs stay');
+  L.farm.setCondition('water'); L.jobs.rebuild();
+  assert(!L.jobs.byKey('h-brood-air@1') && L.jobs.condition === 'water', 'the hot season\'s job goes');
+  assert(L.jobs.byKey('w-test@1')?.status === 'open', 'w-test (08:00-18:00) made and open');
+  const late = makeLevel({ startDay: 1, startHour: 19 });
+  late.farm.setCondition('water'); late.jobs.rebuild();
+  assert(!late.jobs.byKey('w-test@1'), 'a job whose window has passed is not made');
+  L.farm.setCondition(null); L.jobs.rebuild();
+  assert(!L.jobs.list().some((i) => i.def.condition && i.status !== 'done'), 'back to the normal season: no condition job left open');
+});
+
+test('Phase 4: every new state test (STATE_TEST_IDS_P4) on a farm with its fields set', () => {
+  // [test, rule extras, set(L) that meets it, minutes it must hold, set(L) that does not]
+  const CASES = [
+    ['power-on', {}, (L) => { L.farm.power.on = true; }, 0, (L) => { L.farm.power.on = false; }],
+    ['brood-warmer', {}, (L) => { L.env.setHeaterSetpoint(brooderRowC(20) + 1); }, 0, (L) => { L.env.setHeaterSetpoint(brooderRowC(20) + 2.5); }],
+    ['line-flow-ok', { line: 3 }, (L) => { L.farm.water.lines[3].lastFlow = { mlMin: flowToday(L.env) + 1, at: L.env.day }; }, 0,
+      (L) => { L.farm.water.lines[3].lastFlow = { mlMin: flowToday(L.env) - 9, at: L.env.day }; L.farm.water.lines[0].lastFlow = { mlMin: flowToday(L.env), at: L.env.day }; }],
+    ['rh-under', { max: 85 }, (L) => { L.env.houseRH = 82; L.env.forceHouseRH = 82; }, 60, (L) => { L.env.houseRH = 88; L.env.forceHouseRH = 88; }],
+    ['blend-24h', { feed: 'finisher' }, (L) => { L.farm.stats.blendFinH = 21; L.farm.stats.blendH = 0; }, 0, (L) => { L.farm.stats.blendFinH = 12; L.farm.stats.blendH = 24; }],
+    ['medicine-course', {}, (L) => { L.farm.health.medication.daysOn = 3; }, 0, (L) => { L.farm.health.medication.daysOn = 2; }],
+    ['feed-withdrawn', {}, (L) => { L.farm.feed.withdrawn = true; }, 0, (L) => { L.farm.feed.withdrawn = false; }],
+    ['pump-ok', {}, (L) => { Object.assign(L.farm.waterTank, { pumpShare: 1, fixing: false }); }, 0, (L) => { Object.assign(L.farm.waterTank, { pumpShare: 1, fixing: true, fixUntil: L.env.day + 2 * H }); }],
+    ['lines-cool', {}, (L) => { L.farm.water.lineTempC = [28.5, 29.9, 30, 27]; }, 0, (L) => { L.farm.water.lineTempC = [28.5, 31.2, 30, 27]; }],
+  ];
+  assert(CASES.length + 1 === STATE_TEST_IDS_P4.length && CASES.every(([t]) => STATE_TEST_IDS_P4.includes(t)), 'a case for every Phase 4 state test (night-comfort below)');
+  for (const [test, extra, yes, mins, no] of CASES) {
+    const job = T(`t-${test}`, { type: 'state', test, ...extra });
+    const N = makeCycle(CLEANOUT, { day: 20, hour: 6, jobs: [job], before: no });
+    N.at(20, 6 + (mins + 5) / 60); no(N); N.jobs.tick();
+    assert(N.st(`t-${test}@20`) === 'open', `${test}: not met while its condition does not hold`);
+    const Y = makeCycle(CLEANOUT, { day: 20, hour: 6, jobs: [job], before: yes });
+    if (mins > 0) {
+      assert(Y.st(`t-${test}@20`) === 'open', `${test}: needs ${mins} min first`);
+      Y.at(20, 6 + (mins / 2) / 60); yes(Y); Y.jobs.tick();
+      assert(Y.st(`t-${test}@20`) === 'open', `${test}: not yet after ${mins / 2} min`);
+      Y.at(20, 6 + (mins + 1) / 60); yes(Y); Y.jobs.tick();
+    }
+    assert(Y.st(`t-${test}@20`) === 'done', `${test}: met (${Y.st(`t-${test}@20`)})`);
+  }
+  const P = makeCycle(CLEANOUT, { day: 20, hour: 6, jobs: [T('t-pw', { type: 'state', test: 'pump-ok' })], before: (L) => Object.assign(L.farm.waterTank, { pumpShare: 0.88, fixing: false }) });
+  P.jobs.tick(); assert(P.st('t-pw@20') === 'open', 'a worn pump is not ok');
+  // the re-defined night-comfort (PHASE4.md §2.4): a quarter at most panting and none chilled, or big birds on a warm
+  // evening with every working fan and the pad
+  const e = (o) => ({ hour: 19, day: 33.8, outsideTemp: 31, fansEffective: 6, fansBroken: [], padOn: true, houseRH: 80, ...o });
+  const f = (pant, over) => ({ comfort: { pantShare: pant, meanOver: over } });
+  assert(nightComfortNow(e({}), f(0.2, 1)), 'a fifth panting, comfortable');
+  assert(!nightComfortNow(e({ hour: 17.9 }), f(0, 0)), 'not before 18:00');
+  assert(!nightComfortNow(e({ padOn: false, fansEffective: 3 }), f(0.36, 2)), 'about a third panting with three fans');
+  assert(!nightComfortNow(e({ outsideTemp: 25 }), f(0.1, -2)), 'chilled birds are not comfortable');
+  assert(nightComfortNow(e({}), f(0.9, 6)), 'day 33, 31 °C outside: every fan and the pad (the heat sign\'s evening line)');
+  assert(!nightComfortNow(e({ outsideTemp: 29 }), f(0.9, 6)), 'under 29.5 °C outside the fans and the pad alone do not do it');
+  assert(!nightComfortNow(e({ day: 20.8 }), f(0.9, 6)), 'birds under 28 days');
+  assert(!nightComfortNow(e({ fansBroken: [3], fansEffective: 4 }), f(0.9, 6)), 'every WORKING fan (five turn, four on)');
+  assert(nightComfortNow(e({ fansBroken: [3], fansEffective: 5, padOn: false, houseRH: 92 }), f(0.9, 6)), 'five working fans, the pad off over 90 % humidity');
+  assert(HEAT_P4.nightPantMax === 0.25, 'the job reads HEAT_P4');
+  const Nt = makeCycle(WEEK3, { day: 16, hour: 18.2 });
+  const night = Nt.jobs.byKey('r-vent-night@16'), calm = () => { Nt.farm.comfort.pantShare = 0.2; Nt.farm.comfort.meanOver = 0.4; };
+  Nt.act('fans.read', { fans: 1 }); calm(); Nt.jobs.tick();
+  Nt.at(16, 18.2 + 15 / 60); calm(); Nt.jobs.tick();
+  assert(night.status === 'open', 'held 15 of 30 minutes');
+  Nt.at(16, 18.2 + 31 / 60); calm(); Nt.jobs.tick();
+  assert(night.status === 'done', `held 30 minutes: ${night.status}`);
+});
+
+test('Phase 4: p-pump done only once the repair has ended; p-power done on the immediate gen.start result; p-nipples on line 4', () => {
+  const W = makeCycle(WEEKS45, { day: 27, hour: 7, condition: 'water' });
+  W.events.emit(EV.FARM_PROBLEM, { id: 'pump-wear', phase: 'symptom' });
+  const pump = W.jobs.list().find((i) => i.id === 'p-pump');
+  assert(pump && pump.status === 'open', 'p-pump opens on the worn pump\'s symptom');
+  W.farm.waterTank.pumpShare = 0.88;
+  const r = W.farm.act('pump.fix', {});
+  assert(r && r.started === true && r.hours === 2, `pump.fix answers at once: ${JSON.stringify(r)}`);
+  W.jobs.tick();
+  assert(pump.status === 'open' && W.jobs.parts(pump)[0].met && !W.jobs.parts(pump)[1].met, 'the repair started, the pump not ok yet (fixing)');
+  W.at(27, 8); assert(pump.status === 'open', 'one farm hour into the repair: still open');
+  W.at(27, 9.05); assert(pump.status === 'done', `the repair ended (2 farm hours): ${pump.status}, fixing ${W.farm.waterTank.fixing}`);
+  const R = makeCycle(WEEKS45, { day: 33, hour: 15.2, condition: 'rainy' });
+  R.farm.debug.power(false);
+  R.events.emit(EV.FARM_PROBLEM, { id: 'power-cut', phase: 'symptom', alarm: true }); // (the farm's alarm once weeks 4-5 run on it)
+  const pw = R.jobs.list().find((i) => i.id === 'p-power');
+  assert(pw && pw.status === 'open' && R.farm.power.on === false, 'the cut opens p-power');
+  const t0 = R.env.day;
+  R.farm.act('gen.start', {}); R.farm.act('gen.switch', { to: 'generator' });
+  assert(pw.status === 'done' && R.env.day === t0, `done at once on gen.start + the switch, no farm time: ${pw.status}`);
+  const N = makeCycle(WEEK3, { day: 18, hour: 7, condition: 'water' });
+  N.events.emit(EV.FARM_PROBLEM, { id: 'iron-nipples', phase: 'symptom' });
+  const nip = N.jobs.list().find((i) => i.id === 'p-nipples');
+  N.farm.water.lines[3].lastFlow = { mlMin: 20, at: N.env.day };
+  N.act('water.flush', { line: 3, on: true, result: { flushClear: 1 } }); N.jobs.tick();
+  assert(nip.status === 'open', 'flushed, the last flow test still the low one');
+  N.farm.water.lines[3].lastFlow = { mlMin: flowToday(N.env), at: N.env.day + 1e-4 }; N.jobs.tick();
+  assert(nip.status === 'done', `flushed and tested within 3 ml/min: ${nip.status}`);
+});
+
+test('Phase 4: h-brood-air is not done by a timer or fan change while the chicks are still hot', () => {
+  const L = makeLevel({ startDay: 3, startHour: 14.1, condition: 'hot' });
+  const j = L.jobs.byKey('h-brood-air@3');
+  assert(j && j.status === 'open', 'open at 14:06');
+  L.env.forceHouseTemp(39);
+  L.farm.act('vent.timer', { fans: 2, onSec: 120, cycleSec: 300 }); L.farm.act('vent.fans', { fans: 1 }); L.jobs.tick();
+  L.at(3, 15.2); L.env.forceHouseTemp(39); L.jobs.tick();
+  assert(j.status === 'open' && L.jobs.parts(j)[0].met && !L.jobs.parts(j)[1].met, `the chicks still hot after an hour: ${j.status}`);
+});
+
+test('Phase 4 clarity rules (DONE_P4): f-withdraw early, the half-and-half of both feeds, the medicine course', () => {
+  const F = makeCycle(FINISH, { day: 41, hour: 9 });
+  const w = F.jobs.byKey('f-withdraw@41');
+  F.at(41, 10); F.farm.act('feed.withdraw', { on: true }); F.jobs.tick();          // catch - 16 h (the default catch day 42 02:00)
+  assert(w.status === 'waiting', `taken early: the job waits for its window (${w.status})`);
+  F.at(41, 13.01);
+  assert(w.status === 'done', `done when the window opens at catch - 13 h: ${w.status}`);
+  assert(Math.abs(w.doneAt - (41 + 13 * H)) <= 2 / 1440, `done at 13:00 (${w.doneAt})`);
+  for (const [def, key, feed, stat] of [[WEEK3, 'w3-change@15', 'grower', 'blendH'], [WEEKS45, 'w45-change@29', 'finisher', 'blendFinH']]) {
+    const C = makeCycle(def, { day: def === WEEK3 ? 15 : 29, hour: 7 });
+    const ch = C.jobs.byKey(key);
+    C.farm.feed.panType = { starter: 0, grower: feed === 'grower' ? 0.95 : 0.05, finisher: feed === 'finisher' ? 0.95 : 0 };
+    C.farm.stats[stat] = 6; C.jobs.tick();
+    assert(ch.status === 'open', `${key}: the pans 95 % ${feed} after 6 h of half-and-half is not the change`);
+    C.farm.stats[stat] = 21; C.jobs.tick();
+    assert(ch.status === 'done', `${key}: 21 h half-and-half and the pans 95 % ${feed}: ${ch.status}`);
+  }
+  const B = makeCycle(WEEK3, { day: 17, hour: 9 });
+  B.events.emit(EV.FARM_PROBLEM, { id: 'coccidiosis', phase: 'symptom' });
+  const blood = B.jobs.list().find((i) => i.id === 'p-blood');
+  B.act('phone.vet', { reason: 'blood in the droppings' }); B.farm.act('water.medicate', { on: true }); B.jobs.tick();
+  assert(blood.status === 'open' && B.jobs.parts(blood)[1].met, 'the vet and the medicine on: day 1 of 3');
+  B.farm.health.medication.daysOn = 2; B.at(18, 9); B.farm.health.medication.daysOn = 2; B.jobs.tick();
+  assert(blood.status === 'open', 'medicine day 2 of 3');
+  B.farm.health.medication.daysOn = 3; B.jobs.tick();
+  assert(blood.status === 'done', `the vet's course of 3 days: ${blood.status}`);
+  // until the farm counts daysOn, the days from its start while it is on
+  const B2 = makeCycle(WEEK3, { day: 17, hour: 9 });
+  B2.events.emit(EV.FARM_PROBLEM, { id: 'coccidiosis', phase: 'symptom' });
+  const b2 = B2.jobs.list().find((i) => i.id === 'p-blood');
+  B2.act('phone.vet', { reason: 'blood in the droppings' }); B2.farm.act('water.medicate', { on: true });
+  delete B2.farm.health.medication.daysOn; B2.at(19, 0.1); delete B2.farm.health.medication.daysOn; B2.jobs.tick();
+  assert(b2.status === 'done', `started day 17: days 17, 18, 19 (${b2.status})`);
+});
+
+/** level.js on the real sim and the farm (stub or model), the 3D modules and the ui stubbed (as test-level.mjs). */
+function makeLevelJs(condition) {
+  const w = makeWorld();
+  const pos = { x: 0, z: 0 };
+  const player = { position: pos, yaw: 0, isInside: false, teleport(x, z, yaw) { pos.x = x; pos.z = z; this.yaw = yaw ?? 0; } };
+  const ui = { panelKind: null, setMode() {}, closePanel() {}, showResult() {}, jobCard: { refresh() {}, reset() {} }, newRun() {} };
+  const store = { save: () => true, load: () => null, clear() {}, loadProfile: () => null, saveProfile() {}, info: () => null };
+  const level = createLevel({ env: w.env }, { ...w, save: store, player, flock: { resetLevel() {}, serialize: () => ({}), restore() {}, afterSkip() {} },
+    props: { carrying: null, reset() {}, serialize: () => ({}), restore() {}, drop() {} }, ui });
+  level.start({ seed: 1, condition });
+  return { ...w, level, ui };
+}
+
+test('Phase 4: a Next job skip stops at an EV.POWER { on: false } with no alarm problem (the generator runs dry); no skip and the carry clock while dark', () => {
+  const L = makeLevelJs('hot');
+  assert(L.farm.condition === 'hot', 'level.start({ condition }) puts it on the farm');
+  L.level.debug.goto(-1, 8);
+  L.farm.debug.power(false);                                 // the mains off (no alarm problem in the hot season)
+  L.farm.act('gen.start', {}); L.farm.act('gen.switch', { to: 'generator' });
+  assert(L.farm.power.on && L.farm.generator.running, 'the house on the generator');
+  L.farm.generator.fuelL = 15;                               // about an hour of fuel
+  let offs = 0; L.events.on(EV.POWER, (p) => { if (p.on === false) offs++; });
+  const t0 = L.env.day;
+  L.level.nextJob(); const r = L.level.nextJob();
+  const went = (L.env.day - t0) * 24;
+  assert(offs === 1 && L.farm.power.on === false, `the generator ran dry during the skip (${offs} cuts, power ${L.farm.power.on})`);
+  assert(went > 0.8 && went < 1.25 && r.stopped === 'alarm', `the skip stopped at the cut: ${went.toFixed(2)} h, ${JSON.stringify(r)}`);
+  assert(!L.farm.problems.some((p) => p.id === 'gen-dry' && p.phase !== 'pending'), 'no alarm problem in the hot season');
+  const t1 = L.env.day, again = L.level.nextJob();
+  assert(again.refused === 'dark' && L.env.day === t1 && /power is off/.test(L.level.nextLabel()), `no skip while dark: ${JSON.stringify(again)} "${L.level.nextLabel()}"`);
+  L.level.update(0.6);
+  assert(L.env.timeScale === LEVEL1.clock.carry && !L.env.paused, `the dark-house clock: ${L.env.timeScale}`);
+  L.farm.act('gen.fuel', {}); L.farm.act('gen.start', {});
+  L.level.update(0.6);
+  assert(L.farm.power.on && L.env.timeScale === LEVEL1.clock.work, `power back, the work clock again (${L.env.timeScale})`);
+  // the normal season with the generator off: a skip is one jump (nothing can cut it)
+  const N = makeLevelJs(null), n0 = N.env.day;
+  N.level.debug.goto(-1, 8); N.level.nextJob(); N.level.nextJob();
+  assert(N.env.day > n0 + 3 * H, 'a normal skip');
+});
+
+
+// ---------------- Phase 4: the strips of §6 and of the condition jobs ----------------
+const stripCtx = (L) => ({ env: L.env, farm: L.farm, records: { notebook: [] }, props: L.props, engine: L.jobs, minmax: () => ({ min: 20, max: 30 }),
+  weighings: () => ({ n: 0, sectors: 0, mean: null }), from: { x: -14, z: 0, inside: true }, paused: false });
+const rowText = (rows) => rows.map((r) => [r.text, r.what, r.sign, r.yours].filter(Boolean).join(' | ')).join('\n');
+
+test('Phase 4 strips: the vent bar objects at 70 / 110 / 170 %; the prep vent row reads "about 900" and "835–1,210"', () => {
+  const L = makeLevel({ startDay: -1, startHour: 8 });
+  const inst = L.jobs.byKey('prep-vent@-1'), c = stripCtx(L);
+  const need = ventNeed(L.env, L.farm).need;
+  for (const [share, words] of [[0.7, 'under the sign’s 90–130 %'], [1.1, null], [1.7, 'over the sign’s 90–130 %']]) {
+    L.env.setVentTimer({ fans: 1, onSec: Math.round((share * need * 300) / 36000), cycleSec: 300 });
+    const rows = stripRows(STRIPS['prep-vent'], c, inst, 'controller'), v = rows.find((r) => r.k === 'cmp' && /Air your flock needs/.test(r.what));
+    const real = ventNeed(L.env, L.farm).share;
+    assert(v && v.bar && typeof v.bar === 'object' && Math.abs(v.bar.v - real) < 1e-9 && v.bar.max === 1.6 && v.bar.band[0] === VENT_BAND[0] && v.bar.band[1] === VENT_BAND[1],
+      `${share}: the bar object ${JSON.stringify(v?.bar)}`);
+    assert(words ? v.yours.includes(words) : !/sign’s 90–130/.test(v.yours), `${share}: "${v.yours}"`);
+    if (share === 1.7) assert(v.bar.v > v.bar.max, 'over the scale: the bar draws its arrow');
+  }
+  const t = rowText(stripRows(STRIPS['prep-vent'], c, inst, 'controller'));
+  assert(/about 900 m³\/h \(the sign’s example: 6,000 chicks of 42 g\)/.test(t), `the sign column: ${t}`);
+  assert(/928 m³\/h worked out: 155 per 1,000 at 42 g/.test(t) && /90–130 % is 835–1,210 m³\/h/.test(t), `the worked figure and the band: ${t}`);
+  // a later vent job keeps the table row, with the same bar object
+  const M = makeCycle(WEEK2, { day: 9, hour: 6.2 });
+  M.farm.flock.placed = 6000; M.farm.flock.alive = 5960; M.farm.flock.meanWeightG = 260;
+  const mr = stripRows(STRIPS['r-minvent'], stripCtx(M), M.jobs.byKey('r-minvent@9'), 'controller').find((r) => r.k === 'cmp');
+  assert(mr && typeof mr.bar === 'object' && /vent sign table/.test(mr.what), `r-minvent row ${JSON.stringify(mr)}`);
+});
+
+test('Phase 4 strips: the feeder rows say when each line is finished; the done r-fans-pm strip has no unticked step', () => {
+  const L = makeLevel({ startDay: -1, startHour: 8 });
+  const t = rowText(stripRows(STRIPS['prep-feeders'], stripCtx(L), L.jobs.byKey('prep-feeders@-1'), 'feeder-box'));
+  assert(/finished when: rim about 5 cm \(7 at most\), flood windows open, pans 95 % full/i.test(t), `prep-feeders: ${t}`);
+  const D = makeLevel({ startDay: 5, startHour: 7 });
+  const r5 = rowText(stripRows(STRIPS['r-feeders'], stripCtx(D), D.jobs.byKey('r-feeders@5'), 'feeder-box'));
+  assert(/finished when: rim at the plate’s figure ± 3 cm \(about \d+ cm today\), auger on, feed in the pans/i.test(r5), `r-feeders day 5: ${r5}`);
+  const F = makeCycle(WEEK3, { day: 16, hour: 13.5 });
+  const inst = F.jobs.byKey('r-fans-pm@16');
+  F.env.setFans(0); F.act('fans.read', { fans: 0 }); F.jobs.tick();
+  assert(inst.status === 'done', `fans.read does r-fans-pm: ${inst.status}`);
+  const rows = stripRows(STRIPS_CYCLE['r-fans-pm'], stripCtx(F), inst, 'fan-panel');
+  const steps = rows.filter((r) => r.k === 'step');
+  assert(steps.length >= 1 && steps.every((r) => r.done), `the done strip shows only ticked steps: ${JSON.stringify(steps)}`);
+  assert(/No tunnel fans switched on/.test(rowText(rows)), 'no fans on: a plain line');
+});
+
+test('Phase 4 strips: the half-and-half, the medicine day, f-withdraw; every condition job of every condition builds its rows, neutral words', () => {
+  const C = makeCycle(WEEK3, { day: 15, hour: 9 });
+  C.farm.stats.blendH = 7; C.jobs.tick();
+  const ch = rowText(stripRows(STRIPS_CYCLE['w3-change'], stripCtx(C), C.jobs.byKey('w3-change@15'), 'silo'));
+  assert(/Half from each silo: 7\.0 of 20 farm hours/.test(ch), `w3-change: ${ch}`);
+  const B = makeCycle(WEEK3, { day: 17, hour: 9 });
+  B.events.emit(EV.FARM_PROBLEM, { id: 'coccidiosis', phase: 'symptom' });
+  B.act('phone.vet', { reason: 'blood in the droppings' }); B.farm.act('water.medicate', { on: true }); B.farm.health.medication.daysOn = 2; B.jobs.tick();
+  const bl = B.jobs.list().find((i) => i.id === 'p-blood');
+  assert(/medicine day 2 of 3/.test(rowText(stripRows(STRIPS_CYCLE['p-blood'], stripCtx(B), bl, 'water-supply'))), 'the strip reads "medicine day 2 of 3"');
+  const VERDICT = /correct|wrong|well done|good job|great job|mistake|perfect|excellent|match(es)? the/i;
+  const days = [['hot', null, 1, 14.5], ['hot', WEEK2, 9, 14], ['hot', WEEKS45, 22, 13.5], ['rainy', WEEKS45, 29, 7], ['rainy', WEEKS45, 33, 15.3], ['rainy', WEEK3, 19, 14], ['badChicks', null, -1, 8], ['badChicks', null, 0, 10.5],
+    ['badChicks', null, 2, 9], ['water', null, 1, 9], ['water', WEEKS45, 27, 7], ['water', WEEK3, 18, 7]];
+  const problems = { rainy: ['power-cut', 'mains-back', 'gen-dry', 'rain-in', 'damp-spell'], badChicks: ['weak-batch'], water: ['iron-filter', 'iron-nipples', 'pump-wear'] };
+  const seen = new Set();
+  for (const [cond, def, day, hour] of days) {
+    const L = def ? makeCycle(def, { day, hour, condition: cond }) : makeLevel({ startDay: day, startHour: hour, condition: cond });
+    for (const p of problems[cond] || []) L.events.emit(EV.FARM_PROBLEM, { id: p, phase: 'symptom' });
+    L.farm.water.lineTempC = [31, 32.5, 30, 29]; L.farm.stats.chickWeightMeasuredG = 36.2;
+    for (const inst of L.jobs.open().filter((i) => i.def.condition)) {
+      for (const panel of ['generator', 'water-tank', 'water-supply', 'controller', 'drinker-3', 'chick-table']) {
+        const rows = stripRows(STRIPS_COND[inst.id], { ...stripCtx(L), paused: true }, inst, panel);
+        assert(rows.length, `${inst.key}: rows`);
+        for (const r of rows) for (const t of [r.text, r.what, r.sign, r.yours]) if (t != null) { assert(typeof t === 'string' && !/undefined|NaN|\[object/.test(t), `${inst.key}: "${t}"`); assert(!VERDICT.test(t), `${inst.key}: verdict word in "${t}"`); }
+      }
+      seen.add(inst.id);
+    }
+  }
+  const missing = JOBS_COND.map((j) => j.id).filter((id) => !seen.has(id) && id !== 'p-rain-patch');
+  assert(!missing.length && Object.keys(STRIPS_COND).length === JOBS_COND.length, `every condition job has its strip and was built: missing ${missing.join(' ')}`);
+  // a weak batch's brooder row + 1 °C on days 0-3 (the strips' house row and b-warm)
+  const W = makeLevel({ startDay: 0, startHour: 9, condition: 'badChicks' });
+  const bw = rowText(stripRows(STRIPS_COND['b-warm'], stripCtx(W), W.jobs.byKey('b-warm@0'), 'controller'));
+  assert(/\+ 1\.0 °C = .*the sign’s row \+ 1 °C \(weak batch\)/.test(bw), `b-warm: ${bw}`);
 });
 
 let failed = 0;

@@ -134,6 +134,17 @@ export function readingText(kind, v) {
     case 'tip': case 'chicks.tip': return `${int(r.placed)} chicks out on the litter${r.deadInBoxes ? `, ${int(r.deadInBoxes)} dead in the boxes` : ''}`;
     case 'cull': case 'chicks.cull': return `${int(r.n)} culled${r.reason === 'grading' ? ' at the chick table' : r.reason === 'sick' ? ' (sick bird)' : r.reason === 'lame' ? ' (lame bird)' : ''}`;
     case 'order': case 'feed.order': return r.arriveDay != null ? `${r.type ? `${r.type} ` : ''}feed ordered${r.kg != null ? ` (${int(r.kg)} kg)` : ''}, arrives day ${r.arriveDay} ${hhmm(r.arriveHour ?? 9)}` : 'feed ordered';
+    // Phase 4: the conditions' readings (PHASE4.md §10.3 results, as the notebook keeps them)
+    case 'tank': case 'water.tank': return [r.levelPct != null && `tank ${int(r.levelPct)} %`, r.lowPct != null && `marker ${int(r.lowPct)} %${r.lowAt != null ? ` at ${hhmm((r.lowAt % 1) * 24)}` : ''}`,
+      r.pumpBar != null && `pump ${one(r.pumpBar)} bar, ${one(r.pumpA)} A${r.pumpOn === false ? ' (stopped)' : ''}`].filter(Boolean).join(' · ') || 'tank read';
+    case 'water.test': return [r.ph != null && `pH ${one(r.ph)}`, r.chlorinePpm != null && `chlorine ${one(r.chlorinePpm)} ppm`, r.ironMgL != null && `iron ${one(r.ironMgL)} mg/L`].filter(Boolean).join(' · ') || 'water tested';
+    case 'generator': case 'gen.test': case 'gen.start': case 'gen.stop': return [r.ok != null ? (r.ok ? 'test run' : 'test run: no start') : r.running != null ? (r.running ? 'running' : 'stopped') : null,
+      r.fuelL != null && `${int(r.fuelL)} L fuel`, r.hoursLeft != null && `about ${one(r.hoursLeft)} h left`].filter(Boolean).join(' · ') || 'generator';
+    case 'gen.switch': return `house on the ${r.source === 'generator' ? 'generator' : 'mains'}`;
+    case 'chicks.grade': return `stack ${int((r.stack ?? 0) + 1)}: ${int(r.weak)} weak of ${int(r.looked)}, ${int(r.culled)} graded out`;
+    case 'phone.hatchery': return `hatchery told: ${r.chickWeightG != null ? `${one(r.chickWeightG)} g a chick` : 'no box weighed'}${r.weakPct != null ? `, ${one(r.weakPct)} % weak` : ''}`;
+    case 'inlets.storm': return `storm flaps ${r.closed ? 'closed' : 'open'}`;
+    case 'pump.fix': return r.started ? `pump repair started (${int(r.hours ?? 2)} farm hours)` : 'pump repair already running';
     case 'grade': case 'sample.grade': return `chick ${int((r.i ?? 0) + 1)}: rights itself in ${one(r.reflexSec)} s, navel ${r.navel ?? '—'}, hocks ${r.hocks ?? '—'}`;
     case 'grade.sheet': case 'grade.submit': {
       const s = r.sheet || {};
