@@ -648,32 +648,50 @@ unchanged (`npm test` passes; the live farm still runs Phase 3's model):
 
 ## Sound (branch feature/sound, ahead of Phase 5)
 The farmer asked for quiet sounds now and then "to let you know it's working". All procedural Web Audio (no audio
-files: the artifact CSP blocks media), in `src/audio*.js`; the hooks elsewhere are four lines in main.js
-(`createAudio(ctx, { player, flock, events, farm, ui })` after the run, `audio.update(dt)` at the end of `step`,
-`ctx.audio`, `__game.audio`) and `test-audio.mjs` on the end of `npm test`.
+files: the artifact CSP blocks media), in `src/audio*.js`; the hooks elsewhere are five lines in main.js (the import,
+`createAudio(ctx, { player, flock, events, farm, ui })` after the run, `ctx.audio`, `audio.update(dt)` at the end of
+`step`, `__game.audio`) and `test-audio.mjs` on the end of `npm test`.
 - **Files**: `audio-settings.js` (volume / mute store in localStorage, try/catch; the Phase 5 settings menu reuses it;
   `SOUND_KEY` is **U**: M is the litter moisture view) · `audio-mix.js` (pure: surfaces, the door crossfade, bed targets by
-  place / hour / machines, the flock's voice from `flock.sounds()`, the footfall cycle, `LEVELS`) · `audio-synth.js` (noise,
-  reverb, clipper, timbres, pooled voices) · `audio-beds.js` (continuous beds, `BED_DB` / `BED_RAW_DB`) · `audio-voices.js`
-  (one-shot recipes) · `audio-sched.js` (Poisson events: birds, distant, flock) · `audio-engine.js` (graph, update, cues) ·
-  `audio.js` (game adapter: gesture unlock, hidden tab, bus events, DOM hooks) · `audio-ui.js` (speaker button and card in the
-  time bar, a U row in both legends) · `audio-measure.js` (offline render, peak / RMS per layer).
-- **What plays**: outside a breeze in gusts, birds by day (dawn chorus), cicadas at dusk, crickets at night, rarely a
-  motorbike on the public road, a village dog, frogs, a gecko; inside the tunnel fans by `env.fansOn` (and the fan end),
-  the gas hiss by `env.heaterLevel` under the brooders, the pad's trickle while `env.padOn`, rain on the roof
-  (`farm.weatherNow.rain`), the augers while `farm.feed.lines[i].turning`; the flock by nearness and number (chirps,
-  distress peeps when cold / hungry / thirsty, panting and wing flutter when hot, snicks and a rattle with a breathing
-  problem, a murmur from grown birds, silent when empty); footfalls by surface on the walk cycle (gravel, concrete, litter,
-  grass, the foot dips); the house door; valves, the winch, the scale and probe beeps, paper for signs / plates / pages,
-  a soft click on machine keys, water into the flow-test cup, chicks tumbling from a tipped box, the dead bin, a truck,
-  the controller's alarm in a power cut, and one wood-block tick when a job is done (never during a skip).
-- **Rules**: nothing starts before the first key press or click; the context sleeps while muted or hidden; no node per
-  sound (automation on pooled voices) and no allocation per frame; a burst of game steps in one task cannot stack sounds
-  (rate limits on the audio clock); cues queued during a clock jump are dropped.
-- **Levels** at the default volume (measured by `scripts/p5-sound.json` with an OfflineAudioContext, 37 PASS): background
-  RMS -32 to -38 dBFS (the yard -33.5..-35.1 at every hour, the house -32.3 at the fan end with six fans, -37.6 with
-  comfortable chicks), cold chicks' distress 4 dB over contentment (-32.4), hot grown birds 3.5 dB under comfortable ones;
-  cues' loudest 100 ms -34..-40 dBFS (winch -49, litter squeeze -47, key click -56) with peaks at or under -22; footfalls
-  -45..-47 with peaks at or under -26.5; no scene peaks over -17.4 dBFS (the soft clipper starts at -6). Steps file and
-  node tests: `scripts/p5-sound.json` (also the speaker card, U, the volume store, paper / click / tick / door / footfalls
-  by real input, the flow-test cup, no tick flood in a skip), `scripts/test-audio.mjs` (with `fake-audio.mjs`).
+  place / hour / machines, `fanSpinOf` / `padFlowOf` from env, the flock's voice from `flock.sounds()`, its habituation,
+  the footfall cycle, `LEVELS`) · `audio-synth.js` (noise, reverb, clipper, timbres, pooled voices) · `audio-beds.js`
+  (continuous beds, `BED_DB` / `BED_RAW_DB`) · `audio-voices.js` (one-shot recipes) · `audio-sched.js` (Poisson events:
+  birds, distant, flock) · `audio-engine.js` (graph, update, cues) · `audio.js` (game adapter: gesture unlock, hidden tab,
+  bus events, DOM hooks) · `audio-ui.js` (speaker button and card in the time bar, a U row in both legends) ·
+  `audio-measure.js` (offline render, peak / RMS per layer).
+- **What plays**: outside a breeze in gusts, birds by day (dawn chorus), cicadas at dusk, crickets at night (their pitch
+  and rates drift, faster on warm nights), rarely a motorbike on the public road, a village dog, frogs, a gecko; inside
+  the tunnel fans (`fanSpinOf`: `env.fansOn`, but the minimum ventilation timer's mean fans while its cycle passes in
+  under 20 real seconds or the clock is stopped, so the hum never swells on the timer's beat) and the fan end, the gas
+  hiss (3-6.5 kHz) by `env.heaterLevel` under the brooders, the pad's trickle while `env.padOn` by its wet share
+  (`env.padWorking`: a part-clogged pad trickles less), rain on the roof (`farm.weatherNow.rain`), the augers while
+  `farm.feed.lines[i].turning`; the flock by nearness and number (sparse contented chirps, at most 2.8 a second, 3.5 dB
+  softer after a minute among a calm flock and back at once when its state changes; distress peeps when cold / hungry /
+  thirsty, panting and wing flutter when hot, snicks and a rattle with a breathing problem, a murmur from grown birds,
+  silent when empty); footfalls by surface on the walk cycle (gravel, concrete, litter, grass, the foot dips); the house
+  door; valves, the winch, the scale and probe beeps, paper for signs / plates / pages, a soft click on machine keys,
+  water into the flow-test cup, chicks tumbling from a tipped box, the dead bin, a truck, the controller's alarm in a power
+  cut (the tipped box and the alarm pan to where they are; the farmer's own sounds are centred), and one wood-block tick
+  when a job is done (never during a skip).
+- **Rules**: the AudioContext is made only on an event that is a user activation (a mouse press, a touch or pen lifted, a
+  key other than Esc; trusted, and `navigator.userActivation.isActive` where the browser has it); later gestures resume
+  it; it sleeps while muted or hidden. 176 audio nodes (gains, filters, sources, panners, the reverb and the clipper; the
+  five wave tables aside), all made at start-up: a sound is automation on pooled voices (a noise
+  voice is gain -> band-pass -> low-pass -> pan, so a silent voice's filters hear silence and retuning them for the next
+  sound cannot ring); no allocation per frame; a burst of game steps in one task cannot stack sounds (rate limits on the
+  audio clock); cues queued during a clock jump are dropped.
+- **Levels** at the default volume, as `scripts/p5-sound.json` renders them with an OfflineAudioContext (44 PASS):
+  background RMS -32 to -38 dBFS (the yard -34.6..-35.6 at every hour, the house -32.4 at the fan end with six fans,
+  -35.7 at the pad end); comfortable chicks -43.0 (sparse), cold chicks' distress 8 dB over that (-34.8), hot grown birds
+  3 dB under comfortable ones; a burning brooder's house layer -38.3; cues' loudest 100 ms -35..-40 dBFS (winch -49,
+  litter squeeze -47, key click -56) with peaks at or under -23.9 alone; footfalls -45..-47 with peaks at or under -26.7.
+  The **checked bounds** (bounds the steps file asserts, not the loudest the game can get: a scene it does not render
+  can be louder): every layer of every rendered scene peaks at or under -16 dBFS, including every pool at once (cold
+  chicks, dawn birds, a walk and every cue back to back: -19.4) and a storm over a burning brooder with cold chicks
+  (-17.1, RMS -31.4); cues on voices that just played other sounds (litter steps, paper, the door, the bin, a box; five
+  seeds) at or under -20 (measured -21.5..-24.3); no clipping (the soft clipper starts at -6). The steps file also
+  covers the speaker card, U, the volume store, synthetic gestures (no context), the hidden tab (asleep, back, kept
+  asleep while muted), paper / click / tick / door / footfalls by real input, the flow-test cup and no tick flood in a
+  skip; `scripts/test-audio.mjs` (with `fake-audio.mjs`) the rules, the timer fans (< 1 dB through the cycles), the pad's
+  share, the chirp rate and habituation, the pans, every one-shot ending inside its voice's held time, and no node made
+  after start-up.

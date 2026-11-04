@@ -59,6 +59,7 @@
   {"wait": 2500},
   {"eval": "window.__t0 = __game.audio.state().played.tick, 'ticks so far (a tour job finished by the sign or the key ticks too): ' + __t0"},
   {"eval": "for (let i = 0; i < 20; i++) __game.events.emit('job:done', { id: 'sound-test', key: 'sound-test' }); 'twenty job:done at once'"},
+  {"advanceUntil": "__game.audio.state().played.tick > __t0", "max": 1, "step": 0.1},
   {"wait": 1500},
   {"expect": "__game.audio.state().played.tick - __t0 === 1", "label": "a job finished: one wood-block tick, never a flood"},
   {"state": {"farmer": {"x": -14, "z": 9.5, "yaw": 0}, "cameraYaw": 0}},
