@@ -455,18 +455,70 @@ hour)` (`level.debug.freeRun`) and `config` (the config module: steps files read
   of few fans in the day-25 hot afternoon before the farmer's 13:00 round is enough for an abnormal-deaths
   report; the scripted farmer sets six fans at the end of the morning round on hot days.
 
+### Review fixes (Phase 3 review round)
+- **Records and UI:** `records-cycle deathsByLevel()` is an array `[{ level, deaths, culls, doa, pct }]`; the cycle
+  summary and the harvest page read it through `ui-letters deathsByLevelRows` (an old `{ id: pct }` map is read too).
+  Readings in the notebook are the reading, never a bare `true` the farm returned (`fans`, `controller` merge the args
+  with an object result). Charts: round ticks (1-2-2.5-5 × 10ⁿ), the day label inside the view. The skill tree and the
+  summary say "1 point". The fan panel's wind chill unlock reads *Birds feel* (house − wind chill) with "4.1 °C cooler
+  in 2.5 m/s air" under it. The phone's feed note carries its source line (general practice). The HUD clock card keeps
+  one width (`.clock-day` ellipsis; the booked chick day stays on the job card); day 42 reads "Day 42 · the catch" on
+  both. The bird check's droppings guide: pictograms in three columns, the looks in four columns under 700 px, scrolled
+  into view when it opens.
+- **Scene:** the comfort view's warm half is relative to the age's panting threshold (`uHotFrom` = `farm.comfort.hotFrom`
+  from day 8, 1.5 °C for chicks): orange where panting starts, red 3 °C past it; the legend reads *cold · cool · right ·
+  panting starts · too hot* with "birds this age start to pant at +X °C". The three office palms moved south-east of the
+  office (world-yard.js), off the default camera's line to the wash bay and the planning sign (`p3-scene-look`
+  look-17). `patchOcclusion` handles instanced meshes (`instanceMatrix`), and the catch's crates and crew use the
+  occlusion material, so a stack between the camera and the farmer dithers away. House dust is a matte grey-brown haze
+  (normal blending, 0.3 opacity).
+- **Model and jobs:** the plan's sale term has an upper end (`PLAN_CONTRACT.saleMaxPct` 110 %: 12 houses fail; the
+  letter, the sheet and the plate say so). Week 2 fails under 95 % of the day-14 target (`noCare` profile: no input
+  weighs about 91 %). `heatHandled` (farm-cycle-problems.js, also the job engine's `heat-handled`): never while the
+  mean felt comfort is under −1.5 °C, never by the pad for birds under 21 days; `w3-heat` needs no cold death between
+  found and fixed (`padWeek3` profile). A weather problem the farmer never met ends quietly (`fixed`, `fixedBy:
+  'weather'`, `unseen`, EV.FARM_PROBLEM `passed`: a plain line on the day's row, no job). With a withdrawal under 6 h the
+  plant deducts 3 % gut fill from each ticket (`gutKg`; `noWithdrawal` pays less, FCR and EPEF worse than the ideal).
+  New state test `dark-period` (≥ 4 h): `w2-lights` and `p-sds` need it, and the farm fixes the sudden deaths only with
+  it; `vent.timer` answers `{ air, prevAir, stepUp }` and `r-minvent` counts a step up. The vet answers what was
+  reported and seen (medicine only for blood in the droppings once found or on the floor; Gumboro by the vet only once
+  found or named). The crew needs 3 days' notice (`f-book` to day 39 06:00). Birds with no feed in reach lose about 2 %
+  of their weight a day before they starve (`FLOCK.starveLossPerDay`, not during the withdrawal or the heat-wave lift).
+  The fail screen's carried lines name "no vaccine given on day 12", "vaccine reached N % of the birds" and "brooding
+  curtain still down on day 15".
+- **Run and level:** *Next job* with jobs open words the skip with its day ("Skip to 13:00, day 12 — 2 jobs open",
+  "End Clean-out and rest at 06:00, day 70") and the confirmed skip stops at the earliest close of an open job or the
+  next 06:00; a skip of more than a day runs behind the busy card. `L.weighings()` reads the level's saved weighs of the
+  day and counts places as the weigh job does (house sectors from day 8). The drawn flock's generator is reseeded from
+  the level seed and the clock minute at every level start and restore (`flock-level reseed`), and the play-through
+  steps stop the loop before anything runs in real time. The notebook folds away the levels before the last one when a
+  level is entered (`records.compact`); day stats and notebook values are rounded in the save (`src/round.js`); the run
+  key leaves out the blob's copy of the run: the run key at day 67 is about 175 KB (test-run asserts ≤ 250 KB). A
+  standard start clears the later levels and their starts of the abandoned flock and keeps the player's entries of the
+  levels before; a replay from day 22 deletes the stored day-29 start too (`store.clearStart`). The day-29 inner start
+  reached by the running clock no longer teleports the farmer. A skill award schedules a run save (0.5 s).
+- **Pacing (`onDays`):** from day 8 the four flow tests come on even mornings (`FLOW_DAYS`), the silo gauge on odd
+  mornings and the order days 13, 27, 36 (`SILO_DAYS`; `r-feedmeter` asks for the feed meter alone on the others), the
+  droppings checks take five birds, the night ventilation is done at the controller by the door, and the afternoon
+  walk rests on the quiet days 26 and 34.
+
 ### Open (Phase 4 and later)
-- **Day budget** over 4.5 min on every flock day (table above); the `onDays` cuts listed there wait for the farmer.
+- **Day budget:** the `onDays` cuts of the review round are in (above); they are content for the farmer to confirm
+  (PHASE3.md §17 question 14).
 - **noStep** (minimum ventilation never stepped up) costs little in the model (night RH +4 points, litter +3
   points, NH3 +2.5 ppm, 0.4 % of the day-21 weight): the bands are relative for now; a stronger response to too
   little air (wet litter, ammonia, intake) is Phase 4 tuning.
-- **Week 3 heat job:** `p-heat3`'s done test accepts all fans + pad, which chills 16-day-old birds; it also accepts
-  panting ≤ 10 % for 30 min (six fans without the pad). Phase 4: tie the pad part of `heat-handled` to age, or
-  soften cold deaths under tunnel air by age.
+- **Week 3 heat:** `heat-handled` no longer accepts the pad for birds under 21 days or chilled birds (review); the
+  model itself still chills 16-day-old birds under six fans and the pad (about 3 cold deaths an hour): softening
+  wind chill by age is Phase 4 tuning.
 - **Ideal profile points** the sim package could not reach (vent-band, warm-timer, heat-finish, damp-cleared,
   comfort-fin, harvest-uniformity 66 %); every branch still reaches level 2.
 - **Records:** the week table's *Tunnel fans (most)* / *Pad on* are the farmer's own fan-panel readings (one per
-  opening, 2 s after it opens): a day without a reading, or with a reading taken before switching, shows less.
+  opening, 2 s after it opens): a day without a reading, or with a reading taken before switching, shows less (the
+  `goto(auto)` days now show the ideal's readings: the notebook keeps the reading, not the farm's `true`).
+- **Model (review round):** the gut-fill deduction (3 %), the empty-pan weight loss (2 % a day) and week 2's 95 %
+  line are model values for the farmer to confirm; the reviewer's second option for week 2 (stronger crowding and
+  line-height effects after day 10) is left to Phase 4.
 - **Speed:** the brooding week's 24 h skip costs 40–130 ms in node (the limit is 150 ms; Phase 2's was 30 ms).
 - **Scene:** the catching crew walks fixed paths through the farmer and the stacks; the grown flock covers about
   65 % of the floor at 2,950 g; the two board textures take about 46 MB of GPU memory; `ui-jobs.js` imports

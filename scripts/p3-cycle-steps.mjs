@@ -6,6 +6,7 @@
 // (walking, panels, carrying at their clock speeds) plus 2 s per click or key press in the HUD.
 import { writeFileSync } from 'node:fs';
 import { DRINKER_LINES_Z } from '../src/config.js';
+import { FLOW_DAYS, SILO_DAYS } from '../src/content-jobs.js';
 
 // ---------------- step helpers ----------------
 export const W = (x, z, tol = 0.45, max = 60) => ({ walkTo: [x, z], tol, max });
@@ -20,6 +21,8 @@ export const click = (text, times, scope = PANEL) => (times ? { clickText: text,
 export const clickUntil = (text, until, max = 80) => ({ clickTextUntil: text, until, max, in: PANEL });
 export const until = (advanceUntil, max = 60, step = 0.5) => ({ advanceUntil, max, step });
 export const next = () => [{ clickOn: '.ljobs-next' }, adv(0.4)];
+/** Next job until the clock reaches `h` (with a job still open the first press asks, the next one skips). */
+export const nextTo = (h) => [{ clickTextUntil: '', until: `__game.env.hour >= ${h}`, max: 5, in: '.ljobs-foot' }, adv(0.2)]; // its first button is Next job
 /** E at an interactable and the panel it opens. */
 export const E = (id, label) => [press('e'), adv(0.25), exp(`__game.ui.openPanelId === '${id}' || ('open: ' + __game.ui.openPanelId + ', nearest ' + __game.interact.nearest(__game.player)?.id) && false`, label || `E opens ${id}`)];
 export const esc = () => [press('Escape'), adv(0.15)];
@@ -117,7 +120,7 @@ export const lux3 = () => [W(-18, -2, 0.5), press('l'), adv(0.3), W(-18, 2, 0.5)
 /** Squeeze a handful of litter (Q) in two parts of the floor, one by a drinker line. */
 export const squeeze3 = () => [W(-20, -1.95, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3), W(-4, 0.8, 0.5), press('q'), adv(0.3)];
 /** At the office desk: sign today's record (the records book opens on Today). */
-export const signRecord = () => [...E('office-desk', 'E opens the office desk'),
+export const signRecord = (extra = []) => [...E('office-desk', 'E opens the office desk'), ...extra,
   // an open "Report the deaths to the company vet" job: the phone first (the Phone tab of the records book)
   ev(`(() => { const j = __game.jobs().find((x) => x.key.startsWith('p-report@') && x.status === 'open'); if (!j) return 'no report to phone'; const tab = [...document.querySelectorAll('#hud .panel:not([hidden]) [role=tab], #hud .panel:not([hidden]) button')].find((b) => b.textContent.trim() === 'Phone'); tab?.click(); const b = [...document.querySelectorAll('#hud .panel:not([hidden]) button')].find((x) => x.textContent.includes('Report the deaths')); b?.click(); return 'phoned the vet: ' + (b ? 'reported' : 'no button'); })()`), adv(0.2),
   click('Today'), click('Sign today'), adv(0.6)];
@@ -180,25 +183,51 @@ export const passed = (id, extra = '') => exp(`(() => { const r = __game.level.r
 export const rowOut = `window.__rowOut = (label) => { const r = [...document.querySelectorAll('#hud .panel:not([hidden]) .ctrl-row')].find((x) => x.querySelector('.ctrl-label')?.textContent.startsWith(label)); return r?.querySelector('output')?.textContent ?? ''; }`;
 /** The morning round from the gate: dips, controller (+ extra controller work), walk, dead birds, drinkers, meter, feeders, silo, bin. */
 export function morning({ day, whole, controller = [], inside = [], raise = false }) {
+  // from day 8 the flow tests come on even mornings and the silo gauge on the others (content-jobs FLOW_DAYS / SILO_DAYS)
+  const flow = FLOW_DAYS.includes(day), siloDay = SILO_DAYS.includes(day);
+  // the west-end machines first (controller, feeder box, drinker regulators, water meter), then one walk east
+  // through the birds, the extra jobs where the walk ends, the dead birds on the way back to the door
   return [
     ...gateToHouse(), ...controllerRead(), ...controller, ...esc(),
-    ...walkFloor({ whole }),
-    ...drinkers({ raise }), ...waterMeter(), ...feederBox({ raise }), ...inside, ...deadPick(6),
-    ...houseOut(), ...toBin(), ...binCount(), ...deadSweep(), ...toSilo(), ...silo(), ...deadSweep(),
+    ...feederBox({ raise }), ...(flow || raise ? drinkers({ raise, flow }) : []), ...waterMeter(),
+    ...walkFloor({ whole }), ...inside, ...deadPick(6),
+    ...houseOut(), ...toBin(), ...binCount(), ...deadSweep(), ...(siloDay ? [...toSilo(), ...silo(), ...deadSweep()] : []),
     exp(`(() => { const left = __game.jobs().filter((j) => j.key.endsWith('@${day}') && j.status === 'open'); return 'open after the morning round at ' + __t() + ': ' + (left.map((j) => j.key).join(' ') || 'none'); })()`, `day ${day}: the morning round`),
   ];
 }
 /** The afternoon round (13:00): dips, walk, controller, squeezes, dead birds, the extra jobs, bin. */
-export function afternoon({ day, whole, controller = [], inside = [], raise = false }) {
+export function afternoon({ day, whole, controller = [], inside = [], raise = false, east = null }) {
+  // the afternoon controller read is a job to day 14 (r-controller-pm); from day 15 the fan panel has it
+  const ctl = day <= 14 || controller.length ? [...controllerRead(), ...controller, ...esc()] : [];
+  // from day 15 the round starts at the fan panel (east end): `east` = its steps, then the walk back west
+  // through the birds (with the bird checks of the day on the way), the squeezes, the dead birds, the door
+  if (east) {
+    return [
+      ...outToHouse(), ...east, W(20, 0, 0.6), ...(inside.length ? inside : [W(-8, 0, 0.6, 60)]), adv(2.8), ...ctl,
+      ...(inside.length // the bird checks end at the west end: the squeezes from there
+        ? [W(-20, -1.95, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3), W(-4, 0.8, 0.5), press('q'), adv(0.3)]
+        : [W(-4, 0.8, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3), W(-20, -1.95, 0.5), press('q'), adv(0.3)]),
+      ...deadPick(6),
+      ...houseOut(), ...toBin(), ...binCount(), ...deadSweep(),
+    ];
+  }
   return [
-    ...outToHouse(), ...walkFloor({ whole, pm: true }), ...controllerRead(), ...controller, ...esc(),
+    ...outToHouse(), ...walkFloor({ whole, pm: true }), ...ctl,
     ...squeeze3(), ...inside, ...(raise ? [...drinkers({ raise: true, flow: false }), ...feederBox({ raise: true })] : []), ...deadPick(6),
     ...houseOut(), ...toBin(), ...binCount(), ...deadSweep(),
   ];
 }
 /** The evening: the office desk at 16:00 or later, the record signed. */
-export const evening = (day) => [...outToOffice(), exp(`'at the office ' + __t() + ': ' + (__missed(${day}) || 'nothing open')`, `day ${day}: at the office`),
-  { pressIf: 'Escape', if: 'false' }, { clickOn: '.ljobs-next' }, adv(0.4), until('__game.env.hour >= 16', 300), ...signRecord(), ...esc()];
+/** From day 15: Next job to 18:00, the night ventilation at the controller by the door, then the office desk
+ *  for the record (one walk to the office instead of two). */
+export const nightThenRecord = (day, n, atDesk = []) => [...nextTo(18), ev(`'Next job -> ' + __t()`), ...outToHouse(),
+  ...nightAtController(n, `day ${day} evening: the ventilation for the night at the controller`), job(`r-vent-night@${day}`),
+  ...houseOut(), ...outToOffice(), exp(`'at the office ' + __t() + ': ' + (__missed(${day}) || 'nothing open')`, `day ${day}: at the office`),
+  ...signRecord(atDesk), ...esc()];
+export const evening = (day, atDesk = []) => [...outToOffice(), exp(`'at the office ' + __t() + ': ' + (__missed(${day}) || 'nothing open')`, `day ${day}: at the office`),
+  // Next job to 16:00; with a job still open (the drying fans) the first press asks, the second skips
+  { pressIf: 'Escape', if: 'false' }, { clickOn: '.ljobs-next' }, adv(0.2), { clickTextUntil: 'Skip to', until: '__game.env.hour >= 16', max: 1, in: '#hud' }, adv(0.2),
+  until('__game.env.hour >= 16', 300), ...signRecord(atDesk), ...esc()];
 /** The growing birds' light program on the controller (Lights): the preset with Lighting level 1, else by hand. */
 export const growingLights = (key) => [click('Lights'), adv(0.1), click('Growing (from day 8)'), adv(0.1), ev(rowOut),
   clickUntil('One hour earlier', `__game.level.jobs.byKey('${key}')?.status === 'done' || __rowOut('Dark period starts') === '22:00'`, 24),
@@ -240,10 +269,10 @@ SEGMENTS.week2 = () => [
 // ---------------- birds in the hand (the bird check, day 8 on) ----------------
 const CHECK_AT = [[-18, -2], [-6, 2.2], [6, -2], [18, 2.2], [-12, 2.2], [12, -2]];
 /** Pick up n birds from parts of the house (E: the chick provider while a bird check is open) and do one look each. */
-export function birdChecks(n, btn, key) {
+export function birdChecks(n, btn, key, at = CHECK_AT) {
   const out = [];
   for (let i = 0; i < n; i++) {
-    const [x, z] = CHECK_AT[i % CHECK_AT.length];
+    const [x, z] = at[i % at.length];
     const near = `__birdNear(${x + (i % 3) * 0.6}, ${z})`, chick = `__game.interact.nearest(__game.player)?.id === 'chick'`;
     out.push(W(x + (i % 3) * 0.6, z, 0.6),
       { walkToExpr: near, tol: 0.5, max: 10, label: 'the nearest bird' }, { pressIf: 'e', if: chick }, adv(0.25),
@@ -254,25 +283,27 @@ export function birdChecks(n, btn, key) {
   return out;
 }
 const fansAll = (pad) => [click('All six'), adv(0.2), ...(pad ? [{ pressIf: 'Escape', if: 'false' }, ev(`__game.env.padOn ? 'pad already on' : ([...document.querySelectorAll('#hud .panel:not([hidden]) button')].find((b) => /Pad pump (off|on)/.test(b.textContent))?.click(), 'pad pump ' + (__game.env.padOn ? 'on' : 'off'))`)] : [])];
-const fansNight = (n) => [click('All off'), adv(0.2), ...(n > 0 ? [click(`Fan ${n} switch`)] : []), adv(0.2), ev(`'fans for the night: ' + __game.env.fansManual`)];
 /** The fan panel at the east end (fans.read after 2 s), with what to switch. */
 const atFans = (extra, label) => [W(22.4, -4.6, 0.35), ...E('fan-panel', label || 'E opens the fan panel'), adv(2.4), ...extra, ...esc()];
+/** The night ventilation at the controller by the door (r-vent-night): its tunnel fan keys to n fans. */
+const nightAtController = (n, label) => [W(-12, -4.6, 0.3), ...E('controller', label || 'E opens the controller for the night'), adv(2.4), click('Ventilation'), adv(0.1),
+  clickUntil('One tunnel fan fewer', `__game.env.fansManual <= ${n}`, 8), clickUntil('One tunnel fan more', `__game.env.fansManual >= ${n}`, 8),
+  ev(`'fans for the night at the controller: ' + __game.env.fansManual`), ...esc()];
 
 // ---------------- Level 4: Week 3 — day 16 by real input ----------------
 SEGMENTS.week3 = () => [
   ...continueOn('Continue to Week 3', 'week3', 15),
   ...autoTo(16, 6.05), ev(`__timer('day 16')`),
   ...morning({ day: 16, whole: true, controller: minVent() }),
-  ...outToHouse(), until('__game.env.hour >= 8', 60), ...birdChecks(10, 'Look at the vent and droppings', 'droppings'), ...houseOut(),
-  job('w3-droppings@16', 'droppings checked on ten birds from three parts of the house'),
-  ...next(), ev(`'Next job -> ' + __t()`),
-  // 16-day-old birds: six fans, no pad (the heat sign: young birds as few tunnel fans as the heat allows; with the pad too they chill)
-  ...outToHouse(), ...atFans([shot('p3c-14-fans-day16'), ...fansAll(false)], 'day 16 afternoon: the fan panel'), job('r-fans-pm@16', 'the fans and the house read in the afternoon heat'),
-  ...afternoon({ day: 16, whole: true }).slice(DOOR_IN.length + 1),
+  ...nextTo(13), ev(`'Next job -> ' + __t()`),
+  // 16-day-old birds: six fans, no pad (the heat sign: young birds as few tunnel fans as the heat allows; with the pad too they chill);
+  // the droppings of five birds on the walk back west from the fan panel
+  ...afternoon({ day: 16, whole: true, east: [...atFans([shot('p3c-14-fans-day16'), ...fansAll(false)], 'day 16 afternoon: the fan panel'), job('r-fans-pm@16', 'the fans and the house read in the afternoon heat')],
+    inside: [...birdChecks(5, 'Look at the vent and droppings', 'droppings', [[18, 2.2], [6, -2], [-6, 2.2], [-12, -2], [-18, 2.2]]),
+      job('w3-droppings@16', 'droppings checked on five birds from three parts of the house')] }),
   exp(`'panting share ' + __game.farm.comfort.pantShare.toFixed(2) + ' at ' + __t() + ', fans ' + __game.env.fansOn + ', pad ' + __game.env.padOn`, 'six fans in the warm afternoon'),
   job('p-heat3@16', 'Birds panting in the afternoon: handled at the fan panel'),
-  ...evening(16),
-  ...next(), ev(`'Next job -> ' + __t()`), ...officeToHouse(), until('__game.env.hour >= 18', 60), ...atFans(fansNight(1), 'the evening: ventilation for the night'), job('r-vent-night@16'),
+  ...nightThenRecord(16, 1),
   ev(`__timerEnd('day 16')`), ev(`'not done on day 16: ' + (__missed(16) || 'none')`), exp(`__missed(16) === '' && 'every job of day 16 done'`, 'day 16 played by real input: every job done'),
   ...autoTo(21, 21), passed('week3'), shot('p3c-15-week3-result'),
 ];
@@ -282,10 +313,9 @@ SEGMENTS.weeks45 = () => [
   ...continueOn('Continue to Weeks 4 and 5', 'weeks45', 22),
   ...autoTo(25, 6.05), ev(`__timer('day 25')`),
   ...morning({ day: 25, whole: true, inside: atFans(fansAll(false), 'day 25 morning: six tunnel fans for the hot day') }),
-  ...next(), ev(`'Next job -> ' + __t()`),
-  ...outToHouse(), ...atFans([shot('p3c-16-fans-day25'), ...fansAll(true)], 'day 25 hot afternoon: six fans and the pad'),
-  ...afternoon({ day: 25, whole: true }).slice(DOOR_IN.length + 1),
-  ...evening(25), ...next(), ev(`'Next job -> ' + __t()`), ...officeToHouse(), until('__game.env.hour >= 18', 60), ...atFans(fansNight(3), 'the evening: tunnel fans for the night'),
+  ...nextTo(13), ev(`'Next job -> ' + __t()`),
+  ...afternoon({ day: 25, whole: true, east: atFans([shot('p3c-16-fans-day25'), ...fansAll(true)], 'day 25 hot afternoon: six fans and the pad') }),
+  ...nightThenRecord(25, 3),
   ev(`__timerEnd('day 25')`), ev(`'not done on day 25: ' + (__missed(25) || 'none')`), exp(`__missed(25) === '' && 'every job of day 25 done'`, 'day 25 played by real input: every job done'),
   // day 27: a fan stops; found by walking past the east end
   ...autoTo(27, 9.6), ev(`'fans broken ' + JSON.stringify(__game.env.fansBroken) + ' at ' + __t()`), ...gateToHouse(), W(21.8, 2.85, 0.4, 80), adv(3), shot('p3c-17-fan-stopped'),
@@ -304,12 +334,10 @@ SEGMENTS.finish = () => [
   ...continueOn('Continue to Finishing and harvest', 'finish', 36),
   ...autoTo(37, 6.05), ev(`__timer('day 37')`),
   ...morning({ day: 37, whole: true, inside: atFans(fansAll(false), 'day 37 morning: six tunnel fans for the big birds') }),
-  ...outToOffice(), ...E('office-desk', 'the phone at the office desk'), click('Phone'), adv(0.1), click('Book the crew and the trucks'), adv(0.2), shot('p3c-21-phone'), ...esc(),
-  job('f-book@37', 'the catching crew and trucks booked on the phone'),
-  ...next(), ev(`'Next job -> ' + __t()`),
-  ...[W(-38, 26, 0.6), W(-38, 14, 0.6), W(-14, 12, 0.6)], ...outToHouse(), ...atFans(fansAll(true), 'day 37 afternoon: the fan panel'),
-  ...afternoon({ day: 37, whole: true }).slice(DOOR_IN.length + 1),
-  ...evening(37), ...next(), ev(`'Next job -> ' + __t()`), ...officeToHouse(), until('__game.env.hour >= 18', 60), ...atFans(fansNight(3), 'the evening: tunnel fans for the night'),
+  ...nextTo(13), ev(`'Next job -> ' + __t()`),
+  ...afternoon({ day: 37, whole: true, east: atFans(fansAll(true), 'day 37 afternoon: the fan panel') }),
+  // the crew booked on the phone at the evening visit to the office desk (3 days' notice: the window runs to day 39 06:00)
+  ...nightThenRecord(37, 3, [click('Phone'), adv(0.1), click('Book the crew and the trucks'), adv(0.2), shot('p3c-21-phone'), job('f-book@37', 'the catching crew and trucks booked on the phone')]),
   ev(`__timerEnd('day 37')`), ev(`'not done on day 37: ' + (__missed(37) || 'none')`), exp(`__missed(37) === '' && 'every job of day 37 done'`, 'day 37 played by real input: every job done'),
   // the catching night (day 42 from 02:00): watched from the house, the tickets read at the loading bay
   ...autoTo(41, 20), ...autoTo(42, 1.95), ev(`'catch at ' + __game.farm.harvest.catchAt + ', now ' + __t() + ', farmer at ' + __game.player.position.x.toFixed(1) + ',' + __game.player.position.z.toFixed(1)`),
@@ -320,7 +348,7 @@ SEGMENTS.finish = () => [
   exp(`(() => { const r = __game.farm.harvest.result; return r && 'harvest: ' + JSON.stringify({ liveG: r.liveG ?? r.meanLiveG, birds: r.birds, doa: r.doa }); })()`, 'the catch done, the tickets read'),
   // the office book's harvest page reads the deaths by level as numbers (review: no '[object Object]', no '— %')
   ev(`__game.ui.openPanel('office-desk'), 'the record book'`), adv(0.2), click('Harvest'), adv(0.2), shot('p3c-24b-book-harvest'),
-  exp(`(() => { const t = document.querySelector('#hud .panel:not([hidden])')?.textContent || ''; const m = t.match(/By level[^%]*%[^]*?(?=Uniformity)/); return /By level/.test(t) && !/object/i.test(t) && !/— %/.test(t) && 'harvest page: ' + (m ? m[0].replace(/\s+/g, ' ').slice(0, 200) : t.slice(0, 120)); })()`, 'the harvest page: deaths by level as numbers'),
+  exp(`(() => { const t = document.querySelector('#hud .panel:not([hidden])')?.textContent || ''; const m = t.match(/By level[^%]*%[^]*?(?=Uniformity)/); return /By level/.test(t) && !/object/i.test(t) && !/— %/.test(t) && 'harvest page: ' + (m ? m[0].replace(/\\s+/g, ' ').slice(0, 200) : t.slice(0, 120)); })()`, 'the harvest page: deaths by level as numbers'),
   ...esc(),
   ...outToHouse(), W(0, 0, 0.6), adv(2), shot('p3c-25-empty-house'),
   ...autoTo(42, 21), passed('finish', ', live: r.liveG, fcr: r.fcr'), shot('p3c-26-harvest-result'),
@@ -345,7 +373,8 @@ SEGMENTS.cleanout = () => [
   W(-18, -4.9, 0.35), ...E('feeder-box', 'E opens the feeder box'),
   ...[0, 1, 2].flatMap((i) => [click(`Wash the pans of line ${i + 1}`), until(`__game.farm.clean.pans[${i}]`, 60, 0.5)]), ...esc(),
   job('c-pans@44', 'the feeder pans washed'),
-  ...next(), ev(`'Next job -> ' + __t()`), until('__game.env.hour >= 13', 120), ...outToHouse(), ...atFans([click('All six')], 'day 44: the fans to dry the house'),
+  ...next(), ev(`'Next job -> ' + __t()`), until('__game.env.hour >= 13', 120), ...outToHouse(), W(-12, -4.6, 0.3), ...E('controller', 'day 44: the controller by the door, the fans to dry the house'), adv(0.3), click('Ventilation'), adv(0.1),
+  clickUntil('One tunnel fan more', '__game.env.fansManual >= 6', 8), ...esc(),
   ...houseOut(), ...evening(44), ev(`__timerEnd('day 44')`),
   exp(`(() => { const m = __game.jobs().filter((j) => j.key.endsWith('@44') && j.status !== 'done' && j.key !== 'c-dry@44'); return m.length === 0 ? 'day 44 jobs done (the drying runs on)' : 'not done: ' + m.map((j) => j.key + ':' + j.status).join(' '); })()`, 'day 44 played by real input'),
   ...autoTo(67, 7), ev(`'after the rest: ' + __game.level.mode + ' ' + __t()`), adv(0.5),

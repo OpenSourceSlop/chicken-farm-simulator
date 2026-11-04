@@ -28,6 +28,8 @@ const SIGNED = { type: 'event', event: EV.RECORD_CLOSED, match: { signed: true }
 const WEIGH = { type: 'count', id: 'sample.weigh', n: 50, sectors: 5, sectorsOf: 'house' };
 const RAISE = ALL({ type: 'each', id: 'water.height', key: 'line', values: [0, 1, 2, 3] }, { type: 'each', id: 'feed.line', key: 'line', values: [0, 1, 2], has: 'heightCm' });
 const even = (a, b) => { const o = []; for (let d = a; d <= b; d += 2) o.push(d); return o; };
+// the mornings of days 8-41 without the silo gauge (content-jobs.js SILO_DAYS: odd days and the order days 13, 27, 36)
+const FEEDMETER_DAYS = even(8, 41).filter((d) => d !== 36);
 
 // State predicates of Phase 3 (the run package implements them in job-engine.js; PHASE3.md §3.1).
 //   heat-handled  farm.comfort.pantShare <= 0.1, or every fan that turns is on (env.fansEffective = 6 - broken) and
@@ -57,6 +59,8 @@ export const JOBS_CYCLE = [
   D('w2-lights', 8, 'am', 'Set the light program for the growing birds', { spot: 'controller', signs: ['controller-lights', 'sign-light'], branch: 'lighting', done: ALL(ANY('light.program', 'light.preset'), ST('dark-period')) }),
   D('w2-lux', 8, 'am', 'Measure the light at bird level (L)', { spot: 'signLight', signs: ['sign-light'], branch: 'lighting',
     done: { type: 'count', id: 'light.lux', n: 3, sectors: 3, sectorsOf: 'used' } }),
+  // the feed meter alone on the mornings without the silo gauge (content-jobs.js SILO_DAYS)
+  R('r-feedmeter', [8, 41], 'am', 'Read the feed meter at the feeder box', { onDays: FEEDMETER_DAYS, spot: 'feederBox', signs: ['feeder-box'], branch: null, done: A('feed.meter') }),
   R('r-minvent', [8, 20], 'am', 'Step up the minimum ventilation for the birds’ weight', { onDays: even(8, 20), spot: 'controller', signs: ['sign-vent'], branch: 'moisture', done: A('vent.timer', { result: { stepUp: true } }) }),
   D('w2-ready', 9, 'pm', 'Get the rest of the house ready for the birds', { spot: 'litterHeap', signs: ['sign-curtain', 'sign-litter'], branch: 'brooding', done: ST('house-ready') }),
   D('w2-curtain', 9, 'pm', 'Lift the brooding curtain and let the birds spread', { window: [13, 66], pin: true, spot: 'curtainWinch', signs: ['sign-curtain'], branch: 'brooding',
@@ -76,8 +80,8 @@ export const JOBS_CYCLE = [
 
   // ---------------- Level 4: Week 3 (days 15-21) ----------------
   D('w3-change', 15, 'am', 'Change the feed lines to grower pellets', { window: [6, 42], pin: true, spot: 'silo', signs: ['sign-feed', 'silo', 'feeder-box'], branch: 'feed', done: ST('pans-grower') }),
-  R('w3-droppings', [16, 19], 'am', 'Check the droppings on ten birds', { onDays: [16, 19], window: [8, 18], spot: 'birdScale', signs: ['sign-droppings', 'bird-check'], branch: 'feed',
-    done: { type: 'count', id: 'sample.bird', match: { look: 'droppings' }, n: 10, sectors: 3, sectorsOf: 'house' } }),
+  R('w3-droppings', [16, 19], 'am', 'Check the droppings on five birds', { onDays: [16, 19], window: [8, 18], spot: 'birdScale', signs: ['sign-droppings', 'bird-check'], branch: 'feed',
+    done: { type: 'count', id: 'sample.bird', match: { look: 'droppings' }, n: 5, sectors: 3, sectorsOf: 'house' } }),
   D('w3-topup', 18, 'am', 'Fork over caked litter and top it up under the drinker lines', { window: [8, 18], spot: 'litterHeap', signs: ['sign-litter', 'sign-droppings'], branch: 'moisture',
     done: { type: 'count', id: 'litter.patch', n: 4, nearDrinker: 4, sectors: 2, sectorsOf: 'house' } }),
   D('w3-weigh', 21, 'am', 'Weigh sample birds', { window: [8, 18], pin: true, spot: 'birdScale', signs: ['bird-scale'], branch: 'growth', done: WEIGH }),
@@ -95,7 +99,8 @@ export const JOBS_CYCLE = [
   D('w45-brooders', 22, 'am', 'Turn the brooders off and winch them up', { window: [6, 18], spot: 'heater', signs: ['sign-brooder', 'sign-heat'], branch: 'heating', done: A('heat.brooders', { up: true }) }),
   R('r-fans-pm', [15, 41], 'pm', 'Check the fans and the house in the afternoon heat', { spot: 'fanPanel', signs: ['sign-heat', 'fan-panel'], branch: 'ventilation',
     done: A('fans.read') }),   // the walk is r-walk-pm's (PHASE3.md §3.3)
-  R('r-vent-night', [15, 41], 'night', 'Set the ventilation for the night', { spot: 'fanPanel', signs: ['sign-heat', 'sign-vent'], branch: 'moisture', done: ANY('fans.read', 'controller.read') }),
+  // at the controller by the door (its tunnel fan keys) or at the fan panel
+  R('r-vent-night', [15, 41], 'night', 'Set the ventilation for the night', { spot: 'controller', signs: ['sign-heat', 'sign-vent'], branch: 'moisture', done: ANY('fans.read', 'controller.read') }),
   D('w45-air', 23, 'am', 'Measure the air speed at bird height (V)', { window: [8, 18], spot: 'fanPanel', signs: ['sign-heat'], branch: 'ventilation',
     done: { type: 'count', id: 'air.probe', n: 3, sectors: 3, sectorsOf: 'house' } }),
   D('w45-pad', 24, 'am', 'Check the cooling pad: water on every section', { window: [8, 18], spot: 'padPump', signs: ['pad-pump'], branch: 'ventilation', done: A('pad.check') }),
@@ -140,7 +145,7 @@ export const JOBS_CYCLE = [
   D('c-lines', 44, 'clean', 'Clean the drinker lines with disinfectant', { spot: 'waterSupply', signs: ['sign-clean', 'water-supply'], branch: 'water',
     done: ALL(A('water.disinfect', { on: true }), ST('lines-disinfected')) }),
   D('c-pans', 44, 'clean', 'Wash the feeder pans', { spot: 'feederBox', signs: ['sign-clean'], branch: 'feed', done: { type: 'each', id: 'feed.wash', key: 'line', values: [0, 1, 2] } }),
-  D('c-dry', 44, 'clean', 'Let the house dry with the fans', { window: [13, 42], spot: 'fanPanel', signs: ['sign-clean'], branch: 'moisture', done: ST('house-dry') }),
+  D('c-dry', 44, 'clean', 'Let the house dry with the fans', { window: [13, 42], spot: 'controller', signs: ['sign-clean'], branch: 'moisture', done: ST('house-dry') }),
   D('c-spray', 45, 'clean', 'Disinfect the house', { spot: 'washBay', signs: ['sign-clean', 'wash-bay'], branch: 'biosecurity', done: ST('house-disinfected') }),
   D('c-washbay', 45, 'clean', 'Wash and disinfect the tools at the wash bay', { spot: 'washBay', signs: ['sign-clean', 'wash-bay'], branch: 'biosecurity',
     done: { type: 'each', id: 'clean.washbay', key: 'item', values: ['boots', 'buckets', 'barrow', 'washer'] } }),
@@ -171,6 +176,7 @@ export const JOB_WHERE_CYCLE = {
   'w2-lights': 'Climate controller: the Lights section. The light program sign hangs east of the vent sign.',
   'w2-lux': 'Brooding floor: press L at bird height in three different parts of the floor.',
   'r-minvent': 'Climate controller: the Ventilation section; the minimum ventilation sign has the table by weight.',
+  'r-feedmeter': 'Feeder control box on the north wall: the feed meter.',
   'w2-ready': 'Rice husk heap: the barrow over the floor east of the brooding curtain.',
   'w2-curtain': 'The winch on the north wall at the brooding curtain.',
   'w2-spread': 'Walk the whole length of the house; stand still a moment to look and listen.',
@@ -181,9 +187,9 @@ export const JOB_WHERE_CYCLE = {
   'w2-weigh': 'Bird scale: take the scale and frame, set the frame down in five parts of the house.',
   'p-damp': 'Climate controller: humidity and the Ventilation section; squeeze the litter by the walls.',
   'p-lame': 'Lame birds sit apart: E picks one up; cull the ones that cannot reach feed and water.',
-  'p-sds': 'Climate controller: the Lights section. The light program sign hangs east of the vent sign.',
+  'p-sds': 'Climate controller: the Lights section (a dark period every night). The light program sign hangs east of the vent sign.',
   'w3-change': 'Feed silos outside: the two slide valves; then the feeder control box runs the lines.',
-  'w3-droppings': 'Among the birds: E picks one up and look at the vent and the droppings. Ten birds from three parts of the house.',
+  'w3-droppings': 'Among the birds: E picks one up and look at the vent and the droppings. Five birds from three parts of the house.',
   'w3-topup': 'Rice husk heap: the fork for caked patches and sacks of husk for under the drinker lines.',
   'w3-weigh': 'Bird scale: take the scale and frame, set the frame down in five parts of the house.',
   'p-pad-wet': 'Cooling pad pump outside the west end: look at the float valve and the sump.',
@@ -193,7 +199,7 @@ export const JOB_WHERE_CYCLE = {
   'p-hunched': 'Office desk: the phone to the company vet.',
   'w45-brooders': 'Climate controller: the Temperature section.',
   'r-fans-pm': 'Fan panel at the east end, north wall: keep it open a moment to read it.',
-  'r-vent-night': 'Fan panel or the climate controller, between 18:00 and 22:00: the fans for the night.',
+  'r-vent-night': 'Climate controller by the door (its tunnel fan keys) or the fan panel, between 18:00 and 22:00: the fans for the night.',
   'w45-air': 'Press V at bird height in three parts of the house.',
   'w45-pad': 'Cooling pad pump outside the west end.',
   'w45-order': 'Office desk: the phone.',
@@ -221,7 +227,7 @@ export const JOB_WHERE_CYCLE = {
   'c-wash': 'Wash bay west of the house: take the pressure washer and wash the whole house.',
   'c-lines': 'Water supply: disinfectant in the header tank (Clean-out tab), then flush each line.',
   'c-pans': 'Feeder control box: wash each line’s pans.',
-  'c-dry': 'Fan panel: fans on until the floor is dry.',
+  'c-dry': 'Climate controller by the door (its tunnel fan keys) or the fan panel: fans on until the floor is dry.',
   'c-spray': 'Wash bay: take the sprayer and disinfect the whole house.',
   'c-washbay': 'Wash bay: boots, buckets, the barrow and the washer.',
   'c-bait': 'Bait stations at the four corners of the house.',

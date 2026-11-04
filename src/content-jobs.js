@@ -46,6 +46,13 @@ const WEEK = [0, 7];
 // Phase 3 (PHASE3.md §3.3): the daily rounds go on to day 41 (the catch is on day 42); the record to
 // day 46 (the clean-out days). Level 1's engine only makes days -1..7, so the brooding week is unchanged.
 const ROUTINE = [0, 41], ROUTINE1 = [1, 41];
+// Phase 3 pacing (review: every flock day under 4.5 minutes of play): from day 8 the four flow tests come every
+// other morning (even days) and the silo gauge on the other mornings and the feed-order days (13, 27, 36);
+// the afternoon walk rests on the two quiet days of weeks 4-5 (26, 34)
+const span = (a, b, keep = () => true) => { const o = []; for (let d = a; d <= b; d++) if (keep(d)) o.push(d); return o; };
+export const FLOW_DAYS = [...span(0, 7), ...span(8, 41, (d) => d % 2 === 0)];
+export const SILO_DAYS = [...span(0, 7), ...span(8, 41, (d) => d % 2 === 1 || [13, 27, 36].includes(d))];
+const WALK_PM_DAYS = span(0, 41, (d) => d !== 26 && d !== 34);
 const CONTROLLER_READ = { type: 'action', id: 'controller.read' }; // ui: controller open >= 2 s (all three tabs on one screen)
 const GATE_DIP = { type: 'event', event: EV.FOOTDIP, match: { where: 'gate' } };
 const HOUSE_DIP = { type: 'event', event: EV.HOUSE_ENTER, match: { dipped: true } };
@@ -121,10 +128,10 @@ export const JOBS = [
     spot: 'heater', signs: ['sign-health', 'sign-brooder'], branch: 'brooding',
     done: { type: 'coverage', frac: 0.5, sight: 2, listen: true, area: 'used', maxCells: 150 } }), // 150 cells = week 1's half of 300
   R('r-drinkers', ROUTINE, 'am', 'Check drinker flow and height', {
-    spot: 'drinkers.0', signs: ['sign-water'], branch: 'water',
+    onDays: FLOW_DAYS, spot: 'drinkers.0', signs: ['sign-water'], branch: 'water',
     done: { type: 'each', id: 'water.flowtest', key: 'line', values: [0, 1, 2, 3] } }),
   R('r-feeders', ROUTINE, 'am', 'Check the feeders and the silo level', {
-    spot: 'feederBox', signs: ['feeder-box', 'silo'], branch: null,
+    onDays: SILO_DAYS, spot: 'feederBox', signs: ['feeder-box', 'silo'], branch: null,
     done: { type: 'all', of: [{ type: 'action', id: 'feed.meter' }, { type: 'action', id: 'feed.silo' }] } }),
   R('r-dead-am', ROUTINE1, 'am', 'Pick up dead birds and count them at the bin', {
     spot: 'dead', signs: ['sign-health'], branch: null, done: { type: 'state', test: 'dead-cleared' } }),
@@ -133,7 +140,7 @@ export const JOBS = [
   R('r-dips-pm', ROUTINE, 'pm', 'Dip your boots at the house door', {
     spot: 'houseDoor', signs: ['sign-gate'], branch: null, done: HOUSE_DIP }),
   R('r-walk-pm', ROUTINE, 'pm', 'Walk the house again', {
-    spot: 'heater', signs: ['sign-health', 'sign-brooder'], branch: 'brooding',
+    onDays: WALK_PM_DAYS, spot: 'heater', signs: ['sign-health', 'sign-brooder'], branch: 'brooding',
     done: { type: 'coverage', frac: 0.35, sight: 2, listen: true, area: 'used', maxCells: 105 } }),
   R('r-controller-pm', [0, 14], 'pm', 'Read the afternoon temperature', {
     spot: 'controller', signs: ['sign-brooder'], branch: 'brooding', done: CONTROLLER_READ }),

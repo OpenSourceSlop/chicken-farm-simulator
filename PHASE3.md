@@ -128,7 +128,7 @@ want them off at night). New this week:
   half the birds pant at 15:00; a listen or the fan panel shows it → *Birds panting in the afternoon* →
   more tunnel fans (all six bring them back). A farmer who runs only minimum ventilation all week sees
   the birds panting every afternoon and eating less; none die of it in week 3 (§6.3).
-- **Days 16 and 19: droppings.** *Check the droppings on ten birds* (bird check, *Look at the vent and
+- **Days 16 and 19: droppings.** *Check the droppings on five birds* (bird check, *Look at the vent and
   droppings*; Feed & Digestion level 1, earned by the end of week 2, adds the droppings guide).
 - **Day 17: the pad overflows.** The pad's float valve sticks; a strip of litter at the pad end goes wet
   → *Wet litter at the pad end: find what wets it* → *Free the float valve* at the pad pump → *Put fresh
@@ -224,7 +224,7 @@ One calendar for the whole cycle: calendar day N = `env.dayNumber` (HUD "Day N")
 | --- | --- | --- | --- | --- | --- |
 | 1 | `plan` | Level 1 – Plan the farm | −2 07:00 → plan page signed · −2 | cool | every term of the contract met by the company's reply (§6.11) |
 | 2 | `level1` | Level 2 – The brooding week | −1 07:00 → day 7 signed (PHASE2.md) · −1 | cool | day 7 ≥ 4.0 × chick weight, deaths + culls ≤ 2 % |
-| 3 | `week2` | Level 3 – Week 2 | 8 06:00 → day 14 signed · 8 | cool, rainy spell days 9–10 | day 14 weighed mean ≥ 90 % of 480 g; level deaths + culls ≤ 1.0 % |
+| 3 | `week2` | Level 3 – Week 2 | 8 06:00 → day 14 signed · 8 | cool, rainy spell days 9–10 | day 14 weighed mean ≥ 95 % of 480 g (review: a week with no care weighs about 91 %); level deaths + culls ≤ 1.0 % |
 | 4 | `week3` | Level 4 – Week 3 | 15 06:00 → day 21 signed · 15 | normal, warm afternoon day 16 | day 21 ≥ 90 % of 950 g; ≤ 1.0 % |
 | 5 | `weeks45` | Level 5 – Weeks 4 and 5 | 22 06:00 → day 35 signed · 22, 29 | normal, dry spell 23–24, hot day 25, heat wave 30–32, humid day 33 | day 35 ≥ 90 % of 2,200 g; ≤ 2.0 % |
 | 6 | `finish` | Level 6 – Finishing and harvest | 36 06:00 → day 42 harvest record signed · 36 | normal, hot day 38 | harvest live weight ≥ 90 % of `weightAt(age at catch)` × 0.98 (`HARVEST.shrink`); level deaths + culls + DOA ≤ 1.5 % |
@@ -338,9 +338,9 @@ no birds yet"; clean-out "Clean-out day 2"; resting "Rest day 9 · chicks booked
 ### 3.3 Daily routine by age (PHASE2.md §4.3 table, every day)
 | Round | Days 0–7 (Phase 2) | Days 8–14 | Days 15–41 |
 | --- | --- | --- | --- |
-| Morning | dips · controller · meter · walk (brood floor 50 % = 150 cells + listen) · drinkers (flow test 4 lines) · feeders (meter + silo) · dead birds | same; the walk covers 50 % of the **used** floor, at most 150 cells; *Step up the minimum ventilation* on days 8, 10, 12, 14 | same; *Step up the minimum ventilation* on days 16, 18, 20 |
-| Afternoon | house dip · walk 35 % (105 cells) · controller · litter (3 squeezes) · dead birds | same (walk on the used floor, at most 105 cells); *Raise the lines* on days 8, 11, 14 | house dip · walk · **fans** instead of the controller (the fan panel read, `r-fans-pm`) · litter · dead birds; *Raise the lines* on days 17, 20, 24, 28, 32 |
-| Evening | record | record | **night ventilation** (18–22: fan panel or controller read, `r-vent-night`) · record |
+| Morning | dips · controller · meter · walk (brood floor 50 % = 150 cells + listen) · drinkers (flow test 4 lines) · feeders (meter + silo) · dead birds | same; the walk covers 50 % of the **used** floor, at most 150 cells; *Step up the minimum ventilation* on days 8, 10, 12, 14; the flow tests on even days, the silo gauge on odd days and the order days 13, 27, 36 (the feed meter alone, `r-feedmeter`, on the others; review pacing) | same; *Step up the minimum ventilation* on days 16, 18, 20 |
+| Afternoon | house dip · walk 35 % (105 cells) · controller · litter (3 squeezes) · dead birds | same (walk on the used floor, at most 105 cells); *Raise the lines* on days 8, 11, 14 | house dip · walk (not on the quiet days 26 and 34) · **fans** instead of the controller (the fan panel read, `r-fans-pm`) · litter · dead birds; *Raise the lines* on days 17, 20, 24, 28, 32 |
+| Evening | record | record | **night ventilation** (18–22: the controller by the door, or the fan panel, `r-vent-night`) · record |
 About 13 routine jobs a day as in week 1, plus one or two of the level's own. Day 42 has only the catch
 and harvest jobs; the routine ends with day 41. The clean-out days have their own jobs and a record each
 day 43–46.
@@ -375,9 +375,9 @@ engine only makes days −1..7).
 ### 4.3 Level 3 — Week 2 (days 8–14)
 | Job | When | Where | Done when | Sim | Facts | Branch |
 | --- | --- | --- | --- | --- | --- | --- |
-| `w2-lights` *Set the light program for the growing birds* | d8 am | controller | `light.program` | dark hours, lux → SDS, legs (§6.5) | controller-lights, sign-light | lighting |
+| `w2-lights` *Set the light program for the growing birds* | d8 am | controller | all: any `light.program` / `light.preset`, state `dark-period` (≥ 4 h dark, the light sign) | dark hours, lux → SDS, legs (§6.5) | controller-lights, sign-light | lighting |
 | `w2-lux` *Measure the light at bird level* | d8 am | signLight | `count light.lux` n 3, 3 sectors (L key) | reading | sign-light | lighting |
-| `r-minvent` *Step up the minimum ventilation for the birds' weight* | days 8, 10 … 20 am | controller | `vent.timer` | air, humidity (§6.4) | sign-vent | moisture |
+| `r-minvent` *Step up the minimum ventilation for the birds' weight* | days 8, 10 … 20 am | controller | `vent.timer` with `result.stepUp` (at least the air of the setting before) | air, humidity (§6.4) | sign-vent | moisture |
 | `w2-ready` *Get the rest of the house ready for the birds* | d9 13:00–18:00 | litterHeap | state `house-ready` | litter cover | sign-curtain, sign-litter | brooding |
 | `w2-curtain` *Lift the brooding curtain and let the birds spread* (pin) | d9 13:00 → d11 18:00 | curtainWinch | `house.curtain { open: true }` | floor in use → house (§6.2) | sign-curtain | brooding |
 | `w2-spread` *Walk the whole house and look at the spread* | rel `curtain` +0.5 … +6 h | curtainWinch | `coverage` area house 25 % (144 cells) + listen | look notes | sign-curtain, sign-health | brooding |
@@ -388,15 +388,15 @@ engine only makes days −1..7).
 | `w2-weigh` *Weigh sample birds* (pin) | d14 08–18 | birdScale | `count sample.weigh` n 50, 5 house sectors | weighed mean (key target) | bird-scale | growth |
 | `p-damp` *The air in the house feels damp* | problem `rainy-spell` | controller | all: any `vent.timer` / `vent.fans`, state `rh-under` | humidity, litter | sign-vent, sign-air | moisture |
 | `p-lame` *Birds that cannot walk well* | problem `lame-birds` | lame (nearest lame bird) | state `lame-cleared` | culls | sign-legs | biosecurity |
-| `p-sds` *Big birds found dead on their backs* | problem `sudden-deaths` | controller | `controller.read` | — | sign-light, controller-lights | lighting |
+| `p-sds` *Big birds found dead on their backs* | problem `sudden-deaths` | controller | all: `controller.read`, state `dark-period`; the farm fixes the problem only with a dark block of ≥ 4 h | — | sign-light, controller-lights | lighting |
 
 ### 4.4 Level 4 — Week 3 (days 15–21)
 | Job | When | Where | Done when | Sim | Facts | Branch |
 | --- | --- | --- | --- | --- | --- | --- |
 | `r-fans-pm` *Check the fans and the house in the afternoon heat* | days 15–41 pm | fanPanel | ui `fans.read` (the walk is `r-walk-pm`'s) | — | sign-heat, fan-panel | ventilation |
-| `r-vent-night` *Set the ventilation for the night* | days 15–41 18–22 | fanPanel | any: ui `fans.read`, ui `controller.read` | — | sign-heat, sign-vent | moisture |
+| `r-vent-night` *Set the ventilation for the night* | days 15–41 18–22 | controller (by the door; its tunnel fan keys) | any: ui `fans.read`, ui `controller.read` | — | sign-heat, sign-vent | moisture |
 | `w3-change` *Change the feed lines to grower pellets* (pin) | d15 06:00 → d16 18:00 | silo | state `pans-grower` | feed form, digestion (§6.6) | sign-feed, silo, feeder-box | feed |
-| `w3-droppings` *Check the droppings on ten birds* | d16, d19 08–18 | birdScale | `count sample.bird { look: 'droppings' }` n 10, 3 house sectors | droppings readings | sign-droppings, bird-check | feed |
+| `w3-droppings` *Check the droppings on five birds* | d16, d19 08–18 | birdScale | `count sample.bird { look: 'droppings' }` n 5, 3 house sectors | droppings readings | sign-droppings, bird-check | feed |
 | `w3-topup` *Fork over caked litter and top it up under the drinker lines* | d18 08–18 | litterHeap | `count litter.patch` n 4, 4 within 1 m of a drinker line | moisture, caking | sign-litter, sign-droppings | moisture |
 | `w3-weigh` *Weigh sample birds* (pin) | d21 08–18 | birdScale | 50 birds, 5 house sectors | key target | bird-scale | growth |
 | `p-pad-wet` *Wet litter at the pad end: find what wets it* | problem `pad-overflow` | padPump | `pad.fixFloat` → `{ fixed: true }` | wet strip stops growing | pad-pump, sign-litter | moisture |
@@ -767,8 +767,10 @@ climate and growth references of §6.1, §6.3, §6.4 on the env alone; `test-cyc
 - **Withdrawal** `feed.withdraw { on }`: the lines stop; the birds empty the pans in about an hour; the
   pans winch up once empty (≤ 5 %). W = catch time − pans empty (the sign's "pans empty 8–12 hours
   before"; the ideal stops the lines at catch − 11 h, W ≈ 10 h). Shrink `1 − 0.0025 · clamp(W − 2, 0, 10)
-  − 0.003 · max(0, W − 12)` (W 10 h → 0.98, the sign's 2 %); `harvest.gutFull` if W < 6 h (the plant's
-  note); DOA + 0.05 % per hour over 12 h (model).
+  − 0.003 · max(0, W − 12)` (W 10 h → 0.98, the sign's 2 %); `harvest.gutFull` if W < 6 h: the plant deducts
+  the gut fill, 3 % of the weighed kg, from each ticket (`HARVEST_MODEL.gutDeduct`, model; `gutKg` on the
+  ticket and the harvest page), so the paid kg, FCR and EPEF come out worse than with an 8–12 h withdrawal
+  (review); DOA + 0.05 % per hour over 12 h (model).
 - Heat-wave feeders up 11:00–16:00 (lines stopped, pans up): intake that day −3 %, heat × 0.85 (model).
 - Feed left at catching = silos + pans (record; the sign's "less than one day's feed, about 1.2 t").
 
@@ -867,7 +869,11 @@ losses figure: `{ chicksPerWeek = houses · birdsPerHouse · 7 / cycleDays, sale
 cycleDays − 42 − 4, houseM2 }` (the planning calculator, `losses-as-planned`). `planOutcome(plan, houseM2)`
 → the company's reply: the same sums with `lossesCountedPct = max(his losses, PLAN_CONTRACT.lossesMinPct
 4)`, and four terms `[{ key, value, limit, met }]`: birds for sale a week ≥ 3,600 · density ≤ 32 kg/m² ·
-rest days ≥ 21 · chicks a house ≤ 6,000; `pass` = all four. `PLAN_CONTRACT` (config, general): the letter's
+rest days ≥ 21 · chicks a house ≤ 6,000; `pass` = all four. Review: the sale term also has an upper end, at
+most `PLAN_CONTRACT.saleMaxPct` 110 % of the contract (3,960 a week: "the plant takes at most 10 % more", on the
+letter, the plan sheet and the plan-sheet plate, general), so the most houses the sheet allows is no plan (12 ×
+6,000 every 100 days → 4,838: "the company buys 3,600 a week and the plant takes at most 3,960: your plan
+gives 4,838"). `PLAN_CONTRACT` (config, general): the letter's
 terms, 2.8 kg sale weight, 42 growing and about 4 clean-out days, houses 1–12, chicks per house
 1,000–9,000, cycle 49–100 days, send by 16:00. houseM2 = his measured floor (48.0 × 12.0 = 576), else the
 company's drawings (600, the standard 50 × 12 m house): measuring changes the density he sees (28.0 against
@@ -933,7 +939,7 @@ outside is ≥ 10 °C over it, off over 90 % house RH); it never uses the stage 
 | `fansNoPad` | fans, never the pad | day 30 15:00 house 38–40.5 °C; heat-wave heat deaths ≥ 2 %; weeks 4–5 fails on day 30–31 |
 | `padInHumid` | pads on all day 33 | felt at 15:00 day 33 1.5–3.5 °C over the ideal; heat deaths that day 0.15–1 % |
 | `fanUnfixed` | fan 4 never fixed | air speed with six fans switched on 2.0–2.2 m/s; heat-wave panting hours ≥ 2 × ideal |
-| `noWithdrawal` | feed on until the catch | gut-full note; live weight ≥ ideal + 1 % |
+| `noWithdrawal` | feed on until the catch | gut-full; FCR ≥ the ideal's; paid kg ≥ 1 kg and EPEF ≥ 1 point under the ideal (the plant's deduction) |
 | `longWithdrawal` | feed off 24 h before | live weight 3.5–6 % under ideal; DOA ≥ 2 × ideal |
 | `brightCatch` | lights 1.0 during the catch | DOA ≥ 1.4 × ideal |
 | `wetDisinfect` | sprayed an hour after washing | 3–7 positive (`CYCLE_TARGETS`; §6.10 allows 3–9 for other seeds); clean-out not passed without the re-wash |
@@ -968,6 +974,15 @@ costs 0.4 % of the day-21 weight, the same on seeds 1, 2 and 7. The bands are no
 RH ≥ +2.5 points, litter ≥ +2, NH3 ≥ +1.5 ppm, day 21 ≥ 0.2 % under); a stronger response to too little air
 (wet litter, ammonia, intake) is Phase 4 tuning. `minVentW3` heat deaths ≤ 0.07 % (3 birds of 5,950 measured
 against a limit of 2.97).
+
+**Phase 3 review round (fixer):** the plant's gut-fill deduction `HARVEST_MODEL.gutDeduct` 0.03 of the weighed kg
+when W < 6 h (`noWithdrawal` paid more than the ideal before); `FLOCK.starveLossPerDay` 0.02 (birds with no feed in
+reach lose weight before they starve; not during the withdrawal or the heat-wave lift); week 2's `target.minShare`
+0.95 (no input weighed 91 % and passed); `PLAN_CONTRACT.saleMaxPct` 110; `heatHandled` never by the pad under 21
+days and never with the mean felt comfort under −1.5 °C (the ideal, six fans without the pad on day 16, still earns
+w3-heat). New `CYCLE_TARGETS`: `noCare` (week 2 not passed), `padWeek3` (w3-heat not earned, the warm afternoon not
+fixed by air, ≥ 1 cold death on day 16 afternoon); `noWithdrawal` now FCR ≥ the ideal's, paid kg and EPEF under it.
+Every other band is unchanged and holds.
 
 ## 7. Problem events of the new levels
 
