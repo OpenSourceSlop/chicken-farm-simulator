@@ -28,6 +28,16 @@ export const unitIco = (detail = 0) => cached(`ico${detail}`, () => new THREE.Ic
 export const unitSphere = (w = 8, h = 6) => cached(`sph${w}x${h}`, () => new THREE.SphereGeometry(1, w, h));
 
 // Seeded random numbers (mulberry32)
+/** Phase 5 (PHASE5.md §6.4 (d), the look pass): a painted face (a sign, a board, a screen) a few millimetres in front of its
+ *  backing plate wins the depth test at every zoom (45 m away the depth buffer's step nears 2 mm). GL state only: no shader
+ *  program changes. Returns the material. */
+export function decal(material) {
+  material.polygonOffset = true;
+  material.polygonOffsetFactor = -1;
+  material.polygonOffsetUnits = -2;
+  return material;
+}
+
 export function rng(seed = 1) {
   let a = seed >>> 0;
   const f = () => {

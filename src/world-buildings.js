@@ -2,7 +2,7 @@
 // feed silos with the auger to the house, and a spirit house by the office. Owner: world agent.
 import * as THREE from 'three';
 import { COLORS, FARM } from './config.js';
-import { GeoBuilder, unitCone, unitCyl, unitSphere, patchOcclusion } from './world-util.js';
+import { GeoBuilder, unitCone, unitCyl, unitSphere, patchOcclusion, decal } from './world-util.js';
 
 // Phase 4: the generator shed's roof dissolves (screen-door dither, as the house roof) while the farmer works at
 // the generator in the rainy season, so its control panel and transfer switch on the back wall are in view. The
@@ -117,7 +117,7 @@ function office(flat, metal, glass, colliders, signTex, group) {
   const sw = 1.9, sh = 0.5, sz = z1 + 0.5, sy0 = 2.27, scx = doorX + 0.35;
   flat.boxMM(scx - sw / 2 - 0.05, scx + sw / 2 + 0.05, sy0 - 0.05, sy0 + sh + 0.05, sz - 0.05, sz, 0x1d3a58);
   for (const ox of [-sw / 2 + 0.15, sw / 2 - 0.15]) flat.boxMM(scx + ox - 0.02, scx + ox + 0.02, sy0 + sh, 2.86, sz - 0.04, sz - 0.01, 0x55595c);
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), new THREE.MeshLambertMaterial({ map: signTex.office }));
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), decal(new THREE.MeshLambertMaterial({ map: signTex.office })));
   sign.position.set(scx, sy0 + sh / 2, sz + 0.005);
   sign.name = 'office-sign';
   group.add(sign);

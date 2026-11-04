@@ -11,6 +11,7 @@ import { BOARDS_CYCLE, boardsForDay } from './content-signs-cycle.js';
 import { BOARDS_COND } from './content-signs-cond.js';
 import { pictogram3 } from './props-pictos.js';
 import { Batch, canvasTexture, roundRect, FONT, instancedParts } from './props-kit.js';
+import { decal } from './world-util.js';
 
 const { zMin } = HOUSE_BOUNDS;
 const FACE_Z = zMin + 0.12;              // front of the north-wall columns (as house-fittings.js)
@@ -222,7 +223,7 @@ function boardFaces(stat, spots, data, name, cols = 2) {
     pg.applyMatrix4(M);
     geos.push(pg);
   });
-  const faces = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ map: atlas }));
+  const faces = new THREE.Mesh(mergeGeometries(geos), decal(new THREE.MeshLambertMaterial({ map: atlas })));
   faces.name = name;
   faces.receiveShadow = true;
   function repaint(d) {
