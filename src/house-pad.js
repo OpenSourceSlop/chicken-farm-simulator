@@ -130,6 +130,7 @@ export function buildPad(kit) {
     dry: dry6,
     uniforms: padU, material: padMat,
     get wet() { return wet; },
+    get sheenOn() { return sheen.visible; },   // test hook: the water sheet runs (Phase 4: stops in a power cut)
     overflow: over,
     update(dt, env) {
       // Phase 4: in a power cut the pump stops: the water sheet stops at once, the pad drains and lightens

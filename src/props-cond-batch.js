@@ -67,7 +67,7 @@ export function buildBadBatch(group, props) {
   const cb = new Batch();
   openBox(cb, () => {});
   const cullBox = cb.mesh(vc, { cast: true });
-  const CX = T.x - 1.0, CZ = T.z + 0.1;
+  const CX = T.x + 1.1, CZ = T.z + 0.15;   // east of the table (the stacks stand west of it, the dead bin north-east)
   cullBox.position.set(CX, 0.02, CZ);
   cullBox.name = 'props-cull-box';
   const lc = new Batch();

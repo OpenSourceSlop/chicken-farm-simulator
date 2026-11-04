@@ -114,7 +114,7 @@ export function buildGenerator(group, parts, lit, scene) {
         const a = age[i] / LIFE;
         if (a >= 1) { age[i] = -1; puffs.setMatrixAt(i, zero); continue; }
         const s = (0.12 + 0.5 * a) * (a > 0.75 ? (1 - a) / 0.25 : 1);
-        p.set(STACK.x + a * 1.1 + (seed[i] - 0.5) * 0.2, STACK.y + a * 2.2, STACK.z + (seed[i] - 0.5) * 0.3);
+        p.set(STACK.x + a * 1.2 + (seed[i] - 0.5) * 0.2, STACK.y + a * 1.4, STACK.z + (seed[i] - 0.5) * 0.3);
         puffs.setMatrixAt(i, M.compose(p, q, sc.set(s, s * 0.85, s)));
         n++;
       }

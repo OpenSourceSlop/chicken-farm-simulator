@@ -16,6 +16,9 @@ const T = FARM.waterTank;
 const TANK = { r: 1.45, y0: 7.3, y1: 9.8 };
 export const GAUGE = { x: T.x + 0.3, z: T.z + TANK.r + 0.04, y0: 7.5, y1: 9.6, w: 0.36 };
 export const PUMP = { x: T.x + 0.95, z: T.z + 0.4, y: 0.12 };
+// the float gauge's board on the tower's south-east leg (the same level and marker as the strip on the tank, at
+// eye height where the farmer reads the pump: a float in the tank on a cable over the board)
+export const BOARD = { x: T.x + 1.51, z: T.z + 1.51 + 0.11, y0: 0.75, y1: 2.05, w: 0.24 };
 const DIAL = { r: 0.13, bar: { x: PUMP.x - 0.08, y: 0.86 }, amp: { x: PUMP.x + 0.55, y: 0.9 } };
 const SWEEP = (Math.PI * 3) / 2;                   // 270 degrees of scale
 
@@ -74,6 +77,11 @@ export function buildWaterTank(group, parts, lit) {
   b.box(0.05, 0.9, 0.05, DIAL.amp.x, 0.45, P.z - 0.02, 0x6d757c);
   b.box(0.34, 0.36, 0.14, DIAL.amp.x, DIAL.amp.y, P.z + 0.03, 0xa7aeb3);
   b.rod([DIAL.amp.x - 0.1, DIAL.amp.y - 0.18, P.z + 0.03], [P.x + 0.3, P.y + 0.36, P.z], 0.016, 0x2b2e31, 5);
+  // the float gauge board: its frame on the leg, the cable up to the tank
+  const B = BOARD, bh = B.y1 - B.y0;
+  b.box(B.w + 0.05, bh + 0.05, 0.03, B.x, (B.y0 + B.y1) / 2, B.z - 0.025, 0x2f5d8a);
+  for (const y of [B.y0 + 0.15, B.y1 - 0.15]) b.box(0.05, 0.04, 0.12, B.x, y, B.z - 0.08, 0x8f989f);
+  b.rod([B.x - 0.08, B.y1 + 0.02, B.z - 0.01], [T.x + 1.25, TANK.y0 + 0.05, T.z + 1.3], 0.006, 0x2b2e31, 4);
   const fixed = b.mesh(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), { cast: true, receive: true });
   fixed.name = 'props-water-tank-parts';
   // faces: the gauge board (canvas) and the two dials (one canvas)
@@ -87,11 +95,15 @@ export function buildWaterTank(group, parts, lit) {
   const ua = amp.geometry.attributes.uv;
   for (let k = 0; k < ua.count; k++) ua.setX(k, 0.5 + ua.getX(k) * 0.5);
   amp.position.set(DIAL.amp.x, DIAL.amp.y, P.z + 0.102);
-  root.add(fixed, face, dials, amp);
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(B.w, bh), face.material);
+  board.position.set(B.x, (B.y0 + B.y1) / 2, B.z - 0.008);
+  root.add(fixed, face, dials, amp, board);
   root.visible = false;
   group.add(root);
 
   const fill = parts.slot(), marker = parts.slot(), needle = parts.slot(), ampNeedle = parts.slot(), box = parts.slot(), boxLid = parts.slot();
+  const bFill = parts.slot(), bMarker = parts.slot();
+  const bY0 = B.y0 + bh * (30 / 768), bH = bh * (708 / 768);
   const runLamp = lit.slot();
   const st = { levelPct: NaN, lowPct: NaN, bar: 0, amps: 0, fixing: false };
   let t = 0;
@@ -109,7 +121,7 @@ export function buildWaterTank(group, parts, lit) {
     hide() {
       if (!root.visible) return;
       root.visible = false;
-      for (const s of [fill, marker, needle, ampNeedle, box, boxLid]) parts.hide(s);
+      for (const s of [fill, marker, needle, ampNeedle, box, boxLid, bFill, bMarker]) parts.hide(s);
       lit.hide(runLamp);
     },
     update(dt, f) {
@@ -123,6 +135,9 @@ export function buildWaterTank(group, parts, lit) {
       parts.set(fill, tubeX, tubeY0 + h / 2, G.z - 0.004, G.w * (24 / 128) - 0.006, h, 0.01, 0x2f7fc4);
       const my = tubeY0 + (tubeH * low) / 100;
       parts.set(marker, tubeX, my, G.z + 0.003, 0.12, 0.026, 0.02, 0xef6a1a);   // the low marker across the tube
+      const bh2 = Math.max(0.003, (bH * lvl) / 100);
+      parts.set(bFill, B.x, bY0 + bh2 / 2, B.z - 0.002, B.w * (24 / 128) - 0.004, bh2, 0.008, 0x2f7fc4);
+      parts.set(bMarker, B.x, bY0 + (bH * low) / 100, B.z + 0.004, 0.085, 0.02, 0.016, 0xef6a1a);
       // the gauges: the farm's readings (water.tank), a little flutter while the pump runs
       const share = Math.max(0, Math.min(1, Number.isFinite(W.pumpShare) ? W.pumpShare : 1));
       const run = !W.fixing;

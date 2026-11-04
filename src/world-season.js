@@ -16,7 +16,7 @@ function shift(season, r, g, b, out, k0 = 0.85) {
   const lum = 0.3 * r + 0.59 * g + 0.11 * b;
   let tr, tg, tb;
   if (season === 'hot') { tr = lum * 1.32; tg = lum * 1.04; tb = lum * 0.52; }  // dry, browner khaki
-  else { tr = r * 0.72; tg = g * 0.98; tb = b * 0.7; }                         // rainy: deeper, lusher green
+  else { tr = r * 0.55; tg = g * 0.9; tb = b * 0.6; }                          // rainy: deeper, lusher green
   out[0] = r + (tr - r) * k; out[1] = g + (tg - g) * k; out[2] = b + (tb - b) * k;
 }
 

@@ -307,7 +307,9 @@ export function buildBoards(stat) {
     interactables,
     tabSpots,
     /** Phase 4: what each 3D face shows now ({ title, lines, foot, total } by board id) and the repaint count. */
-    faces: { get painted() { return { ...p2.painted, ...p3.painted, ...p4.painted }; }, get repaints() { return repaints; }, power },
+    faces: { get painted() { return { ...p2.painted, ...p3.painted, ...p4.painted }; }, get repaints() { return repaints; }, power,
+      /** the atlas canvases (the harness compares their pixels: a normal run's faces are Phase 3's exactly) */
+      canvases: () => [p2.faces.material.map.image, p3.faces.material.map.image, p4.faces.material.map.image] },
     /** Show the facts tab on these ids (unknown ids are ignored). */
     setTabs(ids) {
       shown = ids.filter((id) => tabSpots.has(id)).slice(0, MAX_TABS);

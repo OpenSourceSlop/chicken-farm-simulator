@@ -156,10 +156,15 @@ export function buildFittings(kit) {
   group.add(probeCables);
 
   let lcdTimer = 0, lcdText = '', lampK = 0, bulbK = 0, lastProbeY = NaN, blink = 0;
+  let darkNow = false;
   return {
     alarm,
+    /** test hooks: the house lamps' strength now (0 = off) and whether the house is dark (no power) */
+    get lamp() { return lampK; },
+    get dark() { return darkNow; },
     update(dt, env, view) {
       const dark = powerOff(kit.farm, env);
+      darkNow = dark;
       // LCD: redraw only when what it shows changes (at most 4 times a second); at once when the power goes
       lcdTimer -= dt;
       if (lcdTimer <= 0 || dark !== (lcdText === 'dark')) {

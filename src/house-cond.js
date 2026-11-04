@@ -11,9 +11,9 @@ import { T } from './house-shell.js';
 import { condOf, problemOn } from './world-cond.js';
 
 const { xMin, xMax, zMax } = HOUSE_BOUNDS;
-const INLET = { w: 0.9, h: 0.22, y: 2.36 };         // the inlet opening, under the eave
-const FLAP = { w: 1.04, h: 0.34, hinge: 2.53 };     // the plate, hinged at its top edge
-const OPEN = -1.15;                                  // open: swung out about 66 degrees (a hood over the inlet)
+const INLET = { w: 0.9, h: 0.22, y: 2.03 };         // the inlet opening at the top of the curtain band (under
+const FLAP = { w: 1.04, h: 0.34, hinge: 2.2 };      // the eave's shadow line: in view from the yard); the plate, hinged at its top edge
+const OPEN = -0.8;                                   // open: swung out about 46 degrees (a hood over the inlet)
 const PIPE_Y = 0.085;                                // drinker pipe centre above the nipple tip (house-drinkers.js)
 const RUST_LINE = 3;                                 // line 4 (PHASE4.md §4.4 iron-nipples, config line 3)
 
@@ -61,9 +61,10 @@ export function buildCondHouse(kit, southWall, lineHeights) {
 
   // ---- rust stains on line 4: a brown blob on each nipple and a streak on the pipe under it ----
   const rb = new Batch();
-  rb.add(new THREE.IcosahedronGeometry(0.013, 0), 0x8a4a22, mat(0, 0.03, 0, 0, 0, 0, 1, 1.4, 1));
-  rb.box(0.05, 0.006, 0.045, 0, PIPE_Y - 0.021, 0, 0x7a3c1a);
-  rb.box(0.012, 0.03, 0.006, 0.01, PIPE_Y - 0.035, 0.021, 0x93512a);
+  rb.add(new THREE.IcosahedronGeometry(0.017, 0), 0x8a4a22, mat(0, 0.03, 0, 0, 0, 0, 1, 1.4, 1));
+  rb.box(0.09, 0.008, 0.05, 0, PIPE_Y - 0.02, 0, 0x7a3c1a);                                    // stain under the pipe
+  rb.box(0.012, 0.04, 0.008, 0.01, PIPE_Y - 0.04, 0.021, 0x93512a);                            // a rusty drip
+  rb.add(new THREE.CylinderGeometry(0.025, 0.017, 0.012, 7), 0x7f4320, mat(0, -0.012, 0.04));   // the drip cup rust-brown
   const rustMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const rust = new THREE.InstancedMesh(rb.geometry(), rustMat, NIPPLE_X.length);
   rust.name = 'house-rust-line4';
@@ -91,7 +92,7 @@ export function buildCondHouse(kit, southWall, lineHeights) {
       rust.visible = on;
       if (on) {
         const y = Number.isFinite(lineHeights[RUST_LINE]) ? lineHeights[RUST_LINE] : 0.2;
-        if (Math.abs(y - rustY) > 1e-4) {
+        if (!(Math.abs(y - rustY) <= 1e-4)) {
           rustY = y;
           NIPPLE_X.forEach((x, i) => rust.setMatrixAt(i, M.makeTranslation(x, y, rz)));
           rust.instanceMatrix.needsUpdate = true;
