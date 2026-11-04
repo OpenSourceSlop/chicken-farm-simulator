@@ -16,6 +16,7 @@
 // browser cannot import a script) at its stops, base controls only (no vent.stages).
 import { EQUIP, LIGHT_PRESETS, HARVEST, CLEAN, WEATHER, LEVEL1, PLAN_LEVEL, levelOfDay, feedStdGAt, flowTargetAt, nippleHeightCmAt, feederRimCmAt, targetTempAt, PLACEMENT_DAY, feedTypeForDay, HEAT, HEAT_P4 } from './config.js';
 import { signTimer } from './farm-profiles.js';
+import { condProfile, condStops, applyCondRound, condAm, condAnswer, condFanPlan } from './farm-profiles-cond.js';
 import { feedLeftKg } from './farm-silos.js';
 
 /** Profile names (keys of CYCLE_TARGETS in scripts/test-cycle.mjs). */
@@ -60,7 +61,14 @@ const MODS = {
   eveningFans3: { eveningFans3: true },
   padYoung1: { padYoung1: true },
 };
-export const cycleProfileOf = (name) => (typeof name === 'object' && name ? name : { ...IDEAL, ...(MODS[name] || {}), name: name || 'ideal' });
+/** A profile by name (Phase 4: with a condition — a condition profile name such as 'hot:ideal', or the farm's condition
+ *  for a plain name — the condition's ideal additions and its mistake's fields, farm-profiles-cond.js). */
+export function cycleProfileOf(name, { condition = null } = {}) {
+  if (typeof name === 'object' && name) return name;
+  const base = { ...IDEAL, ...(MODS[name] || {}), name: name || 'ideal' }, c = condProfile(name, condition);
+  if (!c) return base;
+  return { ...base, ...c, ...(c.catch ? { catch: c.catch } : {}), ...(name === 'hotNoPad' ? { pads: 'never' } : {}) };
+}
 
 // ---- the fan plan (scripts/cycle-refs.mjs idealFans / idealPad, the contract's ideal) ----
 export const IDEAL_STOPS = [6.25, 9, 11, 13.25, 15.5, 18.5, 21];
@@ -112,12 +120,9 @@ export function cycleStops(fromDay, toDay, condition = null) {
     if (d >= 49 && d <= 60) add(d, 7, 'lab');
     if (d <= 46) add(d, 20, 'sign');
   }
-  if (condition && COND_STOPS) out.push(...COND_STOPS(Math.max(8, fromDay), toDay, condition));
+  if (condition) out.push(...condStops(Math.max(8, fromDay), toDay, condition));
   return out.sort((a, b) => a.d + a.h / 24 - (b.d + b.h / 24));
 }
-// a condition's own stops (farm-profiles-cond.js registers them: no import cycle)
-let COND_STOPS = null;
-export const setCondStops = (fn) => { COND_STOPS = fn; };
 
 /** The keep-fed rule: stock of today's feed type for 3 days ahead, orders up to 5 days, to the type's end. */
 function keepFed(farm, env, act, day) {
@@ -174,6 +179,7 @@ function fanPlan(farm, env, act, P, day) {
   // holds: the found heat wave has every fan by the plan)
   const wave = P.fixes && isState(farm, 'heat-wave', 'found', 'fixed') && day >= 30 && day <= 32;
   if (P.eveningFans3 && day >= 29 && day <= 41 && (env.hour >= 18 || env.hour < 6) && !wave) { n = 3; pad = false; }
+  if (P.condition) ({ n, pad } = condFanPlan(farm, env, P, day, age, n, pad));   // Phase 4: the condition's plan
   fansTo(act, env, n, pad);
 }
 /** The evening line (config HEAT_P4): big birds, 18:00 to 21:00. */
@@ -191,14 +197,14 @@ const noTunnelOn = (P, day) => (P.minVentW3 && day >= 15 && day <= 21) || (P.noT
 const envView = (env) => ({ outsideTemp: env.outsideTemp, targetTemp: env.targetTemp, outsideRH: env.outsideRH, houseRH: env.houseRH, padOn: env.padOn });
 
 export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
-  const P = cycleProfileOf(profile), done = [];
+  const P = cycleProfileOf(profile, { condition: farm.condition }), done = [];
   const act = (id, args = {}) => { const result = farm.act(id, args); done.push({ id, args, result }); return result; };
   if (farm.mode !== 'level') return done;
   if (P.noCare) return done;
   // the level of the day (a no-op inside a run, which enters each level at its 06:00 start; level.debug.freeRun
   // and other callers that never entered it get the level's problems, weather and the cycle climate here)
   const lv = levelOfDay(day);
-  if (lv && lv !== LEVEL1 && lv !== PLAN_LEVEL && (!farm.cycleLevel || farm.cycleLevel.id !== lv.id) && env.day >= lv.startDay + lv.startHour / 24 - 1e-9) farm.enterLevel(lv);
+  if (lv && lv.id !== LEVEL1.id && lv.id !== PLAN_LEVEL.id && (!farm.cycleLevel || farm.cycleLevel.id !== lv.id) && env.day >= lv.startDay + lv.startHour / 24 - 1e-9) farm.enterLevel(lv);
   farm.profileGrower = P.grower;
   const fl = farm.flock, age = env.day - PLACEMENT_DAY, alive = fl.alive > 0;
   const lines = [0, 1, 2, 3];
@@ -216,7 +222,7 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
         act('water.pressure', { line, cm: Math.min(40, Math.round(((flowTargetAt(day) - 4) / 2) * 2) / 2) });
         act('water.height', { line, cm: Math.round(nippleHeightCmAt(day)) });
       }
-      for (const line of lines) act('water.flowtest', { line });
+      if (!(P.flowSkipDays || []).includes(day)) for (const line of lines) act('water.flowtest', { line });
       act('feed.meter'); act('feed.silo');
       if (!farm.feed.withdrawn) for (const line of [0, 1, 2]) act('feed.line', { line, running: true, flood: false, heightCm: Math.floor(feederRimCmAt(Math.max(0, age))) });
       if (day === 8 && P.light === 'growing') { act('light.program', LIGHT_PRESETS.growing); for (const [x, z] of SPOTS.slice(0, 3)) act('light.lux', { x, z }); }
@@ -238,6 +244,7 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
       listen();
       answerProblems(farm, env, act, P, day);
       fanPlan(farm, env, act, P, day);
+      if (P.condition) condAm(farm, env, act, P, day, signTimer, isState(farm, 'rainy-spell', 'found') || isState(farm, 'damp-spell', 'found'));
       return done;
     }
     case 'check': {
@@ -288,10 +295,11 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
       fanPlan(farm, env, act, P, day);
       // the night: the pads off as the air cools, unless it is still 12 °C or more over the target (the fans carry on),
       // or the evening line holds them (Phase 4: from day 28 while the outside is warm, until 21:00)
-      if (env.padOn && env.outsideTemp - env.targetTemp < 12 && !(P.padInHumid && day === 33) && !(eveningOn(env, age, P) && eveningPad(env, P)) && !P.eveningFans3) fansTo(act, env, env.fansManual, false);
+      if (env.padOn && env.outsideTemp - env.targetTemp < 12 && !(P.padInHumid && day === 33) && !(eveningOn(env, age, P) && eveningPad(env, P)) && !P.eveningFans3
+        && !(P.youngPad && age < 20.7 && env.hour < 20) && !(P.padsAllNight && env.outsideTemp >= HEAT_P4.padEveningAboveC)) fansTo(act, env, env.fansManual, false);
       return done;
     }
-    case 'evening': {
+    case 'evening': case 'hotYoung': case 'hotYoungOff': case 'hotNight': {
       if (!alive) return done;
       fanPlan(farm, env, act, P, day);
       return done;
@@ -354,7 +362,7 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
       if (farm.clean.closedDay != null && farm.clean.bookedDay == null) act('phone.bookChicks', { day: farm.clean.closedDay + P.restDays });
       return done;
     }
-    default: return done;
+    default: if (P.condition) applyCondRound(farm, env, day, round, P, act); return done;
   }
 }
 const SPOT_BAIT = [[-25.2, -6.8], [25.2, -6.8], [25.2, 6.8], [-25.2, 6.8]];
@@ -385,6 +393,7 @@ function answerProblems(farm, env, act, P, day) {
   if (found('abnormal-deaths')) act('phone.report');
   const m = farm.health.medication;
   if (m.on && m.onH >= 72) act('water.medicate', { on: false });
+  if (P.condition) condAnswer(farm, env, act, P);
 }
 
 /** The last feed order (day 36): enough to the withdrawal and no more (sign-feed: under one day's feed left). */

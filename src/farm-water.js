@@ -45,6 +45,7 @@ export function lineFlow(water, i) {
 }
 /** Phase 4 (the hot season): the birds drink x (1 - 0.015 x (line °C - 30)) over 30 °C (water.lineTempC per line). */
 export const lineWaterK = (c) => (c > 30 ? Math.max(0, 1 - 0.015 * (c - 30)) : 1);
+export const LINE_WATER_FROM_AGE = 21;
 
 /** Height factor of a line at flock age `age`. */
 export function heightFactor(heightCm, age) {
@@ -63,7 +64,9 @@ export function updateAccess(water, age) {
     const r = l.flowMlMin / need;
     let a = Math.pow(Math.max(0, Math.min(1, r / WATER.accessFull)), WATER.accessExp) * heightFactor(l.heightCm, age);
     if (age < WATER.wetUntilAge && r > WATER.wetAbove) a *= Math.max(WATER.wetMin, Math.min(1, 1 - WATER.wetPer * (r - WATER.wetAbove)));
-    if (water.lineTempC) a *= lineWaterK(water.lineTempC[i]);
+    // the hot season's warm line water: big birds (from day 21, the flush job's weeks) drink less over 30 °C; chicks and
+    // young birds live in 25-34 °C air by design (sim package, PHASE4.md §2.7)
+    if (water.lineTempC && age >= LINE_WATER_FROM_AGE) a *= lineWaterK(water.lineTempC[i]);
     l.access = a;
     sum += a; if (a > max) max = a;
   }

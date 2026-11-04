@@ -64,8 +64,9 @@ export function cleanPage(records, farm) {
 /** The cycle summary (PHASE3.md §8.5). run = { plan: run.plan, levels: run.state().levels }. */
 export function cycleSummary(records, farm, run = {}) {
   const fl = (farm && farm.flock) || {}, res = farm && farm.harvest && farm.harvest.result, C = farm && farm.clean;
-  const placed = fl.delivered || fl.placed || 0;
-  const dead = (fl.deadTotal || 0) + (fl.culls || 0) + (res ? res.doa : 0);
+  // Phase 4: a bad batch's claimed chicks (the hatchery's) are neither placed nor lost
+  const placed = (fl.delivered || fl.placed || 0) - (fl.claimed || 0);
+  const dead = (fl.deadTotal || 0) + (fl.culls || 0) + (res ? res.doa : 0) - (fl.claimed || 0);
   const p = (run && run.plan) || (farm && farm.plan) || null, dec = p && p.decisions;
   const weighed = (farm && farm.stats && farm.stats.weighed) || [];
   const weights = [7, 14, 21, 28, 35, 40].map((day) => {
