@@ -83,18 +83,20 @@ pacing table measured by `node scripts/skill-progress.mjs --compare 4,9,15 --ass
 ## 1. Player experience walkthrough
 
 ### 1.1 The first flock (the tree fills up; level 1 and 2 arrive)
-The planning day ends with **Farm Planning level 1** (the plan's own points, 6–7): the caption under the HUD reads *"Farm
-Planning 1 · See more: the planning calculator at the office desk. Use it on the planning sheet."* The skill tree's card for
-Farm Planning shows three rows, each with what it gives or saves:
+The planning day ends with **Farm Planning level 1** (the plan's own points, 6–7): the caption under the HUD says what came
+and where to use it, in one short line (§6.3): *"Farm Planning 1: the planning calculator. Work the sums on the planning sheet
+at the office desk."* The skill tree's card for Farm Planning shows three rows, each with what it gives, what it saves and
+where it is:
 
-> **Level 1 · See more** — Planning calculator at the office desk · *works the sums on the planning sheet*
+> **Level 1 · See more** — Planning calculator at the office desk · *works the sums on the planning sheet* · *saves working the
+> sums of the planning sheet by hand* · where: the planning sheet at the office desk
 > **Level 2 · Faster** — Pocket phone · *saves the walk to the office for every order, vet call and booking* · 2 points to go
 > **Level 3 · The equipment does it** — The daily record on the phone; the next plan starts from this cycle · *saves the walk
 > to the office every evening to sign the day's record* · after a finished flock
 
-At the brooding week's end **Water 2** arrives (*"Water 2 · Faster: read all four sight tubes at the water supply. Use it at the
-sight-tube board on the water supply panel. Saves the four one-minute flow tests on flow-test mornings: a cup test only on a
-line that reads off."*) and **Chick Arrival & Brooding 2** (the smaller chick samples, 3 vent chicks and 6 crops, with *Next
+At the brooding week's end **Water 2** arrives (*"Water 2: the sight tubes. Read all four lines at the water supply, south-west
+corner inside."*; the notebook and the tree keep the long words: what it saves, a cup test only on a line that reads off) and
+**Chick Arrival & Brooding 2** (the smaller chick samples, 3 vent chicks and 6 crops, with *Next
 chick* and the 2 m reach: it helps on the next arrival day).
 On day 8 the job card's *Check drinker flow and height* reads *Water 2: read the sight tubes at the water supply*; the strip
 shows each line's water column against the drinker plate's mark for day 8; three lines read at the mark and count as tested;
@@ -740,12 +742,17 @@ one."*
   the heights at the water supply"*; the job's progress bar shows the glance part; with a fault the manual part leads (§5.3).
 
 ### 6.3 The unlock caption (`ui.js`, on EV.SKILL_UNLOCK of a payoff or a view)
-One caption (`caption.show(…, { now: true })`), the notebook line of kind `skill`, and a paper cue: *"Water 2 · Faster: read
-all four sight tubes at the water supply. Use it at the sight-tube board on the water supply panel. Saves the four one-minute
-flow tests on flow-test mornings."* — the step, the name, where (`where`), what it saves (`saves`). A level 3 adds *"You can
-switch it off in Settings → Automation."* The unlocks the finished flock opens (`gate: true`) wait for the next level start and
-show as one caption listing the branches. No caption for `key: null` (a force or a restore) or while `run.standardPlaying`. On
-the result screen the level's new payoffs are listed under its points with the same words.
+One short caption for 6 s (`caption.show(…, { now: true })`, `job-words.js unlockShort`), the notebook line of kind `skill`
+and a paper cue. The caption says what came and **where to use it, with its key** (`UNLOCK_USE`, 140 characters or fewer, so it
+stays a line or two in the gap between the HUD cards): *"Farm Planning 2: a phone in your pocket. Press R anywhere to order
+feed, call the vet or book the crew."* · *"Moisture 2: Fill the timer. One press on the climate controller's Ventilation tab."*
+(Heating 2 the Temperature tab, Lighting 2 the Lights tab) · *"Brooding 1: the floor thermometer view. Press F anywhere in
+the house."* (C and M the same). A level 3 adds *"Switch it off in Settings → Automation."* The notebook line keeps the long
+words (`unlockCaption`: the step, the name, where, what it saves, the views it brings). The caption narrows to the gap between
+the watch card and the job card when it would cross them, and rises above an edge pointer's pill under it (the job's distance,
+the dead birds', a fault's; `ui.js placeCaption`). The unlocks the finished flock opens (`gate: true`) wait for the next level
+start and show as one caption listing the branches. No caption for `key: null` (a force or a restore) or while
+`run.standardPlaying`. On the result screen the level's new payoffs are listed under its points with the same words.
 
 ### 6.4 The guide (`content-guide.js`)
 A short *Skills* section (game words only, no farming fact; test-contracts' guide check): what the three steps do, that level 3
@@ -1003,24 +1010,28 @@ every branch at level 2, every branch at level 3 (faults off). Printed per job a
 The model's no-skill figures must land within 15 % of p3-cycle's measured play times (ARCHITECTURE.md) or the model is tuned
 first. **The jobs package's first `skill-time` run sets the asserted bands** (each measured figure + 5 points), the integrator
 writes them here and the tree's words never promise more than they show. The savings come mostly from: the sight tubes (Water
-2), the fan panel at the far end (Ventilation 2 at the controller, Ventilation 3), the office (Planning 2 and 3, Feed 2), the
-count at the bin (Biosecurity 2), the weighing (Growth 3; Growth 2 a little), the timer and the thermostat presses (Moisture 2,
-Heating 2), and the raise days (Water 3, Feed 3).
+2), the fan panel at the far end (Ventilation 2 at the controller, where the fans are read and set; Ventilation 3), the office
+(Planning 2 and 3, Feed 2), the count at the bin (Biosecurity 2), the weighing (Growth 3; Growth 2's 25 birds from three
+parts), the chick samples (Brooding 2's 3 vent chicks and 6 crops), the timer and the thermostat presses (Moisture 2, Heating
+2), and the raise days (Water 3, Feed 3).
 
-**Measured at the integration** (main, `live` on). The model (`node scripts/skill-time.mjs`, its `--assert` bands in npm test:
-each measured figure + 5 points) and the real input (`scripts/skills-play.json`, the p3-cycle way of counting: the seconds the
-game advanced plus 2 s per click or key):
+**Measured** (main, `live` on; the model's figures as of the final check's fixes: the sample days added, Ventilation 2 reading
+the fans at the controller). The model (`node scripts/skill-time.mjs`, its `--assert` bands in npm test: each measured figure
++ 5 points) and the real input (`scripts/skills-play.json`, the p3-cycle way of counting: the seconds the game advanced plus
+2 s per click or key; measured at the integration):
 
 | Day | No skills (model, vs p3-cycle) | Level 2 (model) | Level 3 (model) | Real input (`skills-play.json`) |
 | --- | --- | --- | --- | --- |
+| 0 (the vent sample) | 4.88 min | 4.10 (84 %) | 3.98 (82 %) | — |
+| 1 (the crops) | 5.14 min | 4.16 (81 %) | 4.04 (79 %) | — |
 | 8 | 4.73 min (+8 % vs 4.4) | 4.04 (85 %) | 3.40 (72 %) | — |
-| 16 | 5.33 min (+13 % vs 4.7) | 4.62 (87 %) | 4.01 (75 %) | **4.69 min with no skill, 3.91 min with every branch at 3 (83 %): 0.78 min a day saved** |
-| 25 | 4.25 min (+4 % vs 4.1) | 4.04 (95 %) | 3.43 (81 %) | — |
-| 37 | 4.38 min (+4 % vs 4.2) | 4.01 (91 %) | 3.43 (78 %) | — |
+| 14 (a weigh day) | 5.94 min | 4.70 (79 %) | 3.42 (58 %) | — |
+| 16 | 5.33 min (+13 % vs 4.7) | 4.36 (82 %) | 4.01 (75 %) | **4.69 min with no skill, 3.91 min with every branch at 3 (83 %): 0.78 min a day saved** |
+| 25 | 4.25 min (+4 % vs 4.1) | 3.78 (89 %) | 3.43 (81 %) | — |
+| 37 | 4.38 min (+4 % vs 4.2) | 3.78 (86 %) | 3.43 (78 %) | — |
 
-**The sample days** (after the final check, the farmer's choice: Growth 2's 25 birds, Brooding 2's 3 vent chicks and 6 crops;
-`skill-time --assert` bands each figure + 5 points): day 0 4.88 min with no skill, 4.10 at level 2 (84 %), 3.98 at level 3
-(82 %); day 1 5.14, 4.16 (81 %), 4.04 (79 %); day 14 (a weigh day) 5.94, 4.70 (79 %), 3.42 (58 %). The jobs alone: the vent
+**The sample days** (the farmer's choice: Growth 2's 25 birds, Brooding 2's 3 vent chicks and 6 crops; rows 0, 1 and 14 above).
+The jobs alone: the vent
 sample 40.6 s → 28.5 s, the crops 71.6 s → 47.0 s, a hand weighing 90.2 s → 50.0 s (10.2 s at level 3, the scale's glance).
 By real input (`skills-weigh.json`): the 25 birds from 3 parts 0.82 min of play against 1.42 min for 50 birds from 5 parts by
 *Weigh all* (58 %).
@@ -1030,8 +1041,9 @@ regulator visited), the tally bucket, the fan stages' glance and the record sign
 panting birds are still a problem job the farmer handles at the fan panel (no problem is moved by equipment), the droppings
 checks and the night ventilation stay his. Single payoffs by real input: the sight tubes 8.0 s and 6 farm minutes against 18.2 s
 and 12.8 farm minutes for four cup tests (skills-water, 56 % less play); *Fill the timer* in one press, 4 s from the door
-(skills-minvent); *Weigh the frame* 1.17 min against *Weigh all* 1.42 min for the weekly 50 birds (skills-weigh, 83 %), 1.19 min
-on day 21 in skills-play; *Order to 3 days* at the silo gauge 37 m from the desk (skills-feed); the crew booked on the phone from
+(skills-minvent); Growth 2's 25 birds from three parts by *Weigh the frame* 0.82 min against *Weigh all* 1.42 min for the
+standard 50 birds from five parts (skills-weigh, 58 %; before the farmer's choice *Weigh the frame* over the 50 birds took 1.17
+min, 83 %); *Order to 3 days* at the silo gauge 37 m from the desk (skills-feed); the crew booked on the phone from
 the house (skills-phone).
 
 ## 15. Work packages (four, disjoint files, parallel worktrees)
@@ -1361,9 +1373,11 @@ req-night 19, req-watch 13, p5-hud 20; phase1-jobs and the Phase 1 tour clean. S
    row's dimmer failing, the controller's clock losing time after a blip)?
 5. **The sight tubes:** one board at the water supply with the four lines' tubes, a cup test only on a line that reads off. Is
    that how your houses are set up (tubes at each regulator, or together at the front)?
-6. **The controllers' timings:** your own setting holds until 06:00 (winches, rims, brooders, your stage table), 18:00 (timer)
-   or 2 hours (fans), then the controller takes over again; the timer runs at 110 % of the sign's table; the fan stage table
-   starts on day 15; the feed controller stops ordering after day 35. Do these match the controllers you know?
+6. **The controllers' timings:** your own setting holds until the next 06:00 (winches and rims per line, brooders, your own
+   stage table), until 18:00 that day (the timer, your own fans or pad; a setting sent after 18:00 until the next 06:00) or
+   until the next change of week (your light program), then the controller takes over again; the timer runs at 110 % of the
+   sign's table; the fan stage table starts on day 15; the feed controller stops ordering after day 35. Do these match the
+   controllers you know?
 7. **The helper on arrival day** (Brooding 3) waits for the sample box and, in a bad batch, takes only graded stacks: realistic
    for a family contract farm, or should it be the driver of the chick truck?
 8. **The tally bucket** holds about 15 kg (6 big birds) and is still emptied after every round. Right for your farms?
