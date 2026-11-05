@@ -19,7 +19,7 @@ import { SKILLS_UPDATE } from './config.js';
 const ROWS = ['weight', 'deaths', 'comfort', 'intake', 'supply', 'equipment'];
 const LABEL = { weight: 'Weight', deaths: 'Deaths', comfort: 'Comfort', intake: 'Intake', supply: 'Supply', equipment: 'Equipment' };
 const SKILL_CSS = `
-.fw-showme { margin-left: 6px; padding: 0 6px; min-height: 0; height: 20px; font: 600 11px/18px var(--font-display); letter-spacing: 0.03em; }
+.fw-showme { float: right; margin: 0 0 3px 8px; padding: 0 6px; min-height: 0; height: 20px; font: 600 11px/18px var(--font-display); letter-spacing: 0.03em; }
 .fw-stand { display: block; color: var(--ink-dim); font-size: 11.5px; }
 `;
 const one = (v) => (Math.round(v * 10) / 10).toFixed(1);
@@ -61,13 +61,14 @@ export function createWatchCard(root, ctx) {
   const stand = h('span', { class: 'fw-stand', hidden: true });
   let fixNow = null;
   showMe.addEventListener('click', (e) => { e.stopPropagation(); if (fixNow) ctx.ui?.showMe?.(fixNow); });
-  rows.comfort.li.querySelector('.fw-v').append(showMe, stand);
+  // (integration) Show me belongs to the warning it opens (a comfort or an equipment warning): at the top of its box
+  rows.comfort.li.querySelector('.fw-v').append(stand);
   // the compact strip (narrow screens, all steady): the four dots and their labels
   const mini = h('button', { class: 'fw-mini', type: 'button', title: 'Open the flock watch', 'aria-label': 'Open the flock watch' },
     ROWS.map((id) => h('span', { class: 'fw-mini-i', 'data-row': id }, h('span', { class: 'fw-dot', role: 'img' }), LABEL[id], h('span', { class: 'fw-mini-w', hidden: true }))));
   const miniDots = [...mini.querySelectorAll('.fw-dot')], miniItems = [...mini.querySelectorAll('.fw-mini-i')], miniWords = [...mini.querySelectorAll('.fw-mini-w')];
   const warnWhere = h('b', { class: 'fw-warn-where' }), warnWhat = h('span');
-  const warn = h('p', { class: 'fw-warn', hidden: true, tabindex: '-1' }, h('span', { class: 'fw-warn-in' }, warnWhere, ' ', warnWhat));
+  const warn = h('p', { class: 'fw-warn', hidden: true, tabindex: '-1' }, showMe, h('span', { class: 'fw-warn-in' }, warnWhere, ' ', warnWhat));
   const more = button({ class: 'fw-more', hidden: true, 'aria-label': 'Show more of the warning' }, 'more below ▾');
   more.addEventListener('click', () => warn.scrollBy({ top: Math.max(24, warn.clientHeight * 0.7), behavior: 'smooth' }));
   const syncMore = () => { const m = warn.scrollHeight - warn.clientHeight > 1 && warn.scrollTop + warn.clientHeight < warn.scrollHeight - 1; if (more.hidden === m) more.hidden = !m; warn.classList.toggle('is-more', m); };

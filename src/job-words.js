@@ -99,7 +99,7 @@ export function viewLine(viewKey, skills) {
   const name = levelName(u.branch, 1), key = v.keyId ? `{key:${v.keyId}}` : null;
   let has = false, pts = 0;
   try { has = !!skills?.unlocked?.(viewKey); pts = skills?.points?.(u.branch) ?? 0; } catch { has = false; }
-  if (has) return key ? `Your ${name} view: ${key} shows ${v.shows}` : `Your ${name} view, at ${v.where}: ${v.shows}`;
+  if (has) return key ? `Your ${name} view: ${key} shows ${v.shows}` : `Your ${name} view, ${/^(the|a|an)\b/i.test(String(v.where)) ? 'at ' : ''}${v.where}: ${v.shows}`;
   const toGo = Math.max(0, skillLevelPoints()[0] - pts);
   return `${name} would show ${v.shows}${key ? ` (${key})` : ''}${toGo > 0 ? ` · ${plural(toGo, 'point')} to go` : ''}`;
 }
@@ -107,6 +107,8 @@ export function viewLine(viewKey, skills) {
 export const viewsOfJob = (jobId) => Object.entries(SKILL_VIEWS).filter(([, v]) => (v.jobs || []).includes(jobId)).map(([k]) => k);
 
 /** The unlock caption of one branch's new level (SKILLS.md §6.3): its payoff (step, name, where, saves) and its views. */
+/** "Use it at the fan panel" / "Use it anywhere in a level" / "Use it inside the house": at only before a named place. */
+const useAt = (w) => (/^(the|a|an)\b/i.test(String(w)) ? `Use it at ${w}` : `Use it ${w}`);
 export function unlockCaption(keys = []) {
   const ks = keys.map((k) => (typeof k === 'string' ? k : k?.key)).filter(Boolean);
   if (!ks.length) return '';
@@ -115,10 +117,10 @@ export function unlockCaption(keys = []) {
     const p = PAYOFFS[pay];
     const also = views.length ? ` Also: ${views.map((v) => `${lower(UNLOCKS[v].name)} (${UNLOCK_SHOWS[v] || ''})`).join('; ')}.` : '';
     const off = p.step === 'auto' ? ' You can switch it off in Settings → Automation.' : '';
-    return `${levelName(p.branch, p.level)} · ${SKILL_STEP_NAMES[p.level - 1]}: ${lower(p.name)}. Use it at ${p.where}. ${p.saves}.${also}${off}`;
+    return `${levelName(p.branch, p.level)} · ${SKILL_STEP_NAMES[p.level - 1]}: ${lower(p.name)}. ${useAt(p.where)}. ${p.saves}.${also}${off}`;
   }
   const v = views[0], u = UNLOCKS[v], lvl = unlockLevel(u);
-  const where = SKILL_VIEWS[v]?.where ? ` Use it at ${SKILL_VIEWS[v].where}.` : '';
+  const where = SKILL_VIEWS[v]?.where ? ` ${useAt(SKILL_VIEWS[v].where)}.` : '';
   const shows = UNLOCK_SHOWS[v] ? ` (${UNLOCK_SHOWS[v]})` : '';
   return `${levelName(u.branch, lvl)} · ${SKILL_STEP_NAMES[Math.max(0, lvl - 1)]}: ${lower(u.name)}${shows}.${where}`;
 }

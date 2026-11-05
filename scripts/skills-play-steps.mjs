@@ -127,7 +127,12 @@ export function partSkilled() {
 // ---------------- 3. the night: the feed controller orders ----------------
 export function partNight() {
   return [
-    ev(`(() => { const g = __game, f = g.farm.feed; f.pending.length = 0; f.silos[1].kg = 0; f.silos[1].layers = []; const fd = g.feedDays(); const kg = Math.round(2.3 * fd.kgPerDay); f.silos[0].kg = kg; f.silos[0].layers = [{ type: 'starter', kg }]; f.siloKg = kg; window.__a0 = __autos.length; window.__s0 = g.level.skipStopped; return 'hook: the silos at ' + kg + ' kg (' + g.feedDays().days + ' days at ' + fd.kgPerDay + ' kg a day), nothing on the way, at ' + __t(); })()`),
+    // the silos scaled down to about 2.3 days of feed, each silo keeping its own feed (the grower the birds eat now stays in
+    // its silo: emptying it would starve them overnight), nothing on the way
+    ev(`(() => { const g = __game, f = g.farm.feed; f.pending.length = 0; const fd = g.feedDays(), k = Math.min(1, (2.3 * fd.kgPerDay) / Math.max(1, fd.kg));
+      for (const s of f.silos) { s.layers = (s.layers || []).map((l) => ({ ...l, kg: Math.round(l.kg * k) })); s.kg = s.layers.reduce((a, l) => a + l.kg, 0); }
+      f.siloKg = f.silos.reduce((a, s) => a + s.kg, 0); window.__a0 = __autos.length; window.__s0 = g.level.skipStopped;
+      return 'hook: the silos at ' + f.silos.map((s) => s.kg + ' kg ' + (s.layers.map((l) => l.type).join('+') || 'empty')).join(', ') + ' (' + g.feedDays().days + ' days at ' + fd.kgPerDay + ' kg a day), nothing on the way, at ' + __t(); })()`),
     { clickOn: '.ljobs-next' }, adv(0.4), { pressIf: 'j', if: `!__game.ui.openPanelId && __game.env.dayNumber === 16 && __game.env.hour > 18` }, adv(0.4),
     ev(`__game.ui.openPanelId === 'night-check' ? ([...document.querySelectorAll('${PANEL} button')].find((b) => /Skip anyway/.test(b.textContent))?.click(), 'the night check: ' + document.querySelector('${PANEL}').textContent.replace(/\\s+/g, ' ').slice(0, 160)) : 'no night check (nothing off)'`), adv(0.4),
     until(`__game.env.dayNumber === 17 && __game.env.hour >= 5.9 || __game.level.skipStopped !== window.__s0`, 60, 0.5),
@@ -153,7 +158,7 @@ export function partFault() {
     exp(`(() => { const g = __game, r = g.level.watch.status().rows.equipment, w = g.level.watch.warnings.find((x) => x.kind === 'equipment' && x.t >= 17); return r && r.state !== 'green' && w && w.fix && w.fix.panel === 'controller' && /timer/i.test(w.text) && !/correct|wrong|mistake|failed to/i.test(w.text) && 'Equipment row ' + r.state + ': ' + r.value + ' | warning: ' + w.text.slice(0, 160); })()`,
       'the flock watch: the Equipment row and its warning name the timer, its cause and the controller'),
     exp(`/timer/i.test(document.querySelector('#hud').textContent) && 'the HUD names the timer (the watch card, the caption)'`, 'the warning on the HUD'),
-    shot('sp-fault-timer'),
+    adv(0.3), shot('sp-fault-timer'),   // a frame first: the HUD (clock, the watch card) draws the stop
     W(-12, -4.6, 0.3, 80), ...E('controller', 'E opens the controller'), click('Ventilation'), adv(0.2),
     ev(`(() => { const t = [...document.querySelectorAll('${PANEL} [data-payoff="ventCalc"], ${PANEL} .skl-work')].map((e) => e.textContent.replace(/\\s+/g, ' ')).join(' | '); return 'the working beside Fill the timer: ' + t.slice(0, 200); })()`),
     click('Fill the timer'), adv(0.4), shot('sp-fault-fixed'),

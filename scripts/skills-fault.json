@@ -10,6 +10,7 @@
   {"expect": "(() => { const g = __game, s = window.__skip, f = window.__faults.find((p) => p.phase === 'start'); return f && f.id === 'winch-stall' && f.line === 2 && g.env.day <= 24 + 10.05 / 24 && 'the fault started in the skip at ' + f.hour + ' h; the skip stopped at ' + __t() + ': ' + f.text; })()", "label": "the winch stalls inside a Next job skip: the skip stops within the farm hour"},
   {"expect": "(() => { const g = __game, r = g.level.watch.status().rows.equipment, w = g.level.watch.warnings.find((x) => x.kind === 'equipment'); return r.state === 'red' && /Line 3 winch motor stalled/.test(r.value) && w && /Likely cause/.test(w.text) && w.fix && w.fix.spot === 'drinkers.2' && !/correct|wrong|mistake|failed to/i.test(w.text) && 'row: ' + r.value + ' | warning: ' + w.text; })()", "label": "the Equipment row red, the warning with what, cause and where (its fix at the line 3 regulator)"},
   {"expect": "(() => { const hud = document.querySelector('#hud'); return hud && /winch motor stalled/i.test(hud.textContent) && 'the caption / the watch card name the stalled motor'; })()", "label": "the caption"},
+  {"advance": 0.3},
   {"shot": "skills-fault-0-stalled"},
   {"walkTo": [-21.4, 1.95], "tol": 0.6, "max": 60},
   {"press": "e"},
