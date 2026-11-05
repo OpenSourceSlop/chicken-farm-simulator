@@ -100,6 +100,7 @@ export function buildRow(day, { notebook, extras, farm, env }, signed) {
   for (const n of of('order')) if (n.value && n.value.arriveDay != null) notes.push(`Feed ordered, arrives day ${n.value.arriveDay} ${String(n.value.arriveHour).padStart(2, '0')}:00`);
   for (const n of of('text')) notes.push(n.value);
   for (const n of of('watch')) notes.push(`Flock watch ${String(Math.floor(n.hour)).padStart(2, '0')}:${String(Math.round((n.hour % 1) * 60) % 60).padStart(2, '0')}: ${n.value}`); // PHASE4.md §15.1
+  for (const n of of('night')) notes.push(n.value); // the night fix: the night's deaths by cause and their reason (night-check.js)
   if (ex.lapses) notes.push(`House entered without the foot dip: ${ex.lapses}`);
   // ---- Phase 3: the cycle's readings (null when not taken) ----
   const cyc = cycleFields(day, of, notebook, farm);

@@ -18,6 +18,9 @@
 import { weightAt, feedStdGAt, PLACEMENT_DAY, LEVEL1, HARVEST, WATER_TANK } from './config.js';
 import { EV } from './events.js';
 import { pumpGauges } from './farm-cond-water.js';
+// the night fix (after Phase 5): the cold and heat causes from the house's heat balance (brooders at full and the house under
+// the row = too much air out, a brooder out or the pad; the thermostat named only when it is under the row, or over it)
+import { coldCause, hotCause, youngOf, DIAG } from './heat-diag.js';
 
 /** Model values of the watch (PHASE4.md §15.1; none is a sign fact). */
 export const WATCH = {
@@ -65,7 +68,13 @@ const SIGN = { brooder: 'the brooder sign', heat: 'the heat and tunnel fans sign
 /** The farm's state the causes read (watchState(env, farm); every field optional). */
 export function watchState(env, farm) {
   const T = farm?.waterTank;
-  return { condition: farm?.condition ?? null, sun: env?.sunHeatPerH ?? 0, powerOff: farm?.power?.on === false,
+  // the house's heat balance (heat-diag.js): the main cold cause and the young birds' heat cause, read live
+  let cold = null, hot = null, young = null, house = null;
+  if (env && farm && farm.mode === 'level' && env.levelClimate && farm.flock?.alive > 0) {
+    try { cold = coldCause(env, farm); hot = hotCause(env, farm); young = youngOf(env, farm); } catch { cold = hot = null; }
+    house = { c: env.houseTemp, out: env.heaterLevel, full: env.heaterLevel >= DIAG.fullAt };
+  }
+  return { cold, hot, young, house, condition: farm?.condition ?? null, sun: env?.sunHeatPerH ?? 0, powerOff: farm?.power?.on === false,
     tankLow: !!T && farm?.condition === 'water' && ((T.levelPct ?? 100) < 30 || (T.pumpShare ?? 1) < 0.9 || !!T.fixing),
     windChill: env?.windChill ?? 0, airSpeed: env?.airSpeed ?? 0, fans: env?.fansEffective ?? 0, houseRH: env?.houseRH ?? 60,
     // Phase 5 (PHASE5.md §6.8.1, review round): the water condition's iron filter clogged (farm-cond-water.js condX.filterK)
@@ -87,16 +96,25 @@ export function causeOf(kind, age, st = {}) {
   if (st.powerOff && ['cold', 'heat', 'water', 'feed', 'air', null, undefined].includes(kind)) return POWER;
   if (st.tankLow && (kind === 'water' || kind === 'heat')) return TANK;
   switch (kind) {
-    case 'cold':
+    case 'cold': {
+      // the night fix: the house's heat balance names what keeps it under the row (too much air out by the tunnel fans or
+      // the timer, a brooder out, the pad, the thermostat only when it is under the row); older birds: the fans and the pad
+      const d = st.cold, who = young ? 'the chicks are cold' : 'the birds are cold';
+      if (d && (st.young || d.kind === 'air' || d.kind === 'pad')) return { why: `${who}: ${d.why}`, sign: d.sign, signName: d.signName, place: d.place, check: d.check };
       // moving air chills birds of any age (the wind chill of the tunnel fans)
       if ((st.windChill ?? 0) > 1.5 || (st.airSpeed ?? 0) > 0.5) return { why: 'the birds are cold: the moving air of the tunnel fans chills them', sign: 'sign-heat', signName: SIGN.heat, place: 'fan-panel', check: 'the tunnel fans at the fan panel (fewer fans for their age)' };
-      return brooding ? { why: young ? 'the chicks are cold: the house or the brooders run under the brooder sign’s row' : 'the birds are cold: the house runs under its target', sign: 'sign-brooder', signName: SIGN.brooder, place: 'controller', check: 'the thermostat at the climate controller' }
+      return brooding ? { why: young ? 'the chicks are cold: the house or the brooders run under the brooder sign’s row' : 'the birds are cold: the house runs under its target', sign: 'sign-brooder', signName: SIGN.brooder, place: 'controller',
+        check: 'the brooders’ output and the air going out at the climate controller (its Temperature and Ventilation tabs), and the thermostat against the brooder sign’s row' }
         : { why: 'the birds are cold: moving air or a cool night chills them', sign: 'sign-heat', signName: SIGN.heat, place: 'fan-panel', check: 'the tunnel fans at the fan panel' };
+    }
     case 'heat': {
-      const hot = st.condition === 'hot' || (st.sun ?? 0) > 0;
+      const hot = st.condition === 'hot' || (st.sun ?? 0) > 0, d = st.hot;
+      // the night fix: the thermostat over the row first (the brooders heat the house up to it); never named while at the row
+      if (d && (d.kind === 'thermostatHot' || d.kind === 'fewFans')) return { why: `the ${young ? 'chicks' : 'birds'} are hot: ${d.why}`, sign: d.sign, signName: d.signName, place: d.place, check: d.check };
       if (young && st.condition === 'hot') return { why: 'the chicks are hot: the sun on the roof heats the closed house over the brooder sign’s row', sign: 'sign-brooder', signName: `${SIGN.brooder} (its hot-season line)`, place: 'pad-pump', check: 'the pad pump, then one tunnel fan at the fan panel' };
-      if (young && hot) return { why: 'the chicks are hot: the warm afternoon heats the closed house over the brooder sign’s row', sign: 'sign-brooder', signName: SIGN.brooder, place: 'controller', check: 'the thermostat and the minimum ventilation timer at the climate controller' };
-      if (young) return { why: 'the chicks are hot: the house runs over the brooder sign’s row', sign: 'sign-brooder', signName: SIGN.brooder, place: 'controller', check: 'the thermostat at the climate controller' };
+      if (young && hot) return { why: 'the chicks are hot: the warm afternoon heats the closed house over the brooder sign’s row', sign: 'sign-vent', signName: `${SIGN.vent} (its hot-afternoon line)`, place: 'controller', check: 'the minimum ventilation timer at the climate controller (more fan time while it is hot, back to the table when it cools)' };
+      if (young && d) return { why: `the chicks are hot: ${d.why}`, sign: d.sign, signName: d.signName, place: d.place, check: d.check };
+      if (young) return { why: 'the chicks are hot: the house runs over the brooder sign’s row', sign: 'sign-brooder', signName: SIGN.brooder, place: 'controller', check: 'the thermostat against the brooder sign’s row and the minimum ventilation timer at the climate controller' };
       if (damp) return { why: 'the birds are hot: in air this damp they cannot lose their heat', sign: 'sign-heat', signName: SIGN.heat, place: 'fan-panel', check: `the tunnel fans at the fan panel (${brooding ? 'one or two for young birds' : 'as many as Birds feel needs'}; in air this damp the pad gives little cooling)` };
       if (brooding) return { why: 'the young birds are hot for their age', sign: 'sign-heat', signName: `${SIGN.heat} (its young-birds line)`, place: 'pad-pump', check: 'the pad pump with one or two tunnel fans at the fan panel (three in week 3)' };
       return { why: 'the birds are hot for their age', sign: 'sign-heat', signName: SIGN.heat, place: 'fan-panel', check: 'the fan panel and the pad pump' };
@@ -316,7 +334,10 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       const head = kind === 'cold' ? `${who} felt cold for ${r.cold} of the last ${r.hours} hours (felt ${one(s.felt)} °C${row}): they eat less, grow less and the weakest die.`
         : s.age < 8 ? `${who} felt hot for ${r.hot} of the last ${r.hours} hours (felt ${one(s.felt)} °C${row}): they eat less and pant.`
           : `${who} panted for ${r.hot} of the last ${r.hours} hours (felt ${one(s.felt)} °C): they eat less and the weakest die in the heat.`;
-      return { text: head + weightClause(rows) + where(c), c };
+      // the night fix: the house and the brooders as they are now, and the likely cause from the heat balance
+      const hs = st.house && st.young ? ` House ${one(st.house.c)} °C, brooders at ${st.house.full ? 'full' : `${Math.round(st.house.out * 100)} %`}.` : '';
+      const why = c.why.replace(/^the (chicks|birds|young birds) are (cold|hot)(: | for their age)?/, '');
+      return { text: `${head}${hs}${why ? ` Likely cause: ${why}.` : ''}${weightClause(rows)}${where(c)}`, c };
     }
     const k = likely(rows, s), c = causeOf(k, s.age, st);
     const cause = k ? ` Likely cause: ${c.why}.` : '';
@@ -387,6 +408,18 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
     status: () => liveStatus(),
     /** quiet(true / false): while > 0 (a standard start's auto play) warnings are kept in memory only. */
     quiet(on) { quiet = Math.max(0, quiet + (on ? 1 : -1)); },
+    get isQuiet() { return quiet > 0; },
+    /** The night fix: a line outside the hourly rows (a skip stopped on trouble, the night check at sunset): the card's last
+     *  warning, a notebook line and EV.WATCH (its caption), as a warning is; nothing while quiet. */
+    raise({ kind = 'stop', text, cause = '', sign = '', place = '' } = {}) {
+      if (quiet > 0 || !text) return null;
+      const day = Math.floor(env.day + 1e-9), hour = Math.round((env.day - day) * 24 * 100) / 100;
+      const w = { kind, state: 'red', text, cause, sign, place, day, hour, t: env.day };
+      warnings.push(w); status.last = w;
+      records?.note?.('watch', text);
+      events?.emit?.(EV.WATCH, { ...w });
+      return w;
+    },
     get warnings() { return warnings; },
     get samples() { return samples; },
     /** A new level (start, enter, replay): the samples and the warning memory start again. */
