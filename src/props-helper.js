@@ -68,6 +68,10 @@ function helperGeometry(pose) {
     return g.index ? g.toNonIndexed() : g;
   });
   const g = mergeGeometries(geos);
+  // the final check: the lowest point of every pose on the ground (the walk poses' swinging legs lifted both boots about
+  // 2.5 cm, the bend pose's lowered pelvis sank them 14 cm), so his feet stay on the floor, the kerb and the threshold
+  g.computeBoundingBox();
+  g.translate(0, -g.boundingBox.min.y, 0);
   g.computeVertexNormals();
   return g;
 }
@@ -86,7 +90,7 @@ export function createHelper(ctx, { mats, group, boxes, trucks, chicksPerStack }
   const cart = (loaded) => {
     const b = new Batch(); handTruck(b, { tilt: -0.45 }); if (loaded) boxesOnTruck(b, 10, -0.45);
     const m = b.mesh(mats.vc, { cast: false, receive: true });
-    m.name = loaded ? 'props-helper-cart-full' : 'props-helper-cart'; m.position.set(0, 0.085, -1.15); m.visible = false;
+    m.name = loaded ? 'props-helper-cart-full' : 'props-helper-cart'; m.position.set(0, 0.08, -1.15); m.visible = false;
     root.add(m);
     return m;
   };
@@ -200,7 +204,9 @@ export function createHelper(ctx, { mats, group, boxes, trucks, chicksPerStack }
     const withCart = ['to-stack', 'loading', 'carrying', 'tipping', 'back'].includes(st.state);
     const pose = st.state === 'tipping' || st.state === 'loading' ? 'bend' : moving && withCart ? (Math.floor(st.walkT * 3.2) % 2 ? 'walkB' : 'walkA') : 'stand';
     for (const [k, m] of Object.entries(poses)) m.visible = k === pose;
-    root.position.set(st.x, moving && !still ? Math.abs(Math.sin(st.walkT * 10)) * 0.025 : 0, st.z);
+    // (the final check: no bob of the whole figure: it lifted the boots and the hand truck's wheels off the ground)
+    root.position.set(st.x, 0, st.z);
+    void still;
     root.rotation.y = st.yaw;
     cartFull.visible = withCart && (st.state === 'carrying' || (st.state === 'loading' && st.t > LOAD_SEC / 2));
     cartEmpty.visible = withCart && !cartFull.visible;

@@ -3,7 +3,6 @@
   {"wait": 800},
   {"clearStorage": true},
   {"eval": "__game.stop(), __game.config.SKILLS_UPDATE.live = true, __game.perks.allow(true), window.__t = () => 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel, window.__hud = (on) => { document.getElementById('hud').style.visibility = on ? '' : 'hidden'; return on ? 'HUD shown' : 'HUD hidden for a review shot'; }, window.__seen = [], __game.events.on('bird:seen', (p) => __seen.push(p)), window.__B = __game.config.GFX.budget, window.__views = [], window.__v = (name) => { const i = __game.renderInfo(); __views.push({ name, calls: i.calls, triangles: i.triangles }); return name + ': ' + i.calls + ' draw calls, ' + Math.round(i.triangles / 1000) + ' K triangles' + (i.calls <= __B.calls && i.triangles <= __B.triangles ? '' : ' OVER BUDGET'); }, 'live on, perks allowed (a steps file switches them on: SKILLS.md §0)'"},
-
   {"eval": "'--- 1. the helper on arrival day (Brooding 3) ---'"},
   {"eval": "__game.startLevel({ seed: 1 }), __game.skills.debug.force('brooding', 3), JSON.stringify(__game.level.debug.goto(0, 7.9, { auto: true })) + ' ' + __t() + '; boxHelper ' + __game.perks.has('boxHelper') + ', helper ' + __game.props.helper.state"},
   {"expect": "__game.perks.has('boxHelper') && __game.props.helper.state === 'off' && 'no helper before the truck'", "label": "Brooding 3 holds; no helper before the chick truck stops"},
@@ -32,6 +31,7 @@
   {"state": {"zoom": 11, "cameraYaw": 0.35}},
   {"advance": 0.2},
   {"shot": "skills-scene-helper-carrying"},
+  {"expect": "(() => { const H = __game.props.debug.helper; let minY = Infinity; const names = []; H.root.updateMatrixWorld(true); H.root.traverse((m) => { if (!m.isMesh) return; let v = m, vis = true; while (v && v !== H.root.parent) { if (!v.visible) vis = false; v = v.parent; } if (!vis) return; const p = m.geometry.attributes.position, e = m.matrixWorld.elements; for (let k = 0; k < p.count; k++) { const wy = e[1] * p.getX(k) + e[5] * p.getY(k) + e[9] * p.getZ(k) + e[13]; if (wy < minY) minY = wy; } names.push(m.name); }); return __game.props.helper.state === 'carrying' && Math.abs(minY) <= 0.01 && 'carrying at ' + JSON.stringify(__game.props.helper) .slice(0, 80) + ': the lowest point of ' + names.join(', ') + ' at ' + minY.toFixed(3) + ' m'; })()", "label": "final check 7: the helper's boots and the hand truck's wheels on the ground while he carries a stack"},
   {"eval": "__hud(true)"},
   {"walkTo": [-8.6, 1.2], "tol": 0.4},
   {"press": "e"},
@@ -66,7 +66,6 @@
   {"expect": "(() => { const parts = __game.props.serialize().helper?.parts || []; return [0, 1, 2].every((k) => parts.includes(k)) && 'the helper tipped on the parts west of the farmer\\'s (west to east): parts with chicks ' + parts.sort().join(', '); })()", "label": "the helper tips on the next parts of the brooding floor, west to east"},
   {"advanceUntil": "['leaving', 'gone'].includes(__game.props.helper.state)", "max": 30, "step": 0.5},
   {"expect": "['leaving', 'gone'].includes(__game.props.helper.state) && 'after the last stack the helper walks off (' + __game.props.helper.state + ')'", "label": "the helper leaves after the last stack"},
-
   {"eval": "'--- 1b. a bad batch: the helper takes only stacks the farmer has graded ---'"},
   {"eval": "__game.startLevel({ seed: 1 }), __game.skills.debug.force('brooding', 3), __game.setCondition('badChicks'), JSON.stringify(__game.level.debug.goto(0, 7.9, { auto: true })) + ' ' + __t() + ', condition ' + __game.farm.condition"},
   {"advanceUntil": "__game.props.truck.state === 'parked' && __game.props.stacks.left === 6 && __game.props.helper.state === 'waiting'", "max": 160, "step": 1},
@@ -86,7 +85,6 @@
   {"eval": "(() => { const b = __game.flock.catcher.nextNearest(__c1.index, __game.config.AUTO.nextChickM); window.__c2 = b; return 'Next chick: ' + JSON.stringify(b) + '; held ' + JSON.stringify(__game.flock.debug.held()) + ', carrying ' + __game.props.carrying + ' ' + JSON.stringify(__game.props.carryOpts) + ', panel ' + __game.ui.openPanelId; })()"},
   {"expect": "__c2 && __c2.index !== __c1.index && __game.flock.debug.held().length === 1 && __game.flock.debug.held()[0] === __c2.index && __game.flock.debug.status(__c1.index) === 'active' && __game.props.carrying === 'chick' && __game.props.carryOpts.index === __c2.index && __game.ui.openPanelId === 'chick-in-hand' && 'the first chick back on the litter, the next one (' + __c2.index + ') in the hand, the panel still open'", "label": "Next chick: the chick goes down and the nearest other one comes into the hand"},
   {"eval": "__game.ui.closePanel(), 'put back: carrying ' + __game.props.carrying"},
-
   {"eval": "'--- 3. the tally bucket (Biosecurity 2) ---'"},
   {"eval": "__game.skills.debug.force('biosecurity', 2), __game.cycleAt(20, 9), window.__lay = (n, r0, r1) => { const p = __game.player.position; for (let k = 0; k < n; k++) { const a = k * 2.399, r = r0 + (r1 - r0) * (k / Math.max(1, n - 1)); __game.flock.dead.layAt(p.x + Math.cos(a) * r, p.z + Math.sin(a) * r, 'heat'); __game.farm.flock.deadOnFloor++; __game.farm.flock.deadTotal++; } return n; }, 'day 20: tallyBucket ' + __game.perks.has('tallyBucket') + ', deadByLook ' + __game.skills.unlocked('deadByLook')"},
   {"state": {"farmer": {"x": -6, "z": 0.9, "yaw": 0}, "cameraYaw": 0, "zoom": 9}},
@@ -140,7 +138,6 @@
   {"advance": 0.3},
   {"expect": "(() => { const nb = __game.interact.nearest(__game.player); return __game.props.bucketTally.n === Math.floor(15 / (__game.farm.flock.meanWeightG / 1000)) && __caps.filter((m) => /bucket is full/.test(m)).length === 2 && /bucket is full/.test(nb?.label || '') && 'a full bucket says so: the prompt \\u201c' + nb.verb + ' ' + nb.label + '\\u201d, the captions: ' + __caps.join(' | '); })()", "label": "a full bucket goes to the bin first (it says so)"},
   {"eval": "__game.ui.caption = __cap0, __game.props.drop(), __game.flock.dead.pickUp(0, 0, 200), __game.props.drop(), 'cleared'"},
-
   {"eval": "'--- 4. symptom tags and EV.BIRD_SEEN (Biosecurity 3) ---'"},
   {"eval": "__game.skills.debug.force('biosecurity', 3), __game.cycleAt(14, 10), __game.farm.health.lame.push(__game.env.day, __game.env.day, __game.env.day), __game.farm.flock.lameOnFloor = __game.farm.health.lame.length, __seen.length = 0, 'day 14: passCheck ' + __game.perks.has('passCheck') + ', lame on the floor ' + __game.farm.flock.lameOnFloor"},
   {"advance": 1.5},
@@ -160,7 +157,6 @@
   {"press": "e"},
   {"advance": 0.3},
   {"expect": "__game.farm.flock.culls === __culls + 1 && __game.farm.flock.lameOnFloor === __lameN - 1 && !__game.ui.openPanelId && 'E at the tagged lame bird culled it: lame on the floor ' + __lameN + ' -> ' + __game.farm.flock.lameOnFloor", "label": "E at a tagged lame bird culls it (p-lame)"},
-
   {"eval": "'--- 5. the equipment: sight tubes, winch lamps, sensor and dial, scale ---'"},
   {"eval": "__game.startLevel({ seed: 1 }), ['water', 'heating', 'growth', 'brooding'].forEach((b) => __game.skills.debug.force(b, 3)), __game.cycleAt(10, 9), __game.farm.auto.on.winch = true, __game.farm.water.lines[1].pressureCm = (__game.farm.water.lines[1].pressureCm ?? 10) - 5, 'Water, Heating, Growth at 3; line 2 regulator 5 cm low'"},
   {"state": {"farmer": {"x": -21.7, "z": 5.5, "yaw": 0.8}, "cameraYaw": 0.8, "zoom": 4.5}},
@@ -187,7 +183,6 @@
   {"expect": "(() => { const s = __game.props.debug.auto.state(); return s.scale && s.fouled && 'the scale display post and the litter on the platform'; })()", "label": "the fouled scale platform"},
   {"shot": "skills-scene-scale"},
   {"eval": "__hud(true)"},
-
   {"eval": "'--- 6. the draw-call budget with every new model shown ---'"},
   {"eval": "['water', 'heating', 'growth', 'brooding', 'biosecurity'].forEach((b) => __game.skills.debug.force(b, 3)), __game.farm.auto.on.winch = true, __game.setState({ farmer: { x: -14, z: 3.5, yaw: 0 }, cameraYaw: 0.4, zoom: 22 }), __game.advance(0.5), __v('inside, day 10, the equipment and a stalled winch')"},
   {"eval": "__game.props.startCarry('bucket', { n: 3, causes: { heat: 3 }, tally: true }), __game.advance(0.2), __v('inside, carrying the tally bucket')"},
