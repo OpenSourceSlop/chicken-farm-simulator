@@ -216,7 +216,7 @@ export function createDeadBirds(ctx, S, uniforms, pop) {
           list.splice(k, 1);
         }
       }
-      if (!n) return { n: 0, causes, left };
+      if (!n) return opts ? { n: 0, causes, left } : { n: 0, causes };
       dirty = true;
       refill();
       ctx.props?.startCarry?.('bucket', opts && opts.tally ? { n, causes, tally: true } : { n, causes });
