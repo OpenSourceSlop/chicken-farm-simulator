@@ -69,6 +69,7 @@ import { bucket as bucketModel } from './props-models.js'; // PHASE4.md §15.3: 
 import { AUTO, SKILLS_UPDATE } from './config.js';
 import { binShare, birdKgOf, bucketRoom, bucketCopy, putInBucket } from './props-tally.js';
 import { tallyFace } from './player-carry.js';
+import { buildAutoEquipment } from './props-auto.js';
 
 const CHICKS_PER_STACK = (LEVEL1.boxes / LEVEL1.stacks) * LEVEL1.chicksPerBox;
 const inBrood = (p) => p.x > BROOD_BOUNDS.xMin && p.x < BROOD_BOUNDS.xMax && p.z > BROOD_BOUNDS.zMin && p.z < BROOD_BOUNDS.zMax;
@@ -92,6 +93,7 @@ export function buildProps(ctx, { house } = {}) {
   const boards = buildBoards(stat);
   group.add(boards.group);
   const equip = buildEquipment(stat, pool, group);
+  const autoEq = buildAutoEquipment(ctx, { pool, mats, group });   // Skills update: the sight tubes, winches, sensor, scale
   const yard = buildYard(stat, mats, group);
   const equip3 = buildCycleEquipment(stat, pool, group);
   const yard3 = buildCycleYard(stat, pool, group, mats);
@@ -359,6 +361,7 @@ export function buildProps(ctx, { house } = {}) {
     triggers.update(dt, true);
     if (house && house.lineHeights) for (let i = 0; i < 4; i++) lineY[i] = house.lineHeights[i];
     equip.update(dt, f, env, lineY);
+    autoEq.update(dt, f, env, lineY);
     boards.update(dt, f, env);
     // Phase 3
     const roll = house?.debug?.brooders?.curtainRoll ?? 0;
@@ -560,7 +563,7 @@ export function buildProps(ctx, { house } = {}) {
       floor.refresh(ctx.farm);
     },
     // test and tooling hooks (not part of the contract)
-    debug: { trucks, boxes, floor, pool, triggers, yard, equip, boards, equip3, yard3, catchNight, get tools() { return tools; }, dust,
+    debug: { trucks, boxes, floor, pool, triggers, yard, equip, boards, equip3, yard3, catchNight, get tools() { return tools; }, dust, auto: autoEq,
       get cond() { return ctx.condScene || null; } },   // Phase 4: the conditions' scene (props-cond.js), for the harness
   };
   tools = createCycleTools(ctx, { props, pool, yard: yard3, lv });
