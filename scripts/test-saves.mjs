@@ -408,6 +408,33 @@ test('the autosave that cannot write: EV.SAVE auto-failed once per level, with i
   void S;
 });
 
+// ---------------- Skills update (SKILLS.md §11; package "model") ----------------
+test('skills update: farm.auto (the fault plan, an open fault, the holds) and the v2 skill profile round-trip through a save; mergeProfiles keeps the higher tier per slot', async () => {
+  const { SKILLS_UPDATE } = await import('../src/config.js');
+  const was = SKILLS_UPDATE.live;
+  try {
+    SKILLS_UPDATE.live = true;
+    const w = makeWorld();
+    w.farm.start(LEVELS[1], { seed: 9, condition: 'hot', flockNo: 1 });
+    w.farm.auto.on.winch = true;
+    w.env.skipHours(8);
+    w.farm.act('water.height', { line: 1, cm: 14 });
+    w.farm.debug.fault('winch-stall', { line: 3 });
+    w.skills.award('day7-weight', 1); w.skills.setProfile({ cyclesDone: 1 }); w.skills.award('day7-weight', 0);
+    const blob = JSON.parse(JSON.stringify({ farm: w.farm.serialize(), skills: w.skills.serialize() }));
+    assert(blob.farm.auto.faults.length === 3 && blob.farm.auto.faults.filter((f) => f.phase === 'planned').length === 2 && blob.farm.auto.hold.winch[1] > w.env.day, `farm.auto: ${JSON.stringify(blob.farm.auto)}`);
+    assert(JSON.stringify(blob.farm.auto).length < 2000, `about 1 KB: ${JSON.stringify(blob.farm.auto).length}`);
+    const v = makeWorld();
+    v.farm.restore(blob.farm); v.skills.restore(blob.skills);
+    assert(JSON.stringify(v.farm.serialize().auto) === JSON.stringify(blob.farm.auto) && JSON.stringify(v.skills.serialize()) === JSON.stringify(blob.skills), 'round trip');
+    assert(blob.skills.v === 2 && v.skills.points('brooding') === 4 && JSON.stringify(blob.skills).length < 4000, `the profile: ${JSON.stringify(blob.skills)}`);
+    const m = mergeProfiles({ skills: blob.skills, cyclesDone: 1 }, { skills: { v: 1, earned: [['day7-weight', 1], ['flushed-on-time', 0]] }, cyclesDone: 1 });
+    const f = new Map(m.skills.flocks.map(([k, a, b]) => [k, [a, b]]));
+    assert(f.get('day7-weight').join() === '1,0' && f.get('flushed-on-time').join() === '0,', `merged per slot: ${JSON.stringify(m.skills.flocks)}`);
+  } finally { SKILLS_UPDATE.live = was; }
+});
+
+
 for (const t of tests) {
   if (process.env.ONLY && !t.name.includes(process.env.ONLY)) continue;
   const t0 = Date.now();
