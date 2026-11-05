@@ -1099,7 +1099,11 @@ export const AUTO = {
   handHold: { winch: { untilHour: 6, perLine: true }, feed: { untilHour: 6, perLine: true }, brooders: { untilHour: 6 },
     timer: { untilHour: 18, lateUntilHour: 6 }, stages: { hours: 2, tableUntilHour: 6 }, lights: { untilChange: true } },
   // the level 2 / 3 hands-on payoffs (scene, panels)
-  deadReachM: 2.5, chickReachM: 2.0, nextChickM: 2.5, tagM: 2.0, tagSec: 3, tagMax: 6,
+  deadReachM: 2.5,                    // Biosecurity 2: E at a dead bird picks up every drawn dead bird this near
+  bucketMaxKg: 15,                    // Biosecurity 2: the bucket holds this weight of dead birds (about 6 birds of 2.4 kg,
+                                      // 30 or more chicks in week 1); a full bucket goes to the bin first
+  chickReachM: 2.0, nextChickM: 2.5,  // Brooding 2: the catch reach (was 1.2 m) and Next chick's (the same part of the floor)
+  tagM: 2.0, tagSec: 3, tagMax: 6,    // Biosecurity 3: the symptom tags
   helperRate: 2,                      // Brooding 3: two stacks move at a time (the helper starts after sample.box; a bad
                                       // batch's helper takes only stacks the farmer has graded)
   frameWeighSec: 1,                   // Growth 2: the frame's birds weighed in one press, 1 s (each bird's weight kept)

@@ -62,6 +62,15 @@ export const WEEK_TABS = [
   { id: 'clean', label: 'Clean-out', from: 43, to: 46 },
 ];
 
+/**
+ * Skills update (SKILLS.md §3.11, §12.9; package "panels" builds it): the pocket phone — the records book's Phone page alone
+ * (orders, the vet, the crew, the hatchery, with `from: 'pocket'` on each action) and, at Farm Planning 3 (phoneRecord),
+ * *Sign today's record* (the same EV.RECORD_CLOSED { signed } the desk's book sends). Registered by ui.js (package "jobs")
+ * as 'pocket-phone' (kind 'paused'); opened by the phone key (keys.js action `phone`) while perks.has('pocketPhone').
+ * STUB of the design round: the whole record book (the package draws the Phone page alone).
+ */
+export function buildPocketPhonePanel(L) { return buildRecordsPanel(L); }
+
 export function buildRecordsPanel(L) {
   const { env, records, farm } = L;
   const titleId = uniqueId('book-title');

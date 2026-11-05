@@ -651,8 +651,11 @@ test('skills update: payoffs, views, systems and faults well formed; every job t
     for (const j of p.jobs) assert(jobById(j), `payoff ${k}: job ${j}`);
     if (p.system) assert(C.AUTO_SYSTEMS[p.system]?.payoff === k && p.step === 'auto', `payoff ${k}: system ${p.system}`);
     if (p.fault) assert(C.FAULTS[p.fault]?.system === p.system, `payoff ${k}: fault ${p.fault}`);
-    for (const [j, n] of Object.entries(p.need || {})) assert(jobById(j) && n.n > 0 && n.sectors <= n.n, `payoff ${k}: need of ${j}`);
+    assert(!('need' in p), `payoff ${k}: no payoff changes a job's sample size (SKILLS.md §3.5, §3.8)`);
   }
+  // every view unlock says what it gives in plain words (SKILLS.md §6.1, review issue 16)
+  for (const k of Object.keys(UNLOCKS)) assert(C.UNLOCK_SHOWS[k] && !VERDICT.test(C.UNLOCK_SHOWS[k]), `UNLOCK_SHOWS.${k}`);
+  assert(Object.keys(C.UNLOCK_SHOWS).length === Object.keys(UNLOCKS).length, 'UNLOCK_SHOWS: one line per view unlock');
   for (const [k, v] of Object.entries(C.SKILL_VIEWS)) {
     assert(UNLOCKS[k] && v.shows && v.where && !VERDICT.test(v.shows), `view ${k}`);
     for (const j of v.jobs) assert(jobById(j), `view ${k}: job ${j}`);
@@ -660,13 +663,18 @@ test('skills update: payoffs, views, systems and faults well formed; every job t
   }
   for (const [id, s] of Object.entries(C.AUTO_SYSTEMS)) {
     assert(C.PAYOFFS[s.payoff]?.system === id && s.glanceAt.length && !VERDICT.test(s.keeps), `system ${id}`);
-    for (const j of s.jobs) assert(jobById(j), `system ${id}: job ${j}`);
+    // jobs: { jobId: part } — 'whole' or the state test of the part the equipment keeps (review issue 1)
+    for (const [j, part] of Object.entries(s.jobs)) assert(jobById(j) && (part === 'whole' || ['drinkers-raised', 'pans-raised'].includes(part)), `system ${id}: job ${j} part ${part}`);
+    for (const j of ['r-drinkers', 'r-feeders']) assert(!(j in s.jobs), `system ${id}: ${j} is never handed over (the controllers only keep its live test true)`);
+    assert(!Object.keys(s.jobs).some((j) => jobById(j)?.problem), `system ${id}: no problem job is handed over`);
   }
   for (const [id, f] of Object.entries(C.FAULTS)) {
     assert(C.AUTO_SYSTEMS[f.system] && f.fix.length && f.fix.every((a) => ACTION_IDS.includes(a)) && !VERDICT.test(f.what), `fault ${id}`);
+    assert(Array.isArray(f.hours) && f.hours[0] >= 7 && f.hours[1] <= 15, `fault ${id}: starts in daylight with time to fix it (hours ${f.hours})`);
   }
   for (const [c, plan] of Object.entries(C.FAULT_PLAN)) if (c !== 'window' && c !== 'rngMul') assert(c === 'normal' || CONDITIONS[c], `fault plan ${c}`);
-  for (const a of ['auto.glance', 'auto.reset', 'auto.calibrate', 'scale.read', 'scale.clean']) assert(ACTION_IDS.includes(a), `action ${a}`);
+  assert(C.FAULTS['sensor-drift'].fix.join() === 'auto.calibrate' && C.FAULTS['stage-trip'].retryH > 0 && C.FAULTS['timer-reset'].retryH > 0, 'fault fixes and bounds (review issues 6, 7)');
+  for (const a of ['auto.glance', 'auto.reset', 'auto.calibrate', 'scale.read', 'scale.clean', 'water.columns']) assert(ACTION_IDS.includes(a), `action ${a}`);
   assert(UI_ACTION_IDS_SKILLS.includes('auto.glance') && E.PERKS && E.AUTO && E.FAULT && E.BIRD_SEEN, 'events');
 });
 
@@ -687,6 +695,16 @@ test('skills update: the new milestones, the two-flock thresholds, the sign line
     assert(C.SKILLS_UPDATE.flocks * max >= lp[2] + 6, `${b.id}: two flocks give ${2 * max} points (level 3 at ${lp[2]})`);
   }
   assert(C.skillLevelPoints() === (C.SKILLS_UPDATE.live ? lp : SKILL_LEVEL_POINTS), 'skillLevelPoints follows live');
+  {
+    const was2 = C.SKILLS_UPDATE.live;
+    try {
+      C.SKILLS_UPDATE.live = false;
+      assert(C.levelFromPoints(SKILL_LEVEL_POINTS[2], 0) === 3, 'switch off: Phase 5 levels, no gate');
+      C.SKILLS_UPDATE.live = true;
+      assert(C.levelFromPoints(40, 0) === 2 && C.levelFromPoints(lp[2], 1) === 3 && C.levelFromPoints(lp[2] - 1, 1) === 2 && C.levelFromPoints(lp[1], 0) === 2,
+        'live: level 3 needs a finished flock and its points (SKILLS.md §2.2)');
+    } finally { C.SKILLS_UPDATE.live = was2; }
+  }
   const was = C.SKILLS_UPDATE.live;
   try {
     C.SKILLS_UPDATE.live = true;
@@ -719,14 +737,17 @@ test('skills update: perks follow the switch, the levels, allow() and the Automa
     assert(!perks.has('waterAllLines') && !perks.auto('winch'), 'nothing while live is false');
     C.SKILLS_UPDATE.live = true; perks.refresh();
     assert(perks.has('waterAllLines') && perks.auto('winch') && seen.length === 1, 'Water 3 while live');
-    assert(perks.handled('r-raise')?.label === 'handled by the controller (Water 3)', `handled: ${JSON.stringify(perks.handled('r-raise'))}`);
-    assert(perks.need('d0-vent') === null, 'no Brooding 2 yet');
+    const hr = perks.handled('r-raise');
+    assert(hr.length === 1 && hr[0].part === 'drinkers-raised' && hr[0].label === 'handled by the controller (Water 3)', `handled: ${JSON.stringify(hr)}`);
+    assert(perks.handled('r-drinkers').length === 0, 'the daily flow test is never handed over (review issue 1)');
+    skills.debug.force('feed', 3);
+    assert(perks.handled('r-raise').map((x) => x.part).join() === 'drinkers-raised,pans-raised', 'r-raise: both parts with Water 3 and Feed 3');
     skills.debug.force('brooding', 2);
-    assert(perks.need('d0-vent')?.n === 3 && perks.need('d1-crop')?.n === 6, 'Brooding 2 needs');
+    assert(perks.has('quickSamples') && !('need' in perks), 'Brooding 2 holds; no sample size changes');
     const e = perks.easier('w2-weigh');
-    assert(e.length === 2 && e[0].key === 'weigh25' && e[0].toGo === 9 && e[1].later === true, `easier: ${JSON.stringify(e)}`);
+    assert(e.length === 2 && e[0].key === 'frameWeigh' && e[0].toGo === 9 && e[1].later === true, `easier: ${JSON.stringify(e)}`);
     settings.set('automation.water', false);
-    assert(perks.has('waterAllLines') && !perks.auto('winch') && !perks.handled('r-raise'), 'Water 3 off in Settings, Water 2 stays');
+    assert(perks.has('waterAllLines') && !perks.auto('winch') && perks.handled('r-raise').map((x) => x.system).join() === 'feed', 'Water 3 off in Settings, Water 2 stays');
     settings.set('automation.water', true); settings.set('automation.all', false);
     assert(!perks.auto('winch'), 'every level 3 off');
     settings.set('automation.all', true);
@@ -735,7 +756,12 @@ test('skills update: perks follow the switch, the levels, allow() and the Automa
     perks.allow(true);
     assert(perks.list().length === 22 && perks.list().every((p) => typeof p.has === 'boolean'), 'list');
     assert(skills.unlocked('autoWinch') && skills.unlocked('quickSamples') && !skills.unlocked('boxHelper'), 'skills.unlocked knows payoff keys while live');
-  } finally { C.SKILLS_UPDATE.live = was; skills.debug.force('water', null); skills.debug.force('brooding', null); }
+    // a restored profile refreshes the perks (review issue 4): EV.SKILL_UNLOCK { key: null, restore: true }
+    const un = [];
+    bus.on(EV.SKILL_UNLOCK, (p) => un.push(p));
+    skills.restore(skills.serialize());
+    assert(un.some((p) => p.key === null && p.restore), 'skills.restore emits the refresh');
+  } finally { C.SKILLS_UPDATE.live = was; skills.debug.force('water', null); skills.debug.force('brooding', null); skills.debug.force('feed', null); }
 });
 
 test('skills update: the farm carries farm.auto (plain data, saved) and its API; the stubs answer in their shapes', async () => {
@@ -762,6 +788,19 @@ test('skills update: the farm carries farm.auto (plain data, saved) and its API;
   const env2 = createSim(), farm2 = createFarm(env2, { events: createEvents() });
   farm2.restore(blob);
   assert(JSON.stringify(farm2.serialize().auto) === JSON.stringify(blob.auto), 'auto round trip');
+  // review issue 4: the quiet counter survives farm.start and farm.restore (run.js holds it around a whole standard start)
+  farm.autoCtl.quiet(true);
+  farm.start(LEVEL1, { seed: 3 });
+  assert(farm.auto.quietN === 1 && Object.values(farm.auto.on).every((v) => v === false), 'farm.start keeps quietN, resets on');
+  farm.restore(blob);
+  assert(farm.auto.quietN === 1, 'farm.restore keeps quietN');
+  farm.autoCtl.quiet(false);
+  // review issue 3: a controller's ui-only setting reaches env, without EV.ACTION; water.columns answers its shape
+  const before = acts.length;
+  farm.act('heat.setpoint', { c: 31, by: 'auto', quiet: true });
+  assert(Math.abs(env.heaterSetpoint - 31) < 1e-9 && acts.length === before, `brooders controller sets env.heaterSetpoint (${env.heaterSetpoint})`);
+  const cols = farm.act('water.columns', {});
+  assert(cols && cols.lines.length === 4 && cols.lines.every((c) => 'cm' in c && 'markCm' in c && typeof c.inBand === 'boolean'), 'water.columns shape');
 });
 
 let failed = 0;

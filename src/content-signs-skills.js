@@ -6,9 +6,10 @@
 const g = 'general';
 const it = (text, source = g, fromDay) => (fromDay != null ? { text, source, fromDay } : { text, source });
 
-/** board id -> lines added at the end of the board (fromDay: shown from that HUD day). */
+/** board id -> lines added at the end of the board (fromDay: shown from that HUD day). Revised after the review: the sight
+ *  tubes instead of test valves, no sample sizes, the bucket emptied after every round, the sensor checked, the stage table. */
 export const SKILL_BOARD_ITEMS = {
-  'water-supply': [it('The four test valves at the supply run a one-minute flow test on every line at once; set a line that reads off at its own regulator.')],
+  'water-supply': [it('Each line’s sight tube shows its water pressure: a column at the drinker plate’s mark gives about the plate’s flow; cup-test only a line that reads off, at its own regulator. Blocked nipples do not show on a tube: watch the meter.')],
   drinker: [
     it('Auto winches keep each line at the day’s figure on this plate; look at the heights when you read the meter.'),
     it('A winch motor that stalls trips its overload and its line stays where it was: winch the line by hand to the plate’s figure and reset the motor.'),
@@ -19,17 +20,15 @@ export const SKILL_BOARD_ITEMS = {
     it('After a power blip a controller may start again on its first setting: look at the timer when the power comes back.'),
   ],
   'sign-heat': [
-    it('Fan stages add tunnel fans as the house goes over its target; for young birds keep the stages few and high (the young birds line).', g, 8),
+    it('A controller can keep a fan stage table for the birds’ age: it adds tunnel fans as the house goes over its target; for young birds the stages are few and high (the young birds line).', g, 8),
     it('After a power cut or a blip a controller may come back with its stages off: set the fans by hand and switch the stages on again at the fan panel.', g, 8),
   ],
   'sign-brooder': [
     it('The concrete under the litter takes about a day to warm through; in a cold or wet week it takes longer.'),
-    it('Auto brooders hold the controller’s sensor at the row: its reading should be the same as the thermometer beside the controller; compare the two when you read it.'),
+    it('Auto brooders hold the controller’s sensor at the row: a sensor that reads high leaves the house cold. Compare it with the thermometer beside the controller and check the sensor when the two differ.'),
   ],
   'sign-chicks': [
-    it('One chick from each of three parts of the floor shows where it is cold or hot; more chicks give a steadier figure.'),
-    it('Feel the crops of six to ten chicks from three parts of the floor.'),
-    it('Two people tipping the boxes get the chicks onto the litter in half the time.'),
+    it('Two people tipping the boxes get the chicks onto the litter in half the time; weigh the sample box before the first stack is tipped.'),
   ],
   silo: [
     it('Order when the silo holds about two days of feed: the mill brings it the next day if you order before 16:00, else the day after.'),
@@ -37,11 +36,11 @@ export const SKILL_BOARD_ITEMS = {
   ],
   'controller-lights': [it('Dawn and dusk dimming over about 20 minutes keeps the birds calm when the lights change.', g, 8)],
   'bird-scale': [
-    it('Weigh 50 birds from five parts of the house; 25 from five parts give the mean to within about 2 %.'),
+    it('A hand scale with a memory weighs the birds in the frame one after another and keeps every weight for the spread.'),
     it('An automatic platform scale weighs the birds that step on it all day; a fouled platform reads light and counts few birds: clean it and weigh by hand.'),
   ],
   'sign-health': [
-    it('A bucket with a tally counter counts each bird as you pick it up; empty it at the bin after the afternoon round: dead birds never stay in the house overnight.'),
+    it('A tally bucket counts each dead bird as you pick it up; still empty it at the bin after every round.'),
     it('Walk slowly and look at each bird near you: a bird that does not move away, sits hunched or limps is checked in the hand.', g, 8),
   ],
 };

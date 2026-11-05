@@ -25,7 +25,7 @@ import { buildFeederPanel, buildSiloPanel, buildHeapPanel, buildBirdScalePanel }
 import { buildDrinkerPanel, buildWaterSupplyPanel } from './ui-water.js';
 import { buildLevelControllerPanel } from './ui-climate.js';
 import { buildGradingPanel, buildChickInHandPanel, buildWeighPanel } from './ui-inspect.js';
-import { buildRecordsPanel } from './ui-records.js';
+import { buildRecordsPanel, buildPocketPhonePanel } from './ui-records.js';
 import { buildNotebookPanel } from './ui-notebook.js';
 import { buildSkillTreePanel } from './ui-skilltree.js';
 import { buildResultPanel } from './ui-result.js';
@@ -242,6 +242,8 @@ export function createUI(ctx, deps) {
   const details = new Map();
   const L = {
     ctx, env, farm, events, records, skills, props, flock, player, interact,
+    // Skills update (SKILLS.md §12.3, review issue 9): every payoff is read through the perks (ctx.perks: main.js)
+    get perks() { return ctx.perks ?? null; },
     act: (id, args = {}) => farm.act(id, args),
     uiAct,
     close: closePanel,
@@ -394,6 +396,8 @@ export function createUI(ctx, deps) {
   panels.register('chick-in-hand', js('chick-in-hand', () => buildChickInHandPanel(L)));
   panels.register('weigh', js('weigh', () => buildWeighPanel(L)));
   panels.register('office-desk', () => buildRecordsPanel(L), { kind: 'paused' });
+  // Skills update (SKILLS.md §3.11): the pocket phone (opened only while perks.has('pocketPhone'); the panel is a stub now)
+  panels.register('pocket-phone', () => buildPocketPhonePanel(L), { kind: 'paused' });
   panels.register('notebook', () => buildNotebookPanel(L), { kind: 'paused' });
   panels.register('skilltree', () => buildSkillTreePanel(L), { kind: 'paused' });
   // the result and the cycle summary are always a parent (PHASE5.md §8.6): a panel opened over them comes back to them

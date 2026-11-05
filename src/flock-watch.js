@@ -387,6 +387,7 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
     }
   }
 
+  let lead = { comfortH: null, fix: false };   // Skills update: Comfort 2's lead (setLead; STUB)
   const watch = {
     attach(fn) { ctxFn = typeof fn === 'function' ? fn : null; },
     /** env stepper: one sample per farm hour while the level runs. */
@@ -422,6 +423,13 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       events?.emit?.(EV.WATCH, { ...w });
       return w;
     },
+    /** Skills update (SKILLS.md §3.9, §12.9; package "model" builds it, level.js calls it from perks.has('earlyWarning')):
+     *  setLead({ comfortH, fix }) — comfortH: the cold / hot hours of the last 8 that raise the comfort warning (null = the
+     *  Phase 4 rule, WATCH.comfortRed); fix: true adds the fix to the cold / hot warning as w.fix = { text, panel, tab, spot }
+     *  (panel / tab: what ui.js opens for "Show me" as the night check's fix does; spot: a SPOTS key for the job marker).
+     *  STUB: kept, no effect yet. lead() reads it back. */
+    setLead({ comfortH = null, fix = false } = {}) { lead = { comfortH, fix: !!fix }; return lead; },
+    lead() { return { ...lead }; },
     get warnings() { return warnings; },
     get samples() { return samples; },
     /** A new level (start, enter, replay): the samples and the warning memory start again. */
