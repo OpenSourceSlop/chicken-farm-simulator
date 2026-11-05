@@ -43,9 +43,8 @@ export function dayChart({ series, title, unit = '', yMin = 0, yMax = null, W = 
     <text x="${padL}" y="12" font-size="10">${legend}${unit ? ` (${unit})` : ''}</text><text x="${W - padR}" y="${H - 4}" font-size="10" text-anchor="end">day</text></svg>`;
 }
 
-/** Phase 2's water graph (bars: litres per 1,000 birds; dashed: water : feed on its own axis 0-3), any days. Skills update:
- *  exported for the water supply panel's Trend key (Water 1, ui-cycle-water.js). */
-export function waterSvg(pts) {
+/** Phase 2's water graph (bars: litres per 1,000 birds; dashed: water : feed on its own axis 0-3), any days. */
+function waterSvg(pts) {
   const W = 760, H = 220, padL = 40, padR = 52, padT = 22, padB = 30;
   if (!pts.length) return '<p class="book-note">No signed rows yet.</p>';
   const d0 = Math.min(...pts.map((p) => p.d)), n = Math.max(8, Math.max(...pts.map((p) => p.d)) - d0 + 1);

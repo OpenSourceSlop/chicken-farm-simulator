@@ -156,7 +156,7 @@ export function buildChickInHandPanel(L) {
   const backBtn = button({ class: 'btn btn--machine' }, 'Put back');
   // Skills update (Brooding 2, quickSamples): the chick goes back down and the nearest other chick within AUTO.nextChickM
   // comes into the hand without closing the panel (the scene's flock.catcher.nextNearest, else release + catchNearest)
-  const nextBtn = button({ class: 'btn btn--machine', hidden: true, 'aria-label': 'Next chick: put this one down and take the nearest other chick' }, 'Next chick');
+  const nextBtn = button({ class: 'btn btn--machine', hidden: true, 'data-skill-key': 'quickSamples', 'aria-label': 'Next chick: put this one down and take the nearest other chick' }, 'Next chick');
   const tally = h('p', { class: 'equip-note' });
   let bird = null, done = false, nexting = false, nextNote = '';
   // the reading with the chick arrival sign's band beside it (the farmer compares; no verdict)
@@ -239,7 +239,7 @@ export function buildWeighPanel(L) {
   let nextPending = false;
   // Skills update (Growth 2, frameWeigh): the scale with memory weighs every bird in the frame in AUTO.frameWeighSec, each
   // weight kept (one sample.weigh a bird, as Weigh all sends); the samples stay the boards' 50 birds from five places
-  const frameBtn = button({ class: 'btn btn--machine btn--go', hidden: true, 'aria-label': 'Weigh the frame: every bird in the frame in one press (Growth 2)' }, 'Weigh the frame');
+  const frameBtn = button({ class: 'btn btn--machine btn--go', hidden: true, 'data-skill-key': 'frameWeigh', 'aria-label': 'Weigh the frame: every bird in the frame in one press (Growth 2)' }, 'Weigh the frame');
   let frameAll = false;
   frameBtn.addEventListener('click', () => { if (!queue.length) return; shell.foldPlates(); auto = false; nextPending = false; frameAll = true; wait = AUTO.frameWeighSec; draw(); });
   // Skills update (Growth 1, recordsTargets): the day's target beside the weighing ("Day 14 target 456 g (records)")

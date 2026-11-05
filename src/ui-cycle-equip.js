@@ -245,7 +245,7 @@ export function siloSkills(L) {
   const w3 = workLine(), wC = workLine(), said = skNote();
   const note = farmTimeNote();
   const order = (o) => {
-    if (!(o.kg > 0)) return;
+    if (!(o.kg > 0)) { setText(said, `Nothing ordered at ${env.timeLabel}: ${o.text}.`); said.hidden = false; return; }
     const r = L.act('feed.order', { kg: o.kg, type: o.type, silo: o.silo, from: 'silo' }) || {};
     const label = typeLabel(r.type || o.type) || 'feed';
     // the working stays beside the order sent (SKILLS.md §6.5: before and after the press)
@@ -272,11 +272,11 @@ export function siloSkills(L) {
       warn.hidden = !warn.textContent;
       const has2 = perkHas(L, 'siloOrder');
       const o3 = orderTo3(env, farm, L.jobs());
-      k3.hidden = !has2; w3.set(has2 ? o3.text : ''); k3.disabled = !(o3.kg > 0);
+      k3.hidden = !has2; w3.set(has2 ? o3.text : '');
       const catchOn = has2 && env.dayNumber >= 36 && !farm.harvest?.result;
       kC.hidden = !catchOn;
       const oc = catchOn ? orderToCatch(env, farm) : null;
-      wC.set(oc ? oc.text : ''); kC.disabled = !(oc?.kg > 0);
+      wC.set(oc ? oc.text : '');
       said.hidden = !said.textContent;
     }
     const lost = openFault(L, 'order-lost');

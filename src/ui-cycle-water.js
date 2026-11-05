@@ -16,7 +16,6 @@ import { EQUIP } from './config.js';
 import { columnsNow, COLUMN_BAND_CM } from './farm-auto.js';
 import { nippleCmToday } from './job-figures.js';
 import { skillBox, workLine, oneKey, row as skRow, note as skNote, perkHas, perkAuto, live, autoStatus, openFault, holdText, faultText, atText, ensureSkillsStyle } from './ui-cycle-skills.js';
-import { waterSvg } from './ui-summary.js';
 
 const FROM_DAY = 8;
 
@@ -171,6 +170,24 @@ function tubesSvg(cols) {
 }
 const offWords = (c) => { const d = c.cm - c.markCm; return Math.abs(d) <= COLUMN_BAND_CM + 1e-9 ? 'at the mark' : `${one(Math.abs(d))} cm ${d < 0 ? 'under' : 'over'} the mark`; };
 const sameDay = (env, t) => Number.isFinite(t) && Math.floor(t + 1e-9) === Math.floor(env.day + 1e-9);
+/** The Trend key's graph (Water 1), drawn for the panel's width at its own scale (12 px labels): bars litres per 1,000
+ *  birds a day, the dashed line water : feed on its own 0–3 axis (the record book's water graph, ui-summary waterSvg). */
+function trendSvg(pts) {
+  const W = 480, H = 150, padL = 34, padR = 30, padT = 10, padB = 22;
+  const d0 = Math.min(...pts.map((p) => p.d)), n = Math.max(7, Math.max(...pts.map((p) => p.d)) - d0 + 1);
+  const vmax = Math.max(50, ...pts.map((p) => p.v || 0)) * 1.1, bw = (W - padL - padR) / n;
+  const X = (d) => padL + (d - d0 + 0.5) * bw, Y = (v) => H - padB - (Math.max(0, v) / vmax) * (H - padT - padB), RY = (r) => H - padB - (Math.min(3, Math.max(0, r)) / 3) * (H - padT - padB);
+  const ink = 'fill="var(--lcd-ink)" font-size="12" font-family="var(--font-display)"';
+  const bars = pts.filter((p) => Number.isFinite(p.v)).map((p) => `<rect x="${(X(p.d) - bw * 0.35).toFixed(1)}" y="${Y(p.v).toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${(H - padB - Y(p.v)).toFixed(1)}" fill="var(--lcd-ink)" opacity="0.45"/>`).join('');
+  const rp = pts.filter((p) => Number.isFinite(p.ratio));
+  const line = rp.map((p, i) => `${i ? 'L' : 'M'}${X(p.d).toFixed(1)} ${RY(p.ratio).toFixed(1)}`).join('');
+  const days = pts.filter((p, i) => i === 0 || i === pts.length - 1 || (p.d - d0) % 3 === 0).map((p) => `<text x="${X(p.d).toFixed(1)}" y="${H - 6}" text-anchor="middle" ${ink}>${p.d}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Water per 1,000 birds by day (bars) and water to feed (dashed line)">
+    <path d="M${padL} ${H - padB}H${W - padR}" stroke="var(--lcd-ink)"/>${bars}
+    ${line ? `<path d="${line}" fill="none" stroke="var(--lcd-ink)" stroke-width="2" stroke-dasharray="5 3"/>` : ''}
+    <text x="${padL - 4}" y="${padT + 10}" text-anchor="end" ${ink}>${Math.round(vmax)}</text><text x="${padL - 4}" y="${H - padB}" text-anchor="end" ${ink}>0</text>
+    <text x="${W - padR + 4}" y="${padT + 10}" ${ink}>3</text><text x="${W - padR + 4}" y="${H - padB}" ${ink}>0</text>${days}</svg>`;
+}
 
 /** The water supply's payoff parts: { trendKey, trendEl, el, onOpen(), update() }. */
 export function supplySkills(L) {
@@ -179,7 +196,7 @@ export function supplySkills(L) {
   // Water 1: the Trend key beside the meter (the record book's graph of the last 14 days, inline)
   let trendOpen = false;
   const trendKey = oneKey('Trend', () => { trendOpen = !trendOpen; drawTrend(); }, { label: 'Trend: water per 1,000 birds, the last 14 days' });
-  trendKey.hidden = true;
+  trendKey.hidden = true; trendKey.setAttribute('data-skill-key', 'waterTrend');
   const trendEl = h('div', { class: 'cyc-chart', hidden: true });
   function drawTrend() {
     const on = live() && perkHas(L, 'waterTrend') && farm.mode === 'level';
@@ -191,7 +208,7 @@ export function supplySkills(L) {
     const k = rows.map((r) => `${r.day}|${r.waterPerBirdMl}`).join(',');
     if (trendEl.__k === k) return;
     trendEl.__k = k;
-    trendEl.innerHTML = rows.length >= 2 ? `<p class="ctrl-chart-k">Last 14 days · litres per 1,000 birds (bars), water : feed (dashed) · Water 1</p>${waterSvg(rows.map((r) => ({ d: r.day, v: r.waterPerBirdMl, ratio: r.waterFeedRatio })))}`
+    trendEl.innerHTML = rows.length >= 2 ? `<p class="ctrl-chart-k">Last 14 days · litres per 1,000 birds (bars), water : feed (dashed, 0–3) · Water 1</p>${trendSvg(rows.map((r) => ({ d: r.day, v: r.waterPerBirdMl, ratio: r.waterFeedRatio })))}`
       : '<p class="ctrl-chart-k">Water trend: it draws from two signed days of the record book</p>';
   }
   // Water 2: the sight-tube board

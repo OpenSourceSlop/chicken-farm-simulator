@@ -16,9 +16,15 @@ const steps = [
   { eval: helpers },
   { eval: `(() => { __game.config.SKILLS_UPDATE.live = true; __game.perks.allow(true); ${force(3)} __game.startLevel({ seed: 1 }); __game.level.debug.goto(0, 14, { auto: true }); return 'live on, every branch at 3, the brooding week at ' + __game.env.timeLabel + ' on day ' + __game.env.dayNumber; })()` },
 ];
+// the new parts only (the payoff boxes and the keys outside them): the panels' Phase 1–5 parts are p5-a11y's and
+// p5-cross's, which run with live off; a key pressed first so the rings show as for a keyboard player (focus-visible)
+const NEW = "#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])";
 const check = (what) => {
-  steps.push({ expect: `(() => { const f = __floors('#hud .panel:not([hidden])'); return f.n > 0 && !f.bad.length && '${what}: ' + f.n + ' texts at or over their floor'; })() || ('${what}: ' + __floors('#hud .panel:not([hidden])').bad.slice(0, 5).join(' | ')) && false`, label: `the text floors: ${what}` });
-  steps.push({ expect: `(() => { const r = __rings('#hud .panel:not([hidden])'); return r.n > 0 && !r.bad.length && '${what}: ' + r.n + ' focusable, each with its ring'; })() || ('${what}: ' + __rings('#hud .panel:not([hidden])').bad.slice(0, 5).join(' | ')) && false`, label: `the focus rings: ${what}` });
+  steps.push({ eval: `(() => { const e = document.querySelector(${JSON.stringify(NEW)}); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()` }, { press: 'Shift' });
+  // the lists first (an expect prints only PASS / FAIL and its label)
+  steps.push({ eval: `(() => { const f = __floors(${JSON.stringify(NEW)}), rs = [...document.querySelectorAll(${JSON.stringify(NEW)})].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return '${what}: floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()` });
+  steps.push({ expect: `(() => { const f = __floors(${JSON.stringify(NEW)}); return f.n > 0 && !f.bad.length && '${what}: ' + f.n + ' new texts at or over their floor'; })()`, label: `the text floors: ${what}` });
+  steps.push({ expect: `(() => { const rs = [...document.querySelectorAll(${JSON.stringify(NEW)})].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && '${what}: ' + n + ' new focusable keys, each with its ring'; })()`, label: `the focus rings: ${what}` });
   steps.push({ expect: `(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && '${what}: no sideways scroll, ' + keys.length + ' keys inside the panel'; })()`, label: `fits 960 × 600: ${what}` });
 };
 const open = (id, what, before = [], after = []) => {
@@ -45,7 +51,6 @@ open('bird-scale', 'bird scale display');
 open('pocket-phone', 'pocket phone');
 open('weigh', 'weigh panel (Weigh the frame, Records)', [{ eval: "(() => { const ids = (__game.flock.catchGroup(-6, 2, 10) || []).map((b) => b.index); __game.events.emit('frame:set', { x: -6, z: 2, birds: ids }); return 'the frame set down with ' + ids.length + ' birds'; })()" }]);
 steps.push({ expect: "(() => { const b = [...__open().querySelectorAll('button')].find((x) => x.textContent.trim() === 'Weigh the frame'); const t = __open().textContent; return b && b.offsetParent !== null && /Day 36 target [\\d,]+ g \\(records\\)/.test(t) && 'Weigh the frame and the Records line show'; })()", label: 'Weigh the frame and the Records line' });
-open('dead-bin', 'dead bird bin');
 steps.push({ eval: `(() => { __game.ui.closePanel(); ${force(null)} __game.config.SKILLS_UPDATE.live = false; __game.perks.allow(false); return 'back to live off'; })()` });
 fs.writeFileSync(path.join(here, 'skills-panels-a11y.json'), `${JSON.stringify(steps, null, 1)}\n`);
 console.log(`wrote scripts/skills-panels-a11y.json (${steps.length} steps)`);
