@@ -16,7 +16,8 @@ import { buildCondScene } from './props-cond.js'; // Phase 4 (package "scene"; P
 import { createFarm } from './farm.js';
 import { createRecords } from './records.js';
 import { createSkills } from './skills.js';
-import { createPerks } from './perks.js';   // Skills update (SKILLS.md §12.3): what the skills give now
+import { createPerks } from './perks.js';
+import { feedDays } from './farm-silos.js';   // __game.feedDays() (the skills steps files)   // Skills update (SKILLS.md §12.3): what the skills give now
 import { createSaveStore } from './save.js';
 import { buildProps } from './props.js';
 import { createLevel } from './level.js';
@@ -214,6 +215,8 @@ async function start(saved = {}) {
     // (farm.debug.fault(id, opts)), skills.debug.force(branch, level); config.SKILLS_UPDATE.live is the build switch
     perks,
     auto() { return farm.autoCtl?.status?.() ?? null; },
+    // the days of feed in the silos as the silo gauge, the phone and the Feed 2 warning read them (farm-silos feedDays)
+    feedDays() { return feedDays(farm, env); },
     get perf() { return perf; },
     renderInfo() {
       player.update(0); quality.sync(); renderer.render(scene, camera);

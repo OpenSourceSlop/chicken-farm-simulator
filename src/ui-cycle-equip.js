@@ -265,7 +265,7 @@ export function siloSkills(L) {
       let fd = null;
       try { fd = feedDays(farm, env); } catch { fd = null; }
       const per = fd?.kgPerDay ? `${int(knownAliveOf(farm.flock))} birds × ${int((fd.kgPerDay * 1000) / Math.max(1, knownAliveOf(farm.flock)))} g` : '';
-      daysLine.set(fd?.days != null ? `About ${one(fd.days)} days of feed at today’s intake (${per}, the feed sign)` : 'Days of feed: no birds to feed yet',
+      daysLine.set(fd?.days != null ? `About ${one(fd.days)} days of feed at today’s intake (${per}, ${fd.how === 'meter' ? 'the feed meter’s last 24 hours' : 'the feed sign'})` : 'Days of feed: no birds to feed yet',
         (fd?.bySilo || []).length > 1 ? fd.bySilo.map((x, i) => `silo ${i + 1}: ${int(x.kg)} kg, ${x.days != null ? `${one(x.days)} days` : '—'}`).join(' · ') : '');
       const coming = sumKg(farm.feed.pending) + (farm.feed.order?.kg || 0);
       setText(warn, fd?.days != null && fd.days <= AUTO.orderAtDays && !coming ? `About ${one(fd.days)} days of feed left: an order here or at the phone.` : '');
