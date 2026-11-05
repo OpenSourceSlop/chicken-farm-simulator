@@ -15,6 +15,8 @@ const KIND_LABEL = {
   // Phase 3 readings
   'light.lux': 'Light', air: 'Air', 'air.probe': 'Air', bird: 'Bird', 'sample.bird': 'Bird', fans: 'Fan panel', 'fans.read': 'Fan panel', gas: 'Gas', 'gas.meter': 'Gas',
   watch: 'Flock watch', // PHASE4.md §15.1: the early warnings
+  // Skills update (SKILLS.md §8): what a controller did, an equipment fault and its fix, a new skill level (the unlock caption)
+  auto: 'Controller', fault: 'Equipment', skill: 'Skill',
   pad: 'Pad', 'pad.check': 'Pad', ticket: 'Ticket', 'load.ticket': 'Ticket', swab: 'Swab', 'clean.swab': 'Swab', letter: 'Letter', booking: 'Phone', 'phone.bookCatch': 'Phone', 'phone.bookChicks': 'Phone',
 };
 // where a reading was taken, in words (the brooding floor's six parts); a place off it is left out

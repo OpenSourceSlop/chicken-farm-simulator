@@ -8,13 +8,31 @@
 // Phase 5 (package experience, PHASE5.md §4.1, §6.8.3): interface.watch shown / folded (the dots only, open on a click) /
 // hidden (no card: the warnings still come as captions and notebook lines); the warning is shown whole: when the card
 // would reach the time bar, fit() gives its box the room left and it scrolls inside, with a fade and "more below".
-import { h, button, setText, store } from './ui-dom.js';
+import { h, button, setText, store, injectStyle } from './ui-dom.js';
 import { WATCH_STATES } from './flock-watch.js';
+// Skills update (SKILLS.md §5.3, §3.9, §12.9): the Equipment row (while a system is on: status() gives it), Show me on the
+// comfort row (a warning's fix: ui.showMe opens its panel and points the marker), where you stand (Comfort 3)
+import { SKILLS_UPDATE } from './config.js';
 
 // the final check: a fifth row, the water supply (the tank, its pump and the meter), only where the farm has the water
 // condition's tank (the row and its compact dot are hidden while status() gives none)
-const ROWS = ['weight', 'deaths', 'comfort', 'intake', 'supply'];
-const LABEL = { weight: 'Weight', deaths: 'Deaths', comfort: 'Comfort', intake: 'Intake', supply: 'Supply' };
+const ROWS = ['weight', 'deaths', 'comfort', 'intake', 'supply', 'equipment'];
+const LABEL = { weight: 'Weight', deaths: 'Deaths', comfort: 'Comfort', intake: 'Intake', supply: 'Supply', equipment: 'Equipment' };
+const SKILL_CSS = `
+.fw-showme { margin-left: 6px; padding: 0 6px; min-height: 0; height: 20px; font: 600 11px/18px var(--font-display); letter-spacing: 0.03em; }
+.fw-stand { display: block; color: var(--ink-dim); font-size: 11.5px; }
+`;
+const one = (v) => (Math.round(v * 10) / 10).toFixed(1);
+/** Comfort 3 (SKILLS.md §3.9): the comfort where the farmer stands, against the row (the pure watch has no position). */
+export function whereYouStand(env, player) {
+  if (!env || !player?.isInside || typeof env.comfort !== 'function') return '';
+  const p = player.position;
+  let v = null;
+  try { v = env.comfort(p.x, p.z); } catch { v = null; }
+  if (!Number.isFinite(v)) return '';
+  const row = (env.dayNumber ?? 0) <= 21 ? 'the row' : 'the target';
+  return Math.abs(v) < 0.05 ? `where you stand: at ${row}` : `where you stand: ${one(Math.abs(v))} °C ${v < 0 ? 'under' : 'over'} ${row}`;
+}
 const FOLD_KEY = 'chicken-farm.watch-folded';
 const narrowNow = () => typeof window !== 'undefined' && window.innerWidth <= 1100;
 
@@ -25,6 +43,7 @@ export function splitWarning(text) {
 }
 
 export function createWatchCard(root, ctx) {
+  try { injectStyle('fw-skills-style', SKILL_CSS); } catch { /* a page without a full document (node tests) */ }
   const title = h('h2', { class: 'label' }, 'Flock watch');
   const sub = h('span', { class: 'fw-sub' });
   const fold = button({ class: 'fw-fold', 'aria-label': 'Fold the flock watch', title: 'Fold or open the flock watch', 'aria-expanded': 'true' }, '–');
@@ -37,6 +56,12 @@ export function createWatchCard(root, ctx) {
     rows[id] = { li, dot, value, detail, sig: 'new' };
     return li;
   }));
+  // Skills update: Show me (the comfort warning's fix) and where you stand, on the comfort row
+  const showMe = button({ class: 'btn btn--quiet fw-showme', hidden: true, 'data-watch': 'show-me' }, 'Show me');
+  const stand = h('span', { class: 'fw-stand', hidden: true });
+  let fixNow = null;
+  showMe.addEventListener('click', (e) => { e.stopPropagation(); if (fixNow) ctx.ui?.showMe?.(fixNow); });
+  rows.comfort.li.querySelector('.fw-v').append(showMe, stand);
   // the compact strip (narrow screens, all steady): the four dots and their labels
   const mini = h('button', { class: 'fw-mini', type: 'button', title: 'Open the flock watch', 'aria-label': 'Open the flock watch' },
     ROWS.map((id) => h('span', { class: 'fw-mini-i', 'data-row': id }, h('span', { class: 'fw-dot', role: 'img' }), LABEL[id], h('span', { class: 'fw-mini-w', hidden: true }))));
@@ -115,6 +140,16 @@ export function createWatchCard(root, ctx) {
       // the last warning while it is less than 12 farm hours old: where to look first, then what happened
       const w = st.last, env = ctx.env;
       const text = w && env && env.day - w.t < 0.5 ? w.text : '';
+      // Skills update: Show me while the last warning carries its fix (Comfort 2); where you stand inside (Comfort 3)
+      if (SKILLS_UPDATE.live) {
+        fixNow = text && w.fix ? w.fix : null;
+        if (showMe.hidden === !!fixNow) showMe.hidden = !fixNow;
+        let has3 = false;
+        try { has3 = !!ctx.perks?.has?.('comfortAlways'); } catch { has3 = false; }
+        const s = has3 ? whereYouStand(env, ctx.player) : '';
+        if (stand.textContent !== s) setText(stand, s);
+        stand.hidden = !s;
+      } else if (!showMe.hidden || !stand.hidden) { showMe.hidden = true; stand.hidden = true; fixNow = null; }
       if (text !== lastWarn) { lastWarn = text; const p = splitWarning(text); setText(warnWhere, p.where); setText(warnWhat, p.what); warn.hidden = !text; warn.scrollTop = 0; warn.removeAttribute('title'); }
       lastCalm = calm && !text;
       // folded (the settings): the dots only until he opens it; narrow screens: the dots while every row is steady

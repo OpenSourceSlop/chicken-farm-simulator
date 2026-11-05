@@ -13,6 +13,7 @@ import { dialogShell } from './ui-panels.js';
 import { createKeysTab } from './ui-settings-keys.js';
 import { SETTINGS_CSS } from './ui-settings-style.js';
 import { fillGuide } from './content-guide.js';
+import { SKILLS_UPDATE } from './config.js';
 
 export const SETTINGS_ID = 'settings';
 /** The line of plain words under each tab (what it changes; no farming fact). {key:…} tokens are the live keys. */
@@ -23,6 +24,7 @@ export const TAB_WORDS = {
   camera: 'How the view turns and zooms when you drag, turn the wheel or use the keys.',
   interface: 'The size of the HUD, the flock watch card, how long messages stay, sound captions and the controls legend.',
   keys: 'Every key of the game. Press Change, then the new key. A key that another action uses swaps with it.',
+  automation: 'The jobs the farm’s equipment does for you once a branch reaches level 3. With a switch off, that branch’s jobs are done by hand as before, from the next day’s jobs on.',
 };
 // how a slider shows its value
 const SHOW = {
@@ -81,6 +83,16 @@ function createFpsReadout(ctx) {
 
 export function registerSettingsPanel({ register, openPanel, closePanel, ctx, menu = null, title = null }) {
   let wantTab = null, api = null, built = null;
+  // Skills update: the Automation rows' "comes with level 3" (a branch whose level 3 payoff is not reached yet)
+  const autoNotes = new Map();
+  function drawAutoNotes() {
+    if (!autoNotes.size) return;
+    for (const [branch, n] of autoNotes) {
+      let lvl = 3;
+      try { lvl = ctx.skills?.level?.(branch) ?? 3; } catch { lvl = 3; }
+      n.hidden = lvl >= 3;
+    }
+  }
   injectStyle('settings-style', SETTINGS_CSS);
   const S = ctx.settings;
   const fps = createFpsReadout(ctx);
@@ -94,7 +106,9 @@ export function registerSettingsPanel({ register, openPanel, closePanel, ctx, me
   register(SETTINGS_ID, () => {
     const titleId = uniqueId('settings-title');
     const { el, closeBtn } = dialogShell('settings', titleId, () => closePanel());
-    const groups = Object.entries(S.schema).filter(([, G]) => !G.hidden);
+    // Skills update (SKILLS.md §7): the Automation tab only while config SKILLS_UPDATE.live (the six Phase 5 tabs otherwise)
+    const groups = Object.entries(S.schema).filter(([, G]) => !G.hidden || (G.liveOnly && SKILLS_UPDATE.live));
+    autoNotes.clear();
     const ctls = new Map();
     const words = [];
     let keysTab = null, govLine = null, govT = 0;
@@ -114,6 +128,8 @@ export function registerSettingsPanel({ register, openPanel, closePanel, ctx, me
         const p = `${g}.${k}`;
         const c = settingControl(p, it, S.get(p), (v) => S.set(p, v));
         ctls.set(p, c); list.append(c.el);
+        // a branch under level 3: its switch stays (set ahead), with "comes with level 3" beside it
+        if (g === 'automation' && k !== 'all') { const n = h('span', { class: 'set-note set-auto-note', hidden: true }, 'comes with level 3'); c.el.append(n); autoNotes.set(k, n); }
       }
       sec.append(list);
       if (g === 'graphics') { govLine = h('p', { class: 'set-gov', role: 'status' }, ''); sec.append(govLine); }
@@ -150,6 +166,7 @@ export function registerSettingsPanel({ register, openPanel, closePanel, ctx, me
       el,
       onOpen() {
         for (const [line, t] of words) line.textContent = fillGuide(t, { keys: ctx.keys, settings: S });
+        drawAutoNotes();
         for (const [p, c] of ctls) c.sync(S.get(p));
         keysTab?.refresh();
         const i = wantTab ? groups.findIndex(([g]) => g === wantTab) : -1;

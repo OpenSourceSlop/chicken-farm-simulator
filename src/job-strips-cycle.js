@@ -6,6 +6,7 @@ import { knownFlock, ventNeed, nippleCmToday, rimCmNow, nippleInBand, rimInBand,
   LINES_UP_CM, PANS_UP_CM, CATCH_DIMMER_MAX, CATCH_FANS_MIN, DARK_H, HEIGHT_BAND_CM } from './job-figures.js';
 import { step, cmp, line, note, time, wait, pct, partRows, houseRow, birdsSeen, ventRows, lightAt, timerText, heldText } from './job-strips.js';
 import { medicineDays, blendHours, MED_DAYS, BLEND_H } from './job-engine.js';
+import { variantHas } from './job-variants.js';
 
 const cm = (v) => `${Math.round(v)} cm`;
 const list = (a) => a.map((v) => Math.round(v)).join(' · ');
@@ -49,7 +50,14 @@ function orderRows(c, inst, type, days) {
 const weighRows = (c, inst) => {
   const w = c.weighings?.() || { n: 0, sectors: 0, mean: null }, d = c.env.dayNumber, chick = c.farm.stats?.chickWeightMeasuredG ?? c.farm.flock?.chickWeightG;
   const target = d <= 7 ? `bird scale plate: 4–5 × your chick weight ${one(chick)} g = ${int(chick * 4)}–${int(chick * 5)} g` : `bird scale plate, day ${d}: ${int(weightAt(d))} g`;
-  return [cmp('Weighed', 'plate: at least 50 birds from 5 places', `${w.n} birds, ${w.sectors} places`, Math.min(w.n / 50, w.sectors / 5)), cmp('Mean weight', target, w.mean ? `${int(w.mean)} g` : '—')];
+  const out = [cmp('Weighed', 'plate: at least 50 birds from 5 places', `${w.n} birds, ${w.sectors} places`, Math.min(w.n / 50, w.sectors / 5)), cmp('Mean weight', target, w.mean ? `${int(w.mean)} g` : '—')];
+  // Skills update (SKILLS.md §3.8, Growth 2): the parts weighed so far, each frame in one press; the marker leads to the next part
+  if (variantHas(inst?.def, 'frameWeigh')) {
+    const per = new Map();
+    for (const x of w.list || []) per.set(x.s, (per.get(x.s) || 0) + 1);
+    out.push(step(`Parts of the house weighed: ${per.size} of 5${per.size ? ` (${[...per.values()].map((n) => `${n} birds`).join(', ')})` : ''}. The Weigh the frame key weighs its ten birds in one press.`, per.size >= 5 && w.n >= 50));
+  }
+  return out;
 };
 const birdCount = (inst, n, parts) => { const L = inst.st.list || [], s = new Set(L.map((x) => x.s)).size; return step(`${L.length} of ${n} birds, ${s} of ${parts} parts of the house`, L.length >= n && s >= parts); };
 

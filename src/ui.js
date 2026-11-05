@@ -60,6 +60,12 @@ import { createIntro } from './ui-intro.js';
 import { clock as stepClock } from './clock.js';
 import { createKeys } from './keys.js';
 import { registerNightPanel, NIGHT_PANEL } from './ui-night.js'; // the night fix: the night check card before a skip
+// Skills update (SKILLS.md §6.3, §3.9, §3.11, §3.6): the unlock captions, the gate's one caption, the pocket phone key, Show
+// me, the comfort colours on entering (Comfort 3), the Feed 2 silo warning
+import { SKILLS_UPDATE, AUTO } from './config.js';
+import { unlockCaption, groupUnlocks, gateCaption } from './job-words.js';
+import { fillKeys } from './key-words.js';
+import { feedDays } from './farm-silos.js';
 
 const MOVE_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
 const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift']);
@@ -68,7 +74,7 @@ const ARROW_KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
 const MOVE_IDS = ['forward', 'back', 'left', 'right', 'run', 'turnLeft', 'turnRight'];
 // the level's own keys, each to its action (the views and meters come with the level, PHASE3.md §13.6); the bucket's key
 // ('bucket', KeyG by default: PHASE4.md §15.3) is acted on here only, as every other farm key
-const LEVEL_IDS = ['squeeze', 'probe', 'notebook', 'skills', 'floorView', 'lux', 'air', 'comfortView', 'moistureView'];
+const LEVEL_IDS = ['squeeze', 'probe', 'notebook', 'skills', 'floorView', 'lux', 'air', 'comfortView', 'moistureView', 'phone'];
 const FARM_TOOL_IDS = ['squeeze', 'probe', 'lux', 'air']; // fix round: the tools that read the farm rest while the player paused the clock
 const P1_IDS = new Set(['sign-gate', 'controller', 'sign-brooder']); // what E reaches in the sandbox
 const TWO_HANDS_PANELS = new Set(['chick-table', 'chick-grading']);    // PHASE4.md §15.3 (c): panels that handle chicks
@@ -327,7 +333,23 @@ export function createUI(ctx, deps) {
       const dead = p.result.deadInBoxes || 0;
       caption.show(`${int(p.result.placed ?? p.chicks)} chicks out on the litter.${dead ? ` ${int(dead)} dead in these boxes.` : ''}`);
     }
-    if (p.id === 'dead.count') caption.show(`${int(p.n)} dead bird${p.n === 1 ? '' : 's'} counted at the bin.`);
+    if (p.id === 'dead.count') deadCountCaption(p);
+  });
+  // Skills update (SKILLS.md §3.10): the tally bucket counts at pickup; the bin counts only the rest (no bird twice). With
+  // live false every count is at the bin, as before.
+  let deadToday = { day: null, n: 0 };
+  function deadCountCaption(p) {
+    const n = Math.max(0, Math.round(p.n || 0));
+    if (deadToday.day !== env.dayNumber) deadToday = { day: env.dayNumber, n: 0 };
+    deadToday.n += n;
+    if (!SKILLS_UPDATE.live) { caption.show(`${int(p.n)} dead bird${p.n === 1 ? '' : 's'} counted at the bin.`); return; }
+    if (p.at === 'pickup') { if (n > 0) caption.show(`${int(n)} dead bird${n === 1 ? '' : 's'} into the bucket, counted (${int(deadToday.n)} today).`, 4.5, { now: true }); return; }
+    if (n > 0) caption.show(`${int(n)} dead bird${n === 1 ? '' : 's'} counted at the bin.`);
+  }
+  // the bucket emptied at the bin: how many the tally counted as they went in (scene / panels send EV.DEAD_DROP)
+  events.on(EV.DEAD_DROP, (p) => {
+    if (mode !== 'level' || !SKILLS_UPDATE.live || !p || !(p.counted > 0)) return;
+    caption.show(`Bucket emptied into the bin (${int(p.counted)} counted as you picked them up).`, 5);
   });
   // a look note is soft (PHASE4.md §15: the slower clock makes listen stops land beside actions): the next caption, the
   // result of what the farmer just did, replaces it at once (the notebook keeps the note)
@@ -479,7 +501,12 @@ export function createUI(ctx, deps) {
   function nightCheck(nc) {
     if (mode !== 'level' || !nc || !openPanel(NIGHT_PANEL)) return false;
     nightUI.show(nc, {
-      onFix: (fix) => { if (fix?.panel && openPanel(fix.panel)) panels.openPanel?.openTab?.(fix.tab); },
+      onFix: (fix) => {
+        // Skills update: a fault's place (a line's regulator, the silo) gets the marker; the pocket phone only once it is his
+        if (fix?.spot) jobCard.pointTo?.(fix.spot, env.day + (AUTO.showMeH ?? 2) / 24);
+        if (fix?.panel === 'pocket-phone' && !ctx.perks?.has?.('pocketPhone')) { jobCard.pointTo?.('officeDesk', env.day + (AUTO.showMeH ?? 2) / 24); return; }
+        if (fix?.panel && openPanel(fix.panel)) panels.openPanel?.openTab?.(fix.tab);
+      },
       onSkip: () => ctx.level?.nextJob({ anyway: true }),
     });
     return true;
@@ -671,6 +698,7 @@ export function createUI(ctx, deps) {
       else if ((is(e, 'use') || is(e, 'useDead')) && !e.repeat && !typingInControl(e.target) && panels.openId !== 'result') { e.preventDefault(); panels.close(); }
       else if (mode === 'level' && !e.repeat && is(e, 'notebook') && panels.openId === 'notebook') { e.preventDefault(); panels.close(); }
       else if (mode !== 'sandbox' && !e.repeat && is(e, 'skills') && panels.openId === 'skilltree') { e.preventDefault(); panels.close(); }
+      else if (mode === 'level' && !e.repeat && is(e, 'phone') && panels.openId === 'pocket-phone') { e.preventDefault(); panels.close(); }
       return;
     }
     if (title.open) return;
@@ -710,6 +738,7 @@ export function createUI(ctx, deps) {
         case 'air': e.preventDefault(); airMeter(); break;
         case 'comfortView': e.preventDefault(); toggleView('comfort'); break;
         case 'moistureView': e.preventDefault(); toggleView('moisture'); break;
+        case 'phone': e.preventDefault(); skillsUI.openPhone(); break;
         default: break;
       }
     }
@@ -784,6 +813,90 @@ export function createUI(ctx, deps) {
   applyHudScale();
   window.addEventListener('resize', applyHudScale);
   try { ctx.settings?.subscribe?.((c) => { if (c.key === 'hudScale') { applyHudScale(); hudAcc = 0; } }, 'interface'); } catch { /* no store */ }
+
+  // ---- Skills update (SKILLS.md §6.3, §3.9, §3.10, §3.11, §3.6): everything here only while config SKILLS_UPDATE.live ----
+  const skillsUI = (() => {
+    const perksHas = (k) => { try { return !!ctx.perks?.has?.(k); } catch { return false; } };
+    const standard = () => !!ctx.run?.standardPlaying;
+    let queue = [], timer = null, gate = [], gateArmed = false, feedArmed = true, feedAcc = 0;
+    const note = (text) => { try { records?.note?.('skill', text); } catch { /* records */ } };
+    const paper = () => { try { if (ctx.audio?.running) ctx.audio.engine?.cue?.('paper'); } catch { /* sound */ } };
+    // one caption per batch of unlocks (a level-up's payoff and its views together; the highest level shows, each is noted)
+    function flush() {
+      timer = null;
+      const groups = groupUnlocks(queue); queue = [];
+      if (!groups.length || standard()) return;
+      const texts = groups.map((g) => unlockCaption(g)).filter(Boolean);
+      for (const t of texts) note(fillKeys(t));
+      if (texts.length) { caption.show(fillKeys(texts[texts.length - 1]), 14, { now: true }); paper(); }
+    }
+    events.on(EV.SKILL_UNLOCK, (p) => {
+      // no caption for key null (a restore, a force back down) nor while a standard start plays the ideal farmer
+      if (!SKILLS_UPDATE.live || !p || !p.key || standard()) return;
+      // the finished flock's level 3 unlocks wait for the next level start and show as one caption
+      if (p.gate) { if (!gate.includes(p.key)) gate.push(p.key); return; }
+      queue.push(p);
+      if (!timer) timer = setTimeout(flush, 0);
+    });
+    events.on(EV.LEVEL, (p) => { if (p && (p.phase === 'start' || p.phase === 'resume') && gate.length) gateArmed = true; });
+    // Comfort 3: the comfort colours on entering the house ({key:comfortView} turns them off for the visit)
+    events.on(EV.HOUSE_ENTER, () => {
+      if (mode !== 'level' || !SKILLS_UPDATE.live || !perksHas('comfortAlways') || views.comfort) return;
+      views.comfort = true; flock?.setOverlay?.('comfort', true);
+    });
+    // Feed 2: a new order re-arms the warning (once per order)
+    events.on(EV.FARM_DELIVERY, (p) => { if (p && p.kind === 'feed' && p.phase === 'arrive') { feedArmed = true; jobCard.setTopLine?.(null); } });
+    events.on(EV.ACTION, (p) => { if (p && p.id === 'feed.order') jobCard.setTopLine?.(null); });
+    // the time bar's phone key (Farm Planning 2): made the first time it shows, so the Phase 5 time bar is as it was
+    let phoneBtn = null;
+    const phoneTitle = () => { if (!phoneBtn) return; const k = keyWord('phone', 'R'); phoneBtn.title = `The phone (${k})`; phoneBtn.setAttribute('aria-label', `Open the phone in your pocket (${k})`); };
+    function phoneKey() {
+      if (phoneBtn) return phoneBtn;
+      phoneBtn = button({ class: 'btn btn--icon', hidden: true, 'data-time': 'phone' });
+      phoneBtn.innerHTML = ICONS.phone || '☎';
+      phoneBtn.addEventListener('click', () => openPhone());
+      hud.timebar.append(phoneBtn);
+      phoneTitle(); K.subscribe?.(() => phoneTitle());
+      return phoneBtn;
+    }
+    function openPhone() {
+      if (mode !== 'level' || !SKILLS_UPDATE.live) return false;
+      if (perksHas('pocketPhone')) return !!openPanel('pocket-phone');
+      caption.show('The pocket phone comes with Farm Planning 2 on the skill tree.', 5, { now: true });
+      return false;
+    }
+    /** Show me (Comfort 2's warning fix, as the night check's Fix it): its panel and tab, the marker to its place. */
+    function showMe(fix) {
+      if (!fix) return false;
+      if (fix.spot) jobCard.pointTo?.(fix.spot, env.day + (AUTO.showMeH ?? 2) / 24);
+      if (fix.panel && openPanel(fix.panel)) { if (fix.tab) panels.openPanel?.openTab?.(fix.tab); return true; }
+      return !!fix.spot;
+    }
+    function tick(dt) {
+      const live = !!SKILLS_UPDATE.live && mode === 'level';
+      const ph = live && perksHas('pocketPhone');
+      if (ph || phoneBtn) { const b = phoneKey(); if (b.hidden === ph) b.hidden = !ph; }
+      if (!live) return;
+      if (gateArmed && gate.length && !standard()) {
+        const t = gateCaption(gate);
+        gate = []; gateArmed = false;
+        if (t) { caption.show(t, 14, { now: true }); note(t); paper(); }
+      }
+      if ((feedAcc -= dt) > 0) return;
+      feedAcc = 2;
+      if (!perksHas('siloOrder') || !(farm?.flock?.alive > 0)) return;
+      let d = null;
+      try { d = feedDays(farm, env); } catch { d = null; }
+      const pending = (farm.feed?.pending?.length ?? 0) > 0 || !!farm.feed?.order;
+      if (d && Number.isFinite(d.days) && d.days <= (AUTO.orderAtDays ?? 2) + 1e-9 && !pending) {
+        const t = `Silo: about ${Math.max(0, Math.round(d.days * 10) / 10)} days of feed left (Feed 2): order at the silo gauge.`;
+        jobCard.setTopLine?.(t);
+        if (feedArmed) { feedArmed = false; caption.show(t, 8); }
+      } else if (!pending) jobCard.setTopLine?.(null);
+    }
+    return { openPhone, showMe, tick, get gate() { return [...gate]; } };
+  })();
+
   const api = {
     update(dt) {
       rt += dt;
@@ -804,6 +917,7 @@ export function createUI(ctx, deps) {
         if (p1Pointer) p1Pointer.hidden = true;
         if (mode === 'level' || mode === 'result') jobCard.update(dt, !!panels.openId);
         if (mode === 'level') refreshNextBar(dt);
+        skillsUI.tick(dt);
         deadMarks.update(dt, mode === 'level' && farm?.mode === 'level', !!panels.openId || busy.open);
         watchCard.update(dt, (mode === 'level' || mode === 'result') && farm?.mode === 'level');
       }
@@ -877,6 +991,10 @@ export function createUI(ctx, deps) {
     /** PHASE4.md §15.4: the dead-bird chip, the bucket's chip and the markers shown now. */
     deadMarks: () => deadMarks.state(),
     clearCaptions: () => caption.clear(),
+    // Skills update: the pocket phone (Farm Planning 2), Show me (Comfort 2), the gate's unlocks waiting for their caption
+    openPhone: () => skillsUI.openPhone(),
+    showMe: (fix) => skillsUI.showMe(fix),
+    get gateWaiting() { return skillsUI.gate; },
     jobCard,
     squeeze,
     probe,

@@ -5,8 +5,9 @@
 //   node scripts/test-level.mjs
 import { makeWorld } from '../src/farm-profiles-run.js';
 import { createLevel } from '../src/level.js';
-import { LEVEL1 } from '../src/config.js';
+import { LEVEL1, SKILLS_UPDATE, AUTO_SYSTEMS, AUTO } from '../src/config.js';
 import { EV } from '../src/events.js';
+import { createPerks } from '../src/perks.js';
 
 let failed = 0;
 function test(name, fn) {
@@ -14,6 +15,20 @@ function test(name, fn) {
 }
 const assert = (c, msg) => { if (!c) throw new Error(msg); };
 const inBand = (v, [a, b], what) => assert(v >= a && v <= b, `${what} ${v} not in ${a}..${b}`);
+
+/** Skills update: a level on an existing world with the perks in its deps (as main.js passes them). */
+function makeLevelWith(w, perks) {
+  const pos = { x: 0, z: 0 };
+  const player = { position: pos, yaw: 0, isInside: false, teleport(x, z, yaw) { pos.x = x; pos.z = z; this.yaw = yaw ?? 0; } };
+  const ui = { panelKind: null, setMode() {}, closePanel() {}, showResult() {}, jobCard: { refresh() {}, reset() {} }, newRun() {}, clearCaptions() {} };
+  const props = { carrying: null, reset() {}, serialize: () => ({}), restore() {} };
+  const flock = { resetLevel() {}, serialize: () => ({}), restore() {}, afterSkip() {} };
+  const store = { data: null, available: true, save(d) { this.data = d; return true; }, load() { return this.data; }, clear() {}, loadProfile: () => null, saveProfile() {}, info() { return null; } };
+  const level = createLevel({ env: w.env }, { ...w, save: store, player, flock, props, ui, perks });
+  return { ...w, level };
+}
+/** A fresh farm world that shares the skills (and so the perks) of `w`. */
+function makeWorldWith(skills, w0) { const w = makeWorld(); void w0; return { ...w, skills }; }
 
 function makeLevel(profileStore = null) {
   const w = makeWorld();
@@ -216,6 +231,53 @@ test('the hot season\'s brooding week by goto(auto): the HUD names it, the jobs 
   const s = L.level.saveBlob();
   const R = makeLevel();
   assert(R.level.resume(JSON.parse(JSON.stringify(s))) && R.farm.condition === 'hot' && R.level.jobs.byKey('h-brood-air@3'), 'resume keeps the condition and its jobs');
+});
+
+// ---------------- Skills update (SKILLS.md §4.2, §12.9, package "jobs"): the perks wired into the level ----------------
+test('skills update: farm.auto.on from the perks after start, enter and restore, and on EV.PERKS / settings; goto(auto) quiet; flockNo', () => {
+  const was = SKILLS_UPDATE.live;
+  SKILLS_UPDATE.live = true;
+  try {
+    const w = makeWorld();
+    const settings = { v: {}, get(p) { return this.v[p]; } };
+    const perks = createPerks({ skills: w.skills, settings, events: w.events, allowed: true });
+    const L = makeLevelWith(w, perks);
+    let starts = [];
+    const start0 = w.farm.start;
+    w.farm.start = (def, opts) => { starts.push(opts?.flockNo); return start0(def, opts); };
+    w.skills.profile.cyclesDone = 1;
+    L.level.start({ seed: 1 });
+    assert(starts[0] === 1, `farm.start gets flockNo = cyclesDone: ${starts}`);
+    const on = () => Object.entries(w.farm.auto.on).filter(([, v]) => v).map(([k]) => k).sort().join(',');
+    assert(on() === '', `nothing on before any level 3: ${on()}`);
+    w.skills.debug.force('water', 3);
+    assert(on() === 'winch', `EV.PERKS: Water 3 turns the winch on: ${on()}`);
+    for (const b of ['moisture', 'ventilation', 'heating', 'feed', 'lighting', 'growth']) w.skills.debug.force(b, 3);
+    assert(on() === Object.keys(AUTO_SYSTEMS).sort().join(','), `every system on: ${on()}`);
+    settings.v['automation.water'] = false; w.events.emit(EV.SETTINGS, { group: 'automation', key: 'water', value: false });
+    assert(!w.farm.auto.on.winch && w.farm.auto.on.timer, 'the Automation setting turns one system off');
+    settings.v['automation.water'] = true; w.events.emit(EV.SETTINGS, { group: 'automation', key: 'water', value: true });
+    // goto(auto) quiets the controllers the whole way (quietN > 0 at every farm step of the ideal's play)
+    let minQ = Infinity, steps = 0;
+    w.env.addStepper(() => { if (w.farm.mode === 'level') { steps++; minQ = Math.min(minQ, w.farm.auto.quietN); } });
+    L.level.debug.goto(1, 12, { auto: true });
+    assert(steps > 0 && minQ >= 1 && w.farm.auto.quietN === 0, `goto(auto) quiet: min ${minQ} over ${steps} steps, after ${w.farm.auto.quietN}`);
+    // a farm.start resets on; the level sets it again (start, resume)
+    const blob = JSON.parse(JSON.stringify(L.level.saveBlob()));
+    const R = makeLevelWith(makeWorldWith(w.skills, w), perks);
+    assert(R.level.resume(blob) && Object.values(R.farm.auto.on).filter(Boolean).length === Object.keys(AUTO_SYSTEMS).length, 'resume: every system on again from the perks');
+    // enter the next level: on again after enterLevel
+    const E = makeLevelWith(w, perks);
+    E.level.start({ seed: 1 });
+    E.level.debug.goto(7, 21, { auto: true });
+    if (!E.level.result) E.level.debug.goto(8, 6.05);
+    assert(E.level.result?.pass, 'the ideal brooding week passes');
+    w.farm.auto.on.winch = false;
+    assert(E.level.enter('week2') && w.farm.auto.on.winch, 'enter: on again after enterLevel');
+    // the early warning's lead on the flock watch from Comfort 2
+    w.skills.debug.force('comfort', 2);
+    assert(E.level.watch.lead().comfortH === AUTO.earlyComfortH && E.level.watch.lead().fix === true, `setLead from earlyWarning: ${JSON.stringify(E.level.watch.lead())}`);
+  } finally { SKILLS_UPDATE.live = was; }
 });
 
 console.log(failed ? `${failed} failed` : 'all passed');

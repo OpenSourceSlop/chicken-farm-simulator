@@ -127,6 +127,7 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   let runCond = null;               // the condition the run was started under (conditionsDone counts it)
   let startedAt = null;             // the first level the farmer played in this run
   let standard = false;             // the levels before startedAt came from a standard start (the ideal farmer's trace)
+  let playing = 0;                  // > 0 while a standard start plays the ideal farmer (run.standardPlaying)
   let mixed = false;                // farm.condition was not the run's at a level start or end (a harness's setCondition)
   let counted = false;              // this run has raised cyclesDone
   let lastNormal = null;            // { compare } of the last finished normal-season cycle (the summary's compare column)
@@ -284,6 +285,11 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
     const before = Object.fromEntries(RUN_ORDER.slice(0, Math.max(0, RUN_ORDER.indexOf(id))).filter((k) => levels[k]).map((k) => [k, clone(levels[k])]));
     // the ideal farmer's auto play raises no flock watch notice (review round: they went into the farmer's notebook)
     level.watch?.quiet?.(true);
+    // Skills update (SKILLS.md §4.2, §15.2): no controller acts and no fault starts in the whole standard start (every goto,
+    // auto or not, run.next() and the profile's restore); no unlock caption shows meanwhile (run.standardPlaying)
+    const quiet = !!farm?.autoCtl?.quiet;
+    if (quiet) farm.autoCtl.quiet(true);
+    playing++;
     try {
       level.start({ seed: s, run: true, condition: runCond });
       started(LEVEL1);
@@ -300,7 +306,15 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       for (const [k, v] of Object.entries(before)) levels[k] = { ...v, starts: [...new Set([...(v.starts || []), ...(levels[k]?.starts || [])])].sort((a, b) => a - b) };
       saveRun();
       return true;
-    } finally { level.watch?.quiet?.(false); if (snap) level.profile.restore(snap); }
+    } finally {
+      level.watch?.quiet?.(false);
+      try { if (snap) level.profile.restore(snap); } finally {
+        // the perks as the player's profile gives them again, and the controllers on from them (after the restore)
+        try { level.syncAuto?.(); } catch (err) { console.error('syncAuto after a standard start failed', err); }
+        playing--;
+        if (quiet) farm.autoCtl.quiet(false);
+      }
+    }
   }
 
   /** A new run (Start a new flock, or a level row's condition other than the run's): the old run and its starts go;
@@ -338,6 +352,8 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
   const run = {
     stub: false,
     store,
+    /** Skills update (SKILLS.md §4.2, §6.3): a standard start is playing the ideal farmer now (ui.js shows no unlock caption). */
+    get standardPlaying() { return playing > 0; },
     get available() { return !!store.available; },
     state() {
       return { levelId, seed, plan: clone(plan), levels: clone(levels), summary: clone(summary), conditions: [...conditions], condition: mirror(), lastCycle: clone(lastCycle),

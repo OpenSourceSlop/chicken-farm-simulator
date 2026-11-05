@@ -19,6 +19,8 @@
 /** group: 'move' | 'farm' | 'views' | 'time' | 'game'. fixed: not rebindable. extra: shown in the legend, never a code (Wheel).
  *  Review round (PHASE5.md §4.3): the map is on O (Tab stays the browser's focus key, so a keyboard player reaches every
  *  HUD key); pause, 1×, 4× and Next job have keys of their own (P, 1, 4, J), so a whole day plays without the mouse. */
+import { SKILLS_UPDATE } from './config.js';
+
 export const KEY_ACTIONS = [
   { id: 'forward', group: 'move', codes: ['KeyW'], what: 'Walk forward' },
   { id: 'back', group: 'move', codes: ['KeyS'], what: 'Walk back' },
@@ -36,6 +38,9 @@ export const KEY_ACTIONS = [
   { id: 'probe', group: 'farm', codes: ['KeyT'], what: 'Floor thermometer at your feet' },
   { id: 'lux', group: 'farm', codes: ['KeyL'], what: 'Light meter: lux at bird height' },
   { id: 'air', group: 'farm', codes: ['KeyV'], what: 'Air meter: air speed, °C and humidity at bird height' },
+  // Skills update (SKILLS.md §3.11): the pocket phone (Farm Planning 2); only while config SKILLS_UPDATE.live (liveOnly: the
+  // legend, the Keys tab and the guide leave it out otherwise, so the Phase 5 lists stay as they are)
+  { id: 'phone', group: 'farm', codes: ['KeyR'], what: 'The phone in your pocket (Farm Planning 2)', liveOnly: true },
   { id: 'notebook', group: 'views', codes: ['KeyN'], what: 'Notebook: your readings' },
   { id: 'skills', group: 'views', codes: ['KeyK'], what: 'Skill tree' },
   { id: 'floorView', group: 'views', codes: ['KeyF'], what: 'Floor temperature view (once unlocked)' },
@@ -51,6 +56,12 @@ export const KEY_ACTIONS = [
   { id: 'menu', group: 'game', codes: ['Escape'], what: 'Close a panel; with none open, the game menu', fixed: true },
 ];
 const BY_ID = new Map(KEY_ACTIONS.map((a) => [a.id, a]));
+/** Skills update: an action shown and matched now (a liveOnly one only while config SKILLS_UPDATE.live). */
+export const actionLive = (a) => !!a && (!a.liveOnly || !!SKILLS_UPDATE.live);
+/** The views' level names while live (SKILLS.md §3.0: "(Brooding 1)" instead of "(once unlocked)"). */
+const LIVE_WHAT = { floorView: 'Floor temperature view (Brooding 1)', comfortView: 'Comfort view of the flock (Comfort 1)', moistureView: 'Litter moisture view (Moisture 1)' };
+/** An action's words now (the Keys tab, the legend's long form, the guide). */
+export const actionWhat = (a) => (SKILLS_UPDATE.live && LIVE_WHAT[a?.id]) || a?.what || '';
 /** Codes no action may take (the browser's own keys, modifiers). */
 export const RESERVED_CODES = new Set(['Escape', 'MetaLeft', 'MetaRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'ShiftLeft', 'ShiftRight',
   'CapsLock', 'ContextMenu', 'F5', 'F11', 'F12', 'PrintScreen']);
@@ -96,12 +107,12 @@ export function createKeys(settings = null) {
     if (a.follows) return codes(a.follows);
     if (a.fixed) return [...a.codes];
     const o = over(), main = mainOf(a, o);
-    const takenByOther = (c) => KEY_ACTIONS.some((b) => b.id !== id && rebindable(b) && mainOf(b, o) === c);
+    const takenByOther = (c) => KEY_ACTIONS.some((b) => b.id !== id && rebindable(b) && actionLive(b) && mainOf(b, o) === c);
     return [main, ...a.codes.slice(1).filter((c) => c !== main && !takenByOther(c))];
   };
   function matches(e, id) {
     const a = BY_ID.get(id);
-    if (!a || !e) return false;
+    if (!a || !e || !actionLive(a)) return false;
     if (e.ctrlKey || e.metaKey || e.altKey) return false;
     if (a.shift != null && !!e.shiftKey !== a.shift) return false;
     const cs = codes(id);
@@ -117,7 +128,7 @@ export function createKeys(settings = null) {
     if (UI_CODES.has(code)) return { ok: false, reason: 'ui' };
     const o = { ...over() };
     // another action's main key swaps with this one's main key (its alternates stay); an alternate is simply taken
-    const other = KEY_ACTIONS.find((b) => b.id !== id && rebindable(b) && mainOf(b, o) === code);
+    const other = KEY_ACTIONS.find((b) => b.id !== id && rebindable(b) && actionLive(b) && mainOf(b, o) === code);
     let swapped = null;
     if (other) { o[other.id] = mainOf(a, o); swapped = other.id; }
     o[id] = code;
@@ -139,7 +150,7 @@ export function createKeys(settings = null) {
     labels: (id) => { const a = BY_ID.get(id); const ls = [...new Set(codes(id).map(codeLabel))]; return a?.shift ? ['Shift', ...ls] : [...ls, ...(a?.extra || [])]; },
     rows(mode = 'level') {
       const ids = MODE_IDS[mode] || KEY_ACTIONS.map((a) => a.id);
-      return ids.map((id) => BY_ID.get(id)).filter(Boolean).map((a) => ({ id: a.id, keys: this.labels(a.id), what: a.what }));
+      return ids.map((id) => BY_ID.get(id)).filter(actionLive).map((a) => ({ id: a.id, keys: this.labels(a.id), what: actionWhat(a) }));
     },
     rebind,
     reset(id = null) {

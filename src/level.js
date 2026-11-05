@@ -72,6 +72,9 @@ import { JOB_HOLD } from './config.js';
 import { createFlockWatch } from './flock-watch.js'; // PHASE4.md §15.1: the flock watch and its early warnings
 // the night fix (after Phase 5): the night check before a skip through the night, the skip's stops, the morning summary
 import { nightCheck, nightHoursIn, createSkipGuard, createNightLog, NIGHT } from './night-check.js';
+// Skills update (SKILLS.md §4.2, §15.2): the jobs as the payoffs make them, the controllers on from the perks, quiet ideal play
+import { jobVariant } from './job-variants.js';
+import { AUTO, AUTO_SYSTEMS, FAULTS } from './config.js';
 
 const H = 1 / 24;
 const CARRY_KINDS = new Set(['boxes', 'barrow', 'sack', 'frame']);
@@ -89,7 +92,10 @@ const L1_ROUNDS = new Set(['prep', 'eve', 'sign', 'am', 'truck', 'vent', 'crop',
 export function createLevel(ctx, deps = {}) {
   const { farm, records, skills, save, player, flock, props, ui, events } = deps;
   const env = ctx.env;
-  const engine = createJobEngine({ events, env, farm, props, records });
+  // Skills update (SKILLS.md §12.3): every payoff is read through the perks (main.js deps.perks / ctx.perks; none in a node
+  // world that makes none: then every job is as on main and no controller runs)
+  const perksNow = () => deps.perks || ctx.perks || null;
+  const engine = createJobEngine({ events, env, farm, props, records, variant: (jd) => jobVariant(jd, perksNow()) });
   // PHASE4.md §15.1: one sample of the flock per farm hour (skips and goto(auto) included), its warnings on the bus
   const watch = createFlockWatch({ env, farm, events, records });
   env.addStepper?.(watch.step);
@@ -113,6 +119,7 @@ export function createLevel(ctx, deps = {}) {
   let free = null;                  // { def, off } while debug.freeRun runs the farm (tools)
   let alarms = 0;                   // EV.POWER { on: false } and alarm symptoms so far (a Next job skip stops at a new one)
   let pinStops = 0;                 // pinned condition jobs opened so far (a minute-by-minute skip stops at a new one too)
+  let unlocks = [];                 // Skills update: the payoffs and views this level unlocked (the result screen lists them)
   let bad = { gradedOut: 0, looked: 0, weak: 0, called: null, wait: null };  // a bad batch: the grading at the table, the hatchery call (env.day);
   // wait: the day whose record closed over the limit only by the day-0 culls the hatchery can still claim (checked at 24:00)
 
@@ -177,6 +184,22 @@ export function createLevel(ctx, deps = {}) {
 
   // ---------------- bus ----------------
   const weighDays = () => (is(def, LEVEL1) ? [LEVEL1.endDay] : def.weighDays || []);
+  // ---------------- Skills update: the controllers on from the perks (SKILLS.md §4.2, §12.9) ----------------
+  /** farm.auto.on[system] = perks.auto(system), and Comfort 2's lead on the flock watch; after every farm.start, enterLevel and
+   *  restore, and on EV.PERKS / EV.SETTINGS (run.js calls it after a standard start's profile restore too). */
+  function syncAuto() {
+    const p = perksNow();
+    if (farm?.auto?.on) for (const s of Object.keys(AUTO_SYSTEMS)) { let on = false; try { on = !!p?.auto?.(s); } catch { on = false; } farm.auto.on[s] = on; }
+    let lead = false;
+    try { lead = !!p?.has?.('earlyWarning'); } catch { lead = false; }
+    watch.setLead?.(lead ? { comfortH: AUTO.earlyComfortH, fix: true } : { comfortH: null, fix: false });
+  }
+  if (events) {
+    events.on(EV.PERKS, () => syncAuto());
+    events.on(EV.SETTINGS, (p) => { if (!p || p.group == null || p.group === 'automation') syncAuto(); });
+    // the payoffs and views a level brings (the result screen lists them; a force, a restore or the gate's are not the level's)
+    events.on(EV.SKILL_UNLOCK, (p) => { if (p && p.key && !p.forced && !p.restore && !p.gate && level.mode === 'level' && !ended && !unlocks.includes(p.key)) unlocks.push(p.key); });
+  }
   if (events) {
     // Phase 4: every power cut and every alarm stops a Next job skip (skip() watches the count)
     events.on(EV.POWER, (p) => { if (p && p.on === false) alarms++; });
@@ -470,7 +493,8 @@ export function createLevel(ctx, deps = {}) {
   /** The result of the level that runs: only what was measured (PHASE3.md §10). */
   function computeResult(reason) {
     const c = condNow();
-    const base = { levelId: def.id, n: def.n, title: def.title, short: def.short, inRun, condition: c, conditionLabel: c ? conditionLabel(c) : null };
+    const base = { levelId: def.id, n: def.n, title: def.title, short: def.short, inRun, condition: c, conditionLabel: c ? conditionLabel(c) : null,
+      ...(unlocks.length ? { unlocks: unlocks.slice() } : {}) };
     if (is(def, LEVEL1)) return { ...computeResultL1(reason), ...base };
     const ld = levelDeaths();
     const part = is(def, PLAN_LEVEL) ? planResult() : isWeekLevel(def) ? weekResult(ld) : is(def, FINISH) ? finishResult(ld) : is(def, CLEANOUT) ? cleanResult() : { pass: false, failText: '' };
@@ -481,12 +505,25 @@ export function createLevel(ctx, deps = {}) {
       fcr: fl.alive > 0 && Number.isFinite(fl.fcr) && fl.fcr > 0 ? fl.fcr : part.harvest?.fcr ?? null, points: points.slice() };
   }
 
+  /** The equipment's faults of this level in plain words ("Fan stages off from day 25 08:23 to 10:23"); [] without any. */
+  function faultLines() {
+    const out = [], from = startAt ?? -Infinity;
+    for (const f of farm.auto?.faults || []) {
+      if (!f || !f.id || (f.phase !== 'open' && f.phase !== 'fixed') || !((f.startedAt ?? f.at ?? -Infinity) >= from - 1e-9)) continue;
+      const s = splitDay(f.startedAt ?? f.at), what = FAULTS[f.id]?.what || 'Equipment fault';
+      const to = f.fixedAt != null ? ` to ${splitDay(f.fixedAt).day === s.day ? '' : `day ${splitDay(f.fixedAt).day} `}${hhmm(splitDay(f.fixedAt).hour)}` : ', still open at the end';
+      out.push(`${what} from day ${s.day} ${hhmm(s.hour)}${to}`);
+    }
+    return out;
+  }
   function end(reason) {
     if (ended) return;
     if (is(def, CLEANOUT)) checkpoint('rest');
     checkpoint('level-end');
     engine.finish();
     ended = computeResult(reason);
+    // Skills update (SKILLS.md §5.4): a level that fails with the equipment's faults in it names them on the fail screen
+    if (!ended.pass) { const fl = faultLines(); if (fl.length) ended.faults = fl; }
     emitLevel({ phase: 'end', result: ended });
     if (!inRun) save?.clear?.();
     if (inRun && runApi) { try { runApi.levelEnd(ended); } catch (err) { console.error('run level end failed', err); } }
@@ -626,7 +663,7 @@ export function createLevel(ctx, deps = {}) {
   }
   /** Everything of one level (a new level, a replay, a resume). */
   function resetLevelState() {
-    fired = new Set(); points = []; weighs = []; signedEnd = false; ended = null; pending = null; failAt = null;
+    fired = new Set(); points = []; unlocks = []; weighs = []; signedEnd = false; ended = null; pending = null; failAt = null;
     startAt = null; reached.clear(); stoppedAt = null; bad = { gradedOut: 0, looked: 0, weak: 0, called: null, wait: null }; soonWarned.clear();
     fast = defaultFast(); userPaused = false; saveIn = null; lastSaveDay = null; tickAcc = 0; cancelIdle();
   }
@@ -803,6 +840,11 @@ export function createLevel(ctx, deps = {}) {
     },
     /** run.js: its side of saves and results (see the header). */
     attachRun(api) { runApi = api || null; },
+    /** Skills update (SKILLS.md §4.2, §12.9): farm.auto.on from the perks now, and Comfort 2's lead (run.js after a standard
+     *  start's profile restore; level.js itself after every farm.start, enterLevel and restore, and on EV.PERKS / EV.SETTINGS). */
+    syncAuto,
+    /** The perks the level reads (main.js deps.perks or ctx.perks; null in a node world without them). */
+    get perks() { return perksNow(); },
     /** A Phase 2 save resumed as the brooding week of a run (run.continueSave). */
     joinRun() { inRun = true; },
     /** The skill profile as it is now / put back (a standard start plays the ideal farmer: his points
@@ -846,7 +888,9 @@ export function createLevel(ctx, deps = {}) {
       flock?.resetLevel?.();
       ui?.newRun?.();
       // Phase 4: the condition goes on the farm here and only here (null = the normal season, PHASE4.md §3.1)
-      farm.start(d, { seed, condition: cond });
+      // Skills update (SKILLS.md §5.2): the flock's fault plan is drawn at the brooding week's start for this flock slot
+      farm.start(d, { seed, condition: cond, flockNo: cyc.cyclesDone ?? 0 });
+      syncAuto();
       // the planning day of a condition run in the condition's weather (the farm keeps the plan level's own; PHASE4.md §1.2)
       if (cond && is(d, PLAN_LEVEL)) { const w = conditionLevel(d, cond).weather; if (w && env.weather !== w) { env.setWeather(w); env.houseTemp = env.outsideTemp + 1; } }
       startAt = env.day;
@@ -872,6 +916,7 @@ export function createLevel(ctx, deps = {}) {
       if (t > env.day + 1e-9) { const h = (t - env.day) * 24; env.skipHours(h); flock?.afterSkip?.(h); } // the night, with the farmer's settings
       def = next;
       farm.enterLevel(next);
+      syncAuto();
       // the notebook of the levels before the last one folds away (the rows stay whole; PHASE3.md §8.6): the run save
       // stays under its 250 KB to the end of the rest
       const prevDef = LEVELS[LEVELS.findIndex((l) => l.id === next.id) - 1];
@@ -908,7 +953,7 @@ export function createLevel(ctx, deps = {}) {
       env.setHour(e.hour ?? 0);
       // the save's condition (farm.serialize().cond; farm.restore puts it back on the farm)
       const sc = data.farm?.cond?.condition;
-      farm.start(d, { seed: lv.seed ?? 1, keepClock: true, condition: sc && CONDITIONS[sc] ? sc : null });
+      farm.start(d, { seed: lv.seed ?? 1, keepClock: true, condition: sc && CONDITIONS[sc] ? sc : null, flockNo: cyc.cyclesDone ?? 0 });
       env.setMaxDay?.(maxDay);
       env.setFans(e.fansManual ?? e.fansOn ?? 0); env.setPad(!!e.padOn);
       env.setVentTimer(e.ventTimer ?? null);
@@ -930,6 +975,7 @@ export function createLevel(ctx, deps = {}) {
       if (e.targetShift != null) env.setTargetShift?.(e.targetShift);
       farm.restore(data.farm);
       if (farm.mode !== 'level') { farm.mode = 'level'; farm.level = d; }
+      syncAuto();   // the save's farm keeps its fault plan; the systems come on from the perks now (never saved)
       records?.restore?.(data.records);
       props?.restore?.(data.props);
       flock?.restore?.(data.flock);
@@ -1129,6 +1175,9 @@ export function createLevel(ctx, deps = {}) {
         const target = day + hour * H;
         if (target <= env.day + 1e-9) return false;
         noHold++;   // PHASE4.md §15.2: the ideal farmer's rounds hold no job open
+        // Skills update (SKILLS.md §4.2): the ideal farmer's auto play moves no controller and starts no fault
+        const quiet = auto && !!farm.autoCtl?.quiet;
+        if (quiet) farm.autoCtl.quiet(true);
         try {
         if (auto) {
           {
@@ -1149,7 +1198,7 @@ export function createLevel(ctx, deps = {}) {
         const to = is(def, LEVEL1) ? target : Math.min(target, engine.endAt());
         if (to > env.day + 1e-9) skip((to - env.day) * 24);
         return true;
-        } finally { noHold--; }
+        } finally { noHold--; if (quiet) farm.autoCtl.quiet(false); }
       },
       /**
        * A level-mode farm at (day, hour) for any day up to the clean-out, for the other packages' tools
@@ -1170,15 +1219,20 @@ export function createLevel(ctx, deps = {}) {
         }
         free.def = levelOfDay(day);
         if (target <= env.day + 1e-9) return true;
-        for (const s of cycleProfiles.cycleStops(env.dayNumber, Math.floor(target), condNow())) {
-          const t = s.d + s.h * H;
-          if (t <= env.day + 1e-9 || t >= target) continue;
-          skip((t - env.day) * 24);
-          if (s.r === 'sign') { if (!records?.row?.(s.d)?.signed) records?.sign?.(s.d); continue; }
-          try { cycleProfiles.applyCycleRound(farm, env, s.d, s.r, profileFor('ideal')); } catch (err) { console.error('applyCycleRound failed', err); }
-          pickDead();
-        }
-        if (target > env.day + 1e-9) skip((target - env.day) * 24);
+        // Skills update: the free run plays the ideal's care, as goto(auto) does: no controller acts meanwhile
+        const quiet = !!farm.autoCtl?.quiet;
+        if (quiet) farm.autoCtl.quiet(true);
+        try {
+          for (const s of cycleProfiles.cycleStops(env.dayNumber, Math.floor(target), condNow())) {
+            const t = s.d + s.h * H;
+            if (t <= env.day + 1e-9 || t >= target) continue;
+            skip((t - env.day) * 24);
+            if (s.r === 'sign') { if (!records?.row?.(s.d)?.signed) records?.sign?.(s.d); continue; }
+            try { cycleProfiles.applyCycleRound(farm, env, s.d, s.r, profileFor('ideal')); } catch (err) { console.error('applyCycleRound failed', err); }
+            pickDead();
+          }
+          if (target > env.day + 1e-9) skip((target - env.day) * 24);
+        } finally { if (quiet) farm.autoCtl.quiet(false); }
         return true;
       },
       /** Start a problem now (the farm decides the symptom when the farmer meets it). */

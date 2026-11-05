@@ -11,7 +11,7 @@ import { STATE_TEST_IDS_P4, JOBS_COND } from '../src/content-jobs-cond.js';
 import { heatHandled } from '../src/farm-cycle-problems.js';
 import { BOARD_P4_ITEMS } from '../src/content-signs-cond.js';
 import { nightComfortNow } from '../src/job-engine.js';
-import { flowToday, brooderRowC, VENT_BAND } from '../src/job-figures.js';
+import { flowToday, brooderRowC, VENT_BAND, nippleCmToday as nippleCmTodayOf, rimCmNow as rimCmNowOf } from '../src/job-figures.js';
 import { JOBS_CYCLE, STATE_TEST_IDS_P3 } from '../src/content-jobs-cycle.js';
 import { STRIPS, partRows, stripRows, heldText } from '../src/job-strips.js';
 import { jobPlaces, nextPlace } from '../src/job-next.js';
@@ -1078,6 +1078,46 @@ test('§15.2 level: a job held while its panel is open, missed 20 farm minutes a
   L2.level.nextJob(); L2.level.nextJob();
   const i2 = L2.level.jobs.byKey(key);
   assert(i2.status === 'missed' && i2.heldFrom == null, `the skip held nothing: ${i2.status}`);
+});
+
+// ---------------- Skills update (SKILLS.md §12.6, package "jobs"): the new state tests and rule type ----------------
+test('skills update: auto-ok reads farm.autoCtl.ok(system, inst, part) live; drinkers-raised / pans-raised; the tubes in flows-in-band; the seen rule', () => {
+  const live = (label, test, extra = {}) => ({ type: 'state', test, live: true, label, ...extra });
+  const jobsList = [
+    T('t-auto', { type: 'all', of: [live('in band', 'auto-ok', { system: 'winch', part: 'drinkers-raised' }), { type: 'action', id: 'auto.glance', match: { system: 'winch' } }] }),
+    T('t-dr', { type: 'state', test: 'drinkers-raised' }), T('t-pr', { type: 'state', test: 'pans-raised' }),
+    T('t-tubes', { type: 'all', of: [{ type: 'each', id: 'water.flowtest', key: 'line', values: [0, 1, 2, 3], tubes: true }, live('flows', 'flows-in-band', { tubes: true })] }),
+    T('t-seen', { type: 'seen', look: 'gait', n: 3, sectors: 2, sectorsOf: 'house', action: { id: 'sample.bird', match: { look: 'gait' } } }),
+  ];
+  const L = makeCycle(WEEK3, { day: 20, hour: 6, jobs: jobsList });
+  let ok = false, asked = null;
+  L.farm.autoCtl.ok = (system, inst, part) => { asked = { system, key: inst?.key, part }; return ok; };
+  L.at(20, 8.1);
+  L.act('auto.glance', { system: 'winch' }); L.at(20, 8.2);
+  assert(L.st('t-auto@20') === 'open' && asked?.system === 'winch' && asked.part === 'drinkers-raised' && asked.key === 't-auto@20', `auto-ok asked the controller: ${JSON.stringify(asked)}`);
+  ok = true; L.at(20, 8.3);
+  assert(L.st('t-auto@20') === 'done', `auto-ok in band with the glance: ${L.st('t-auto@20')}`);
+  const nip = nippleCmTodayOf(L.env), rim = rimCmNowOf(L.env);
+  for (const l of L.farm.water.lines) l.heightCm = nip;
+  L.at(20, 8.4);
+  assert(L.st('t-dr@20') === 'done' && L.st('t-pr@20') === 'open', `drinkers-raised alone: ${L.st('t-dr@20')} ${L.st('t-pr@20')}`);
+  for (const l of L.farm.feed.lines) l.heightCm = rim;
+  L.at(20, 8.5);
+  assert(L.st('t-pr@20') === 'done', 'pans-raised');
+  // the tubes: three in band by the tubes (water.columns), the fourth by a cup test; the latest reading of a line counts
+  const at = L.env.day, cols = [0, 1, 2].map((i) => ({ line: i, cm: 12, markCm: 12, inBand: true }));
+  cols.forEach((c) => { L.farm.water.lines[c.line].lastColumn = { cm: 12, inBand: true, at }; });
+  L.act('water.columns', { result: { lines: cols } }); L.at(20, 8.6);
+  assert(L.st('t-tubes@20') === 'open', 'three tubes in band: open');
+  const want = flowToday(L.env);
+  L.farm.water.lines[3].lastFlow = { mlMin: want, at: L.env.day }; L.act('water.flowtest', { line: 3, result: { mlMin: want } }); L.at(20, 8.7);
+  assert(L.st('t-tubes@20') === 'done', `the fourth by a cup test: ${L.st('t-tubes@20')}`);
+  // seen: two birds seen walking in one part, one in the hand in another
+  L.events.emit(EV.BIRD_SEEN, { index: 1, look: 'gait', x: -18, z: -2.8 }); L.events.emit(EV.BIRD_SEEN, { index: 1, look: 'gait', x: -18, z: -2.8 });
+  L.events.emit(EV.BIRD_SEEN, { index: 2, look: 'gait', x: -18, z: 2.8 }); L.at(20, 8.8);
+  assert(L.st('t-seen@20') === 'open' && L.jobs.byKey('t-seen@20').st.list.length === 2, 'each bird once');
+  L.act('sample.bird', { look: 'gait', x: 18, z: 2.8, result: {} }); L.at(20, 8.9);
+  assert(L.st('t-seen@20') === 'done', `the seen rule with the in-hand check: ${L.st('t-seen@20')}`);
 });
 
 let failed = 0;
