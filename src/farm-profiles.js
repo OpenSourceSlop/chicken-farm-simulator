@@ -126,7 +126,7 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
       const h = heightFor(P, day, farm.water.lines[line].heightCm);
       if (h != null && !on('winch')) act('water.height', { line, cm: h });
     }
-    for (const line of lines) act('water.flowtest', { line });
+    if (!(P.flowSkipDays || []).includes(day)) for (const line of lines) act('water.flowtest', { line });   // the normal profile's missed tests (SKILLS.md §2.4)
     if (day === 4 && P.filter === 'am4') { act('water.filter'); act('water.clearFilter'); for (const line of lines) act('water.flowtest', { line }); }
     act('feed.meter');
     act('feed.silo');
@@ -190,7 +190,8 @@ function fixLeak(act, farm) {
 }
 function pressureFor(P, day) {
   if (typeof P.pressure === 'number') return P.pressure;
-  return Math.round(((flowTargetAt(Math.max(0, day)) - 4) / 2) * 2) / 2; // f = 2 x cm + 4 = day + 20
+  // Skills update (the normal profile, SKILLS.md §2.4): the regulators a little off the sign's setting (pressureOffset cm)
+  return Math.round(((flowTargetAt(Math.max(0, day)) - 4) / 2) * 2) / 2 + (P.pressureOffset || 0); // f = 2 x cm + 4 = day + 20
 }
 function heightFor(P, day, current) {
   if (P.heights === 'sign') return Math.round(nippleHeightCmAt(Math.max(0, day)));

@@ -32,7 +32,7 @@
 //   scale.clean {}                 -> { cleaned: bool }                      the platform cleaned (scale-fouled fixed)
 //   water.columns {}               -> { lines: [{ line, cm, markCm, inBand }] } the sight tubes (Water 2); every line keeps
 //                                     lastColumn { cm, inBand, at }
-import { AUTO, AUTO_SYSTEMS, LEVEL1, LIGHT_PRESETS, flowTargetAt, nippleHeightCmAt, weightAt, flockAgeAt, SKILL_SHORT } from './config.js';
+import { AUTO, AUTO_SYSTEMS, LEVEL1, LIGHT_PRESETS, flowTargetAt, SKILL_SHORT, SKILLS_UPDATE, HEAT, HEAT_P4, FAN_COUNT, flockAgeAt } from './config.js';
 import { EV } from './events.js';
 import { WATER, lineFlow } from './farm-water.js';
 import { planFaults, stepFaults, openFaults, installFaultDebug, faultHand, faultAct, faultWords, dropQuiet } from './farm-faults.js';
@@ -205,6 +205,26 @@ export function autoStatus(farm, env) {
   return { on: { ...A.on }, systems, faults: open.map((f) => ({ ...f, words: faultWords(f, env, farm) })), last: { ...A.last } };
 }
 
+/**
+ * The update's own day stats (SKILLS.md §2.3, while SKILLS_UPDATE.live only: with the switch off the farm's stats are Phase
+ * 5's): stats.daily[d].nightOk — the night-comfort state (r-vent-night's: a quarter panting at most and none chilled, or big
+ * birds on a warm evening with every fan and the pad) held for 30 farm minutes after 18:00 (night-air-w3); nightH the hours
+ * of the evening read.
+ */
+export function payoffStats(farm, env, hrs) {
+  if (!SKILLS_UPDATE.live || !(farm.flock.alive > 0) || !(farm.flock.placed > 0) || env.hour < 18) return;
+  const daily = farm.stats.daily || (farm.stats.daily = {}), D = daily[env.dayNumber] || (daily[env.dayNumber] = { h: 0 });
+  const C = farm.comfort || {}, e = Number.isFinite(C.meanOver) ? C.meanOver : C.e;
+  let calm = (C.pantShare ?? 0) <= HEAT_P4.nightPantMax + 1e-9 && Number.isFinite(e) && e >= -1.5 - 1e-9;
+  if (!calm) {
+    const big = flockAgeAt(env.day) >= HEAT_P4.padEveningFromAge - 1e-9, warm = (env.outsideTemp ?? 0) >= HEAT_P4.padEveningAboveC - 1e-9;
+    calm = big && warm && (env.fansEffective ?? 0) >= FAN_COUNT - (env.fansBroken || []).length && (!!env.padOn || env.houseRH > HEAT.padOffAboveRH);
+  }
+  D.nightH = +((D.nightH || 0) + hrs).toFixed(4);
+  D.nightRun = calm ? +((D.nightRun || 0) + hrs).toFixed(4) : 0;
+  if (D.nightRun >= 0.5 - 1e-9) D.nightOk = true;
+}
+
 /** The controllers' step (every farm step, after the model). */
 export function stepAuto(farm, env, hrs) {
   if (farm.mode !== 'level') return;
@@ -230,7 +250,7 @@ export function installAuto(farm, env, events = null) {
   Object.defineProperty(farm, 'autoCtl', { get: () => api, enumerable: false, configurable: true });
 
   const step = farm.step, act = farm.act, start = farm.start, serialize = farm.serialize, restore = farm.restore;
-  farm.step = (e, gameSeconds) => { step(e, gameSeconds); if (farm.mode === 'level' && gameSeconds > 0) stepAuto(farm, e, gameSeconds / 3600); };
+  farm.step = (e, gameSeconds) => { step(e, gameSeconds); if (farm.mode === 'level' && gameSeconds > 0) { payoffStats(farm, e, gameSeconds / 3600); stepAuto(farm, e, gameSeconds / 3600); } };
   farm.act = (id, args = {}) => {
     if (args.by === 'auto' && AUTO_ENV_ACTIONS.has(id)) {
       if (id === 'heat.setpoint') env.setHeaterSetpoint(args.c);

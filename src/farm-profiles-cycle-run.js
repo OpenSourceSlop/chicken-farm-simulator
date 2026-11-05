@@ -7,7 +7,8 @@
 // A profile starts from the ideal's state at its first level (`from`, a standard start: the ideal of the same seed
 // up to there, kept in memory exactly as it was, with the ideal's trace before it) and runs to `to`. A failed
 // level ends the run (the player would replay it).
-import { LEVELS, LEVEL1, PLAN_LEVEL, levelById, weightAt, PLACEMENT_DAY, CYCLE, HARVEST, SKILL_BRANCHES, SKILLS_UPDATE, AUTO_SYSTEMS } from './config.js';
+import { LEVELS, LEVEL1, PLAN_LEVEL, levelById, weightAt, PLACEMENT_DAY, CYCLE, HARVEST, SKILL_BRANCHES, SKILLS_UPDATE, AUTO_SYSTEMS, nippleHeightCmAt, feedTypeForDay } from './config.js';
+import { signTimer } from './farm-profiles.js';
 import { createPerks } from './perks.js';
 import { EV } from './events.js';
 import { makeWorld, schedule } from './farm-profiles-run.js';
@@ -121,7 +122,7 @@ export function runCycle(name = 'ideal', opts = {}) {
   if (usePerks) SKILLS_UPDATE.live = true;
   try { return runCycleBody(name, opts, usePerks); } finally { SKILLS_UPDATE.live = was; }
 }
-function runCycleBody(name, { seed = 1, from, to, stopAtStart = false, keepStarts = false, condition = undefined, onWorld = null, skillsFrom = null, cyclesDone = null, perks = null } = {}, usePerks = false) {
+function runCycleBody(name, { seed = 1, from, to, stopAtStart = false, keepStarts = false, condition = undefined, onWorld = null, skillsFrom = null, cyclesDone = null, perks = null, handFix = true } = {}, usePerks = false) {
   condition = condition !== undefined ? condition : COND_OF[name] ?? null;
   const P = cycleProfileOf(name === 'determinism' ? 'ideal' : name, { condition });
   const [f0, t0] = RANGE[name] || COND_RANGE[name] || ['plan', 'cleanout'];
@@ -148,6 +149,7 @@ function runCycleBody(name, { seed = 1, from, to, stopAtStart = false, keepStart
     const sync = () => { if (farm.auto) for (const sys of Object.keys(AUTO_SYSTEMS)) farm.auto.on[sys] = pk.auto(sys); };
     events.on(EV.PERKS, sync);
     trace.perks = pk; trace.syncAuto = sync;
+    world.handFix = handFix;
     P.autoOn = () => farm.auto.on;
   }
   let lastHr = null;
@@ -196,6 +198,26 @@ function pickDead(world) {
   farm.act('dead.count', { n, causes });
 }
 const skipTo = (env, t) => { if (t > env.day + 1e-9) env.skipHours((t - env.day) * 24); };
+/**
+ * Skills update (SKILLS.md §5.1): the farmer meets an open fault of the equipment on his round, by hand, as the Equipment row
+ * says (the profiles' answer with the perks option): the line winched to the plate and the motor reset, the timer set by the
+ * vent sign, the stages switched on again, the sensor checked once the row shows it, the feed ordered by hand, the platform
+ * cleaned.
+ */
+function fixByHand(world) {
+  const { farm, env } = world;
+  for (const f of (farm.auto?.faults || []).filter((x) => x.phase === 'open')) {
+    switch (f.id) {
+      case 'winch-stall': farm.act('water.height', { line: f.args.line, cm: Math.round(nippleHeightCmAt(Math.max(0, env.dayNumber))) }); farm.act('auto.reset', { system: 'winch', line: f.args.line }); break;
+      case 'timer-reset': farm.act('vent.timer', signTimer(farm)); break;
+      case 'stage-trip': farm.act('auto.reset', { system: 'stages' }); break;
+      case 'sensor-drift': if (f.foundAt != null) farm.act('auto.calibrate'); break;
+      case 'order-lost': farm.act('feed.order', { kg: f.args.kg || 2000, type: f.args.type || feedTypeForDay(env.dayNumber).id }); break;
+      case 'scale-fouled': farm.act('scale.clean'); break;
+      default: break;
+    }
+  }
+}
 /** Growth 3 (SKILLS.md §3.8): on a weigh day the farmer reads the automatic scale's day average in the afternoon. */
 function scaleRead(world) {
   const { farm, env } = world;
@@ -233,7 +255,7 @@ function playPlan(world, P) {
 // chicks graded out on day 0 counted apart once the hatchery was told: farm.flock.claimed)
 function playBrooding(world, P) {
   const { env, farm, records } = world, def = LEVEL1;
-  const P2 = { ...profileOf(P.p2 || 'ideal'), ...p2ProfileFor(P.condition ? P : null), ...(P.autoOn ? { autoOn: P.autoOn } : {}) };
+  const P2 = { ...profileOf(P.p2 || 'ideal'), ...(P.p2Mods || {}), ...p2ProfileFor(P.condition ? P : null), ...(P.autoOn ? { autoOn: P.autoOn } : {}) };
   const fail = farm.levelFor ? farm.levelFor(LEVEL1).fail : LEVEL1.fail;
   let failedAt = null;
   const B = farm.condition ? broodStopsCond(farm.condition, farm.delivery) : { stops: [], truckHour: 8 }, dh = (B.truckHour - 8) / 24;
@@ -248,6 +270,7 @@ function playBrooding(world, P) {
     if (kind === 'snap') continue;
     if (kind === 'sign') { records.sign(ev.d); if (ev.d >= 0 && pctL1(farm) > fail.mortalityMaxPct && failedAt == null) failedAt = ev.d; continue; }
     applyRound(farm, env, ev.d, kind, P2);
+    if (world.handFix) fixByHand(world);
     if (kind === 'am' || kind === 'pm') pickDead(world);
     if (kind === 'pm' && ev.d === 7) scaleRead(world);
   }
@@ -284,13 +307,14 @@ function playCycleLevel(world, def, P, trace) {
       continue;
     }
     applyCycleRound(farm, env, s.d, s.r, P);
+    if (world.handFix) fixByHand(world);
     // the normal profile's slips that are the level's part (SKILLS.md §2.4): a house entry without the dip, a dead-bird round missed
     const L = P.levelSlips || {};
     if (s.r === 'am' && (L.lapse || []).includes(s.d)) world.events.emit(EV.HOUSE_ENTER, { dipped: false });
     const miss = (L.deadMissed || []).some(([d, r]) => d === s.d && r === s.r);
     if (miss) world.events.emit(EV.JOB_MISSED, { key: `r-dead-${s.r}@${s.d}`, id: `r-dead-${s.r}` });
     if (!P.noCare && !miss) pickDead(world);
-    if (s.r === 'pm' && [14, 21, 28, 35, 40].includes(s.d)) scaleRead(world);
+    if (s.r === 'fans' && s.h === 15.5 && [14, 21, 28, 35, 40].includes(s.d)) scaleRead(world);
     if (farm.house.curtainOpen) once('curtain');
     if (farm.health.vaccine.state === 'drunk') once('vaccine');
     if (s.r === 'weigh') { cp(world, def, 'weighin'); }

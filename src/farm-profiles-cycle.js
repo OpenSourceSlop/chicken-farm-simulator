@@ -63,11 +63,15 @@ const MODS = {
   eveningFans3: { eveningFans3: true },
   padYoung1: { padYoung1: true },
   // Skills update (SKILLS.md §2.4): a careful farmer in his first flock — the ideal's management with the slips players make,
-  // none failing a level: Phase 2's smallMistakes in the brooding week, vent temperatures 4 h after placing, no light reading
-  // on day 8, droppings of a few birds in week 3, no air speed on day 23, no pad check before the heat wave, a dip missed on
-  // day 26 and a dead-bird round on day 30, no morning flow tests on five days, the crew booked on day 39, the catch at 30 %
-  // dimmer, the feeders left down in the heat wave, 1.3 t more on the last order, 30 birds weighed on day 40
-  normal: { p2: 'smallMistakes', ventLate: true, luxSkip8: true, droppingsN: { 16: 5, 19: 4 }, airSkip23: true, noPadCheckWave: true,
+  // none failing a level. The brooding week: the lines lowered on day 3 and the filter found in the afternoon of day 4
+  // (Phase 2's smallMistakes) and no morning flow test on days 1-3 in place of its regulators at 6 cm and thermostat 1 °C
+  // under the row (measured over the whole cycle those two cost Heating's cold-night and 20-30 g at every weigh-in to day 21,
+  // more than §2.4 meant); vent temperatures 4 h after placing, no light reading on day 8, droppings of a few birds in week 3,
+  // no pad check before the heat wave (it also finds the clogged pad a day late), a dip missed on day 26 and a dead-bird round
+  // on day 30, no morning flow tests on five days of weeks 4-5, the crew booked on day 39, the catch at 30 % dimmer, the
+  // feeders left down in the heat wave, 1.3 t more on the last order, 30 birds weighed on day 40 (the day 23 air speed slip
+  // is left out: with the pad check's it kept Heat & Ventilation from level 2 until day 35)
+  normal: { p2: 'smallMistakes', p2Mods: { pressure: 'sign', setpointOffset: 0, heights: 'sign', flowSkipDays: [1, 2, 3] }, ventLate: true, luxSkip8: true, droppingsN: { 16: 5, 19: 4 }, noPadCheckWave: true,
     flowSkipDays: [23, 24, 25, 26, 27], bookDay: 39, catchDimmer: 0.3, heatFeeders: false, lastOrderExtraKg: 1300, weighN: { 40: 30 },
     levelSlips: { lapse: [26], deadMissed: [[30, 'pm']] } },
 };
