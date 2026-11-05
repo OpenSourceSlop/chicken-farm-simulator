@@ -183,8 +183,14 @@ export function cycleSymptoms(farm, env, id, a, result) {
       if (isFound(farm, 'sudden-deaths') && darkHoursOf(farm, env) >= 4) fixProblem(farm, env, 'sudden-deaths', 'light');
       break;
     case 'fans.read': {
+      // Ventilation 2 reads the fans at the controller's Ventilation tab too (a.at 'controller'): there it finds what the
+      // controller's own read finds (the birds panting, the damp heat), never what needs eyes on the fans: a slipped belt (its
+      // lamp is on, it moves no air: the fan panel's air speed or a walk past the fans) and the heat wave's look at the fans
+      // (p-heatwave's "read the fan panel"); the controller shows a hint for a switched-on fan that draws little current
+      const atFans = a.at !== 'controller';
       for (const h of HEAT_IDS) if (isActive(farm, h) && pant > 0.2) findProblem(farm, env, h, 'fans');
       if (isActive(farm, 'humid-heat') && env.houseRH >= 85 && env.houseTemp >= 30) findProblem(farm, env, 'humid-heat', 'fans');
+      if (!atFans) break;
       if (isActive(farm, 'fan-belt') && env.fansManual > defOf(farm, 'fan-belt').fan) findProblem(farm, env, 'fan-belt', 'fans');
       if (isActive(farm, 'heat-wave') && pant > 0.2 && env.dayNumber >= 30 && env.dayNumber <= 32) findProblem(farm, env, 'heat-wave', 'fans');
       const hw = stateOf(farm, 'heat-wave'); if (hw && hw.phase === 'found') hw.read = true;

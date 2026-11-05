@@ -115,7 +115,8 @@ const RULES_B = {
   'pads-limit': (farm) => { const h = sum(farm, range(22, 35), 'padHum'); return { tier: h <= 0.5 + 1e-9 ? 0 : null, detail: `${Math.round(h * 60)} min with the pads on over ${HEAT.padOffAboveRH} % house humidity` }; },
   'fan-fixed': sameDay('fan-belt'), 'pad-flushed': sameDay('pad-clog'),
   'heatwave-ready': (farm, records) => {
-    const before = (k) => notes(records, k).some((n) => n.day === 29 || (n.day === 30 && n.hour < 10));
+    // the fans checked at the fan panel (a Ventilation 2 read at the controller sees no fan turn: this check round)
+    const before = (k) => notes(records, k).some((n) => (n.day === 29 || (n.day === 30 && n.hour < 10)) && !(k === 'fans' && n.value?.at === 'controller'));
     const ok = [before('fans'), before('pad'), before('water.flow')];
     return { tier: ok.every(Boolean) ? 0 : null, detail: `${ok.filter(Boolean).length} of 3 checks (fans, pad, water) before the heat wave` };
   },

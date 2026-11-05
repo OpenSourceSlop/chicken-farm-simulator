@@ -15,6 +15,7 @@ import { feedDays } from '../src/farm-silos.js';
 import { lightsOk, rowFor, timerFor, winchTarget } from '../src/farm-auto-ctl.js';
 import { nightCheck, createSkipGuard } from '../src/night-check.js';
 import { equipmentRow } from '../src/flock-watch.js';
+import { RULES_CYCLE } from '../src/skills-rules-cycle.js';
 import { adviseFans } from '../src/farm-fans.js';
 import { unlabel } from '../src/ui-cycle-controller.js';
 
@@ -556,6 +557,32 @@ await test('the brooding week\'s day-7 weigh-in on a fouled platform (this check
     assert(!r.pass && r.scaleDecided && Math.abs(r.scaleCleanG - want) <= 1 && r.scaleCleanRatio >= 4 && r.ratio < 4, `borderline: ${JSON.stringify({ pass: r.pass, ratio: r.ratio, scaleDecided: r.scaleDecided, scaleCleanG: r.scaleCleanG, scaleCleanRatio: r.scaleCleanRatio })}`);
     assert(/; the fouled platform decided it: clean, it would have read about \d+ g, 4\.\d\d × the chick weight$/.test(r.failText), `the fail text: ${r.failText}`);
   }
+});
+
+await test('Ventilation 2\'s fans read at the controller (this check round): it finds no slipped belt and does not do the heat wave\'s look at the fans; the fan panel does both (r-fans-pm done at the controller: test-payoffs)', () => {
+  const ui = (R, id, a) => { R.events.emit(EV.ACTION, { id, ...a, result: undefined }); R.level.engine.tick(); };
+  // day 27: fan 4's belt slips at 09:00; with four fans or more switched on its lamp is on and it moves no air
+  const R = at('weeks45');
+  R.level.debug.goto(27, 9.5);
+  const st = (W, id) => W.farm.problems.find((p) => p.id === id);
+  R.env.setFans(6);
+  assert(st(R, 'fan-belt')?.phase === 'active' && R.env.fansBroken.includes(3), `the belt slipped: ${JSON.stringify(st(R, 'fan-belt'))}`);
+  ui(R, 'fans.read', { fans: 6, at: 'controller' });
+  assert(st(R, 'fan-belt').phase === 'active' && !R.level.engine.list().some((j) => j.id === 'p-fan'), `not found at the controller: ${st(R, 'fan-belt').phase}`);
+  ui(R, 'fans.read', { fans: 6 });
+  assert(st(R, 'fan-belt').phase === 'found' && st(R, 'fan-belt').foundBy === 'fans' && R.level.engine.list().some((j) => j.id === 'p-fan'), `found at the fan panel: ${JSON.stringify(st(R, 'fan-belt'))}`);
+  // day 29: the heat wave told on the radio; the job's "Fans: read the fan panel" and the farm's readiness only at the fan panel
+  const W = at('weeks45', 29, 8);
+  ui(W, 'radio.listen', {});
+  const hw = st(W, 'heat-wave'), job = () => W.level.engine.list().find((j) => j.id === 'p-heatwave');
+  assert(hw?.phase === 'found' && job()?.status === 'open', `the heat wave told: ${JSON.stringify(hw)}`);
+  ui(W, 'fans.read', { fans: 6, at: 'controller' });
+  assert(!hw.read && job().st.parts[0].met === false, `the controller's read is not the look at the fans: read ${hw.read}, parts ${JSON.stringify(job().st.parts.map((p) => p.met))}`);
+  const notes = (n) => ({ notebook: n });
+  const at10 = (v) => [{ kind: 'fans', day: 29, hour: 8, value: v }, { kind: 'pad', day: 29, hour: 8.2, value: {} }, { kind: 'water.flow', day: 29, hour: 8.4, value: {} }];
+  assert(RULES_CYCLE['heatwave-ready'](W.farm, notes(at10({ fans: 6, at: 'controller' }))).tier == null && RULES_CYCLE['heatwave-ready'](W.farm, notes(at10({ fans: 6 }))).tier === 0, 'heatwave-ready: the fans checked at the fan panel');
+  ui(W, 'fans.read', { fans: 6 });
+  assert(hw.read === true && job().st.parts[0].met === true, `the fan panel's read: read ${hw.read}, parts ${JSON.stringify(job().st.parts.map((p) => p.met))}`);
 });
 
 console.log(failed ? `${failed} failed` : 'all passed');

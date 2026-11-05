@@ -239,7 +239,10 @@ export function controllerSkills(L, { draft, lp, refresh, waits }) {
     said.fans = `Set at ${env.timeLabel}: ${a.tail}`;
     waits(); refresh();
   }, { label: 'Set the tunnel fans and the pad as suggested' });
-  const fans = skillBox('fanAdvice', 'Fans and pad for now', skRow(fanKey, fanWork.el));
+  // this check round: the controller cannot see a fan turn; a switched-on fan whose belt slipped runs its motor light, so the
+  // controller shows that it draws little current and sends the farmer to look (found at the fan panel or walking past it)
+  const fanHint = h('p', { class: 'skl-note skl-note--fault', hidden: true, 'data-fan-hint': '' });
+  const fans = skillBox('fanAdvice', 'Fans and pad for now', skRow(fanKey, fanWork.el), fanHint);
   // the final check: with Ventilation 2 the fans and the pad are read here too (the Ventilation tab's suggestion box in view
   // for 2 s sends fans.read { at: 'controller' } once per opening), so r-fans-pm needs no walk to the fan panel
   let fansSeen = 0, fansRead = false;
@@ -291,7 +294,12 @@ export function controllerSkills(L, { draft, lp, refresh, waits }) {
       fillWork.set(f.text, said.fill || 'The vent sign’s table for your count and the bird scale’s weight, at about 110 %.');
     }
     // Ventilation 2
-    if (fans.show(lvl && perkHas(L, 'fanAdvice'))) { const a = fanAdviceFor(env, farm); fanWork.set(a.text, said.fans); }
+    if (fans.show(lvl && perkHas(L, 'fanAdvice'))) {
+      const a = fanAdviceFor(env, farm); fanWork.set(a.text, said.fans);
+      const light = (env.fansBroken || []).filter((i) => i < (env.fansManual ?? 0)).map((i) => i + 1);
+      fanHint.hidden = !light.length;
+      if (light.length) setText(fanHint, `Fan ${light.join(', ')} draws little current while switched on (its motor runs light): go and look at it in the east end wall.`);
+    }
     // Lighting 2
     if (lights.show(lvl && perkHas(L, 'weekLights'))) {
       const w = weekProgramFor(env.dayNumber);

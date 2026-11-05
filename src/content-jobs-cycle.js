@@ -138,7 +138,9 @@ export const JOBS_CYCLE = [
   P('p-fan', 'Fan 4 is not turning', { problem: 'fan-belt', spot: 'fan-broken', signs: ['fan-panel'], branch: 'ventilation', done: A('fan.fix', { result: { fixed: true } }) }),
   P('p-pad-dry', 'Part of the cooling pad is dry', { problem: 'pad-clog', spot: 'padPump', signs: ['pad-pump'], branch: 'ventilation', done: A('pad.flush', { result: { fixed: true } }) }),
   P('p-heatwave', 'A heat wave is coming: get the house ready', { problem: 'heat-wave', spot: 'fanPanel', signs: ['sign-heat', 'pad-pump', 'sign-feed'], branch: 'ventilation',
-    done: ALL(L('Fans: read the fan panel', A('fans.read')), L('Pad: check it with the pump on', A('pad.check', { result: { flowing: true } })), L('Water: a flow test on a line', A('water.flowtest'))) }),
+    // (this check round: the fan panel's own read, not Ventilation 2's at the controller: { at: undefined } matches only a
+    // fans.read without an `at`, events.js matchPayload)
+    done: ALL(L('Fans: read the fan panel', A('fans.read', { at: undefined })), L('Pad: check it with the pump on', A('pad.check', { result: { flowing: true } })), L('Water: a flow test on a line', A('water.flowtest'))) }),
   P('p-humid', 'Hot and humid in the house', { problem: 'humid-heat', spot: 'padPump', signs: ['pad-pump'], branch: 'ventilation',
     done: ALL(L('Switch the pad or the fans', ANY('vent.pad', 'vent.fans')), L('Pad off above 90 % humidity, every fan on, for 30 farm minutes', ST('pad-humid-ok'))) }),
 
