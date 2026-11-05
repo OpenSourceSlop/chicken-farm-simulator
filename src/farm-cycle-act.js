@@ -89,7 +89,7 @@ export function cycleAct(farm, env, id, a = {}) {
     case 'feed.order': {
       if (!cyc) return undefined; // the brooding week: Phase 2's single figure
       const r = orderFeed(feed, env, a);
-      if (r.kg > 0) fixProblem(farm, env, 'low-silo', 'order');
+      if (r.kg > 0 && a.by !== 'auto') fixProblem(farm, env, 'low-silo', 'order');   // Skills update: no problem fixed by equipment
       return r;
     }
     case 'feed.meter': return cyc ? { kg: Math.floor(feed.meterKg), type: mainType(feed) } : undefined;

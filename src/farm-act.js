@@ -128,7 +128,7 @@ export function doAct(farm, env, id, a) {
       const arriveDay = env.dayNumber + (env.hour < 16 ? 1 : 2), arriveHour = 9;
       feed.order = { kg, arriveDay, arriveHour, orderedAt: env.day };
       feed.orders.push({ ...feed.order, arrivedAt: null });
-      fixProblem(farm, env, 'low-silo', 'order');
+      if (a.by !== 'auto') fixProblem(farm, env, 'low-silo', 'order');   // Skills update: no problem fixed by equipment
       return { arriveDay, arriveHour };
     }
     // ---- chicks and birds ----

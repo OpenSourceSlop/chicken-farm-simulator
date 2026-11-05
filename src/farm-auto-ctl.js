@@ -5,7 +5,7 @@
 import { AUTO, LIGHT_PRESETS, FEED_TYPES, PLACEMENT_DAY, nippleHeightCmAt, feederRimCmAt, feedStdGAt, flockAgeAt, lightPresetForDay, feedTypeForDay } from './config.js';
 import { EV } from './events.js';
 import { ventNeed, onSecFor, brooderRowC, knownAliveOf } from './job-figures.js';
-import { stageTableFor } from './farm-fans.js';
+import { stageTableFor, withDifferential } from './farm-fans.js';
 import { feedDays } from './farm-silos.js';
 import { preheatHours } from './heat-diag.js';
 
@@ -39,6 +39,8 @@ function crossed(farm, env, key, h) {
 
 // ---------------- Water 3: the drinker winches ----------------
 export const winchTarget = (env) => Math.round(nippleHeightCmAt(Math.max(0, env.dayNumber)));
+/** Model values: the winch motor's own speed for a line more than 6 cm off the plate (not the age-following rate). */
+export const WINCH_FAST = { overCm: 6, cmPerH: 30 };
 function stepWinch(farm, env) {
   if (catchNear(farm, env) || !flockOn(farm)) return;
   const want = winchTarget(env), stall = (farm.auto.faults || []).find((f) => f.phase === 'open' && f.id === 'winch-stall');
@@ -48,8 +50,10 @@ function stepWinch(farm, env) {
     if (held(farm, env, 'winch', i) || (stall && stall.args.line === i)) return;
     const d = want - l.heightCm;
     if (Math.abs(d) < 0.5) return;
-    // at most AUTO.winchCmPerH: one centimetre a step of 1 / winchCmPerH farm hours
-    if (mv[i] != null && env.day - mv[i] < H / AUTO.winchCmPerH - 1e-9) return;
+    // following the age: at most AUTO.winchCmPerH (one centimetre a step of 1 / winchCmPerH farm hours); a line far off the
+    // plate (the prep day's lowering from the clean-out height) at the motor's own speed
+    const fast = Math.abs(d) > WINCH_FAST.overCm, rate = fast ? WINCH_FAST.cmPerH : AUTO.winchCmPerH;
+    if (mv[i] != null && env.day - mv[i] < H / rate - 1e-9) return;
     mv[i] = env.day;
     farm.act('water.height', { line: i, cm: l.heightCm + Math.sign(d) * Math.min(1, Math.abs(d)), by: 'auto', quiet: true });
     moved++;
@@ -96,11 +100,17 @@ function stepStages(farm, env) {
   const morning = crossed(farm, env, 'stagesDay', AUTO.morningHour);
   if (held(farm, env, 'stages') || held(farm, env, 'stagesTable')) { m.stagesKey = null; return; }
   const t = stageTableFor(env, farm), k = tableKey(t);
-  if (!t || (k === m.stagesKey && env.fanStages && !morning)) return;
-  m.stagesKey = k;
+  if (!t) return;
+  const w = withDifferential(t, env), kw = tableKey(w);
+  if (k === m.stagesKey && env.fanStages && !morning) {
+    // the same table for the age: only the differential of the stages now on moves (no new line in the notebook)
+    if (kw !== m.stagesWKey) { m.stagesWKey = kw; farm.act('vent.stages', { stages: w.stages, padOverC: w.padOverC, by: 'auto', quiet: true }); }
+    return;
+  }
+  m.stagesKey = k; m.stagesWKey = kw;
   const first = t.stages[0];
   autoDo(farm, env, 'stages', 'table', `Fan stages: the table for day ${env.dayNumber} (${first.overC < -10 ? `the evening line: every fan${t.padOverC != null ? ' and the pad' : ''}` : `${t.stages.length} stages from +${first.overC} °C${t.padOverC != null ? `, the pad over +${t.padOverC} °C` : ''}`})`,
-    'vent.stages', { stages: t.stages, padOverC: t.padOverC });
+    'vent.stages', { stages: w.stages, padOverC: w.padOverC });
 }
 /** The stage table of the age is running (the controller's own, as it set it). */
 export const stagesRunning = (farm, env) => { const t = stageTableFor(env, farm); return !!(t && env.fanStages && farm.auto.mem.stagesKey === tableKey(t)); };
@@ -128,29 +138,35 @@ function stepBrooders(farm, env) {
 }
 
 // ---------------- Feed 3: the orders and the feeder rims ----------------
-const END = { starter: 15.1, grower: 29.6, finisher: 41.6 };   // the ideal's own ends of each feed (the changes' blends)
+// Each feed's days in env.day (the ideal's own changes: the blends from 14:15 and 29:15, the finisher to the withdrawal)
+const SPAN = { starter: [-Infinity, 15.1], grower: [14.6, 29.6], finisher: [29.6, 41.6] };
 const stockOf = (feed, type) => (feed.silos || []).reduce((a, s) => a + s.layers.filter((l) => l.type === type).reduce((x, l) => x + l.kg, 0), 0);
 const pendingOf = (feed, type) => (feed.pending || []).filter((o) => o.type === type).reduce((a, o) => a + o.kg, 0);
-/** The order the feed controller would place now: { kg, type } or null. */
+/** The mill's rule (the silo plate): ordered before 16:00 the truck comes the next day at 09:00, else the day after. */
+const arrivalIf = (t) => Math.floor(t + 1e-9) + (((t % 1) + 1) % 1 < 16 / 24 - 1e-9 ? 1 : 2) + 9 / 24;
+/**
+ * The order the feed controller would place now: { kg, type } or null. At AUTO.orderAtDays of the feed's own use ahead or
+ * under — or before the mill's 16:00 when it would be there by tomorrow's 16:00 (the truck the next day keeps the silo over
+ * a day) — it orders AUTO.orderToDays from the truck's arrival, of the feed for the age (and the next feed for its change).
+ */
 export function feedOrderNow(farm, env) {
-  const feed = farm.feed, fl = farm.flock, age = env.day - PLACEMENT_DAY, cyc = !!(farm.cyc && farm.cyc.on);
+  const feed = farm.feed, fl = farm.flock, cyc = !!(farm.cyc && farm.cyc.on), now = env.day;
   if (!(fl.placed > 0) || !(fl.alive > 0) || env.dayNumber > AUTO.lastAutoOrderDay || feed.withdrawn) return null;
-  const perDay = (t) => (knownAliveOf(fl) * feedStdGAt(Math.max(0, age + t))) / 1000;
-  if (!cyc) {   // the brooding week: Phase 2's one silo figure
-    const d = feedDays(farm, env);
-    if (feed.order || d.days == null || d.days > AUTO.orderAtDays + 1e-9) return null;
-    return { kg: Math.round(Math.max(0, AUTO.orderToDays * d.kgPerDay - d.kg) / 100) * 100, type: 'starter' };
-  }
+  const birds = knownAliveOf(fl), perDay = (t) => (birds * feedStdGAt(Math.max(0, t - PLACEMENT_DAY))) / 1000;
+  const use = (type, t0, t1) => { const [a, b] = SPAN[type], x0 = Math.max(t0, a), x1 = Math.min(t1, b); let kg = 0; for (let t = x0; t < x1 - 1e-9; t += 0.125) kg += perDay(t) * Math.min(0.125, x1 - t); return kg; };
+  // the truck of an order sent now, and of one sent at the next hourly read (after the mill's 16:00: the day after tomorrow):
+  // order now if, waiting, the silo would hold under AUTO.orderAtDays of this feed when the truck came
+  const arrive = arrivalIf(now), later = arrivalIf(now + H);
+  const want = (type, have) => {
+    if (have - use(type, now, later) - use(type, later, later + AUTO.orderAtDays) >= -1e-6) return null;
+    const kg = Math.round(Math.max(0, use(type, now, arrive + AUTO.orderToDays) - have) / 100) * 100;
+    return kg >= 200 ? { kg, type } : null;
+  };
+  if (!cyc) return feed.order ? null : want('starter', feed.siloKg ?? 0);   // the brooding week: Phase 2's one silo figure
   for (const T of FEED_TYPES) {
-    const end = END[T.id], start = T.id === 'starter' ? 0 : T.fromDay - 0.4;
-    if (env.day > end || start - age > AUTO.orderAtDays + 1) continue;
-    const from = Math.max(age, start - PLACEMENT_DAY + PLACEMENT_DAY), left = Math.max(0, end - Math.max(env.day, start));
-    let need = 0; for (let t = 0; t < Math.min(AUTO.orderToDays, left); t += 0.25) need += perDay(Math.max(0, from - age) + t) * 0.25;
-    let soon = 0; for (let t = 0; t < Math.min(AUTO.orderAtDays, left); t += 0.25) soon += perDay(Math.max(0, from - age) + t) * 0.25;
-    const have = stockOf(feed, T.id) + pendingOf(feed, T.id);
-    if (pendingOf(feed, T.id) > 0 || have >= soon - 1e-6 || need <= 0) continue;
-    const kg = Math.round(Math.max(0, need - have) / 100) * 100;
-    if (kg >= 200) return { kg, type: T.id };
+    if (now > SPAN[T.id][1] || pendingOf(feed, T.id) > 0) continue;
+    const o = want(T.id, stockOf(feed, T.id));
+    if (o) return o;
   }
   return null;
 }

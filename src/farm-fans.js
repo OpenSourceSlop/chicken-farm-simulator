@@ -57,7 +57,10 @@ export const FAN_ADVICE = {
   youngFrom: 14, bigFrom: 21, youngMax: 3,                  // the young birds' line: at most three tunnel fans in week 3
   // the stage table over the house's range (°C over the target): big birds one fan per 1.2 °C from +1 °C (the heat sign's
   // stages); young birds few and high (the young birds' line); the pad over +9 °C with every fan (big birds only)
-  bigStages: [1, 2.2, 3.4, 4.6, 5.8, 7], youngStages: [2, 3.5, 5], padOverC: 9,
+  bigStages: [1, 2.2, 3.4, 4.6, 5.8, 7], youngStages: [1, 2, 3], padOverC: 9,
+  // the controller's hysteresis (a real stage controller's differential): a stage that is on stays on until the house is
+  // hystC under its step; the pad, once on, until padHystC under its step
+  hystC: 0.8, padHystC: 3,
 };
 const one = (v) => (Math.round(v * 10) / 10).toFixed(1);
 const ageOf = (env, farm) => (farm && Number.isFinite(farm.age) ? farm.age : flockAgeAt(env.day));
@@ -105,4 +108,11 @@ export function stageTableFor(env, farm) {
     return { stages: [{ overC: -50, fans: n }], padOverC: p ? -50 : null, key: `evening${p ? '+pad' : ''}` };
   }
   return { stages: A.bigStages.map((overC, i) => ({ overC, fans: Math.min(n, i + 1) })), padOverC: humid ? null : A.padOverC, key: `big${humid ? '' : '+pad'}${n}` };
+}
+/** The table as the controller writes it now: the stages that are on (and the pad, once on) held by the differential. */
+export function withDifferential(t, env) {
+  if (!t) return t;
+  const A = FAN_ADVICE, n = env.fansManual ?? 0;
+  return { ...t, stages: t.stages.map((s) => (s.overC > -10 && s.fans <= n ? { ...s, overC: +(s.overC - A.hystC).toFixed(2) } : s)),
+    padOverC: t.padOverC != null && t.padOverC > -10 && env.padOn ? +(t.padOverC - A.padHystC).toFixed(2) : t.padOverC };
 }
