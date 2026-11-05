@@ -803,6 +803,26 @@ test('skills update: the farm carries farm.auto (plain data, saved) and its API;
   assert(cols && cols.lines.length === 4 && cols.lines.every((c) => 'cm' in c && 'markCm' in c && typeof c.inBand === 'boolean'), 'water.columns shape');
 });
 
+test('skills update: the tally bucket\'s share at the bin counts no bird twice (review issue 2)', async () => {
+  const { binShare } = await import('../src/props-tally.js');
+  const a = binShare({ n: 5, causes: { heat: 3, legs: 2 }, counted: 5, countedCauses: { heat: 3, legs: 2 } });
+  assert(a.n === 0 && a.dropped === 5 && Object.keys(a.causes).length === 0, `all counted at pickup: ${JSON.stringify(a)}`);
+  const b = binShare({ n: 4, causes: { heat: 4 }, counted: 1, countedCauses: { heat: 1 } });
+  assert(b.n === 3 && b.causes.heat === 3 && b.dropped === 4, `part counted: ${JSON.stringify(b)}`);
+  const c = binShare({ n: 2, causes: {} });
+  assert(c.n === 2 && c.dropped === 2, 'no tally: the bin counts every bird (Phase 4)');
+  // through the farm: 5 at pickup, then the bin's share (0) with a by-look tally -> countedDead +5 exactly
+  const { createSim } = await import('../src/sim.js');
+  const { createFarm } = await import('../src/farm.js');
+  const env = createSim(), farm = createFarm(env, { events: createEvents() });
+  farm.start(LEVEL1, { seed: 2 });
+  const before = farm.flock.countedDead;
+  farm.act('dead.count', { n: 5, causes: {}, at: 'pickup' });
+  const share = binShare({ n: 5, causes: {}, counted: 5 });
+  farm.act('dead.count', { n: share.n, causes: share.causes, byLook: { back: 2 }, at: 'bin' });
+  assert(farm.flock.countedDead - before === 5, `countedDead +${farm.flock.countedDead - before}`);
+});
+
 let failed = 0;
 for (const t of tests) {
   try { await t.fn(); console.log(`ok   ${t.name}`); } catch (e) { failed++; console.log(`FAIL ${t.name}: ${e.message}`); }
