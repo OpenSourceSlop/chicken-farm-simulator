@@ -73,6 +73,7 @@ export function createTags(ctx, S, pop) {
         if (tg.until < t || !active || slot < 0 || slot >= S.n) { tags.delete(id); continue; }
         tg.x = S.px[slot]; tg.z = S.pz[slot];
         tg.dist = Math.hypot(tg.x - farmerPos.x, tg.z - farmerPos.z);
+        if (tg.dist > 2 * AUTO.tagM) tags.delete(id);   // he walked on (or jumped away): the tag is behind him
       }
       if (tags.size > AUTO.tagMax) {
         const keep = new Set([...tags.values()].sort((a, b) => a.dist - b.dist).slice(0, AUTO.tagMax).map((g) => g.id));

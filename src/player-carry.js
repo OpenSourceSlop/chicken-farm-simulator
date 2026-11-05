@@ -106,7 +106,7 @@ export const tallyFace = (() => {
     g.fillStyle = '#2b2f33'; g.fillRect(0, 0, 64, 32);
     g.fillStyle = '#0e2412'; g.fillRect(4, 4, 56, 24);
     g.fillStyle = full ? '#f0b43c' : '#b9e27a';
-    g.font = '700 22px "Chakra Petch", monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '700 25px "Chakra Petch", monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(String(Math.max(0, Math.min(999, n | 0))).padStart(2, '0'), 32, 17);
     tex.needsUpdate = true;
   }
@@ -114,8 +114,8 @@ export const tallyFace = (() => {
     /** A counter face for a bucket (local to the bucket: on its rim, tilted up toward the camera); null in node. */
     make() {
       if (!ensure()) return null;
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.055), mat);
-      m.name = 'bucket-tally'; m.position.set(0, 0.315, 0.155); m.rotation.set(-0.95, 0, 0); m.visible = false;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.075), mat);
+      m.name = 'bucket-tally'; m.position.set(0, 0.33, 0.168); m.rotation.set(-0.7, 0, 0); m.visible = false;
       faces.push(m);
       return m;
     },
