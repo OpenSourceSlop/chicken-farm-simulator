@@ -972,6 +972,26 @@ writes them here and the tree's words never promise more than they show. The sav
 count at the bin (Biosecurity 2), the weighing (Growth 3; Growth 2 a little), the timer and the thermostat presses (Moisture 2,
 Heating 2), and the raise days (Water 3, Feed 3).
 
+**Measured at the integration** (main, `live` on). The model (`node scripts/skill-time.mjs`, its `--assert` bands in npm test:
+each measured figure + 5 points) and the real input (`scripts/skills-play.json`, the p3-cycle way of counting: the seconds the
+game advanced plus 2 s per click or key):
+
+| Day | No skills (model, vs p3-cycle) | Level 2 (model) | Level 3 (model) | Real input (`skills-play.json`) |
+| --- | --- | --- | --- | --- |
+| 8 | 4.73 min (+8 % vs 4.4) | 4.04 (85 %) | 3.40 (72 %) | — |
+| 16 | 5.33 min (+13 % vs 4.7) | 4.62 (87 %) | 4.01 (75 %) | **4.69 min with no skill, 3.91 min with every branch at 3 (83 %): 0.78 min a day saved** |
+| 25 | 4.25 min (+4 % vs 4.1) | 4.04 (95 %) | 3.43 (81 %) | — |
+| 37 | 4.38 min (+4 % vs 4.2) | 4.01 (91 %) | 3.43 (78 %) | — |
+
+The real day 16 saves less than the model's level 3 (83 % against 75 %): on that day the payoffs felt are the sight tubes (no
+regulator visited), the tally bucket, the fan stages' glance and the record signed on the phone where he stands; the afternoon's
+panting birds are still a problem job the farmer handles at the fan panel (no problem is moved by equipment), the droppings
+checks and the night ventilation stay his. Single payoffs by real input: the sight tubes 8.0 s and 6 farm minutes against 18.2 s
+and 12.8 farm minutes for four cup tests (skills-water, 56 % less play); *Fill the timer* in one press, 4 s from the door
+(skills-minvent); *Weigh the frame* 1.17 min against *Weigh all* 1.42 min for the weekly 50 birds (skills-weigh, 83 %), 1.19 min
+on day 21 in skills-play; *Order to 3 days* at the silo gauge 37 m from the desk (skills-feed); the crew booked on the phone from
+the house (skills-phone).
+
 ## 15. Work packages (four, disjoint files, parallel worktrees)
 **Common to all four (repeated in short in each section).** Work in `git worktree add ../cfs-<key> -b skills/<key> main`; edit
 **only the files listed** for your package (new files with the listed prefixes are yours too); code against the contracts in

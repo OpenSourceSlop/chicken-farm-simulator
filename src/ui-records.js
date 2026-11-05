@@ -187,7 +187,7 @@ export function buildRecordsPanel(L, { pocket = false } = {}) {
   function feedLine() {
     let fd = null;
     try { fd = feedDays(farm, env); } catch { fd = null; }
-    return fd?.days != null ? h('p', { class: 'book-note' }, `About ${one(fd.days)} days of feed in the silos at today’s intake (${int(fd.kg)} kg, the feed sign).`) : null;
+    return fd?.days != null ? h('p', { class: 'book-note' }, `About ${one(fd.days)} days of feed in the silos at today’s intake (${int(fd.kg)} kg, ${fd.how === 'meter' ? 'the feed meter’s last 24 hours' : 'the feed sign'}).`) : null;
   }
   function phonePage() {
     const d = env.dayNumber;
