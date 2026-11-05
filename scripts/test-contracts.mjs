@@ -560,7 +560,7 @@ test('phase 5 graphics quality: the governor steps down in Phase 1\'s order; man
   assert(st.ratioCap === 0.85, `then the 0.85 render scale (${JSON.stringify(st)})`);
   assert(r.shadowMap.type === 2, 'the simple shadow keeps the soft filter (the type is in three\'s program key)');
   s.set('graphics.shadows', 'off');
-  assert(r.shadowMap.enabled === true && r.shadowMap.type === 2 && r.shadowMap.autoUpdate === false && q.state().shadows === 'off' && sun.shadow.mapSize.x === 256,
+  assert(r.shadowMap.enabled === true && r.shadowMap.type === 2 && r.shadowMap.autoUpdate === false && q.state().shadows === 'off' && sun.shadow.mapSize.x === 512,
     'shadows off by hand: an empty map no longer drawn, shadowMap.enabled and the type unchanged (no shader compiles)');
   s.set('graphics.pixelRatio', '1.25');
   assert(q.state().ratioCap === 1.25, 'a pixel ratio by hand');

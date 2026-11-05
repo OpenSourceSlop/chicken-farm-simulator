@@ -175,6 +175,7 @@ async function start(saved = {}) {
     const raw = clock.getDelta();
     try {
       step(Math.min(raw, 0.05));
+      quality.sync();               // fix round: shadows off redraws the house's shadow when the sun has moved
       renderer.render(scene, camera);
       frames++;
       failures = 0;
@@ -207,7 +208,7 @@ async function start(saved = {}) {
     settings, keys, quality, saves,
     get perf() { return perf; },
     renderInfo() {
-      player.update(0); renderer.render(scene, camera);
+      player.update(0); quality.sync(); renderer.render(scene, camera);
       const i = renderer.info;
       return { calls: i.render.calls, triangles: i.render.triangles, programs: i.programs ? i.programs.length : null, geometries: i.memory.geometries, textures: i.memory.textures,
         pixelRatio: renderer.getPixelRatio(), shadows: renderer.shadowMap.enabled ? perf.shadowMap : 0, linked };
@@ -255,7 +256,7 @@ async function start(saved = {}) {
       if (s.cameraYaw != null || s.zoom != null) player.setView?.({ yaw: s.cameraYaw, distance: s.zoom });
       return this.snapshot();
     },
-    renderNow() { player.update(0); renderer.render(scene, camera); },
+    renderNow() { player.update(0); quality.sync(); renderer.render(scene, camera); },
     metrics() { return flock.metrics(); },
     snapshot() {
       const keys = ['day', 'dayNumber', 'hour', 'weather', 'outsideTemp', 'houseTemp', 'houseRH', 'heaterSetpoint', 'heatersOn',
@@ -328,7 +329,9 @@ async function start(saved = {}) {
     }
   }
   await bootScreen.step('Warming up the graphics');
-  warmUp();
+  // fix round: with the soft shadow and every caster on, whatever quality is stored (a Low boot never compiled the shadow
+  // depth programs, so Medium or High chosen later linked them in play)
+  quality.warm(warmUp);
   // Title card / sandbox (level.js). A hot reload of a running level resumes it instead
   // (level.resume loads the skill profile first, so the skill tree carries over).
   if (!(saved.levelSave && level.resume(saved.levelSave))) level.boot();

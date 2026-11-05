@@ -9,8 +9,9 @@
 // Review round: no quality change compiles a shader. three 0.160 keys every program on shadowMap.enabled and
 // shadowMap.type (WebGLPrograms), so both stay as main.js set them (on, PCF soft) for the whole session: the simple shadow
 // is the same soft filter on a 1024 map (Phase 1's step 2 switched to PCF: a recompile of every lit material on exactly
-// the slow machines the governor serves), and 'off' is a 256 map rendered once with no caster (every fragment lit) and
-// then never again (shadowMap.autoUpdate false): the shadow pass costs nothing, the lit shaders stay the same programs.
+// the slow machines the governor serves), and 'off' is a 512 map with the house alone as caster (fix round: its roof and
+// walls shade the floor), drawn only when the sun or the shadow box has moved (shadowMap.autoUpdate false): the shadow
+// pass costs next to nothing, the lit shaders stay the same programs.
 // A light's castShadow is in the program key too (numDirLightShadows): the sun keeps its own.
 //
 //   const quality = createQuality({ THREE, renderer, scene, world, perf, settings, flock, onResize })
@@ -31,8 +32,42 @@ export function createQuality({ THREE, renderer, scene, world, perf = {}, settin
   const get = (k, d) => { try { return settings ? settings.get(`graphics.${k}`) : d; } catch { return d; } };
   const autoOf = () => ({ ratio: get('pixelRatio', 'auto') === 'auto', shadows: get('shadows', 'auto') === 'auto', flock: get('flockDetail', 'auto') === 'auto' });
 
-  let casters = null;   // the casters switched off for the one empty shadow pass of 'off' (back after that frame)
+  let casters = null;   // the casters switched off for one shadow pass of 'off' (back after that frame)
   function restoreCasters() { if (casters) { for (const o of casters) o.castShadow = true; casters = null; } }
+  // Fix round: 'off' keeps the house's own shadow. The roof and walls are what shade the floor and the birds, so without
+  // them the used litter read pale like fresh husk and the birds glared white (litter colour is a cue the farmer reads).
+  // The house alone is drawn into the small map, and only when the sun has turned more than about 5 degrees (about a farm
+  // hour) or the shadow box, which follows the farmer, has moved a few metres: the pass costs next to nothing, and no
+  // program changes (the sun keeps castShadow; a mesh's castShadow is not in any program key).
+  const OFF_TURN = Math.cos((5 * Math.PI) / 180), OFF_MOVE = 6;
+  let offRef = null, shell = null;
+  const sunDir = (sun, out) => { out.x = sun.position.x - sun.target.position.x; out.y = sun.position.y - sun.target.position.y; out.z = sun.position.z - sun.target.position.z;
+    const l = Math.hypot(out.x, out.y, out.z) || 1; out.x /= l; out.y /= l; out.z /= l; return out; };
+  const dirNow = { x: 0, y: 1, z: 0 };
+  function inShell(o) { if (!shell) return false; for (let q = o; q; q = q.parent) if (q === shell) return true; return false; }
+  /** One shadow pass of 'off': every caster outside the house off for that frame (back in frame()), the map drawn. */
+  function drawShell() {
+    const sun = world?.sun;
+    if (!shell || !shell.parent) shell = scene.getObjectByName?.('house') || null;
+    casters = casters || [];
+    scene.traverse((o) => { if (o.castShadow && !o.isLight && !inShell(o)) { o.castShadow = false; casters.push(o); } });
+    renderer.shadowMap.needsUpdate = true;
+    if (sun?.position && sun.target?.position) {
+      const d = sunDir(sun, { x: 0, y: 0, z: 0 }), t = sun.target.position;
+      offRef = { dir: d, at: { x: t.x, y: t.y, z: t.z } };
+    } else offRef = null;
+  }
+  /** Before each render: the casters back after the pass that drew 'off', and in 'off' a new pass when the sun or the
+   *  shadow box has moved. */
+  function sync() {
+    if (casters && !renderer.shadowMap.needsUpdate) restoreCasters();
+    if (st.shadows !== 'off' || casters) return;
+    const sun = world?.sun;
+    if (!sun?.position || !sun.target?.position || !offRef) return;
+    sunDir(sun, dirNow);
+    const t = sun.target.position, a = offRef.at;
+    if (dirNow.x * offRef.dir.x + dirNow.y * offRef.dir.y + dirNow.z * offRef.dir.z < OFF_TURN || Math.hypot(t.x - a.x, t.z - a.z) > OFF_MOVE) drawShell();
+  }
   function setShadows(mode) {
     if (mode === st.shadows) return;
     const sun = world?.sun, sm = renderer.shadowMap;
@@ -40,12 +75,12 @@ export function createQuality({ THREE, renderer, scene, world, perf = {}, settin
     const size = mode === 'high' ? GFX.shadowHigh : mode === 'low' ? GFX.shadowLow : GFX.shadowOff;
     if (sun && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
     if (mode === 'off') {
-      casters = casters || [];
       // meshes only: a light's castShadow is in the program key (numDirLightShadows), so the sun keeps its own
-      scene.traverse((o) => { if (o.castShadow && !o.isLight) { o.castShadow = false; casters.push(o); } });
-      sm.autoUpdate = false; sm.needsUpdate = true;
-    } else {
       restoreCasters();
+      sm.autoUpdate = false;
+      drawShell();
+    } else {
+      restoreCasters(); offRef = null;
       sm.autoUpdate = true; sm.needsUpdate = true;
     }
     perf.shadowMap = mode === 'off' ? 0 : size;
@@ -119,8 +154,18 @@ export function createQuality({ THREE, renderer, scene, world, perf = {}, settin
 
   const api = {
     pixelRatio: () => Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, st.ratioCap),
+    /** Fix round: before each render (main.js frame and renderNow): 'off' redraws the house's shadow when the sun or the
+     *  shadow box has moved. */
+    sync,
+    /** Fix round (a Low boot linked the shadow programs in play): fn runs with every caster on and the soft shadow
+     *  drawn each frame, so the warm-up compiles the depth programs whatever the stored quality; the setting after. */
+    warm(fn) {
+      const was = st.shadows;
+      if (was !== 'high') setShadows('high');
+      try { return fn(); } finally { if (was !== 'high') setShadows(was); }
+    },
     frame(rawDt) {
-      // after the frame that drew the empty shadow map (three clears needsUpdate when it has): the casters back
+      // after the frame that drew the 'off' shadow map (three clears needsUpdate when it has): the casters back
       if (casters && !renderer.shadowMap.needsUpdate) restoreCasters();
       perf.fps = (perf.fps || 0) + (1 / Math.max(rawDt, 1e-3) - (perf.fps || 0)) * 0.05;
       sample(rawDt);

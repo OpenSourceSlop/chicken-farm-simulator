@@ -904,7 +904,7 @@ export const GFX = {
   governor: { windowSec: 2, holdSec: 3, firstHoldSec: 4, slowSec: 0.036, verySlowSec: 0.05 },
   // the sun's shadow map: high 2048, low 1024, off 256 kept empty (PHASE5.md §4.4, review round: the shadow type and
   // renderer.shadowMap.enabled never change, both are in three's program key, so no setting compiles a shader mid-play)
-  shadowHigh: 2048, shadowLow: 1024, shadowOff: 256,
+  shadowHigh: 2048, shadowLow: 1024, shadowOff: 512,
   budget: { calls: 110, triangles: 650000, programs: 66 },
 };
 
