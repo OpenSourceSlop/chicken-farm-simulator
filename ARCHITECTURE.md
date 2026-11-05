@@ -1186,3 +1186,77 @@ it); the Phase 1 sandbox, Phase 2's lone brooding week, Phase 3's cycle and Phas
 - The open questions for the farmer are PHASE5.md §12 (Esc for the menu, the map on O, three slots, backups in parts, the
   hot season's weight, the sounds, captions by default, the HUD size, the first-play cards, the Time settings, reduced
   flock detail, coming back to the menu).
+
+## The farmer's night report (after Phase 5) — branch fix/night
+The farmer: "Going from day 0 to day 1 always seems to have a significant amount of dead birds with no way of preventing
+it … I'm setting the thermostat to 40 during the day and night … the temperature drops to 19 overnight … I don't think
+your suggestion would fix this." His screenshot (day 1 06:44): thermostat 40, the vent sign's timer (1 fan, 8 s / 300 s),
+HUD FANS 1/6, house 26.2 °C, outside 21.2 °C, 34 dead, the flock watch's cold warning ending "check the thermostat at the
+climate controller".
+- **What happened** (reproduced in node, `scripts/test-night.mjs`, and by real input in the browser, `scripts/req-night.json`):
+  one tunnel fan on by hand (the Tunnel fans row is the first row of the controller's Ventilation tab, above the timer)
+  moves 36,000 m³/h, about 40 times the 929 m³/h that 6,000 day-0 chicks need; with the brooders at full (6.5 °C/h) the
+  house settles at 25.9 °C when the outside reaches its 19 °C low at 03:00 (the "19" of his report is the outside gauge
+  beside the house one). FANS 1/6 at 06:44 was that fan: the timer runs 8 s in 300 s (2.7 % of the time). The floor he
+  measured (27.8–29 °C) is the pre-heated concrete holding its warmth: the brooder sign's 28–30 °C; the air is what fell.
+  The thermostat at 40 cannot help (the brooders are already at full); with the fan off it would take the house to
+  38–39 °C (272 heat deaths in a night).
+- **Every path by which the house falls toward the outside with the brooders on** (heat-diag.js solves sim.js's own
+  equation for its steady state; within 0.5 °C of the sim in every case): tunnel fans by hand (36,000 m³/h each, plus
+  their wind chill: 1.25 °C for chicks per fan); the timer over the vent sign's 90–130 % (2 fans 120 s / 300 s = 31 times
+  the need: 27 °C); the pad with a tunnel fan (the inlet air cooled: 20 °C); a brooder out (heat × 7/8 and a cold spot
+  round it); the thermostat under the row; the power off (conditions); the brooders winched up (week 4 on); a colder night
+  (the cold-night problem, −6 °C: the sign's settings still hold 33.9 °C). Not paths: the house door and the side curtains
+  (no model of either), the storm flaps (they let in less air), the fan stages (only above the target), the slab (it gives
+  heat back as the air falls: +1.3 °C/h at 03:00 in his night).
+- **Model faults found**: the flock watch's cold cause read no heat balance — "the house or the brooders run under the
+  row; check the thermostat" whatever the thermostat (its moving-air branch needed over 1.5 °C of wind chill; one fan gives
+  1.25); the HUD's fan gauge added the manual tunnel fans to the timer's fans in their on-part, so a tunnel fan left on
+  read like the timer. Both fixed. Left as it is (noted): the normal season's brooding week keeps the outside RH at 60 %
+  day and night (no cycle climate before Week 2), so a pad run at night would cool the inlet air 6.8 °C; no play runs it.
+- **Modules**: `src/heat-diag.js` (pure: `settleAt`, `hoursAhead`, `coldFixes` — every change the farmer can make with the
+  house it would settle at —, `causeWords` / `coldCause` / `hotCause` in the flock watch's shape, `comfortAt` — the farm's own
+  comfort model on a proxy env at a projected hour —, `controllerNotes`); `src/night-check.js` (pure: `nightCheck`,
+  `createSkipGuard`, `createNightLog`, `coldReport` / `hotReport`); `src/ui-night.js` (the night check card, panel kind
+  'paused'). `EV.NIGHT`; `sim.js` exports `HEAT`.
+- **The night check** (item 1): level.nextJob, before a skip with 2 h or more of night (18:30–06:00) in the young-bird weeks
+  (under 21 days, the brooders down), when something is off tonight: the coldest hour read by the comfort model as the flock
+  watch reads an hour (or the house 2 °C under the row), the house settling 2.5 °C over the row with the thermostat 1.5 °C
+  over it, or the timer under half the vent sign's air. The card: Temperature (the house, the row, the thermostat), Ventilation
+  (tunnel fans and timer in m³/h against the need), Brooders (output now, what the coldest hour needs), "What is off, and where
+  to set it", *Fix it at the controller (… tab)* (the controller opens on that tab, `openTab`) and *Skip anyway*
+  (`nextJob({ anyway: true })`). Nothing shows when all is fine. The running clock passing 18:30 with something off raises the
+  check's first line on the flock watch card (walking on into the night). `level.debug.nextSkip()`.
+- **The skip's stops** (item 2): a Next job skip over a flock moves a farm hour at a time (the power-cut minute steps stay) and
+  stops — the clock back to 1×, the flock watch card's line (`watch.raise`), a caption — at a new flock watch warning, a death
+  spike (5 birds or 0.08 % in an hour, and twice the rate the skip began with), the young birds' house 3 °C under the row
+  with the brooders at full (or the thermostat under it) and half the floor cold, or 3 °C over it with half panting; each only
+  when it was not so as the skip began. The caption names the cause from the heat balance: "House 28.8 °C and falling 0.9 °C
+  an hour, 5.2 °C under the row …: the timer runs 2 fans, 120 s in every 300 s: 28,800 m³/h, about 27 times the 1,054 m³/h
+  that 5,998 chicks need …; the brooders are at full and cannot keep up. See the minimum ventilation sign; check the minimum
+  ventilation timer … (back to the vent sign's setting: 8 s on in every 300 s with 1 fan). The thermostat at 40 °C is 6.0 °C
+  over the row …". Big birds' heat names the fans and pads ("0 of 6 tunnel fans run and the pad pump is off …").
+- **The controller** (items 3, 8, 9): under the thermostat, the brooder sign's row beside the setting ("Brooder sign: 34 °C for
+  day 0 · yours 40 °C: 6.0 °C over the sign's row; once the air is right the house will overheat the chicks"); the brooders'
+  output in % and what the house does ("… at full and the house falling 0.9 °C an hour …: more heat goes out than they put back"
+  with the cause and where); the Ventilation tab warns of tunnel fans for young birds with their airflow against the need, of
+  the brooders at full and losing, of a timer over the band in a cool house; the floor note; the LCD reads TUNNEL n/6 beside
+  TIMER. The HUD's fan gauge: "1 tunnel" over "Timer 1 · 8 s / 300 s", the timer's fans outlined pips while they run. The floor
+  probe's caption after placement and the floor view's legend say the litter follows the air and the concrete.
+- **The flock watch** (item 7): `watchState` carries the heat diagnosis; the cold cause is the biggest fix (the tunnel fans or
+  the timer with their airflow, a brooder out, the pad, the thermostat only when it is under the row; "the floor" when the house
+  holds near the row with heat to spare); the young birds' heat names the thermostat only when it is over the row. The cold
+  warning reads "… House 27.7 °C, brooders at full. Likely cause: 1 tunnel fan runs all the time: 36,000 m³/h along the floor,
+  about 40 times the 929 m³/h that 5,998 chicks need …; the timer alone gives 960 m³/h. See the minimum ventilation sign (its
+  tunnel fans line); check the Tunnel fans row on the climate controller's Ventilation tab …".
+- **The morning summary** (item 4): the night log samples 18:00–06:00 and at 06:00 writes the night's deaths by cause with the
+  reason ("The night to day 1 06:00: 278 chicks died since 18:00. 272 died of heat: the house held 37.x–39.x °C overnight; the
+  brooder sign gives 34 °C for day 0; the thermostat was at 40 °C. …") as a notebook line of kind `night` on the day's record
+  row, and EV.NIGHT (a caption when 3 or more died of cold or heat, or 0.1 % of the flock); quiet with the watch; saved with the
+  level (`level.serialize().night`).
+- **Every level and season** (item 5): the ideal of every condition (normal, hot, rainy, badChicks, water) through the
+  brooding week to the finish sees no night check after its last round of the night (21:00; the hot season's 23:00 and 02:00
+  rounds in weeks 2–3) and no stop. Before those rounds its warm-afternoon settings (day 6's wide timer, week 3's evening fans,
+  the hot season's afternoon fan) would be named if the farmer skipped through the night with them: the vent sign's "set it
+  back by the table when the afternoon cools". Week 3 with four tunnel fans left on: the check, then the watch's stop naming
+  them; the hot season's big birds with no fan: a death-spike stop naming the fans and pads.

@@ -180,7 +180,9 @@ export function causeWords(kind, env, farm, at = {}) {
             : young ? `the tunnel fans at the fan panel or on ${CTRL}’s Ventilation tab (off for the night once the evening cools: the timer gives the ${b} their air)`
               : `the tunnel fans at the fan panel or on ${CTRL}’s Ventilation tab (fewer fans while the night is cool)` };
       }
-      const t = a.timer, set = t ? `${onSecFor(a.need, t.fans, t.cycleSec)} s on in every ${t.cycleSec} s with ${plural(t.fans, 'fan')}` : '';
+      // the vent sign's way: one fan while one fan's on-seconds stay within the cycle's first half, else the fans set now
+      const t = a.timer, one1 = t ? onSecFor(a.need, 1, t.cycleSec) : 0, nf = t && one1 > t.cycleSec * 0.5 ? t.fans : 1;
+      const set = t ? `${onSecFor(a.need, nf, t.cycleSec)} s on in every ${t.cycleSec} s with ${plural(nf, 'fan')}` : '';
       return { kind, sign: 'sign-vent', signName: 'the minimum ventilation sign', place: 'controller', fix: { panel: 'controller', tab: 'vent' },
         why: `the timer runs ${timerWords(t)}: ${int(a.timerM3h)} m³/h, ${times(a.timerShare)} the ${need}`,
         check: `the minimum ventilation timer on ${CTRL}’s Ventilation tab (back to the vent sign’s setting${set ? `: ${set}` : ''})` };
