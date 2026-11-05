@@ -130,7 +130,7 @@ export function startFault(farm, env, f, id, args = {}) {
   Object.assign(f, { id, system: F.system, phase: 'open', startedAt: +env.day.toFixed(5), foundAt: F.selfKnown ? +env.day.toFixed(5) : null, fixedAt: null, args: { ...(f.args || {}), ...args } });
   switch (id) {
     case 'winch-stall': {
-      const L = Number.isFinite(args.line) ? Math.max(0, Math.min(3, Math.round(args.line))) : Math.floor(((f.at || env.day) * 997) % 4);
+      const want = Number.isFinite(args.line) ? args.line : f.args.line, L = Number.isFinite(want) ? Math.max(0, Math.min(3, Math.round(want))) : Math.floor(((f.at || env.day) * 997) % 4);
       f.args.line = L; f.args.cm = Math.round(farm.water.lines[L].heightCm);
       break;
     }
