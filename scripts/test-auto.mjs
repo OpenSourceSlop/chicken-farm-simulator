@@ -518,5 +518,24 @@ await test('a fault still open from an earlier level shows on a later level\'s f
   assert(Array.isArray(r.faults) && r.faults.length === 1 && /^Temperature sensor reading high from day 1 10:18 \(from an earlier level\), still open at the end$/.test(r.faults[0]), `the fail screen's equipment line: ${JSON.stringify(r.faults)}`);
 });
 
+await test('a fouled scale and the weigh-in (final check 6): the warning on the weigh-in\'s eve from 12:00 and again at 06:00; a borderline weigh-in the fouled platform decided names it', () => {
+  const R = at('week3', 20, 9, ['scale']);
+  const warns = [];
+  R.events.on(EV.WATCH, (p) => { if (p && p.fault === 'scale-fouled') warns.push({ day: p.day, hour: p.hour, text: p.text }); });
+  R.env.skipHours(0.1);
+  const f = R.farm.debug.fault('scale-fouled');
+  assert(f && f.id === 'scale-fouled', `fault ${JSON.stringify(f)}`);
+  R.env.skipHours(12.5 - R.env.hour);
+  assert(warns.some((w) => w.day === 20 && w.hour >= 12 && w.hour < 13 && /Tomorrow is a weigh day/.test(w.text)), `the eve's warning by 12:30 of day 20: ${JSON.stringify(warns)}`);
+  R.env.skipHours(24);                                            // the farmer leaves the platform alone (no quiet: the scale keeps its morning)
+  assert(warns.some((w) => w.day === 21 && w.hour >= 6 && w.hour < 9), `the weigh day's warning before 09:00: ${JSON.stringify(warns.map((w) => [w.day, w.hour]))}`);
+  const D = R.farm.stats.scaleDay?.[21], minShare = 0.9, target = 950;
+  assert(D && D.fouled && D.k >= 3, `the weigh-in morning on the fouled platform: ${JSON.stringify(D)}`);
+  D.meanG = Math.round(target * (minShare - 0.02));                // borderline: under the target share, over it once clean
+  R.level.debug.goto(21, 23.9, { auto: true });
+  const r = R.level.result;
+  assert(r && !r.pass && r.scaleFouled && r.scaleDecided && /the fouled platform decided it: clean, it would have read about/.test(r.failText), `week 3: ${JSON.stringify(r && { pass: r.pass, failText: r.failText, scaleDecided: r.scaleDecided })}`);
+});
+
 console.log(failed ? `${failed} failed` : 'all passed');
 process.exit(failed ? 1 : 0);

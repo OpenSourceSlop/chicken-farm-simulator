@@ -470,10 +470,16 @@ export function createLevel(ctx, deps = {}) {
     const share = weightG != null ? weightG / targetG : null;
     const max = M.fail.mortalityMaxPct;
     const pass = share != null && share >= M.target.minShare && ld.pct <= max && !failAt;
+    // the final check: a fouled platform that decided a borderline weigh-in says so (the reading less its fouled hours'
+    // light share, FAULTS['scale-fouled'].readLowPct: what a clean platform would have read)
+    const cleanG = plat?.fouled && plat.meanG != null ? plat.meanG / (1 - (FAULTS['scale-fouled'].readLowPct / 100) * Math.min(1, (plat.fouledH || plat.k || 1) / Math.max(1, plat.k || 1))) : null;
+    const scaleDecided = !pass && !failAt && ld.pct <= max && cleanG != null && cleanG / targetG >= M.target.minShare;
+    const decidedWords = scaleDecided ? `; the fouled platform decided it: clean, it would have read about ${int(cleanG)} g, ${int((100 * cleanG) / targetG)} % of the target` : '';
     const failText = failAt || ld.pct > max ? `deaths and culls in ${LEVEL_WORDS[def.id]} reached ${two(failAt?.pct ?? ld.pct)} % on day ${failAt?.day ?? env.dayNumber}`
-      : share != null ? `day ${day} weight ${int(weightG)} g${wr && wr.n >= 10 ? '' : scaleWord}, ${int(share * 100)} % of the ${int(targetG)} g target` : `no day ${day} weight`;
+      : share != null ? `day ${day} weight ${int(weightG)} g${wr && wr.n >= 10 ? '' : scaleWord}, ${int(share * 100)} % of the ${int(targetG)} g target${decidedWords}` : `no day ${day} weight`;
     const weighs2 = (def.weighDays || []).filter((d) => d !== day).map((d) => { const w = weighResult(d); return w && w.n >= 10 ? { day: d, weightG: w.mean, targetG: weightAt(d), uniformityPct: w.uniformityPct } : null; }).filter(Boolean);
     return { pass, failText, weightG, targetG, targetDay: day, share, minShare: M.target.minShare, weighedByHand: !!(wr && wr.n >= 10), weighedN: wr?.n ?? 0, ...(plat?.fouled ? { scaleFouled: true } : {}),
+      ...(scaleDecided ? { scaleDecided: true, scaleCleanG: Math.round(cleanG) } : {}),
       uniformityPct: wr && wr.n >= 10 ? wr.uniformityPct : null, otherWeighs: weighs2, mortalityMaxPct: max };
   }
 

@@ -498,9 +498,10 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
     let raised = null;
     for (const f of (farm.auto.faults || []).filter((x) => x.phase === 'open')) {
       const state = faultState(farm, env, f), F = FAULTS[f.id] || {};
-      // (review round: a fouled scale warns on a weigh day from 06:00, so a Next job skip stops before the weigh-in reads it)
+      // (review round: a fouled scale warns on a weigh day from 06:00, so a Next job skip stops before the weigh-in reads it;
+      // the final check: and on the eve of a weigh day from 12:00, so the platform is cleaned before the weigh-in morning)
       const warn = state === 'red' || (state === 'amber' && f.id === 'sensor-drift' && (farm.age ?? 0) < (F.warnAmberUnderDays ?? 7))
-        || (f.id === 'scale-fouled' && WEIGH_DAYS.includes(env.dayNumber) && env.hour >= 6);
+        || (f.id === 'scale-fouled' && ((WEIGH_DAYS.includes(env.dayNumber) && env.hour >= 6) || (WEIGH_DAYS.includes(env.dayNumber + 1) && env.hour >= 12)));
       const key0 = f.id === 'scale-fouled' ? `:${env.dayNumber}` : '';
       const key = `equipment:${f.id}:${f.startedAt}${key0}`, m = mem[key] || (mem[key] = { active: false, lastAt: null, clearSince: null });
       if (!warn || m.active) continue;

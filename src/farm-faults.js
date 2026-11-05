@@ -107,7 +107,7 @@ export function faultWords(f, env, farm) {
     }
     case 'scale-fouled': {
       const s = farm.autoCtl?.scale?.() || { n: 0 };
-      return { what: `Bird scale: ${int(s.n)} weighings today, about ${int(AUTO.scalePerDay)} before.${WEIGH_DAYS.includes(env.dayNumber) ? ' Today is a weigh day: the weigh-in reads this scale unless you weigh by hand.' : ''}`, short: 'Bird scale fouled', cause: 'litter on the scale’s platform: it reads light and counts few birds', place: 'the bird scale',
+      return { what: `Bird scale: ${int(s.n)} weighings today, about ${int(AUTO.scalePerDay)} before.${WEIGH_DAYS.includes(env.dayNumber) ? ' Today is a weigh day: the weigh-in reads this scale unless you weigh by hand.' : WEIGH_DAYS.includes(env.dayNumber + 1) ? ' Tomorrow is a weigh day: clean it before 09:00, or weigh by hand.' : ''}`, short: 'Bird scale fouled', cause: 'litter on the scale’s platform: it reads light and counts few birds', place: 'the bird scale',
         fix: 'clean the platform and weigh by hand', sign: 'bird-scale', spot: 'birdScale', panel: 'bird-scale', tab: null };
     }
     default: return { what: F.what || 'Equipment fault', cause: '', place: '', fix: '', sign: F.plate || '', spot: F.spot || '' };

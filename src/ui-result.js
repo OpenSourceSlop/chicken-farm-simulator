@@ -146,7 +146,8 @@ function cardsOf(res, def) {
   }
   // a week level
   return bigs(
-    res.weightG != null ? big(`Day ${res.targetDay} weight`, `${int(res.weightG)} g`, `${int((res.share ?? 0) * 100)} % of the ${int(res.targetG)} g target · ${res.weighedByHand ? `${int(res.weighedN)} birds weighed` : 'automatic scale, not weighed by hand'}`)
+    // the final check: the automatic scale's reading names a fouled platform (and that it decided the weigh-in)
+    res.weightG != null ? big(`Day ${res.targetDay} weight`, `${int(res.weightG)} g`, `${int((res.share ?? 0) * 100)} % of the ${int(res.targetG)} g target · ${res.weighedByHand ? `${int(res.weighedN)} birds weighed` : res.scaleFouled ? `automatic scale, its platform fouled (about 6 % light)${res.scaleDecided ? `: clean, about ${int(res.scaleCleanG)} g` : ''}; not weighed by hand` : 'automatic scale, not weighed by hand'}`)
       : big(res.early ? 'Ended early' : `Day ${res.targetDay} weight`, res.early ? `Day ${fmt0(res.day)}, ${endHour(res)}` : 'not weighed', `No day ${res.targetDay} weighing.`),
     deathsCard(res, def),
     // the farmer's choice after the skills review: the uniformity of the hand weighing says its birds (25 with Growth 2)
@@ -180,7 +181,8 @@ export function buildResultPanel(L) {
       ? h('div', { class: 'outcome' }, h('h3', null, `${name} complete`), h('p', null, R
         ? (res.levelId === 'plan' && R.next ? 'The plan is in the book. Continue to the brooding week: house 1 gets the first flock of your plan.' : R.next ? `The level is in the book. ${R.next.label} on the same flock, or replay it to try other settings.` : 'The house rests clean. The cycle summary is the whole flock, from the plan to the next chicks.')
         : 'The week is in the book. Replay it to try other settings, or keep walking the farm on day 7.'))
-      : h('div', { class: 'outcome outcome--again' }, h('h3', null, `${name} not passed: ${res.failText}.`), h('p', null, needsText(res, def)));
+      : h('div', { class: 'outcome outcome--again' }, h('h3', null, `${name} not passed: ${res.failText}.`), h('p', null, needsText(res, def)),
+        res.scaleDecided ? h('p', { class: 'result-carried result-faults' }, h('b', null, 'The bird scale: '), `its platform was fouled at the weigh-in, so it read about 6 % light. Cleaned before 09:00 (Clean the platform at the bird scale), or the birds weighed by hand, the weigh-in reads the birds’ own weight.`) : null);
     const pts = res.points || [];
     const run = () => L.run?.();
     const prev = R?.previous;
