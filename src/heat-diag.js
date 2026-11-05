@@ -304,3 +304,12 @@ export function controllerNotes(env, farm) {
   out.floor = { state: 'green', text: 'The floor (the litter) follows the house air above it and the concrete under it: the concrete warms slowly over the pre-heat and holds that warmth for a day or more. The brooder sign wants the floor at 28–30 °C before the chicks come. A floor that cools in the day comes from cold air (the air going out: the Ventilation tab) or a short pre-heat (the thermostat, this tab).' };
   return out;
 }
+
+/**
+ * Skills update (SKILLS.md §3.4; package "model" writes it): the pre-heat Heating 2's heat-loss readout gives —
+ * { hours, startBy, floorC, targetC: 28, why } with the brooders at full from now in this weather (the slab's rate, the
+ * outside forecast), or null when there is nothing to pre-heat (chicks on the floor, brooders up). The one home of the
+ * figure: the controller's Temperature tab, the job strip of prep-preheat and the brooders controller read it here.
+ * STUB: null.
+ */
+export function preheatHours(env, farm) { void env; void farm; return null; }

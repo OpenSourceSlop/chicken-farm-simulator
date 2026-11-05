@@ -1,25 +1,35 @@
 // Faults of the level 3 automation (SKILLS.md §5): rare, realistic, winnable — a winch motor stalling, the controller
-// restarting on its first timer setting, the fan stages tripping (in the rainy season off after every power cut), the
-// temperature sensor drifting, a feed order lost, the bird scale's platform fouled. Pure logic. Owner: package "model".
-// STUB of the design round: the shapes and the hooks are the contract; the plan, the effects and the fixes come with the
-// package (config FAULTS, FAULT_PLAN hold the numbers).
+// restarting on its first timer setting, the fan stage output tripping (in the rainy season off after every power cut),
+// the temperature sensor drifting, a feed order lost, the bird scale's platform fouled. Pure logic. Owner: package "model".
+// STUB of the design round (revised after the review): the shapes and the hooks are the contract; the plan's draw, the
+// effects and the fixes come with the package (config FAULTS, FAULT_PLAN hold the numbers).
 //
-//   planFaults(farm, env)        at farm.start of a flock: the flock's fault times (FAULT_PLAN[condition || 'normal']), from
-//                                createRng(seed x FAULT_PLAN.rngMul + flock) — never farm.rng, so every Phase 1–5 trace is
-//                                unchanged — into farm.auto.faults as { id: null, phase: 'planned', at } (the id is picked at
-//                                its time among the systems on then, by the plan's weights; none on: 'dropped')
-//   stepFaults(farm, env, hrs)   start a planned fault at its time (inside its window: FAULT_PLAN.window, FAULTS[id].hours /
-//                                days); run an open one (the drift's rise, the order's red after redAfterH, the timer's retry);
-//                                fix it when its fix action was done (FAULTS[id].fix) or its reading is back; emits EV.FAULT
-//                                { id, system, phase, text, cause, sign, place, spot, line?, day, hour } on 'start' / 'found' /
-//                                'fixed' / 'dropped' (the flock watch's Equipment row and warning read farm.auto.faults)
+// ONE rule for the plan (SKILLS.md §5.2):
+//   planFaults(farm, env, { flockNo })   at the brooding week's farm.start only (farm-auto.js installAuto calls it; a later
+//                                level's enterLevel draws nothing): FAULT_PLAN[farm.condition || 'normal'] from
+//                                createRng(farm.seed x FAULT_PLAN.rngMul + flockNo) — never farm.rng, so every Phase 1–5
+//                                trace is unchanged — into farm.auto.faults as items { id: null, system: null, phase:
+//                                'planned', at } (at: env.day; flock days FAULT_PLAN.window.fromDay..toDay, not on notDays,
+//                                minGapDays apart, inside window.hours). Saved with the farm: a replay or a resume keeps it.
+//   stepFaults(farm, env, hrs)   an item whose time has come (and quietN 0, no fault open): the fault is picked among the
+//                                systems on now by the plan's weights, each fault's own FAULTS[id].hours / days holding
+//                                (else the next system; none on: 'dropped'). order-lost arms then: the next automatic order
+//                                within FAULTS['order-lost'].armH is never confirmed (no order in that time: 'dropped').
+//                                Runs an open fault (the drift's rise, the order's red after redAfterH, the controllers'
+//                                retries: timer-reset retryH, stage-trip retryH from its start — the bound), fixes it when
+//                                its fix action was done by the farmer (FAULTS[id].fix) or the retry came; emits EV.FAULT
+//                                { id, system, phase, text, cause, sign, place, spot, line?, day, hour } on 'start' /
+//                                'found' / 'fixed' / 'dropped' (the flock watch's Equipment row and warning read
+//                                farm.auto.faults). The rainy season's after-cut stage trip (FAULT_PLAN.rainy.afterCut,
+//                                farm-cond-power.js EV.POWER on while stages is on) is an item { afterCut: true } outside
+//                                the plan's max and the "one open" rule.
 //   openFaults(farm)             the faults with phase 'open'
 //   faultWords(fault, env, farm) { what, cause, place, fix } in plain words (the watch, the night check, the job card, records)
 //   installFaultDebug(farm, env) farm.debug.fault(id, { line?, at? }) starts a fault now (harness and node tests; the
 //                                system need not be on); farm.debug.faults() lists them
 import { FAULTS } from './config.js';
 
-export function planFaults(farm, env) { void env; if (farm.auto) farm.auto.faults = []; return []; }   // STUB: no faults planned
+export function planFaults(farm, env, opts = {}) { void env; void opts; if (farm.auto) farm.auto.faults = []; return []; }   // STUB: no faults planned
 export function stepFaults(farm, env, hrs) { void farm; void env; void hrs; }
 export const openFaults = (farm) => (farm.auto?.faults || []).filter((f) => f.phase === 'open');
 

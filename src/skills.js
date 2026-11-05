@@ -14,7 +14,7 @@
 //   (a replay that lifts day7-weight from tier 0 to tier 1 emits +2, not +3), and EV.SKILL_UNLOCK
 //   when a branch level is reached. A milestone is kept per profile; a replay can only raise it.
 //   Milestone texts are what the player sees: results in plain words, never praise or verdicts.
-import { SKILL_BRANCHES, UNLOCKS, conditionLevel, levelById, skillLevelPoints, unlockLevel, PAYOFFS, SKILLS_UPDATE } from './config.js';
+import { SKILL_BRANCHES, UNLOCKS, conditionLevel, levelById, skillLevelPoints, levelFromPoints, unlockLevel, PAYOFFS, SKILLS_UPDATE } from './config.js';
 import { EV } from './events.js';
 import { RULES } from './skills-rules.js';
 import { RULES_CYCLE } from './skills-rules-cycle.js';
@@ -112,10 +112,11 @@ export function createSkills({ events, records, farm } = {}) {
     }
     return p;
   };
-  // Skills update (SKILLS.md §2.2, §13.2): the thresholds in force (config skillLevelPoints: [4, 9, 22] while
-  // SKILLS_UPDATE.live, else Phase 2's [4, 9, 15]); a harness's forced level (skills.debug.force: never saved) wins
+  // Skills update (SKILLS.md §2.2, §13.2): the thresholds in force (config skillLevelPoints: [4, 9, 13] while
+  // SKILLS_UPDATE.live, else Phase 2's [4, 9, 15]) and, while live, the level 3 gate (a finished flock: profile.cyclesDone
+  // >= SKILLS_UPDATE.level3After; config levelFromPoints); a harness's forced level (skills.debug.force: never saved) wins
   const forced = new Map();
-  const levelOf = (branch) => (forced.has(branch) ? forced.get(branch) : skillLevelPoints().filter((need) => pointsOf(branch) >= need).length);
+  const levelOf = (branch) => (forced.has(branch) ? forced.get(branch) : levelFromPoints(pointsOf(branch), profile.cyclesDone));
   /** The view unlocks (config UNLOCKS, level by unlockLevel) and, while live, the payoffs (config PAYOFFS) a branch level gives. */
   const keysAt = (branch, from, to) => [
     ...Object.entries(UNLOCKS).filter(([, u]) => u.branch === branch && unlockLevel(u) > from && unlockLevel(u) <= to).map(([key]) => ({ key })),
@@ -207,8 +208,12 @@ export function createSkills({ events, records, farm } = {}) {
     /** The run raises it at a cycle's end: every finished run counts; `condition` once the run was played under that one
      *  condition from its start level through the clean-out (PHASE4.md §3.1). Returns the profile. */
     cycleDone({ condition = null, underOne = true } = {}) {
+      const before = SKILL_BRANCHES.map((b) => levelOf(b.id));
       profile.cyclesDone += 1;
       if (condition && underOne) profile.conditionsDone[condition] = (profile.conditionsDone[condition] || 0) + 1;
+      // Skills update (SKILLS.md §2.2): the finished flock opens the level 3 gate (while live): the payoffs it passes unlock
+      // now (EV.SKILL_UNLOCK { key, payoff, gate: true }; the unlock caption waits for the next level start)
+      SKILL_BRANCHES.forEach((b, i) => { const after = levelOf(b.id); if (after > before[i]) for (const k of keysAt(b.id, before[i], after)) events && events.emit(EV.SKILL_UNLOCK, { ...k, gate: true }); });
       return skills.profile;
     },
     /** Set the profile's fields (a profile store without them reads 0: the run may pass lastCycle's 1). */
@@ -220,6 +225,10 @@ export function createSkills({ events, records, farm } = {}) {
     restore(d) {
       earned.clear(); for (const [k, v] of (d && d.earned) || []) earned.set(k, v);
       profile.cyclesDone = (d && Number.isFinite(d.cyclesDone)) ? d.cyclesDone : 0; profile.conditionsDone = d && d.conditionsDone ? { ...d.conditionsDone } : {};
+      // Skills update (SKILLS.md §4.2, review issue 4): a restored profile (level.profile.restore after a standard start, a
+      // loaded save) may change what the skills give: the perks refresh on this and level.js re-syncs farm.auto.on on the
+      // EV.PERKS that follows. key null: no unlock caption (listeners of EV.SKILL_UNLOCK skip key null)
+      events && events.emit(EV.SKILL_UNLOCK, { key: null, restore: true });
     },
   };
   // The bus drives the checkpoints (PHASE2.md §9): nobody else calls evaluate().

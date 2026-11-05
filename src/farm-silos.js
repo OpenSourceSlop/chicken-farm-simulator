@@ -4,7 +4,7 @@
 // In the brooding week the silos only follow Phase 2's single figure (feed.siloKg: the augers and the
 // day 4 order change it; reconcileSilos books it as starter in silo 1), so the week is Phase 2's. From
 // Week 2 (farm.cyc.on) stepAugersCycle replaces Phase 2's augers and orders go by type.
-import { EQUIP, FEED_TYPES, feedTypeForDay, HEAT } from './config.js';
+import { EQUIP, FEED_TYPES, feedTypeForDay, HEAT, feedStdGAt, flockAgeAt } from './config.js';
 import { FEED, panCap, augerState } from './farm-feed.js';
 
 // model constants
@@ -186,4 +186,19 @@ export const feedLeftKg = (feed) => sumSilos(feed) + feed.lines.reduce((a, l) =>
 
 export function serializeSilos(feed) {
   return { silos: feed.silos.map((s) => ({ type: s.type, kg: +s.kg.toFixed(2), layers: s.layers.map((l) => ({ type: l.type, kg: +l.kg.toFixed(2) })) })) };
+}
+
+/**
+ * Skills update (SKILLS.md §3.6; package "model" owns it): the days of feed in the silos — { days, kg, kgPerDay, how,
+ * bySilo: [{ kg, days }] } at today's intake by the feed sign (the known birds x feedStdGAt(age)), the figure the silo gauge
+ * shows (Feed 2), its 2-day warning, the pocket phone's order line, the feed controller and its fault read (one figure
+ * for all). STUB: the siloDays view's sign figure (ui-cycle-equip.js), without the feed meter's 24-hour rate.
+ */
+export function feedDays(farm, env) {
+  const fl = farm.flock, birds = Math.max(0, fl.placed - fl.countedDead - (fl.culls - (fl.cullsInBoxes || 0)));
+  const kgPerDay = (birds * feedStdGAt(flockAgeAt(env.day))) / 1000;
+  const silos = farm.feed.silos || [{ kg: farm.feed.siloKg ?? 0 }];
+  const kg = silos.reduce((a, s) => a + Math.max(0, s.kg || 0), 0);
+  const per = (k) => (kgPerDay > 0 ? Math.round((k / kgPerDay) * 10) / 10 : null);
+  return { days: per(kg), kg: Math.round(kg), kgPerDay: Math.round(kgPerDay), how: 'sign', bySilo: silos.map((s) => ({ kg: Math.round(s.kg || 0), days: per(s.kg || 0) })) };
 }

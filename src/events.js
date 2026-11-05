@@ -102,8 +102,9 @@ export const ACTION_IDS = [
   'gen.start', 'gen.stop', 'gen.switch', 'gen.test', 'gen.fuel', 'inlets.storm', 'water.tank', 'pump.fix', 'chicks.grade',
   'brood.trays', 'phone.hatchery',
   // Skills update (SKILLS.md §12.2): the glance at a controller's reading (ui), resetting a stalled or tripped system, the
-  // sensor checked against the thermometer, the automatic scale's day figures, its platform cleaned
-  'auto.glance', 'auto.reset', 'auto.calibrate', 'scale.read', 'scale.clean',
+  // sensor checked against the thermometer, the automatic scale's day figures, its platform cleaned, the four drinker
+  // lines' sight tubes read at the water supply (Water 2)
+  'auto.glance', 'auto.reset', 'auto.calibrate', 'scale.read', 'scale.clean', 'water.columns',
 ];
 /** Phase 3 action ids that are ui-only (EV.ACTION with result undefined; the farm sees them on the bus). */
 export const UI_ACTION_IDS_CYCLE = ['plan.letter', 'plan.reply', 'fans.read', 'phone.vet', 'swab.read', 'light.preset', 'sign.read'];

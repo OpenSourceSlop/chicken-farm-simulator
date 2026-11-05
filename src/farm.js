@@ -164,7 +164,9 @@ export function createFarm(env, { events } = {}) {
       const cond = condAct(farm, env, id, args);
       const cyc = cond !== undefined ? cond : cycleAct(farm, env, id, args);
       const result = cyc !== undefined ? cyc : doAct(farm, env, id, args);
-      if (farm.mode === 'level') { actionSymptoms(farm, env, id, args, result); cycleSymptoms(farm, env, id, args, result); condSymptoms(farm, env, id, args, result); }
+      // Skills update (SKILLS.md §4.2, review issue 3): a controller's step (by: 'auto') changes the state only: no problem
+      // is found, acted on or fixed by the equipment (the find and the act stay the farmer's)
+      if (farm.mode === 'level' && args.by !== 'auto') { actionSymptoms(farm, env, id, args, result); cycleSymptoms(farm, env, id, args, result); condSymptoms(farm, env, id, args, result); }
       if (!args.quiet) emit(EV.ACTION, { id, ...args, result });
       return result;
     },

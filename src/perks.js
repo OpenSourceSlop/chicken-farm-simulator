@@ -7,12 +7,15 @@
 //   perks.has(key)        a PAYOFFS key: SKILLS_UPDATE.live, allowed, its branch at its level, and for a level 3 its
 //                         settings (automation.all and automation.<branch>); a view key (config UNLOCKS): skills.unlocked(key)
 //   perks.auto(system)    an AUTO_SYSTEMS system's payoff holds (has(AUTO_SYSTEMS[system].payoff))
-//   perks.need(jobId)     a sampling job's numbers with the payoffs now: { n, sectors, key } | null (Brooding 2: d0-vent 3,
-//                         d1-crop 6, b-crop48 6; Growth 2: the weigh jobs 25) — the job variant and the milestones read it
+//   (no payoff changes a job's sample size: the boards' 5 vent chicks, 10 crops and 50 birds hold; the design round's
+//   perks.need is gone with the review)
 //   perks.easier(jobId)   the payoffs that ease the job, lowest level first: [{ key, name, saves, branch, level, step, has,
 //                         toGo (points to the level; 0 once reached), later (true: level 3 in a first flock) }]
-//   perks.handled(jobId)  { system, branch, key, label: 'handled by the controller (Water 3)', reading, glanceAt } while a
-//                         system that takes the job is on, else null
+//   perks.handled(jobId)  the parts of the job the equipment does now: [{ system, part, branch, key, label: 'handled by the
+//                         controller (Water 3)', reading, glanceAt }] for every system on whose AUTO_SYSTEMS[s].jobs names the
+//                         job (part 'whole' or the state test it keeps: r-raise -> drinkers-raised (winch), pans-raised
+//                         (feed)); [] when none (r-drinkers and r-feeders are never handed over: the controllers only keep
+//                         their live tests true)
 //   perks.list()          every payoff: { key, ...PAYOFFS[key], has, toGo, setting (true / false: its automation setting) }
 //   perks.allowed / allow(on)   false under automation (navigator.webdriver) until a steps file calls __game.perks.allow(true)
 //   perks.version         bumps on every change; EV.PERKS { version, keys } when a payoff came or went
@@ -55,13 +58,6 @@ export function createPerks({ skills, settings = null, events = null, allowed = 
     get version() { return version; },
     has,
     auto(system) { const s = AUTO_SYSTEMS[system]; return !!s && has(s.payoff); },
-    need(jobId) {
-      for (const key of EASES.get(jobId) || []) {
-        const n = PAYOFFS[key].need && PAYOFFS[key].need[jobId];
-        if (n && has(key)) return { ...n, key };
-      }
-      return null;
-    },
     easier(jobId) {
       if (!live()) return [];
       return (EASES.get(jobId) || []).map((key) => {
@@ -70,12 +66,14 @@ export function createPerks({ skills, settings = null, events = null, allowed = 
       });
     },
     handled(jobId) {
+      const out = [];
       for (const [system, s] of Object.entries(AUTO_SYSTEMS)) {
-        if (!(s.jobs || []).includes(jobId) || !perks.auto(system)) continue;
+        const part = s.jobs && s.jobs[jobId];
+        if (!part || !perks.auto(system)) continue;
         const p = PAYOFFS[s.payoff];
-        return { system, branch: s.branch, key: s.payoff, label: `handled by the controller (${SKILL_SHORT[s.branch]} ${p.level})`, reading: s.reading, glanceAt: [...s.glanceAt] };
+        out.push({ system, part, branch: s.branch, key: s.payoff, label: `handled by the controller (${SKILL_SHORT[s.branch]} ${p.level})`, reading: s.reading, glanceAt: [...s.glanceAt] });
       }
-      return null;
+      return out;
     },
     list() {
       return Object.entries(PAYOFFS).map(([key, p]) => ({ key, ...p, has: has(key), toGo: level(p.branch) >= p.level ? 0 : toGo(p), setting: p.step === 'auto' ? setting(p.branch) : null }));

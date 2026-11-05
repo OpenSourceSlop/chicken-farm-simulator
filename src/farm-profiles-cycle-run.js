@@ -109,12 +109,13 @@ function hourRow(world) {
 }
 
 /** Run a profile from a standard start of `from` through `to`. */
-export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = false, keepStarts = false, condition = undefined } = {}) {
+export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = false, keepStarts = false, condition = undefined, onWorld = null } = {}) {
   condition = condition !== undefined ? condition : COND_OF[name] ?? null;
   const P = cycleProfileOf(name === 'determinism' ? 'ideal' : name, { condition });
   const [f0, t0] = RANGE[name] || COND_RANGE[name] || ['plan', 'cleanout'];
   from = from ?? f0; to = to ?? t0;
   const world = makeWorld(), { env, events, farm, records, skills } = world;
+  if (onWorld) onWorld(world);   // SKILLS.md §2.5: skill-progress listens to the world's bus (the award days) before play
   const trace = { hourly: [], levels: {}, levelEnds: {}, points: {}, records, farm, env, skills, events, condition };
   const idealName = condition ? IDEAL_OF[condition] : 'ideal', keep = P.name === idealName || (P.name === 'ideal' && !condition);
   const ck = (id) => `${seed}:${condition || ''}:${id}`;
