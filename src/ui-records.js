@@ -23,6 +23,9 @@ import { planPage, harvestPage, cleanPage, lettersPage } from './ui-letters.js';
 import { graphsPage } from './ui-summary.js';
 import { createJobStrip } from './ui-jobstrip.js';
 import { needTime } from './ui-farmtime.js';
+// Skills update (SKILLS.md §3.11): the pocket phone (Farm Planning 2) and the record signed on it (Farm Planning 3)
+import { feedDays } from './farm-silos.js';
+import { perkHas, skillBox, workLine, oneKey, row as skRow, ensureSkillsStyle } from './ui-cycle-skills.js';
 
 // What "Today" lists, in job order: [note kind(s), label]
 const TODAY_LINES = [
@@ -64,18 +67,20 @@ export const WEEK_TABS = [
 
 /**
  * Skills update (SKILLS.md §3.11, §12.9; package "panels" builds it): the pocket phone — the records book's Phone page alone
- * (orders, the vet, the crew, the hatchery, with `from: 'pocket'` on each action) and, at Farm Planning 3 (phoneRecord),
- * *Sign today's record* (the same EV.RECORD_CLOSED { signed } the desk's book sends). Registered by ui.js (package "jobs")
- * as 'pocket-phone' (kind 'paused'); opened by the phone key (keys.js action `phone`) while perks.has('pocketPhone').
- * STUB of the design round: the whole record book (the package draws the Phone page alone).
+ * (orders, the vet, the crew, the hatchery, with `from: 'pocket'` on each action; the feed line from farm-silos feedDays)
+ * and, at Farm Planning 3 (phoneRecord), *Sign today's record* (records.sign: the same EV.RECORD_CLOSED { signed: true }
+ * the desk's book sends). Registered by ui.js (package "jobs") as 'pocket-phone' (kind 'paused'); opened by the phone key
+ * (keys.js action `phone`) while perks.has('pocketPhone').
  */
-export function buildPocketPhonePanel(L) { return buildRecordsPanel(L); }
+export function buildPocketPhonePanel(L) { return buildRecordsPanel(L, { pocket: true }); }
 
-export function buildRecordsPanel(L) {
+export function buildRecordsPanel(L, { pocket = false } = {}) {
   const { env, records, farm } = L;
   const titleId = uniqueId('book-title');
-  const { el, closeBtn } = dialogShell('book', titleId, L.close);
-  const TABS = [
+  const { el, closeBtn } = dialogShell(pocket ? 'book book--pocket' : 'book', titleId, L.close);
+  // the pocket phone's actions carry from: 'pocket' (the desk's book sends them exactly as before)
+  const FROM = pocket ? { from: 'pocket' } : {};
+  const ALL_TABS = [
     { id: 'today', label: 'Today', page: () => todayPage() },
     { id: 'week', label: 'Week', page: () => weekPage() },
     { id: 'plan', label: 'Plan', page: () => planPage(L), when: () => !!(L.run()?.state().plan || farm.plan || env.dayNumber <= PLAN_LEVEL.endDay) },
@@ -85,6 +90,7 @@ export function buildRecordsPanel(L) {
     { id: 'graphs', label: 'Graphs', page: () => graphsPage(L) },
     { id: 'phone', label: 'Phone', page: () => phonePage() },
   ];
+  const TABS = pocket ? ALL_TABS.filter((t) => t.id === 'phone') : ALL_TABS;
   const tabBtns = TABS.map((t) => button({ class: 'book-tab', role: 'tab', 'aria-selected': 'false' }, t.label));
   const pages = TABS.map(() => h('div', { class: 'book-page', role: 'tabpanel' }));
   let tab = 0, weekTab = null;
@@ -93,10 +99,10 @@ export function buildRecordsPanel(L) {
   const show = (i) => { tab = i; tabBtns.forEach((b, j) => b.setAttribute('aria-selected', String(i === j))); pages.forEach((p, j) => { p.hidden = i !== j; }); render(); };
   tabBtns.forEach((b, i) => b.addEventListener('click', () => show(i)));
   const sub = h('p');
-  const titleEl = h('h2', { id: titleId }, 'Flock record · House 1');
-  const head = h('header', { class: 'book-head' }, h('span', { class: 'book-icon', html: ICONS.book, 'aria-hidden': 'true' }),
+  const titleEl = h('h2', { id: titleId }, pocket ? 'Phone · in your pocket' : 'Flock record · House 1');
+  const head = h('header', { class: 'book-head' }, h('span', { class: 'book-icon', html: pocket ? ICONS.phone : ICONS.book, 'aria-hidden': 'true' }),
     h('div', null, titleEl, sub));
-  el.append(h('div', { class: 'book-cover' }, head, h('div', { class: 'book-tabs', role: 'tablist' }, tabBtns), h('div', { class: 'book-paper' }, pages)), closeBtn);
+  el.append(h('div', { class: 'book-cover' }, head, h('div', { class: 'book-tabs', role: 'tablist', hidden: pocket }, tabBtns), h('div', { class: 'book-paper' }, pages)), closeBtn);
 
   // ---- radio (top of Today) ----
   const forecast = h('p', { class: 'radio-text', 'aria-live': 'polite' });
@@ -161,17 +167,40 @@ export function buildRecordsPanel(L) {
     return s;
   }
   let crewDay = HARVEST.catchDefault.day, crewHour = HARVEST.catchDefault.hour, chickDay = null;
+  // ---- the pocket phone (Skills update, SKILLS.md §3.11) ----
+  let pocketSaid = '';
+  /** Farm Planning 3 (phoneRecord): today's record signed on the phone (records.sign: EV.RECORD_CLOSED { signed: true }). */
+  function pocketTop() {
+    if (!perkHas(L, 'phoneRecord')) return [];
+    ensureSkillsStyle();
+    const d = env.dayNumber, row = records.row?.(d), wait = signWait();
+    const work = workLine();
+    const key = oneKey('Sign today’s record', () => { records.sign(env.dayNumber); pocketSaid = `Today’s record signed on the phone at ${env.timeLabel}.`; render(); });
+    key.classList.add('btn--paper');
+    key.disabled = !!row?.signed || wait;
+    work.set(row?.signed ? pocketSaid || 'Today’s record is signed.' : wait ? 'The day’s record is signed in the evening, from 16:00.' : 'The record book fills itself from your readings and the farm’s meters; signing closes today’s row.');
+    const box = skillBox('phoneRecord', 'Today’s record', skRow(key, work.el));
+    box.show(true);
+    return [box.el];
+  }
+  /** The feed line of the pocket phone: the days of feed in the silos (farm-silos feedDays, the one figure). */
+  function feedLine() {
+    let fd = null;
+    try { fd = feedDays(farm, env); } catch { fd = null; }
+    return fd?.days != null ? h('p', { class: 'book-note' }, `About ${one(fd.days)} days of feed in the silos at today’s intake (${int(fd.kg)} kg, the feed sign).`) : null;
+  }
   function phonePage() {
     const d = env.dayNumber;
     const type = feedType || feedTypeForDay(Math.max(0, d)).id;
     phoneStrip.update();
     const out = [phoneStrip.el];
+    if (pocket) out.push(...pocketTop());
     // feed mill
     const typeBtns = FEED_TYPES.map((t) => { const b = button({ class: 'btn btn--paper', 'aria-pressed': String(t.id === type) }, t.label); b.addEventListener('click', () => { feedType = t.id; render(); }); return b; });
     const kgBtns = kgOpts.map((k) => { const b = button({ class: 'btn btn--paper', 'aria-pressed': String(k === kg) }, `${int(k)} kg`); b.addEventListener('click', () => { kg = k; render(); }); return b; });
     const order = button({ class: 'btn btn--paper btn--ink' }, h('span', { html: ICONS.phone, 'aria-hidden': 'true' }), 'Order feed');
     order.addEventListener('click', () => {
-      const r = L.act('feed.order', { kg, type }) || {};
+      const r = L.act('feed.order', { kg, type, ...FROM }) || {};
       const clock = needTime('the feed truck comes as farm time passes; the clock runs once you close the book (Next job skips ahead)').text;
       const label = FEED_TYPES.find((t) => t.id === type)?.label.toLowerCase() || type;
       const took = r.kg != null && r.kg !== kg ? ` The silo had room for ${int(r.kg)} kg.` : '';
@@ -180,13 +209,14 @@ export function buildRecordsPanel(L) {
     out.push(h('h3', { class: 'book-h' }, 'Feed mill'),
       h('p', { class: 'book-note book-note--fact' }, 'Two silos of 6,000 kg: starter and finisher go to silo 1, grower to silo 2. Ordered before 16:00, it comes the next morning at 09:00.',
         h('small', { class: 'book-src' }, `Source: ${sourceLabel('general')} · the Feed program sign and the silo plate`)),
+      pocket ? feedLine() : null,
       h('div', { class: 'book-row' }, typeBtns), h('div', { class: 'book-row' }, kgBtns), h('div', { class: 'book-row' }, order), h('p', { class: 'book-note', 'aria-live': 'polite' }, phoneLines.order));
     // the company vet
     const report = button({ class: 'btn btn--paper btn--ink' }, h('span', { html: ICONS.phone, 'aria-hidden': 'true' }), 'Report the deaths to the company vet');
-    report.addEventListener('click', () => { L.uiAct('phone.report', {}); say('report', `Reported to the company vet at ${env.timeLabel}.`); });
+    report.addEventListener('click', () => { L.uiAct('phone.report', { ...FROM }); say('report', `Reported to the company vet at ${env.timeLabel}.`); });
     const reasons = d >= 8 ? ['Blood in the droppings', 'Birds sitting hunched, white watery droppings', 'Birds that cannot walk well', 'Something else in the flock'] : [];
     const vetBtns = reasons.map((why) => { const b = button({ class: 'btn btn--paper' }, why); b.addEventListener('click', () => {
-      L.uiAct('phone.vet', { reason: why.toLowerCase() });
+      L.uiAct('phone.vet', { reason: why.toLowerCase(), ...FROM });
       // the steps hotfix: the letter comes over farm time: a paused clock runs again once the book closes
       say('vet', `You told the vet: ${why.toLowerCase()}, at ${env.timeLabel}. The vet’s answer comes as a letter on the desk. ${needTime('the letter comes as farm time passes; the clock runs once you close the book').text}`);
     }); return b; });
@@ -198,7 +228,7 @@ export function buildRecordsPanel(L) {
       const weakPct = b.looked > 0 ? (100 * b.weak) / b.looked : null;
       const call = button({ class: 'btn btn--paper btn--ink' }, h('span', { html: ICONS.phone, 'aria-hidden': 'true' }), 'Call the hatchery about the chicks');
       call.addEventListener('click', () => {
-        L.uiAct('phone.hatchery', { chickWeightG: w != null ? Math.round(w * 10) / 10 : null, weakPct: weakPct != null ? Math.round(weakPct * 10) / 10 : null });
+        L.uiAct('phone.hatchery', { chickWeightG: w != null ? Math.round(w * 10) / 10 : null, weakPct: weakPct != null ? Math.round(weakPct * 10) / 10 : null, ...FROM });
         say('quality', `You told the hatchery at ${env.timeLabel}, day ${d}: ${w != null ? `chicks of ${one(w)} g (your box weighing)` : 'the box not weighed'}${weakPct != null ? `, ${one(weakPct)} % weak at the grading (${int(b.gradedOut)} graded out)` : ''}.`);
       });
       out.push(h('h3', { class: 'book-h' }, 'Hatchery: the chicks that came'),
@@ -215,7 +245,7 @@ export function buildRecordsPanel(L) {
       const hours = select(Array.from({ length: 24 }, (_, i) => [i, hhmm(i)]), crewHour, (v) => { crewHour = +v; }, 'Catching time');
       const book = button({ class: 'btn btn--paper btn--ink' }, h('span', { html: ICONS.phone, 'aria-hidden': 'true' }), 'Book the crew and the trucks');
       book.addEventListener('click', () => {
-        const r = L.act('phone.bookCatch', { day: crewDay, hour: crewHour }) || {};
+        const r = L.act('phone.bookCatch', { day: crewDay, hour: crewHour, ...FROM }) || {};
         say('crew', r.booked ? `Booked at ${env.timeLabel}: the crew and two trucks come ${dayTime(r.catchAt)}. ${needTime('the crew comes at the booked time as farm time passes (Next job skips ahead)').text}` : `The crew’s office: ${r.reason || 'no booking'}. The catch stays ${dayTime(r.catchAt ?? now)}.`);
       });
       out.push(h('h3', { class: 'book-h' }, 'Catching crew'), h('p', { class: 'book-note' }, `The catch now: ${dayTime(now)}${hv?.bookedAt != null ? ' (booked)' : ' (the company’s default)'}.`),
@@ -229,7 +259,7 @@ export function buildRecordsPanel(L) {
       const days = select(Array.from({ length: Math.max(1, 70 - first) }, (_, i) => first + i).map((x) => [x, `Day ${x}`]), chickDay, (v) => { chickDay = +v; }, 'Chick day');
       const book = button({ class: 'btn btn--paper btn--ink' }, h('span', { html: ICONS.phone, 'aria-hidden': 'true' }), 'Book the next chicks');
       book.addEventListener('click', () => {
-        const r = L.act('phone.bookChicks', { day: chickDay }) || {};
+        const r = L.act('phone.bookChicks', { day: chickDay, ...FROM }) || {};
         say('hatchery', r.booked ? `Booked at ${env.timeLabel}: the next chicks come on day ${r.bookedDay}. ${needTime('the house rests until then as farm time passes (Next job skips ahead)').text}` : `The hatchery: ${r.reason || 'no booking'}.`);
       });
       out.push(h('h3', { class: 'book-h' }, 'Hatchery'), h('p', { class: 'book-note' }, c.bookedDay != null ? `The next chicks: day ${c.bookedDay}.` : 'No chicks booked yet.'),
@@ -240,8 +270,8 @@ export function buildRecordsPanel(L) {
 
   function render() {
     const d = env.dayNumber;
-    setText(sub, `${int(LEVEL1.chicksPlaced)} chicks · ${dayLabel(d, { bookedDay: farm.clean?.bookedDay })} · the clock stops while the book is open`);
-    setText(titleEl, farm.condition ? `Flock record · House 1 · ${conditionLabel(farm.condition)}` : 'Flock record · House 1');
+    setText(sub, `${int(LEVEL1.chicksPlaced)} chicks · ${dayLabel(d, { bookedDay: farm.clean?.bookedDay })} · the clock stops while the ${pocket ? 'phone' : 'book'} is open`);
+    setText(titleEl, pocket ? 'Phone · in your pocket' : farm.condition ? `Flock record · House 1 · ${conditionLabel(farm.condition)}` : 'Flock record · House 1');
     TABS.forEach((t, i) => { tabBtns[i].hidden = t.when ? !t.when() : false; });
     if (tabBtns[tab].hidden) { tab = 0; tabBtns.forEach((b, j) => b.setAttribute('aria-selected', String(j === 0))); pages.forEach((p, j) => { p.hidden = j !== 0; }); }
     signBtn.disabled = !!records.row?.(d)?.signed || signWait();
@@ -250,7 +280,7 @@ export function buildRecordsPanel(L) {
   return {
     el,
     kind: 'paused',
-    onOpen() { setText(forecast, ''); weekTab = null; phoneStrip.onOpen(); show(tab); },
+    onOpen() { setText(forecast, ''); weekTab = null; pocketSaid = ''; phoneStrip.onOpen(); show(tab); },
     onClose() { phoneStrip.onClose(); },
     update(dt, force) { if (force) render(); else if (TABS[tab].id === 'phone') phoneStrip.update(); },
     showTab: (i) => show(typeof i === 'string' ? Math.max(0, TABS.findIndex((t) => t.id === i || t.label === i)) : i),
