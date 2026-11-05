@@ -201,7 +201,7 @@ export function supplySkills(L) {
   function drawTrend() {
     const on = live() && perkHas(L, 'waterTrend') && farm.mode === 'level';
     trendKey.hidden = !on;
-    trendKey.setAttribute('aria-pressed', String(on && trendOpen));
+    trendKey.setAttribute('aria-expanded', String(on && trendOpen));   // a disclosure (shows the graph under the meter), not a lit switch
     trendEl.hidden = !(on && trendOpen);
     if (trendEl.hidden) return;
     const rows = (L.records?.rows ? L.records.rows() : []).filter((r) => r.day >= Math.max(0, env.dayNumber - 14) && r.day <= env.dayNumber);

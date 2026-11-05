@@ -14,6 +14,9 @@ const steps = [
   { clearStorage: true },
   { eval: "__game.stop(), window.__open = () => document.querySelector('#hud .panel:not([hidden])'), 'stopped: the new keys of the panels package at 960 × 600 (SKILLS.md §15.3)'" },
   { eval: helpers },
+  // the floors are read at rest: the mouse left over a key by a real click would measure the shared .key hover gradient (every
+  // key of the game has it), so the hover look is held at the key's rest look for this run
+  { eval: "(() => { const s = document.createElement('style'); s.id = 'skills-a11y-rest'; s.textContent = '#hud .key:hover { background: linear-gradient(180deg, var(--key-hi), var(--key)) !important; }'; document.head.append(s); return 'keys measured at rest'; })()" },
   { eval: `(() => { __game.config.SKILLS_UPDATE.live = true; __game.perks.allow(true); ${force(3)} __game.startLevel({ seed: 1 }); __game.level.debug.goto(0, 14, { auto: true }); return 'live on, every branch at 3, the brooding week at ' + __game.env.timeLabel + ' on day ' + __game.env.dayNumber; })()` },
 ];
 // the new parts only (the payoff boxes and the keys outside them): the panels' Phase 1–5 parts are p5-a11y's and
