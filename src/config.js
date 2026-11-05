@@ -921,16 +921,16 @@ export const MAP = {
 // ---------------------------------------------------------------------------------------------------------------------
 // Skills update (SKILLS.md): skills that make playing easier. Contract data of the design round (revised after the
 // critic's review); owners per SKILLS.md §15.
-//   live          the build switch (false on main until the last merge, SKILLS.md §16; a steps file may set
+//   live          the build switch (true on main since the integration, SKILLS.md §16; a steps file or a node test may set
 //                 __game.config.SKILLS_UPDATE.live): the new level thresholds, the level 3 gate and the two-flock points,
 //                 the payoffs, the job card's and the tree's new words, the sign lines and the moved Feed views.
-//                 false = the Phase 5 game.
+//                 false = the Phase 5 game. Under automation no payoff acts until __game.perks.allow(true).
 //   levelPoints   points for levels 1, 2, 3 while live (SKILL_LEVEL_POINTS [4, 9, 15] otherwise)
 //   level3After   level 3 needs this many finished flocks too (skills.profile.cyclesDone >= 1): a first flock reaches
 //                 level 2 at most, and a branch with 13 points at the end of it is at level 3 from the next plan
 //                 (SKILLS.md §2.2, the pacing measured by scripts/skill-progress.mjs, §2.5)
 //   flocks        a milestone counts once per flock slot, in up to this many flocks (slot 1: cyclesDone 0, slot 2: >= 1)
-export const SKILLS_UPDATE = { live: false, levelPoints: [4, 9, 13], level3After: 1, flocks: 2 };
+export const SKILLS_UPDATE = { live: true, levelPoints: [4, 9, 13], level3After: 1, flocks: 2 };
 /** The thresholds in force (skills.js, the perks, the tree and the job card read this, never a constant). */
 export const skillLevelPoints = () => (SKILLS_UPDATE.live ? SKILLS_UPDATE.levelPoints : SKILL_LEVEL_POINTS);
 /** The level a branch's points give, with the level 3 gate while live (cyclesDone: the profile's finished flocks). */

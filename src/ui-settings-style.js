@@ -6,6 +6,8 @@ export const SETTINGS_CSS = `
   color: var(--ink-dim); font: 600 12px/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .set-tab:hover { color: var(--ink); background: rgba(255, 255, 255, 0.08); }
 .set-tab[aria-selected="true"] { color: var(--ink); background: var(--panel-raised); box-shadow: inset 0 -3px 0 var(--accent); }
+/* Skills update: seven tabs with Automation (while live): each label takes its own width so none is cut */
+.set-tabs:has(> .set-tab:nth-child(7)) .set-tab { flex: 1 1 auto; padding: 8px 4px; font-size: 11.5px; letter-spacing: 0.03em; }
 .set-sec { display: grid; gap: 10px; padding: 12px 2px 2px; }
 .set-sec[hidden] { display: none; }
 .set-words { margin: 0; color: var(--ink-dim); font-size: 13px; line-height: 1.45; }
