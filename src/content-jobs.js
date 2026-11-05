@@ -175,7 +175,8 @@ export const JOBS = [
     spot: 'controller', signs: ['sign-brooder'], branch: 'brooding', done: CONTROLLER_READ }),
   R('r-litter', ROUTINE, 'pm', 'Check the litter ({key:squeeze}: squeeze a handful)', {
     spot: 'signLitter', signs: ['sign-litter'], branch: null,
-    done: { type: 'count', id: 'litter.squeeze', n: 3, sectors: 2, nearDrinker: 1 } }),
+    // fix round: the parts of the floor in use (the brooding floor while the curtain is down, the whole house after)
+    done: { type: 'count', id: 'litter.squeeze', n: 3, sectors: 2, nearDrinker: 1, sectorsOf: 'used' } }),
   R('r-dead-pm', ROUTINE, 'pm', 'Pick up dead birds', {
     spot: 'dead', signs: ['sign-health'], branch: null, done: { type: 'state', test: 'dead-cleared' } }),
   R('r-record', [0, 46], 'eve', 'Fill in the daily record at the office', {

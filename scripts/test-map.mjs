@@ -8,6 +8,7 @@ import { MAP_PLACES, standOf, projector, layoutLabels, labelWidth, boxesOverlap,
 import { MAP, SPOTS, SPOTS2, SPOTS3, SPOTS4, FARM, HOUSE_BOUNDS } from '../src/config.js';
 import { makeWorld } from '../src/farm-profiles-run.js';
 import { createLevel } from '../src/level.js';
+import { markBoxes, buildingCentres, layoutMarkers, jobRows, signText } from '../src/map-marks-plan.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -143,6 +144,60 @@ test('jobCard.spots(): [{ key, n, title, x, z, inside, current }] for the open j
     // the numbers follow the card's order of open jobs (1, 2, 3 …)
     assert([...new Set(spots.map((s) => s.n))].sort((a, b) => a - b).every((n, i) => n === i + 1 || n > i), 'numbered from 1');
   } finally { if (had) globalThis.document = keep; else delete globalThis.document; }
+});
+
+// ---- fix round: the marks clear of each other (labels, sign posts, machine marks, the jobs' markers) ----
+/** The open jobs' spots on a day from the real job engine and job card (as the page's ui.jobCard.spots()). */
+async function spotsOn(day, hour, opts = {}) {
+  const had = 'document' in globalThis, keep = globalThis.document;
+  try {
+    const { createJobCard } = await import('../src/ui-jobs.js');
+    const w = makeWorld();
+    const pos = { x: FARM.spawn.x, z: FARM.spawn.z };
+    const player = { position: pos, yaw: 0, isInside: false, teleport(x, z) { pos.x = x; pos.z = z; } };
+    const ui = { panelKind: null, setMode() {}, closePanel() {}, showResult() {}, jobCard: { refresh() {}, reset() {}, atAnyJob: () => false, atJob: () => false }, newRun() {} };
+    const store = { save: () => true, load: () => null, clear() {}, loadProfile: () => null, saveProfile() {}, info: () => null };
+    const props = { carrying: null, reset() {}, serialize: () => ({}), restore() {}, drop() {}, highlight() {} };
+    const flock = { resetLevel() {}, serialize: () => ({}), restore() {}, afterSkip() {}, dead: { near: () => [] } };
+    const level = createLevel({ env: w.env }, { ...w, save: store, player, flock, props, ui });
+    level.start({ seed: 1, ...opts });
+    level.debug.goto(day, hour);
+    globalThis.document = { createElement: fakeEl, createTextNode: (t) => ({ text: String(t) }), head: fakeEl('head'), documentElement: fakeEl('html') };
+    const ctx = { THREE, scene: { add() {} }, camera: new THREE.PerspectiveCamera(), env: w.env, farm: w.farm, props, flock, player, events: w.events, level, keys: null };
+    const card = createJobCard(fakeEl('div'), ctx, { engine: () => level.engine }, { root: fakeEl('div'), avoid: () => [], onNext() {}, onNotebook() {}, onSkills() {}, nextLabel: () => 'Next job' });
+    return { spots: card.spots(), pos: { ...pos } };
+  } finally { if (had) globalThis.document = keep; else delete globalThis.document; }
+}
+const hits = (A, B, same = false) => { const out = []; for (let i = 0; i < A.length; i++) for (let j = same ? i + 1 : 0; j < B.length; j++) if (boxesOverlap(A[i], B[j])) out.push([A[i].id || A[i].text, B[j].id || B[j].text]); return out; };
+test('fix round: no marker, label or sign post on another (the planning day and the prep day, both views, 960 x 600 and 1280 x 800)', async () => {
+  for (const [day, hour, name, opts] of [[-2, 7.2, 'planning day', { level: 'plan' }], [-2, 11, 'planning day 11:00', { level: 'plan' }], [-1, 6.6, 'prep day'], [-1, 16.5, 'prep day afternoon']]) {
+    const { spots, pos } = await spotsOn(day, hour, opts);
+    for (const size of [[960, 600], [1280, 800]]) {
+      const box = { x: 0, y: 0, ...mapBoxSize(...size) };
+      for (const view of ['farm', 'house']) {
+        const P = projector(MAP[view], box), q = P.toPx(pos.x, pos.z), me = { id: 'farmer', x: q.x - 12, y: q.y - 12, w: 24, h: 24 };
+        const marks = markBoxes(P, box, view);
+        const labels = view === 'farm' ? layoutLabels(P, box, { measure: labelWidth, px: MAP.minLabelPx, obstacles: [...marks, me] }) : [];
+        const centres = buildingCentres(P, box);
+        const markers = layoutMarkers(P, box, spots, { view, obstacles: [...labels, ...marks, me, ...centres] }).map((m) => ({ ...m, id: `job ${m.text}`, x: m.x - m.w / 2, y: m.y - m.h / 2 }));
+        const bad = [...hits(markers, markers, true), ...hits(markers, labels), ...hits(markers, marks), ...hits(labels, marks), ...hits(markers, centres)];
+        const tag = `${name} ${size.join(' x ')} ${view}`;
+        console.log(`     ${tag}: ${spots.length} job places -> ${markers.length} markers (${markers.map((m) => m.text).join(', ')}), ${labels.length} labels, ${marks.length} marks; overlaps ${bad.length}`);
+        assert(!bad.length, `${tag}: ${bad.map((b) => b.join(' on ')).join('; ')}`);
+        const inView = spots.filter((sp) => { const r = P.toPx(sp.x, sp.z); return r.x >= 0 && r.y >= 0 && r.x <= box.w && r.y <= box.h; });
+        assert(inView.every((sp) => markers.some((m) => m.keys.includes(sp.key) && m.ns.includes(sp.n))), `${tag}: every job with a place in view has its number on a marker`);
+      }
+    }
+  }
+});
+test('fix round: the side list has one row a job, by job number; signs read S1, S2 … on the map', async () => {
+  const { spots, pos } = await spotsOn(-1, 16.5);
+  const rows = jobRows(spots, pos);
+  assert(rows.length === new Set(spots.map((s) => s.key)).size, `one row a job: ${rows.length}`);
+  assert(rows.every((r, i) => !i || r.n > rows[i - 1].n), `by number: ${rows.map((r) => r.n).join(', ')}`);
+  const multi = rows.find((r) => r.places.length > 1);
+  assert(multi && multi.places.every((p, i) => !i || Math.hypot(p.x - pos.x, p.z - pos.z) >= Math.hypot(multi.places[i - 1].x - pos.x, multi.places[i - 1].z - pos.z)), 'a job of several places: nearest first');
+  assert(signText('signGate') === 'S1' && /^S\d+$/.test(signText('signHeat')) && signText('office') === '', `sign marks: ${signText('signGate')}, ${signText('signHeat')}`);
 });
 
 let failed = 0;

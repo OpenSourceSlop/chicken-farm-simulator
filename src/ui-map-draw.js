@@ -4,7 +4,8 @@
 // (the clock stands still while it is open) and returns where everything went (ui.map.state()).
 //   drawView(svg, { view: 'farm'|'house', P, box, ctx, spots, labels, present(p), shut }) -> { shapes, markers, dead, bucket, birds, farmer }
 import { FARM, HOUSE_BOUNDS, HOUSE, COLORS, HEATERS, DRINKER_LINES_Z, FEEDER_LINES_Z, LINE_X, SPOTS2, SPOTS3 } from './config.js';
-import { MAP_PLACES, SIGN_NUMBERS } from './map-plan.js';
+import { MAP_PLACES } from './map-plan.js';
+import { signText, postSize } from './map-marks-plan.js';
 import { FAN_Z } from './house-fans.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -122,11 +123,16 @@ export function drawView(svg, { view, P, box, ctx, spots = [], labels = [], pres
   const birds = drawBirds(live, P, ctx, big ? 3 : 2);
   if (dark) { wr(P, HOUSE_BOUNDS.xMin, HOUSE_BOUNDS.zMin, HOUSE_BOUNDS.xMax, HOUSE_BOUNDS.zMax, { fill: '#0b120e', opacity: 0.62, class: 'map-dark' }, live); }
   if (shut) wr(P, HOUSE_BOUNDS.xMin, HOUSE_BOUNDS.zMin, HOUSE_BOUNDS.xMax, HOUSE_BOUNDS.zMax, { fill: 'url(#map-hatch)', class: 'map-shut' }, live);
-  // dead birds on the floor: small dark crosses; the bucket set down with its count
+  // dead birds on the floor: crosses in the 3D markers' muted red with a light halo (they read on the chick dots and
+  // in the dark house); fix round: never more crosses than the farm's own count, and none on the house at rest
   const dead = { n: ctx.farm?.flock?.deadOnFloor ?? 0, crosses: 0, at: [] };
+  const want = shut ? 0 : Math.max(0, dead.n);
   for (const d of ctx.flock?.dead?.near?.(0, 0, 200) || []) {
-    const q = P.toPx(d.x, d.z), s = big ? 4 : 3;
-    S('path', { d: `M${f1(q.x - s)} ${f1(q.y - s)}L${f1(q.x + s)} ${f1(q.y + s)}M${f1(q.x + s)} ${f1(q.y - s)}L${f1(q.x - s)} ${f1(q.y + s)}`, stroke: '#1a1a1a', 'stroke-width': 2, class: 'map-dead' }, live);
+    if (dead.crosses >= want) break;
+    const q = P.toPx(d.x, d.z), s = big ? 4 : 3.2;
+    const xd = `M${f1(q.x - s)} ${f1(q.y - s)}L${f1(q.x + s)} ${f1(q.y + s)}M${f1(q.x + s)} ${f1(q.y - s)}L${f1(q.x - s)} ${f1(q.y + s)}`;
+    S('path', { d: xd, class: 'map-dead-halo' }, live);
+    S('path', { d: xd, class: 'map-dead' }, live);
     dead.crosses++; dead.at.push({ x: q.x, y: q.y });
   }
   const bd = ctx.props?.bucketDown;
@@ -159,12 +165,17 @@ export function drawPlaces(svg, P, { view, present = () => true, shut = false, b
     const r = p.rect ? null : big ? 7 : 6;
     if (p.rect) { const a = P.toPx(p.rect.x0, p.rect.z0), b = P.toPx(p.rect.x1, p.rect.z1); S('rect', { x: f1(a.x - 2), y: f1(a.y - 2), width: f1(b.x - a.x + 4), height: f1(b.y - a.y + 4), class: 'map-hit' }, el); }
     else if (p.kind === 'sign') {
-      S('rect', { x: f1(q.x - r), y: f1(q.y - r), width: f1(2 * r), height: f1(2 * r), rx: 2, class: 'map-post' }, el);
-      const t = S('text', { x: f1(q.x), y: f1(q.y + 4.2), class: 'map-postn', 'text-anchor': 'middle' }, el); t.textContent = String(SIGN_NUMBERS[p.id] || '');
+      // fix round: a small board on a leg marked 'S3', so a sign never reads as job 3 (an orange round, a bare number)
+      const ps = postSize(p.id, big);
+      S('line', { x1: f1(q.x), y1: f1(q.y + ps.h / 2), x2: f1(q.x), y2: f1(q.y + ps.h / 2 + 3), class: 'map-postleg' }, el);
+      S('rect', { x: f1(q.x - ps.w / 2), y: f1(q.y - ps.h / 2), width: f1(ps.w), height: f1(ps.h), rx: 1, class: 'map-post' }, el);
+      const t = S('text', { x: f1(q.x), y: f1(q.y + 3.9), class: 'map-postn', 'text-anchor': 'middle' }, el); t.textContent = signText(p.id);
     } else S('rect', { x: f1(q.x - r * 0.8), y: f1(q.y - r * 0.8), width: f1(r * 1.6), height: f1(r * 1.6), rx: 1.5, class: 'map-mach' }, el);
     // a generous hit area round the small marks
     if (!p.rect) S('circle', { cx: f1(q.x), cy: f1(q.y), r: big ? 11 : 9, class: 'map-hit' }, el);
-    const bb = p.rect ? (() => { const a = P.toPx(p.rect.x0, p.rect.z0), b = P.toPx(p.rect.x1, p.rect.z1); return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y }; })() : { x: q.x - r, y: q.y - r, w: 2 * r, h: 2 * r };
+    const ps = p.kind === 'sign' ? postSize(p.id, big) : null;
+    const bb = p.rect ? (() => { const a = P.toPx(p.rect.x0, p.rect.z0), b = P.toPx(p.rect.x1, p.rect.z1); return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y }; })()
+      : ps ? { x: q.x - ps.w / 2, y: q.y - ps.h / 2, w: ps.w, h: ps.h + 3 } : { x: q.x - r, y: q.y - r, w: 2 * r, h: 2 * r };
     shapes.set(p.id, { el, box: bb, faint });
   }
   return shapes;

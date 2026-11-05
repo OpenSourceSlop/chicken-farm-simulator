@@ -134,11 +134,12 @@ const placeRect = (p, P) => {
 
 /**
  * The always-shown labels of the Farm view placed north, south, east or west of their buildings, each clear of every
- * label placed before it and inside the map box, and off the other buildings where there is room (PHASE5.md §5.4).
+ * label placed before it and inside the map box, and off the other buildings where there is room (PHASE5.md §5.4); fix
+ * round: off the obstacles too (the sign posts, the machine marks and the farmer: map-marks-plan.js markBoxes).
  * measure(text, px) -> px (the page: max of its font and labelWidth; node: labelWidth). Returns
  * [{ id, text, side, x, y, w, h }] (the label's box in map px; the text sits at its centre).
  */
-export function layoutLabels(P, box, { measure = labelWidth, px = MAP.minLabelPx, places = MAP_PLACES } = {}) {
+export function layoutLabels(P, box, { measure = labelWidth, px = MAP.minLabelPx, places = MAP_PLACES, obstacles = [] } = {}) {
   const always = LABEL_ORDER.map((id) => places.find((p) => p.id === id && p.label === 'always')).filter(Boolean);
   for (const p of places) if (p.label === 'always' && !always.includes(p)) always.push(p);
   const rects = new Map(always.map((p) => [p.id, placeRect(p, P)]));
@@ -156,12 +157,14 @@ export function layoutLabels(P, box, { measure = labelWidth, px = MAP.minLabelPx
     sides.forEach((side, k) => {
       const base = at[side];
       // the side's own spot, then nudged along the building's edge when a neighbour is in the way
-      const shifts = side === 'n' || side === 's' || side === 'in' ? [0, -w / 3, w / 3, -w / 2, w / 2] : [0, -h, h, -1.6 * h, 1.6 * h];
+      const shifts = side === 'n' || side === 's' || side === 'in' ? [0, -w / 3, w / 3, -w / 2, w / 2, -0.75 * w, 0.75 * w] : [0, -h, h, -1.6 * h, 1.6 * h];
       shifts.forEach((d, j) => {
         const b = side === 'e' || side === 'w' ? { x: base.x, y: base.y + d, w, h } : { x: base.x + d, y: base.y, w, h };
         if (!inBox(b) || done.some((o) => boxesOverlap(o, b, 2))) return;
         let cost = k * 40 + j * 12;
         for (const [id, o] of rects) if (id !== p.id || side !== 'in') cost += overlapArea(o, b) * (id === 'house' ? 3 : 1);
+        // fix round: the sign posts, the machine marks and the farmer's arrow (ui-map.js; map-marks-plan.js markBoxes)
+        for (const o of obstacles) if (boxesOverlap(o, b, 1)) cost += 400 + overlapArea(o, b) * 6;
         if (!best || cost < best.cost) best = { cost, side, ...b };
       });
     });

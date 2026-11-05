@@ -15,6 +15,7 @@ import { MAP, FARM, HOUSE_BOUNDS, LEVEL1, SPOTS } from './config.js';
 import { MAP_PLACES, projector, standOf, layoutLabels, labelWidth, mapBoxSize, groupOf, PLACE_GROUPS, SIGN_NUMBERS, walkWords, routeLength } from './map-plan.js';
 import { drawView, drawPlaces, S } from './ui-map-draw.js';
 import { drawLabels, drawWord, drawMarkers, drawFarmer } from './ui-map-marks.js';
+import { markBoxes, buildingCentres, layoutMarkers, jobRows, signText } from './map-marks-plan.js';
 import { findPath, freeSpot } from './player-path.js';
 import { clock as inputClock } from './clock.js';
 import { MAP_CSS } from './ui-map-style.js';
@@ -67,6 +68,8 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
     if ((e.type === 'dblclick' || e.type === 'pointerdown') && swallowAt) { player?.walkTo?.(swallowAt.x, swallowAt.z, true); swallowAt = null; }
   }
   for (const t of ['pointerdown', 'mousedown', 'mouseup', 'click', 'dblclick']) window.addEventListener(t, swallow, true);
+  // fix round: one resize listener for the map's life (the panel is built again at every level start: one more each time)
+  window.addEventListener('resize', () => { if (built && !built.el.hidden && svg?.isConnected) redraw(); });
   function walkPoint(x, z, run = false) {
     // fix round: the player's pause freezes the farmer: the map still shows the farm, the walk waits for the clock
     const pausedText = ctx.level?.mode === 'level' ? ctx.level?.hudHooks?.pausedText?.() : '';
@@ -96,7 +99,7 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
     const groups = PLACE_GROUPS.map((g) => h('section', { class: 'map-group' }, h('h3', { class: 'label' }, g.name),
       h('ul', null, MAP_PLACES.filter((p) => groupOf(p) === g.id).map((p) => h('li', null, placeButton(p))))));
     lists = h('div', { class: 'map-lists' }, h('section', { class: 'map-group' }, h('h3', { class: 'label' }, 'Jobs now'), jobsList), ...groups,
-      h('p', { class: 'map-key' }, 'Orange rounds: the open jobs, numbered as on the job card. Squares: signs. Crosses: dead birds. The arrow: you.'));
+      h('p', { class: 'map-key' }, 'Orange rounds: the open jobs, numbered as on the job card (jobs at one place share one). Boards marked S1, S2 …: signs. Grey squares: machines. Red crosses: dead birds. The arrow: you.'));
     const side = h('nav', { class: 'map-side', 'aria-label': 'Places on the farm' }, h('div', { class: 'map-tabs', role: 'tablist', 'aria-label': 'Map view' }, tabs), lists);
     body = h('div', { class: 'map-body' }, mapBox, side);
     el.append(h('div', { class: 'map-case card' },
@@ -105,7 +108,6 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
     svg.addEventListener('click', onSvgClick);
     svg.addEventListener('pointermove', onSvgMove);
     svg.addEventListener('pointerleave', () => { if (!focusId) hideTag(); });
-    window.addEventListener('resize', () => { if (built && !built.el.hidden) redraw(); });
     built = {
       el,
       onOpen() { routes = new Map(); redraw(); queueMicrotask?.(() => (tabs.find((t) => t.dataset.mapView === view))?.focus({ preventScroll: true })); },
@@ -117,19 +119,21 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
 
   function placeButton(p) {
     const sn = SIGN_NUMBERS[p.id];
-    const b = button({ class: 'map-place', 'data-place': p.id }, sn ? h('span', { class: 'map-sn', 'aria-hidden': 'true' }, String(sn)) : null, h('span', null, p.name));
+    const b = button({ class: 'map-place', 'data-place': p.id }, sn ? h('span', { class: 'map-sn', 'aria-hidden': 'true' }, signText(p.id)) : null, h('span', null, p.name));
     b.addEventListener('click', (e) => walkPlace(p, e.shiftKey));
     b.addEventListener('focus', () => setFocus(p.id));
     b.addEventListener('blur', () => { if (focusId === p.id) setFocus(null); });
     return b;
   }
+  // fix round: one row a job in the job card's order (a job of several places says how many and walks to the nearest)
   function fillJobs(spots) {
-    const pos = player?.position || { x: 0, z: 0 };
-    const near = spots.slice().sort((a, b) => Math.hypot(a.x - pos.x, a.z - pos.z) - Math.hypot(b.x - pos.x, b.z - pos.z));
-    jobsList.replaceChildren(...(near.length ? near.map((s) => {
-      const b = button({ class: 'map-place', 'data-job': s.key }, h('span', { class: 'map-n', 'aria-hidden': 'true' }, String(s.n)), h('span', null, `${s.title}${s.name ? ` · ${s.name}` : ''}`));
-      b.addEventListener('click', (e) => { if (s.inside && shut()) showTag(null, `<b>${s.title}</b> · ${SHUT}`); else walkPoint(s.x, s.z, e.shiftKey); });
-      b.addEventListener('focus', () => { setFocus(null); showMarkerTag(s); });
+    const rows = jobRows(spots, player?.position || { x: 0, z: 0 });
+    jobsList.replaceChildren(...(rows.length ? rows.map((row) => {
+      const s = row.places[0], k = row.places.length;
+      const where = k > 1 ? ` · ${k} places (the nearest first)` : s.name ? ` · ${s.name}` : '';
+      const b = button({ class: 'map-place', 'data-job': row.key, 'data-places': String(k) }, h('span', { class: 'map-n', 'aria-hidden': 'true' }, String(row.n)), h('span', null, `${row.title}${where}`));
+      b.addEventListener('click', (e) => { if (s.inside && shut()) showTag(null, `<b>${row.title}</b> · ${SHUT}`); else walkPoint(s.x, s.z, e.shiftKey); });
+      b.addEventListener('focus', () => { setFocus(null); const m = drawn?.markers.find((x) => x.keys.includes(row.key)); if (m) showMarkerTag(m); else showTag(null, `<b>${row.n} · ${row.title}</b>`); });
       return h('li', null, b);
     }) : [h('li', null, h('p', { class: 'map-none' }, 'No job open now.'))]));
   }
@@ -167,11 +171,18 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
     if (d.dead.n > 0) drawWord(marks, hb.x - 4, hb.y + 16, `${d.dead.n} dead bird${d.dead.n === 1 ? '' : 's'}`, 'end');
     if (rain) { S('rect', { x: 0, y: 0, width: box.w, height: box.h, class: 'map-rain' }, marks); drawWord(marks, 10, 20, 'Raining', 'start'); }
     void ht;
-    const labels = view === 'farm' ? layoutLabels(P, box, { measure: measureLabel, px: MAP.minLabelPx }) : [];
-    drawLabels(marks, labels);
-    const markers = drawMarkers(marks, P, spots, { view, box });
+    // fix round: the labels clear of the sign posts, machine marks and the farmer; the jobs' markers (merged by place)
+    // clear of all of those and of each other; the farmer's arrow under the labels
+    const posts = markBoxes(P, box, view), fq = player?.position ? P.toPx(player.position.x, player.position.z) : null;
+    const me = fq ? [{ id: 'farmer', x: fq.x - 12, y: fq.y - 12, w: 24, h: 24 }] : [];
+    // the map's own words ('5 dead birds', 'Cooling pad (west end)', 'No power', the bucket's count) as drawn
+    const words = [...svg.querySelectorAll('.map-word, .map-tagtext')].map((t) => { try { const b = t.getBBox(); return b.width > 0 ? { id: t.textContent, x: b.x - 1, y: b.y - 1, w: b.width + 2, h: b.height + 2 } : null; } catch { return null; } }).filter(Boolean);
     const farmer = drawFarmer(marks, P, player);
-    drawn = { shapes, markers, labels, dead: d.dead, bucket: d.bucket, birds: d.birds, farmer, houseHit, spots };
+    const labels = view === 'farm' ? layoutLabels(P, box, { measure: measureLabel, px: MAP.minLabelPx, obstacles: [...posts, ...me, ...words] }) : [];
+    drawLabels(marks, labels);
+    const laid = layoutMarkers(P, box, spots, { view, obstacles: [...labels, ...posts, ...me, ...words, ...buildingCentres(P, box)] });
+    const markers = drawMarkers(marks, laid);
+    drawn = { shapes, markers, labels, words, dead: d.dead, bucket: d.bucket, birds: d.birds, farmer, houseHit, spots };
     for (const [id, s] of shapes) s.el.addEventListener('pointerenter', () => showTag(id));
     for (const m of markers) m.el.addEventListener('pointerenter', () => showMarkerTag(m));
     fillJobs(spots);
@@ -212,7 +223,7 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
   function placeTagText(p) {
     if (p.inside && shut()) return `<b>${p.name}</b> · ${SHUT}`;
     if (p.id === 'house' && view === 'farm') return `<b>${p.name}</b> · click for the House view · the door: ${walkText(standOf(p).x, standOf(p).z)}`;
-    const s = standOf(p), sn = SIGN_NUMBERS[p.id];
+    const s = standOf(p), sn = signText(p.id);
     return `<b>${sn ? `${sn} · ` : ''}${p.name}</b> · ${walkText(s.x, s.z)}${present(p) ? '' : ' · not on the farm now'}`;
   }
   function showTag(id, html = null) {
@@ -225,10 +236,11 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
   }
   function showMarkerTag(m) {
     if (!tag) return;
-    tag.innerHTML = `<b>${m.n} · ${m.title}</b>${m.name ? ` · ${m.name}` : ''}${m.inside && shut() ? ` · ${SHUT}` : ''}`;
+    const head = m.titles && m.titles.length > 1 ? m.titles.map((t) => `<b>${t}</b>`).join('<br>') : `<b>${m.n} · ${m.title}</b>`;
+    tag.innerHTML = `${head}${m.name ? ` · ${m.name}` : ''}${m.inside && shut() ? ` · ${SHUT}` : ''}`;
     tag.hidden = false;
     const mm = drawn?.markers.find((x) => x.key === m.key);
-    place(mm ? { x: mm.x - mm.r, y: mm.y - mm.r, w: 2 * mm.r, h: 2 * mm.r } : null);
+    place(mm ? { x: mm.x - mm.w / 2, y: mm.y - mm.h / 2, w: mm.w, h: mm.h } : null);
   }
   function place(b) {
     if (!box) return;
@@ -308,7 +320,8 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
         view, box: last ? { w: last.box.w, h: last.box.h, scale: last.scale } : null, shut: shut(),
         places: MAP_PLACES.filter((p) => drawn.shapes.has(p.id)).map((p) => { const s = drawn.shapes.get(p.id); const l = drawn.labels.find((x) => x.id === p.id); return { id: p.id, ...s.box, faint: s.faint, label: l ? { text: l.text, x: l.x, y: l.y, w: l.w, h: l.h } : null }; }),
         labels: drawn.labels.map((l) => ({ id: l.id, text: l.text, side: l.side, x: l.x, y: l.y, w: l.w, h: l.h, drawn: rectOf(svg.querySelectorAll('.map-label')[drawn.labels.indexOf(l)]) })),
-        markers: drawn.markers.map(({ el, ...m }) => m), dead: { n: drawn.dead.n, crosses: drawn.dead.crosses },
+        markers: drawn.markers.map(({ el, ...m }) => m), posts: markBoxes(P, box, view), words: drawn.words, dead: { n: drawn.dead.n, crosses: drawn.dead.crosses },
+        jobRows: [...jobsList.querySelectorAll('[data-job]')].map((b) => b.textContent),
         bucket: drawn.bucket, birds: drawn.birds, farmer: drawn.farmer, tag: tag && !tag.hidden ? tag.textContent : null, focus: focusId,
       };
     },
