@@ -70,6 +70,7 @@ import { AUTO, SKILLS_UPDATE } from './config.js';
 import { binShare, birdKgOf, bucketRoom, bucketCopy, putInBucket } from './props-tally.js';
 import { tallyFace } from './player-carry.js';
 import { buildAutoEquipment } from './props-auto.js';
+import { createHelper } from './props-helper.js';
 
 const CHICKS_PER_STACK = (LEVEL1.boxes / LEVEL1.stacks) * LEVEL1.chicksPerBox;
 const inBrood = (p) => p.x > BROOD_BOUNDS.xMin && p.x < BROOD_BOUNDS.xMax && p.z > BROOD_BOUNDS.zMin && p.z < BROOD_BOUNDS.zMax;
@@ -105,6 +106,8 @@ export function buildProps(ctx, { house } = {}) {
   const catchNight = buildCatch(mats, group);
   const dust = buildDust(group);
   const boxes = buildBoxes(mats.vc, group);
+  // Skills update (SKILLS.md §3.5, Brooding 3): the helper who tips stacks with the farmer on arrival day
+  const helper = createHelper(ctx, { mats, group, boxes, trucks, chicksPerStack: CHICKS_PER_STACK });
   // PHASE4.md §15.3: the dead-bird bucket where the farmer set it down (with its birds showing)
   const floorBucketB = new Batch(); bucketModel(floorBucketB, { dead: true });
   const floorBucket = floorBucketB.mesh(mats.vc, { cast: true });
@@ -396,7 +399,8 @@ export function buildProps(ctx, { house } = {}) {
     // trucks
     trucks.update(dt);
     const left = boxes.update(dt, trucks);
-    props.stacks.left = boxes.stacks.filter((s) => s.state === 'truck' || s.state === 'ground').length;
+    helper.update(dt, f, env);
+    props.stacks.left = boxes.stacks.filter((s) => s.state === 'truck' || s.state === 'ground' || s.state === 'reserved').length;
     if (trucks.st.chicks.state === 'parked' || trucks.st.chicks.state === 'driving-in') st.delivered = true;
     void left;
     if (trucks.st.chicks.state === 'parked' && props.stacks.left === 0) {
@@ -504,6 +508,10 @@ export function buildProps(ctx, { house } = {}) {
       leave() { trucks.leave('feed'); },
     },
     stacks: { left: 0 },
+    /** Skills update (SKILLS.md §12.9): the arrival-day helper (Brooding 3): { state, stack, want, tips, x, z }; state 'off'
+     *  until the chick truck stops with the perks holding boxHelper, 'waiting' for the sample box, 'ready', 'to-stack',
+     *  'loading', 'carrying', 'tipping', 'back', 'leaving', 'gone'. */
+    get helper() { return { state: helper.state, stack: helper.stack, want: helper.want, tips: helper.tips, ...helper.position }; },
     update,
     setOverlay(name, on) {
       if (!(name in props.overlay)) return;
@@ -519,6 +527,7 @@ export function buildProps(ctx, { house } = {}) {
       props.bucketDown = null; showCarry(null);
       trucks.leave('chicks', true); trucks.leave('feed', true);
       boxes.reset();
+      helper.reset();
       st.delivered = false; st.frameAt = null; yard.frameSet.visible = false;
       props.stacks.left = 0;
       triggers.reset();
@@ -533,7 +542,8 @@ export function buildProps(ctx, { house } = {}) {
         // EV.BIRD_PICK): a save made while one is held restores with empty hands
         v: 2, carrying: props.carrying === 'chick' ? null : props.carrying, carryOpts: props.carrying === 'chick' ? null : props.carryOpts,
         truck: trucks.st.chicks.state, feedTruck: trucks.st.feed.state, stacks: props.stacks.left,
-        stackStates: boxes.stacks.map((s) => s.state), pile: boxes.pile, delivered: st.delivered,
+        // a stack the helper is walking to or wheeling in goes back on the ground in the save (he takes it again)
+        stackStates: boxes.stacks.map((s) => (s.state === 'reserved' || (s.state === 'carried' && helper.carried === s.i) ? 'ground' : s.state)), pile: boxes.pile, delivered: st.delivered,
         // Phase 3: the catching trucks, the panels put up, the tape's hook, the feed truck's silo
         catchTrucks: catchNight.trucks.map((t) => (t.state === 'parked' || t.state === 'in' ? 1 : 0)), panels: tools.panelsSeen ? 1 : 0,
         tape: tools.st.tape ? { ...tools.st.tape } : null, feedSilo: trucks.feedSilo,
@@ -541,6 +551,8 @@ export function buildProps(ctx, { house } = {}) {
         ...(ctx.condScene?.serialize ? { cond: ctx.condScene.serialize() } : {}),
         // PHASE4.md §15.3: the bucket standing on the floor
         ...(props.bucketDown ? { bucketDown: { x: props.bucketDown.x, z: props.bucketDown.z, ...bucketCopy(props.bucketDown), inside: props.bucketDown.inside } } : {}),
+        // Skills update: the arrival-day helper (absent while he is not on the farm)
+        ...(helper.serialize() ? { helper: helper.serialize() } : {}),
       };
     },
     restore(d) {
@@ -554,6 +566,7 @@ export function buildProps(ctx, { house } = {}) {
       if (settle(d.feedTruck) === 'parked') trucks.arrive('feed', true, { silo: d.feedSilo }); else trucks.leave('feed', true);
       if (Array.isArray(d.stackStates)) d.stackStates.forEach((s, i) => { if (boxes.stacks[i]) { boxes.stacks[i].state = s; boxes.stacks[i].drop = 1; } });
       boxes.pile = d.pile ?? 0;
+      helper.restore(d.helper || null);
       st.delivered = !!d.delivered;
       props.stacks.left = d.stacks ?? 0;
       (d.catchTrucks || []).forEach((on, i) => { if (on) catchNight.arrive(i, true); else catchNight.leave(i, true); });
@@ -563,7 +576,7 @@ export function buildProps(ctx, { house } = {}) {
       floor.refresh(ctx.farm);
     },
     // test and tooling hooks (not part of the contract)
-    debug: { trucks, boxes, floor, pool, triggers, yard, equip, boards, equip3, yard3, catchNight, get tools() { return tools; }, dust, auto: autoEq,
+    debug: { trucks, boxes, floor, pool, triggers, yard, equip, boards, equip3, yard3, catchNight, get tools() { return tools; }, dust, auto: autoEq, helper,
       get cond() { return ctx.condScene || null; } },   // Phase 4: the conditions' scene (props-cond.js), for the harness
   };
   tools = createCycleTools(ctx, { props, pool, yard: yard3, lv });
