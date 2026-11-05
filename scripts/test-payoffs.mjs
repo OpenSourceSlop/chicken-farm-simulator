@@ -16,7 +16,7 @@ import { jobVariant, applyVariant, rebuildVariant, variantKeyOf, DEAD_TITLE, RUL
 import { jobPlaces, nextPlace, PHONE_TODO } from '../src/job-next.js';
 import { stripRows, stripsAt, STRIPS } from '../src/job-strips.js';
 import { STRIPS_CYCLE } from '../src/job-strips-cycle.js';
-import { easierLine, handledLines, unlockCaption, gateCaption, nextLevelLine, PAYOFF_CARD, PAYOFF_NOW, FAULT_MANUAL, viewLine, groupUnlocks } from '../src/job-words.js';
+import { easierLine, handledLines, unlockCaption, unlockShort, UNLOCK_USE, gateCaption, nextLevelLine, PAYOFF_CARD, PAYOFF_NOW, FAULT_MANUAL, viewLine, groupUnlocks } from '../src/job-words.js';
 import { fillKeys } from '../src/key-words.js';
 import { nippleCmToday, rimCmNow, flowToday } from '../src/job-figures.js';
 import { SKILLS_UPDATE, AUTO_SYSTEMS, PAYOFFS, SKILL_VIEWS, SKILL_BRANCHES, LEVEL1, CYCLE, WEEK2, WEEKS45, houseSector, BROOD_BOUNDS } from '../src/config.js';
@@ -345,6 +345,17 @@ test('the unlock caption, the gate\'s one caption and the tree\'s next-level lin
   assert(/— 3 points to go$/.test(nextLevelLine('water', 1, 6, 0)), nextLevelLine('water', 1, 6, 0));
   assert(/comes with your next flock$/.test(nextLevelLine('water', 2, 13, 0)), nextLevelLine('water', 2, 13, 0));
   assert(/— 0 points to go$/.test(nextLevelLine('water', 2, 13, 1)), nextLevelLine('water', 2, 13, 1));
+  // the final check: the caption says where to use the unlock and its key, level 3 where to switch it off, short enough for
+  // the gap between the HUD cards (140 characters)
+  assert(clean(unlockShort([{ key: 'pocketPhone' }]), 'phone') === 'Farm Planning 2: a phone in your pocket. Press R anywhere to order feed, call the vet or book the crew.', unlockShort([{ key: 'pocketPhone' }]));
+  assert(/^Moisture 2: Fill the timer\. One press on the climate controller’s Ventilation tab\.$/.test(plain(unlockShort(['ventFill']))) && /Temperature tab/.test(plain(unlockShort(['brooderRow']))) && /Lights tab/.test(plain(unlockShort(['weekLights']))), 'the controller tab named');
+  assert(/Press F anywhere/.test(plain(unlockShort(['floorOverlay']))) && /Press C anywhere/.test(plain(unlockShort(['comfortOverlay']))) && /Press M anywhere/.test(plain(unlockShort(['moistureOverlay']))), 'the F, C and M views with their keys');
+  for (const k of [...Object.keys(PAYOFFS), ...Object.keys(SKILL_VIEWS)]) {
+    const t = clean(unlockShort([k]), `short ${k}`);
+    assert(t.length <= 140 && UNLOCK_USE[k], `${k}: ${t.length} characters, its own words: ${t}`);
+    assert((PAYOFFS[k]?.step === 'auto') === t.endsWith('Switch it off in Settings → Automation.'), `${k}: level 3 says where to switch it off: ${t}`);
+  }
+  assert(plain(unlockShort([{ key: 'lineOverview' }, { key: 'waterAllLines', payoff: true }])).startsWith('Water 2: the sight tubes.'), 'a batch shows its payoff');
 }));
 
 test('every new text: plain words, no verdict, every {key:id} token filled', () => live(() => {

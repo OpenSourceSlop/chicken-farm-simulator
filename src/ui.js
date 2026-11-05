@@ -828,12 +828,27 @@ export function createUI(ctx, deps) {
     capEl = capEl || root.querySelector('.caption');
     const el = capEl;
     if (!el || el.hidden) return;
-    el.style.left = ''; el.style.maxWidth = '';
+    el.style.left = ''; el.style.maxWidth = ''; el.style.bottom = '';
+    // the final check: the edge pointers' pills (the job's "42 m", the dead birds', a fault's; not the symptom tags that
+    // follow the birds) never cover the caption: it rises above the pills under it, which keep their place (they point at
+    // the ground). Strict overlap only, so a pill that already keeps clear of the caption (it avoids it) moves nothing.
+    const c = el.getBoundingClientRect(), R0 = root.getBoundingClientRect();
+    let top = Infinity;
+    for (const q0 of root.querySelectorAll('.edge-pointer:not(.edge-pointer--tag)')) {
+      if (q0.hidden || !q0.offsetParent) continue;
+      const q = q0.getBoundingClientRect();
+      if (!(q.width > 0) || q.right <= c.left || q.left >= c.right || q.bottom <= c.top || q.top >= c.bottom) continue;
+      top = Math.min(top, q.top);
+    }
+    if (top < Infinity) {
+      const bottomNow = parseFloat(getComputedStyle(el).bottom) || 0, lift = c.bottom - top + 8;
+      if (lift > 0 && c.top - lift > R0.top + 60) el.style.bottom = `${Math.round(bottomNow + lift)}px`;
+    }
     const W = root.clientWidth, r = el.getBoundingClientRect();
     let L = 0, R = W, hit = false;
-    for (const c of [root.querySelector('.fw'), root.querySelector('.ljobs')]) {
-      if (!c || c.hidden || !c.offsetParent) continue;
-      const q = c.getBoundingClientRect();
+    for (const k of [root.querySelector('.fw'), root.querySelector('.ljobs')]) {
+      if (!k || k.hidden || !k.offsetParent) continue;
+      const q = k.getBoundingClientRect();
       if (!(q.width > 0) || q.bottom < r.top - 4 || q.top > r.bottom + 4 || q.right < r.left - 4 || q.left > r.right + 4) continue;
       hit = true;
       if ((q.left + q.right) / 2 < W / 2) L = Math.max(L, q.right + 10); else R = Math.min(R, q.left - 10);

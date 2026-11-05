@@ -75,7 +75,7 @@
   {"eval": "__game.skills.debug.force('lighting', 2), 'Lighting forced to 2'"},
   {"wait": 120},
   {"advance": 0.2},
-  {"expect": "(() => { const c = __game.ui.captionNow, n = (__game.records.notebook || []).filter((x) => x.kind === 'skill').pop(), nt = n ? String(n.value?.text ?? n.value ?? '') : ''; return !!c && /^Lighting 2 · Faster unlocked: one press sets the light program for the flock's age \\(skill tree K\\)$/.test(c.text) && /Use it at /.test(nt) && /Saves picking the dark hours/.test(nt) && 'caption: ' + c.text + ' | notebook: ' + nt.slice(0, 160); })()", "label": "the unlock caption one short line (review round); the notebook keeps step, payoff, where, what it saves"},
+  {"expect": "(() => { const c = __game.ui.captionNow, n = (__game.records.notebook || []).filter((x) => x.kind === 'skill').pop(), nt = n ? String(n.value?.text ?? n.value ?? '') : ''; return !!c && /^Lighting 2: Program for the days\\. One press on the climate controller’s Lights tab\\.$/.test(c.text) && /Use it at /.test(nt) && /Saves picking the dark hours/.test(nt) && 'caption: ' + c.text + ' | notebook: ' + nt.slice(0, 160); })()", "label": "the unlock caption says where to use it (final check); the notebook keeps step, payoff, where, what it saves"},
   {"expect": "(() => { const n = __game.records.notebook.filter((x) => x.kind === 'skill'); return n.length >= 1 && /Lighting 2 · Faster/.test(n[n.length - 1].value) && 'notebook: ' + n.length + ' skill line(s)'; })()", "label": "the unlock's notebook line of kind skill"},
   {"shot": "skills-tree-caption"},
   {"clickText": "Open the menu", "in": "#hud .hud-bl"},

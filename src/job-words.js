@@ -124,17 +124,62 @@ export function unlockCaption(keys = []) {
   const shows = UNLOCK_SHOWS[v] ? ` (${UNLOCK_SHOWS[v]})` : '';
   return `${levelName(u.branch, lvl)} · ${SKILL_STEP_NAMES[Math.max(0, lvl - 1)]}: ${lower(u.name)}${shows}.${where}`;
 }
-/** The review round: the unlock's caption in one short line (the full words stay in the notebook line and on the tree):
- *  "Water 2 · Faster unlocked: read all four sight tubes at the water supply (skill tree {key:skills})". */
+/** The final check: the unlock caption says what came and where to use it, with its key (SKILLS.md §6.3). One or two short
+ *  sentences each, so the caption stays a short line or two in the gap between the HUD cards; level 3 adds where to switch
+ *  it off. Keys as {key:id} tokens (filled when shown, as bound now). */
+export const UNLOCK_USE = {
+  // level 2 and 3 payoffs
+  waterAllLines: 'the sight tubes. Read all four lines at the water supply, south-west corner inside',
+  autoWinch: 'the drinker winches follow the age. Look at the heights at the water supply',
+  ventFill: 'Fill the timer. One press on the climate controller\u2019s Ventilation tab',
+  autoTimer: 'the timer steps up with the flock. Look at it on the controller\u2019s Ventilation tab',
+  fanAdvice: 'Set as suggested. One press at the fan panel or the controller\u2019s Ventilation tab',
+  autoStages: 'the fan stage table runs the tunnel fans. Look at the stages at the controller',
+  brooderRow: 'Set to the sign\u2019s row. One press on the climate controller\u2019s Temperature tab',
+  autoBrooders: 'the brooders follow the sign. Check the sensor on the controller\u2019s Temperature tab',
+  quickSamples: 'smaller chick samples. 3 vent chicks, one a part of the floor, and 6 crops; Next chick in the hand',
+  boxHelper: 'a helper tips the chick boxes. At the truck, once the sample box is weighed',
+  siloOrder: 'days of feed and Order to 3 days. At the silo gauge outside the north wall',
+  autoFeed: 'feed orders itself. Look for the order at the silo gauge',
+  weekLights: 'Program for the days. One press on the climate controller\u2019s Lights tab',
+  autoLights: 'the light program follows the age. Look at it on the controller\u2019s Lights tab',
+  frameWeigh: 'weigh 25 birds instead of 50. At the bird scale on weigh days: the frame in three parts of the house',
+  autoScale: 'the scale\u2019s day average. Read it at the bird scale\u2019s display',
+  earlyWarning: 'earlier warnings. Show me on the flock watch card opens the fix',
+  comfortAlways: 'the comfort colours whenever you are inside. {key:comfortView} turns them off for a visit',
+  tallyBucket: 'the tally bucket. {key:use} at a dead bird picks up every one within 2.5 m; empty it at the bin',
+  passCheck: 'symptom tags. Walk slowly past the birds in the house',
+  pocketPhone: 'a phone in your pocket. Press {key:phone} anywhere to order feed, call the vet or book the crew',
+  phoneRecord: 'the daily record on the phone. Press {key:phone}, then Sign today\u2019s record',
+  // level 1 views (SKILL_VIEWS: the key where it has one)
+  floorOverlay: 'the floor thermometer view. Press {key:floorView} anywhere in the house',
+  comfortOverlay: 'the comfort colours. Press {key:comfortView} anywhere in the house',
+  moistureOverlay: 'the litter moisture view. Press {key:moistureView} anywhere in the house',
+  planningCalc: 'the planning calculator. Work the sums on the planning sheet at the office desk',
+  symptomCheck: 'the quick symptom check. Quick look in the bird check, with a bird in your hand',
+  windChill: 'the wind chill readout. The Birds feel line on the fan panel',
+  heatLoss: 'the heat loss readout. On the climate controller\u2019s Temperature tab',
+  waterTrend: 'the water trend. The Trend key beside the meter at the water supply',
+  droppingsGuide: 'the droppings guide. In the bird check, beside the bird you hold',
+  lightPresets: 'the light presets. On the climate controller\u2019s Lights tab',
+  recordsTargets: 'targets in the records. In the record book and on the weigh panel',
+};
+/** Level 3's words: where the equipment is switched off. */
+export const UNLOCK_OFF = 'Switch it off in Settings \u2192 Automation.';
+/** The unlock's caption: "Farm Planning 2: a phone in your pocket. Press R anywhere to order feed, call the vet or book the
+ *  crew." (the full words, saves and also-views, stay in the notebook line and on the tree). */
 export function unlockShort(keys = []) {
   const ks = keys.map((k) => (typeof k === 'string' ? k : k?.key)).filter(Boolean);
   if (!ks.length) return '';
   const pay = ks.find((k) => PAYOFFS[k]), v = ks.find((k) => UNLOCKS[k]);
   const name = (n) => lower(String(n || '').replace(/[;:,].*$/, '').replace(/\s*\([^)]*\)\s*$/, ''));
-  if (pay) { const p = PAYOFFS[pay]; return `${levelName(p.branch, p.level)} · ${SKILL_STEP_NAMES[p.level - 1]} unlocked: ${name(p.name)} (skill tree {key:skills})`; }
+  if (pay) {
+    const p = PAYOFFS[pay], use = UNLOCK_USE[pay] || `${name(p.name)}. ${upper(useAt(p.where))}`;
+    return `${levelName(p.branch, p.level)}: ${use}.${p.step === 'auto' ? ` ${UNLOCK_OFF}` : ''}`;
+  }
   if (!v) return '';
-  const u = UNLOCKS[v], lvl = unlockLevel(u);
-  return `${levelName(u.branch, lvl)} · ${SKILL_STEP_NAMES[Math.max(0, lvl - 1)]} unlocked: ${name(u.name)} (skill tree {key:skills})`;
+  const u = UNLOCKS[v], lvl = unlockLevel(u), w = SKILL_VIEWS[v]?.where;
+  return `${levelName(u.branch, lvl)}: ${UNLOCK_USE[v] || `${name(u.name)}${w ? `. ${upper(useAt(w))}` : ''}`}.`;
 }
 /** The unlocks of a batch grouped by branch and level, in the tree's branch order: [[keys of one level-up], …]. */
 export function groupUnlocks(list = []) {
