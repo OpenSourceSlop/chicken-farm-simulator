@@ -286,7 +286,8 @@ tree's `saves` lines promise no figure.
 
 ### 3.0 Level 1 · See more (the existing views, easy to find)
 Nothing new to earn; each view gets a key or a button **at the place the job is done** and a strip line in the jobs it helps
-(`SKILL_VIEWS[key] = { shows, where, keyId?, jobs }`; the strip line reads *"Your Brooding 1 view: F shows the floor's warmth
+(`SKILL_VIEWS[key] = { shows, where, keyId?, jobs, saves }`: the tree's level 1 row shows the saves line and *Where: … · press F*
+since the final check; the strip line reads *"Your Brooding 1 view: F shows the floor's warmth
 under the brooders"*; with the view not unlocked yet the line reads *"Brooding 1 would show the floor's warmth (F) · 2 points to
 go"*, once per job, never on a sign):
 
@@ -1353,6 +1354,25 @@ every level (`hot:ideal` with the skills: 0 heat deaths; it failed Week 3 at 1.0
 page errors: skills-review 15 (new), skills-water 14, skills-minvent 9, skills-feed 10, skills-weigh 28, skills-phone 10,
 skills-tree 21, skills-auto 6, skills-fault 9, skills-scene 33, skills-panels-a11y 38, skills-design-stubs 10, skills-play 74,
 req-night 19, req-watch 13, p5-hud 20; phase1-jobs and the Phase 1 tour clean. Screenshots: `shots/skills-review/`.
+
+### 16.4 The final check fix round (after caa7290)
+The final check left seven items; each was confirmed (a node probe, a browser run or a screenshot) and fixed:
+
+| # | What was left | What changed |
+| --- | --- | --- |
+| 1 | Growth 2 and Brooding 2 kept the boards' sample sizes, against the farmer's choice | Growth 2 is hand weighing from **25 birds instead of 50** (from three parts of the house: the frame holds about ten), Brooding 2 a vent sample of **3 chicks instead of 5** and **6 crops instead of 10** (`PAYOFFS[k].need`, `job-variants.js smallerRule`); the boards keep 50 / 5 / 10 as the standard with a general-practice line each; the rules, the job card, the strips, the weigh panel (its Growth 2 line; *Weigh the frame* and *Weigh all* stop at the 25), the chick tally, the milestones (`vent-checked`, `vent-band`, `weighed-weekly`: `farm.stats.samples`), the result's uniformity of the hand weighing's birds and the run card follow; *Weigh the frame* and *Next chick* stay as extras; skill-time models the sample jobs; `skills-weigh.json` weighs 25 birds and takes a 3-chick vent sample by real input (§3.5, §3.8, §14.2, §17 Q2) |
+| 2 | The unlock caption did not say where to use the unlock nor its key; the job's distance pill covered it | `UNLOCK_USE`: *"Farm Planning 2: a phone in your pocket. Press R anywhere to order feed, call the vet or book the crew."*, the controller's tab for Moisture 2 / Heating 2 / Lighting 2, F / C / M for the views, *"Switch it off in Settings → Automation."* at level 3, each 140 characters or fewer; the caption rises above an edge pointer's pill under it (§6.3) |
+| 3 | The tree's level 1 rows had no saves line, no where and no key | `SKILL_VIEWS[k].saves` for all 11 views; the row reads *"Saves probing the floor in many places to find a cold patch · Where: anywhere in the house · press F"* (§6.1) |
+| 4 | A fault left open from an earlier level was missing from a later level's fail screen | `level.js faultLines` keeps every fault still open at the fail, marked *from an earlier level*; a fixed one only when it started in the level |
+| 5 | Ventilation 2's saves line promised the walk to the fan panel, but r-fans-pm still needed the fan panel | the controller's Ventilation tab reads the fans too (its suggestion box in view 2 s sends `fans.read { at: 'controller' }`): r-fans-pm is done there; the controller is its first place, its strip shows there, the where line names the tab |
+| 6 | With Growth 3 and no hand weighing a fouled platform reads about 6 % light at the weigh-in | the flock watch warns on the eve of a weigh day from 12:00 (*"Tomorrow is a weigh day: clean it before 09:00, or weigh by hand"*) as well as from 06:00 on the day; a borderline weigh-in the fouled platform decided says so (*"the fouled platform decided it: clean, it would have read about … g"*), the weight card names the fouled platform and the fail screen says how to avoid it |
+| 7 | The helper floated above the kerb while carrying; doc drift | every pose's lowest point on the ground and no bob of the whole figure (the lowest point measured 0.000 m while he carries), a soft contact shadow under his boots and his hand truck, and he walks 2.2 m in through the door before he turns (he no longer walks along the inside of the kerb); §1.1, §6.3, §14.2 and §17 Q6 as the code is |
+
+**Results of the round (main, seed 1, 960 × 600):** `npm test` 521 ok, all passed; `skill-progress --assert` all met (both
+profiles: level 2 everywhere after flock 1, level 3 from flock 2); every skills steps file (skills-weigh 35, skills-review 20,
+skills-tree 23, skills-scene 34, skills-play 71 …), p3-cycle 140, req-night 19, p2-level1 58 and phase1-jobs (4 of 4) PASS
+without console or page errors (ARCHITECTURE.md *Skills update — the final check fix round*). Screenshots:
+`shots/skills-final-fix/`.
 
 ## 17. Open questions for the farmer
 1. **The pace of level 3:** level 3 now comes once a first flock is finished (13 points over both flocks): a careful player

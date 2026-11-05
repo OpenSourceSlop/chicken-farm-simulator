@@ -1441,16 +1441,18 @@ set false (a steps file or a node test) the game is the Phase 5 game: test-sim b
   4 / 9 / 13 bar, *comes with your next flock* for a first flock at 13, and *on* / *off in Settings* for level 3.
 - **Level 2 (Faster)**: the sight tubes at the water supply (four lines in one click; a cup test only at a line that reads
   off), *Fill the timer* (the vent sign's need at 110 % in one press, the working beside the key), the fan panel's and the
-  controller's *Set as suggested*, *Set to the sign's row* and the pre-heat line, *Next chick* and the 2 m reach, the silo
-  gauge's days of feed with the 2-day warning and *Order to 3 days* / *Order to the catch* there, *Program for days N–M*,
-  *Weigh the frame* (each part's birds in one press, 1 s), the earlier comfort warning with its fix (*Show me*), the tally
+  controller's *Set as suggested* (the fans read at the controller too since the final check), *Set to the sign's row* and
+  the pre-heat line, the smaller chick samples (3 vent chicks, 6 crops; *Next chick* and the 2 m reach as extras: the final
+  check), the silo gauge's days of feed with the 2-day warning and *Order to 3 days* / *Order to the catch* there, *Program for
+  days N–M*, hand weighing from 25 birds (three parts of the house; *Weigh the frame*, each frame in one press, as the extra:
+  the final check), the earlier comfort warning with its fix (*Show me*), the tally
   bucket (every dead bird within 2.5 m in one E, counted at pickup, 15 kg), the pocket phone (R anywhere, the time bar's key).
 - **Level 3 (the equipment does it)**: seven controllers (winches, timer, fan stages, brooders, feed, lights, bird scale) act
   only through `farm.act` by `'auto'` or the env setters; a handed-over job becomes *any of*: a quick look at the reading in
   band, or the job by hand (the card: *handled by the controller (Water 3) · look at …*); the farmer's own setting holds
   (06:00 or 18:00); the comfort colours on entering, the symptom tags within 2 m and the passing check, the arrival
   day's helper, the daily record on the phone. `r-drinkers` and `r-feeders` are never handed over; no payoff changes a
-  sample size or a pass rule.
+  pass rule (only Growth 2 and Brooding 2 a sample size, the farmer's choice: the final check fix round below).
 - **Faults**: one plan per flock (drawn at the brooding week's start, saved), six faults (winch stall, timer reset, stage
   trip with its high temperature alarm, sensor drift, lost feed order, fouled scale), each raised on the flock watch's
   Equipment row with what, cause and place, stopping a Next job skip, on the night check with its *Fix it* place, and fixed
@@ -1577,3 +1579,51 @@ and a node probe or a browser run before the fix; SKILLS.md §16.3 lists them on
   (skills-review 15, skills-play 74, skills-scene 33, skills-panels-a11y 38, skills-tree 21 …), req-night 19, req-watch 13,
   p5-hud 20, phase1-jobs and the Phase 1 tour all PASS without console or page errors (SKILLS.md §16.3). Screenshots in
   `shots/skills-review/`.
+
+
+## Skills update — the final check fix round (after caa7290)
+The final check left seven items (SKILLS.md §16.4 lists them with what changed); each was confirmed first (the bad7 probe, a
+browser run at 960 × 600, the helper's measured lowest point) and fixed in its own commit.
+- **The smaller samples (the farmer's choice)**: config `PAYOFFS.frameWeigh.need` / `quickSamples.need` and `SAMPLE_STANDARD`;
+  `job-variants.js smallerRule` (the count rule's `n` / `sectors`, the boards' figures kept in `std`, `smaller` the payoff, a
+  label naming both), applied before a hand-over wraps the rule, so Growth 3's hand part is the 25 birds too; `sampleOf(def)`;
+  level.js keeps a smaller sample in `farm.stats.samples[actionId][day]` when its job opens, and `skills-rules-payoff.js
+  sampleNeed` gives the milestones the day's own sample (the boards' standard otherwise, so node runs are as before); the weigh
+  panel's `need()` / `shareNow()` (the one-press keys weigh what the weighing still needs, Growth 2 only), `L.sampleTally` (the
+  open sample job of the purpose); `RUN_CARD` target, `ui-result` uniformity with the birds weighed; the general-practice lines
+  in `content-signs-skills.js` (bird-scale, sign-chicks); `skill-time.mjs` models the vent, crop and weigh jobs (days 0, 1, 14
+  with bands; its `defaultSteps` took the wrong argument and never ran before).
+- **The unlock caption**: `job-words.js UNLOCK_USE` (all 22 payoffs and the 11 level 1 views) and `UNLOCK_OFF`; `unlockShort`
+  builds *"<Branch level>: <use>."* (+ the Automation line at level 3); `ui.js placeCaption` lifts the caption above the
+  non-tag edge pointers under it (strict overlap, so a pill that already keeps clear of it moves nothing), then narrows it to
+  the gap between the cards.
+- **The tree's level 1 rows**: `SKILL_VIEWS[k].saves`; `ui-skilltree.js` shows the shows / saves / *Where: … · press F* lines.
+- **Faults**: `level.js faultLines` keeps the faults still open at the fail whatever level they started in (*from an earlier
+  level*); `flock-watch.js equipmentWarn` warns about a fouled scale on the eve of a weigh day from 12:00 as well as on the day
+  from 06:00 (`farm-faults.js` words for the eve); `weekResult` works out the clean platform's figure from the fouled hours
+  (`scaleDay.fouledH / k`) and sets `scaleDecided` / `scaleCleanG` when the fouled platform decided a borderline weigh-in;
+  `ui-result.js` says so on the weight card and under the fail line.
+- **Ventilation 2 at the controller**: `ui-cycle-controller.js` sends `fans.read { at: 'controller' }` once per opening after
+  the suggestion box has been in view 2 s; `fanAdvice` joins `PLACE_KEYS` (no rule change: r-fans-pm's two places marked
+  `alt`, alternatives: the Next line takes the nearer one and `job-strips.js thenRows` adds no "then walk" row at either; its
+  strip at the controller; the where line).
+- **The helper**: `props-helper.js helperGeometry` puts each pose's lowest point at y 0; no bob of the root; the cart's wheels
+  at the floor; a soft contact shadow under his boots and under the cart (two small discs: the game draws no shadow maps; 101
+  of 110 draw calls at the door); `DOOR_IN` 2.2 m inside the door, so he never walks along the inside of the south kerb.
+- **Tests**: test-payoffs (the smaller samples' rules, strips and where lines; every unlock caption's words, key and length;
+  Ventilation 2 at the controller), test-skills (the milestones under `farm.stats.samples`; a 25-bird draw's uniformity),
+  test-contracts (the `need` payoffs; every view's saves line), test-auto (a fault from an earlier level on the fail screen; the
+  fouled scale's eve warning and a borderline weigh-in it decided), skill-time (the sample days' bands); steps files
+  `skills-weigh.json` (rewritten: 25 birds from three parts and a 3-chick vent sample by real input, the 50-bird *Weigh all* run
+  for the play time), `skills-review.json` (the Water 2, Heating 3 over the job pointer's pill and Moisture 1 captions; r-fans-pm
+  done at the controller's Ventilation tab), `skills-tree.json` (the level 1 rows), `skills-scene.json` (the helper's lowest
+  point while carrying), `skills-play.json` regenerated (its weighing 25 birds from three parts).
+- **Results** (main, seed 1, 960 × 600): `npm test` 521 ok, all passed (skill-time `--assert` with the sample days' bands);
+  `node scripts/skill-progress.mjs --assert`: the §2.5 targets all met, both profiles pass every level of both flocks, reach
+  level 2 in every branch in flock 1 and level 3 in every branch from flock 2's start. Steps files, every one without console
+  or page errors: skills-auto 6, skills-design-stubs 10, skills-fault 9, skills-feed 10, skills-minvent 9, skills-panels-a11y
+  38, skills-phone 10, skills-play 71 (its weighing now 25 birds from three parts), skills-review 20, skills-scene 34,
+  skills-tree 23, skills-water 14, skills-weigh 35 (by real input: 25 birds from three parts 0.82 min against the 50-bird
+  *Weigh all* run's 1.42 min, 58 %; the 3-chick vent sample); p3-cycle 140, req-night 19, p2-level1 58, phase1-jobs 4 of 4
+  tasks. Screenshots in `shots/skills-final-fix/`.
+
