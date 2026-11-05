@@ -121,7 +121,9 @@ export function wayText(from, p) {
 // ---------------- parts of the floor ----------------
 const BROOD_COL = ['west', 'middle', 'east'], HOUSE_COL = ['west end', 'west middle', 'east middle', 'east end'];
 /** The sample parts a count job still needs: the brooding floor's six or the house's eight, by name and centre. */
-function sectorPlaces(inst, c, todo) {
+// frame: the catching frame only goes down on the brooding floor (props.js), so with the skills update
+// the weighing parts of the house are the ones it reaches (the east middle at its brooding end).
+function sectorPlaces(inst, c, todo, frame = false) {
   const r = inst.def.done, st = inst.st;
   if ((r.type !== 'count' && r.type !== 'seen') || !r.sectors) return null;
   const have = new Set((st.list || []).map((x) => x.s)), need = r.sectors;
@@ -130,7 +132,9 @@ function sectorPlaces(inst, c, todo) {
   if (house) {
     const w = (BIRD_BOUNDS.xMax - BIRD_BOUNDS.xMin) / 4;
     for (let col = 0; col < 4; col++) for (const north of [true, false]) {
-      const x = BIRD_BOUNDS.xMin + (col + 0.5) * w, z = north ? -2.8 : 2.8, s = sectorOf(r, x, z, c.env);
+      let x = BIRD_BOUNDS.xMin + (col + 0.5) * w;
+      if (frame && SKILLS_UPDATE.live) { if (BIRD_BOUNDS.xMin + col * w > BROOD_BOUNDS.xMax - 0.8) continue; x = Math.min(x, BROOD_BOUNDS.xMax - 0.8); }
+      const z = north ? -2.8 : 2.8, s = sectorOf(r, x, z, c.env);
       if (!have.has(s)) out.push(floor(x, z, `the ${HOUSE_COL[col]} of the house, ${north ? 'north' : 'south'} side`, todo));
     }
   } else {
@@ -316,7 +320,7 @@ export function jobPlaces(inst, c) {
   }
   if (WEIGH_IDS.has(id)) {
     if (carrying !== 'frame') return (st.list || []).length >= inst.def.done.n ? [] : [{ id: 'birdScale', at: SPOTS2.birdScale, name: 'the bird scale', along: 'in the house', todo: 'take the scale and frame' }];
-    return sectorPlaces(inst, c, 'set the frame down there ({key:use})');
+    return sectorPlaces(inst, c, 'set the frame down there ({key:use})', true);
   }
   if (id in COUNT_TODO) {
     const more = sectorPlaces(inst, c, COUNT_TODO[id]);

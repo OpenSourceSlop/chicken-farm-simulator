@@ -298,7 +298,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     }
   }
 
-  let sig = '', current = null, items = new Map(), soonEls = new Map();
+  let sig = '', current = null, items = new Map(), soonEls = new Map(), shownCur = null;
   /** Skills update: what the payoffs say on the current job's card lines (live false: the job's own where line only). */
   function skillLines(inst) {
     const c = cardCtx(), has = (k) => placeKey(inst, c, k);
@@ -407,6 +407,12 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
       sections.push(det);
     }
     list.replaceChildren(...sections);
+    // Skills update: the current job's lines (handled, would be easier, where) in view when it changes (live only)
+    if (SKILLS_UPDATE.live && cur && cur.key !== shownCur) {
+      shownCur = cur.key;
+      const li = list.querySelector('.job.is-current');
+      if (li && li.offsetTop + li.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = Math.max(0, li.offsetTop - 4);
+    }
     ctx.props?.highlight?.(cur ? cur.def.signs : []);
   }
 

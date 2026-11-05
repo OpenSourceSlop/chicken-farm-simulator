@@ -19,7 +19,7 @@ import { STRIPS_CYCLE } from '../src/job-strips-cycle.js';
 import { easierLine, handledLines, unlockCaption, gateCaption, nextLevelLine, PAYOFF_CARD, PAYOFF_NOW, FAULT_MANUAL, viewLine, groupUnlocks } from '../src/job-words.js';
 import { fillKeys } from '../src/key-words.js';
 import { nippleCmToday, rimCmNow, flowToday } from '../src/job-figures.js';
-import { SKILLS_UPDATE, AUTO_SYSTEMS, PAYOFFS, SKILL_VIEWS, SKILL_BRANCHES, LEVEL1, CYCLE, WEEK2, WEEKS45, houseSector } from '../src/config.js';
+import { SKILLS_UPDATE, AUTO_SYSTEMS, PAYOFFS, SKILL_VIEWS, SKILL_BRANCHES, LEVEL1, CYCLE, WEEK2, WEEKS45, houseSector, BROOD_BOUNDS } from '../src/config.js';
 import { GUIDE, fillGuide } from '../src/content-guide.js';
 import { SETTINGS_SCHEMA } from '../src/settings.js';
 import { KEY_ACTIONS, createKeys } from '../src/keys.js';
@@ -232,6 +232,12 @@ test('the phone, the silo gauge and the glance as places; the phone has no marke
   assert(jobPlaces(wg, G.c())[0].id === 'birdScale' && /Growth 3/.test(jobPlaces(wg, G.c())[0].todo), 'in band: look at the scale (Growth 3)');
   G.ok = false;
   assert(jobPlaces(wg, G.c())[0].todo === 'take the scale and frame', `out of band: weigh by hand: ${jobPlaces(wg, G.c())[0].todo}`);
+  // the frame in hand: only the parts of the house the frame goes down in (the brooding floor, props.js)
+  G.props.carrying = 'frame';
+  const fp = jobPlaces(wg, G.c()) || [];
+  assert(fp.length === 6 && fp.every((p) => p.at.x <= BROOD_BOUNDS.xMax - 0.5) && new Set(fp.map((p) => houseSector(p.at.x, p.at.z))).size === 6,
+    `the frame's parts: ${fp.map((p) => `${p.name} (${p.at.x.toFixed(1)})`).join('; ')}`);
+  G.props.carrying = null;
 }));
 
 test('a variant instance is saved and resumed with the same rule, whatever the perks are then', () => live(() => {

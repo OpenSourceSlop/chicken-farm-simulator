@@ -847,17 +847,22 @@ export function createUI(ctx, deps) {
     // Feed 2: a new order re-arms the warning (once per order)
     events.on(EV.FARM_DELIVERY, (p) => { if (p && p.kind === 'feed' && p.phase === 'arrive') { feedArmed = true; jobCard.setTopLine?.(null); } });
     events.on(EV.ACTION, (p) => { if (p && p.id === 'feed.order') jobCard.setTopLine?.(null); });
-    // the time bar's phone key (Farm Planning 2)
-    const phoneBtn = button({ class: 'btn btn--icon', hidden: true });
-    phoneBtn.innerHTML = ICONS.phone || ICONS.bell || '☎';
-    phoneBtn.addEventListener('click', () => openPhone());
-    hud.timebar.append(phoneBtn);
-    const phoneTitle = () => { const k = keyWord('phone', 'R'); phoneBtn.title = `The phone (${k})`; phoneBtn.setAttribute('aria-label', `Open the phone in your pocket (${k})`); };
-    phoneTitle(); K.subscribe?.(() => phoneTitle());
+    // the time bar's phone key (Farm Planning 2): made the first time it shows, so the Phase 5 time bar is as it was
+    let phoneBtn = null;
+    const phoneTitle = () => { if (!phoneBtn) return; const k = keyWord('phone', 'R'); phoneBtn.title = `The phone (${k})`; phoneBtn.setAttribute('aria-label', `Open the phone in your pocket (${k})`); };
+    function phoneKey() {
+      if (phoneBtn) return phoneBtn;
+      phoneBtn = button({ class: 'btn btn--icon', hidden: true, 'data-time': 'phone' });
+      phoneBtn.innerHTML = ICONS.phone || '☎';
+      phoneBtn.addEventListener('click', () => openPhone());
+      hud.timebar.append(phoneBtn);
+      phoneTitle(); K.subscribe?.(() => phoneTitle());
+      return phoneBtn;
+    }
     function openPhone() {
       if (mode !== 'level' || !SKILLS_UPDATE.live) return false;
       if (perksHas('pocketPhone')) return !!openPanel('pocket-phone');
-      caption.show('The pocket phone comes with Farm Planning 2 on the skill tree.');
+      caption.show('The pocket phone comes with Farm Planning 2 on the skill tree.', 5, { now: true });
       return false;
     }
     /** Show me (Comfort 2's warning fix, as the night check's Fix it): its panel and tab, the marker to its place. */
@@ -870,7 +875,7 @@ export function createUI(ctx, deps) {
     function tick(dt) {
       const live = !!SKILLS_UPDATE.live && mode === 'level';
       const ph = live && perksHas('pocketPhone');
-      if (phoneBtn.hidden === ph) phoneBtn.hidden = !ph;
+      if (ph || phoneBtn) { const b = phoneKey(); if (b.hidden === ph) b.hidden = !ph; }
       if (!live) return;
       if (gateArmed && gate.length && !standard()) {
         const t = gateCaption(gate);

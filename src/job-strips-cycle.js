@@ -55,7 +55,7 @@ const weighRows = (c, inst) => {
   if (variantHas(inst?.def, 'frameWeigh')) {
     const per = new Map();
     for (const x of w.list || []) per.set(x.s, (per.get(x.s) || 0) + 1);
-    out.push(step(`Parts of the house weighed: ${per.size} of 5${per.size ? ` (${[...per.values()].map((n) => `${n} birds`).join(', ')})` : ''}. Weigh the frame weighs its birds in one press.`, per.size >= 5 && w.n >= 50));
+    out.push(step(`Parts of the house weighed: ${per.size} of 5${per.size ? ` (${[...per.values()].map((n) => `${n} birds`).join(', ')})` : ''}. The Weigh the frame key weighs its ten birds in one press.`, per.size >= 5 && w.n >= 50));
   }
   return out;
 };

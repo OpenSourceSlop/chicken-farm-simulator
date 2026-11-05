@@ -36,7 +36,7 @@ export const PAYOFF_NOW = {
   quickSamples: 'Next chick puts this chick down and takes the next one near it',
   siloOrder: 'Order to 3 days at the silo gauge (the working is beside the key)',
   weekLights: 'Program for the days sets the light program for the age in one press (the sign’s row is beside the key)',
-  frameWeigh: 'Weigh the frame weighs its birds in one press; the marker leads to the next part of the house',
+  frameWeigh: 'the Weigh the frame key weighs its ten birds in one press; the marker leads to the next part of the house',
   earlyWarning: 'the flock watch warns two farm hours earlier; Show me on its card opens the fix',
   comfortAlways: 'the comfort colours show while you are inside ({key:comfortView} turns them off for the visit)',
   tallyBucket: 'the tally bucket picks up every dead bird near you and counts them as you pick them up; empty it at the bin',
