@@ -248,7 +248,8 @@ export function siloSkills(L) {
     if (!(o.kg > 0)) return;
     const r = L.act('feed.order', { kg: o.kg, type: o.type, silo: o.silo, from: 'silo' }) || {};
     const label = typeLabel(r.type || o.type) || 'feed';
-    setText(said, r.arriveDay != null ? `Ordered ${int(r.kg ?? o.kg)} kg of ${label} at ${env.timeLabel}: the feed truck comes day ${r.arriveDay}, ${String(r.arriveHour ?? 9).padStart(2, '0')}:00.` : `Ordered ${int(o.kg)} kg at ${env.timeLabel}.`);
+    // the working stays beside the order sent (SKILLS.md §6.5: before and after the press)
+    setText(said, r.arriveDay != null ? `Ordered ${int(r.kg ?? o.kg)} kg of ${label} at ${env.timeLabel} (${o.text}): the feed truck comes day ${r.arriveDay}, ${String(r.arriveHour ?? 9).padStart(2, '0')}:00.` : `Ordered ${int(o.kg)} kg at ${env.timeLabel} (${o.text}).`);
     note.start('the feed truck comes as farm time passes (Next job skips ahead)');
     sync();
   };
