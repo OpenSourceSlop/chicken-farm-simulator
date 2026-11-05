@@ -18,6 +18,8 @@ import { cycleFeederParts, cycleSiloParts, cycleHeapParts, siloSkills, feederSki
 import { createJobStrip } from './ui-jobstrip.js';
 // the steps hotfix: an action that waits on farm time runs a paused clock again and says so
 import { farmTimeNote } from './ui-farmtime.js';
+// Skills update (SKILLS.md §3.8, §5.1): the automatic scale's display (Growth 3), its glance and Clean the platform
+import { skillBox, workLine, oneKey, row as skRow, note as skNote, perkAuto, openFault, faultText, glanceFor } from './ui-cycle-skills.js';
 
 /**
  * Machine case: header with icon, title and where; a dark working plate; plate columns at the side.
@@ -285,7 +287,28 @@ export function buildBirdScalePanel(L) {
   const back = button({ class: 'btn btn--machine' }, 'Put them back');
   take.addEventListener('click', () => { props.startCarry('frame', {}); L.close(); });
   back.addEventListener('click', () => { props.drop(); refresh(); });
-  shell.main.append(h('div', { class: 'equip-reads' }, auto.el, sample.el), h('div', { class: 'equip-btns' }, take, back),
+  // Skills update (Growth 3, autoScale): the display open AUTO.glanceSec sends auto.glance { system: 'scale' } and scale.read
+  // { day } (the day's count, mean and uniformity for the records); Clean the platform (scale.clean) for a fouled scale
+  let read = null, cleanSaid = '';
+  const dispLine = workLine(), scaleNote = skNote();
+  const cleanKey = oneKey('Clean the platform', () => {
+    const r = L.act('scale.clean', {}) || {};
+    cleanSaid = r.cleaned ? `Platform cleaned at ${env.timeLabel}: the birds step on it again.` : `Platform cleaned at ${env.timeLabel}.`;
+    drawScale();
+  }, { label: 'Clean the automatic scale’s platform' });
+  const scaleBox = skillBox('autoScale', 'Automatic platform scale · today', skRow(dispLine.el, cleanKey), scaleNote);
+  const showScale = () => L.farm?.mode === 'level' && (perkAuto(L, 'scale') || !!openFault(L, 'scale-fouled'));
+  const glance = glanceFor(L, 'bird-scale', { extra: () => { if (showScale()) { read = L.act('scale.read', { day: env.dayNumber }) || null; drawScale(); } } });
+  function drawScale() {
+    if (!scaleBox.show(showScale())) return;
+    const f = openFault(L, 'scale-fouled');
+    dispLine.set(read ? `${read.n ? `${int(read.n)} weighings, mean ${int(read.meanG)} g${read.uniformityPct != null ? `, uniformity ${int(read.uniformityPct)} %` : ''}` : 'No weighings yet today'} (read ${env.timeLabel})` : 'Reading the display…',
+      read?.fouled || f ? 'Litter on the platform: it reads light and counts few birds.' : 'Birds that stepped on the platform today.');
+    setText(scaleNote, cleanSaid || (f ? faultText(L, f) : ''));
+    scaleNote.hidden = !scaleNote.textContent;
+    scaleNote.classList.toggle('skl-note--fault', !!f && !cleanSaid);
+  }
+  shell.main.append(h('div', { class: 'equip-reads' }, auto.el, sample.el), scaleBox.el, h('div', { class: 'equip-btns' }, take, back),
     h('p', { class: 'equip-note' }, 'Set the frame down among the birds (E): it holds about ten. Weigh them, let them go, move on.'));
   function refresh() {
     const draft = records?.draft?.(env.dayNumber);
@@ -296,7 +319,9 @@ export function buildBirdScalePanel(L) {
     back.hidden = props.carrying !== 'frame';
   }
   let acc = 0;
-  return { el: shell.el, onOpen() { shell.refreshPlates(); }, update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.4; refresh(); } } };
+  return { el: shell.el,
+    onOpen() { shell.refreshPlates(); read = null; cleanSaid = ''; glance.onOpen(); drawScale(); },
+    update(dt, force) { glance.update(dt); acc -= dt; if (force || acc <= 0) { acc = 0.4; refresh(); drawScale(); } } };
 }
 
 export const fmtKg = (kg) => `${one(kg)} kg`;

@@ -11,6 +11,9 @@ import { h, button, setText } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { equipShell, machineRow, readout, stepper } from './ui-equipment.js';
 import { machineJob, progressBar } from './ui-cycle-kit.js';
+// Skills update (SKILLS.md §3.10, review issue 2): the bin counts only the bucket's share the tally did not count at pickup
+import { binShare } from './props-tally.js';
+import { live } from './ui-cycle-skills.js';
 
 const TOOLS = [
   { kind: 'washer', name: 'Pressure washer', sub: 'detergent, a strip about 5 m wide', take: 'Take the washer', back: 'Put the washer back' },
@@ -118,8 +121,16 @@ export function buildDeadBin(api) {
     const o = props.carrying === 'bucket' ? props.carryOpts || { n: 0, causes: {} } : { n: 0, causes: {} };
     const n = o.n || 0, causes = { ...(o.causes || {}) };
     const byLook = { ...counts };
-    L.act('dead.count', { n, causes, byLook });
-    events?.emit(EV.DEAD_DROP, { n, causes });
+    if (live()) {
+      // Skills update: dead.count only for the share not counted at pickup (props-tally binShare) plus the by-look tallies
+      // (byLook never adds to countedDead); EV.DEAD_DROP carries every bird dropped, so the bucket empties as before
+      const share = binShare(o), looked = Object.values(byLook).some((v) => v > 0);
+      if (share.n > 0 || looked) L.act('dead.count', { n: share.n, causes: share.causes, byLook, at: 'bin' });
+      events?.emit(EV.DEAD_DROP, { n: share.dropped, causes, counted: Math.max(0, Math.round(o.counted || 0)) });
+    } else {
+      L.act('dead.count', { n, causes, byLook });
+      events?.emit(EV.DEAD_DROP, { n, causes });
+    }
     if (props.carrying === 'bucket') props.drop();
     L.close();
   });
@@ -129,7 +140,7 @@ export function buildDeadBin(api) {
   function refresh() {
     const o = props.carrying === 'bucket' ? props.carryOpts || {} : {};
     const n = o.n || 0, causes = o.causes || {};
-    const key = `${n}|${JSON.stringify(causes)}`;
+    const key = `${n}|${JSON.stringify(causes)}|${live() ? o.counted || 0 : 0}`;
     if (key !== shown) {
       shown = key;
       const looks = [];
@@ -139,10 +150,14 @@ export function buildDeadBin(api) {
       const mixed = looks.map((l, i) => [((i * 7919) % 97) / 97, l]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
       bucket.innerHTML = mixed.length ? mixed.slice(0, 60).map(deadSvg).join('') : '<p class="cyc-line cyc-dim" style="margin:6px">The bucket is empty.</p>';
       bucket.setAttribute('aria-label', `${n} dead bird${n === 1 ? '' : 's'} in the bucket`);
-      inBucket.set(String(n), n === 1 ? 'dead bird' : 'dead birds');
+      const cp = live() ? Math.min(n, Math.max(0, Math.round(o.counted || 0))) : 0;
+      inBucket.set(String(n), `${n === 1 ? 'dead bird' : 'dead birds'}${cp ? `, ${cp} counted into the bucket` : ''}`);
     }
     const counted = Object.values(counts).reduce((a, b) => a + b, 0);
-    setText(rest, n ? `Your counts: ${counted} of ${n}${counted < n ? ` · ${n - counted} not by any of these looks` : ''}.` : 'Pick up the dead birds in the house first.');
+    // Skills update: with the tally bucket the birds were counted as they went in; the bin counts the rest only
+    const atPickup = live() ? Math.min(n, Math.max(0, Math.round(o.counted || 0))) : 0;
+    const pick = atPickup ? ` ${atPickup} of them ${atPickup === 1 ? 'was' : 'were'} counted into the bucket as you picked them up${atPickup < n ? `; the bin counts the other ${n - atPickup}` : ': the bin counts none again'}.` : '';
+    setText(rest, n ? `Your counts: ${counted} of ${n}${counted < n ? ` · ${n - counted} not by any of these looks` : ''}.${pick}` : 'Pick up the dead birds in the house first.');
     count.disabled = !n;
   }
   return {

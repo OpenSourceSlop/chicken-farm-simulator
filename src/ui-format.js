@@ -123,7 +123,14 @@ export function readingText(kind, v) {
     case 'ticket': case 'load.ticket': return `truck ${(r.truck ?? 0) + 1}: ${int(r.crates)} crates, ${int(r.birds)} birds, net ${int(r.netKg)} kg`;
     case 'swab': case 'clean.swab': return `swab ${int(r.n ?? (r.spot ?? 0) + 1)} taken`;
     case 'booking': case 'phone.bookCatch': case 'phone.bookChicks': return r.booked ? `booked${r.bookedDay != null ? `: chicks on day ${r.bookedDay}` : ''}` : `not booked: ${r.reason ?? ''}`;
-    case 'dead': case 'dead.count': return `${int(r.n)} dead counted at the bin`;
+    // Skills update (SKILLS.md §3.10): the tally bucket counts at pickup (at: 'pickup'); else at the bin, as before
+    case 'dead': case 'dead.count': return r.at === 'pickup' ? `${int(r.n)} dead counted into the bucket` : `${int(r.n)} dead counted at the bin`;
+    // Skills update (SKILLS.md §12.2): the new readings, as the notebook keeps them
+    case 'water.columns': return Array.isArray(r.lines) ? `sight tubes: ${r.lines.map((c) => `line ${(c.line ?? 0) + 1} ${one(c.cm)} cm`).join(', ')} (mark ${one(r.lines[0]?.markCm)} cm)` : 'sight tubes read';
+    case 'scale.read': return r.n ? `bird scale: ${int(r.n)} weighings, mean ${int(r.meanG)} g${r.uniformityPct != null ? `, uniformity ${int(r.uniformityPct)} %` : ''}` : 'bird scale: no weighings yet';
+    case 'scale.clean': return 'bird scale platform cleaned';
+    case 'auto.calibrate': return `controller sensor ${one(r.sensorC)} °C checked against the thermometer ${one(r.houseC)} °C`;
+    case 'auto.reset': return `${r.system === 'winch' ? `line ${(r.line ?? 0) + 1} winch motor` : r.system === 'stages' ? 'fan stages' : r.system || 'equipment'} reset`;
     case 'weigh': case 'sample.weigh': return `bird ${int(r.weightG)} g`;
     case 'box': case 'sample.box': return `box ${two(r.weightKg)} kg gross, box ${two(r.boxKg)} kg`;
     case 'filter': case 'water.filter': return `filter in ${one(r.inBar)} bar, out ${one(r.outBar)} bar`;

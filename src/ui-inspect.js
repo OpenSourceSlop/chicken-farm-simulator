@@ -13,6 +13,9 @@ import { clock } from './clock.js';
 // Phase 4 (package "panels"): a bad batch's Grade the stacks tab (PHASE4.md §4.3, §12.3), the chick-grading table
 import { gradingFor, gradingView } from './ui-cond-grading.js';
 import { buildPlate } from './ui-boards.js';
+// Skills update (SKILLS.md §3.5, §3.8, §3.0): Next chick (Brooding 2), Weigh the frame (Growth 2), the Records line (Growth 1)
+import { AUTO, weightAt } from './config.js';
+import { perkHas, live } from './ui-cycle-skills.js';
 
 // A chick drawn in 2D (top-left origin 0..60). flip = on its back, cull = gone.
 function chickSvg({ flip = false, size = 1 } = {}) {
@@ -151,8 +154,11 @@ export function buildChickInHandPanel(L) {
   const cropBtn = button({ class: 'btn btn--machine btn--go' }, 'Feel the crop');
   const cullBtn = button({ class: 'btn btn--machine btn--cull' }, 'Cull');
   const backBtn = button({ class: 'btn btn--machine' }, 'Put back');
+  // Skills update (Brooding 2, quickSamples): the chick goes back down and the nearest other chick within AUTO.nextChickM
+  // comes into the hand without closing the panel (the scene's flock.catcher.nextNearest, else release + catchNearest)
+  const nextBtn = button({ class: 'btn btn--machine', hidden: true, 'aria-label': 'Next chick: put this one down and take the nearest other chick' }, 'Next chick');
   const tally = h('p', { class: 'equip-note' });
-  let bird = null, done = false;
+  let bird = null, done = false, nexting = false, nextNote = '';
   // the reading with the chick arrival sign's band beside it (the farmer compares; no verdict)
   ventBtn.addEventListener('click', () => { if (!bird || done) return; const r = L.act('sample.vent', { x: bird.x, z: bird.z, index: bird.index }) || {}; out.set(`${one(r.tempC)} °C`, 'vent temperature · chick arrival sign: 39.4–40.5 °C comfortable, lower = cold, higher = hot'); done = true; sync(); });
   cropBtn.addEventListener('click', () => { if (!bird || done) return; const r = L.act('sample.crop', { x: bird.x, z: bird.z, index: bird.index }) || {}; out.set(cropWords(r.crop), 'crop · chick arrival sign: at 24 hours at least 95 % of crops full and soft'); done = true; sync(); });
@@ -163,21 +169,46 @@ export function buildChickInHandPanel(L) {
     bird = null; L.close();
   });
   backBtn.addEventListener('click', () => L.close());
-  shell.main.append(h('div', { class: 'hand-grid' }, pic, h('div', null, out.el, h('div', { class: 'equip-btns' }, ventBtn, cropBtn, cullBtn, backBtn), tally)));
+  nextBtn.addEventListener('click', () => {
+    if (!bird || !perkHas(L, 'quickSamples')) return;
+    const prev = bird, p = L.player?.position || prev;
+    let got = null, viaScene = false;
+    nexting = true; bird = null; nextNote = '';
+    try {
+      const c = L.flock?.catcher;
+      if (c && typeof c.nextNearest === 'function') { viaScene = true; got = c.nextNearest(prev.index, AUTO.nextChickM); }
+      else {
+        L.flock?.releaseBird?.(prev.index, false);
+        got = L.flock?.catchNearest?.(p.x, p.z, AUTO.nextChickM, prev.purpose) ?? null;
+      }
+    } catch (err) { console.error('Next chick failed', err); }
+    nexting = false;
+    if (bird) return;                                                    // EV.BIRD_PICK opened the panel again with take()
+    if (got && got.index != null) { take({ ...got, purpose: prev.purpose }); return; }
+    if (viaScene) { bird = prev; nextNote = `No other chick within ${AUTO.nextChickM} m: put this one back and walk on.`; sync(); return; }
+    L.notice?.(`Chick put back. No other chick within ${AUTO.nextChickM} m of you: walk to the next part of the floor.`, 5);
+    if (L.props.carrying === 'chick') L.props.drop();
+    L.close();
+  });
+  shell.main.append(h('div', { class: 'hand-grid' }, pic, h('div', null, out.el, h('div', { class: 'equip-btns' }, ventBtn, cropBtn, nextBtn, cullBtn, backBtn), tally)));
   function sync() {
     const p = bird?.purpose;
     ventBtn.hidden = p !== 'vent'; cropBtn.hidden = p !== 'crop'; cullBtn.hidden = p !== 'sick';
     ventBtn.disabled = cropBtn.disabled = done;
     const t = L.sampleTally(p);
-    setText(tally, p === 'sick' ? 'A bird sitting apart, feathers fluffed, eyes closed.' : t);
+    nextBtn.hidden = !(perkHas(L, 'quickSamples') && (p === 'vent' || p === 'crop'));
+    setText(tally, p === 'sick' ? 'A bird sitting apart, feathers fluffed, eyes closed.' : [t, nextNote].filter(Boolean).join(' '));
     const sub = shell.el.querySelector('.ctrl-brand p');
     if (sub) setText(sub, p === 'sick' ? 'A sick-looking bird' : p === 'crop' ? 'Crop check' : 'Vent temperature');
   }
+  function take(b) { bird = b; done = false; nextNote = ''; out.set('—', ''); sync(); }
   return {
     el: shell.el,
     /** Called by ui.js when a bird is picked up. */
-    take(b) { bird = b; done = false; out.set('—', ''); sync(); },
+    take,
     onClose() {
+      // Next chick: the panel closes and opens again around the next chick in the hand (nothing to put back here)
+      if (nexting) return;
       // Put back: the flock lets the bird go and empties the hands (props.drop)
       if (bird) { L.flock?.releaseBird?.(bird.index, false); bird = null; }
       if (L.props.carrying === 'chick') L.props.drop();
@@ -206,8 +237,15 @@ export function buildWeighPanel(L) {
   nextBtn.addEventListener('click', () => { shell.foldPlates(); auto = false; wait = 0.4; nextPending = true; });
   allBtn.addEventListener('click', () => { shell.foldPlates(); auto = true; wait = 0.4; });
   let nextPending = false;
+  // Skills update (Growth 2, frameWeigh): the scale with memory weighs every bird in the frame in AUTO.frameWeighSec, each
+  // weight kept (one sample.weigh a bird, as Weigh all sends); the samples stay the boards' 50 birds from five places
+  const frameBtn = button({ class: 'btn btn--machine btn--go', hidden: true, 'aria-label': 'Weigh the frame: every bird in the frame in one press (Growth 2)' }, 'Weigh the frame');
+  let frameAll = false;
+  frameBtn.addEventListener('click', () => { if (!queue.length) return; shell.foldPlates(); auto = false; nextPending = false; frameAll = true; wait = AUTO.frameWeighSec; draw(); });
+  // Skills update (Growth 1, recordsTargets): the day's target beside the weighing ("Day 14 target 456 g (records)")
+  const target = h('p', { class: 'equip-note', hidden: true });
   const spread = h('div', { class: 'cyc-chart cyc-spread', hidden: true });
-  shell.main.append(h('div', { class: 'equip-reads' }, frameMean.el, allMean.el), list, h('div', { class: 'equip-btns' }, nextBtn, allBtn), spread,
+  shell.main.append(h('div', { class: 'equip-reads' }, frameMean.el, allMean.el), target, list, h('div', { class: 'equip-btns' }, frameBtn, nextBtn, allBtn), spread,
     h('p', { class: 'equip-note' }, 'Close the panel to let the birds go; the frame stays in your hands for the next place.'));
   function drawSpread() {
     const on = !!L.skills?.unlocked?.('uniformityChart');
@@ -224,15 +262,26 @@ export function buildWeighPanel(L) {
     frameMean.set(valid.length ? `${int(valid.reduce((a, b) => a + b, 0) / valid.length)} g` : '—', `${valid.length} of ${valid.length + queue.length} birds`);
     const all = L.weighings();
     allMean.set(all.n ? `${int(all.mean)} g` : '—', all.n ? `${all.n} bird${all.n === 1 ? '' : 's'} · ${all.sectors} place${all.sectors === 1 ? '' : 's'}` : '');
-    nextBtn.disabled = allBtn.disabled = !queue.length;
+    nextBtn.disabled = allBtn.disabled = !queue.length || frameAll;
+    frameBtn.hidden = !perkHas(L, 'frameWeigh');
+    frameBtn.disabled = !queue.length || frameAll;
+    if (frameAll) setText(frameBtn, 'Weighing the frame…'); else setText(frameBtn, 'Weigh the frame');
+    const d = L.env.dayNumber, showT = live() && perkHas(L, 'recordsTargets') && d >= 0 && d <= 42;
+    target.hidden = !showT;
+    if (showT) { const tg = weightAt(d); setText(target, `Day ${d} target ${int(tg)} g (records)${all.n ? ` · your mean today ${int(all.mean)} g = ${int((100 * all.mean) / tg)} % of it` : ''}`); }
     drawSpread();
   }
   return {
     el: shell.el,
-    take(f) { frame = f; queue = (f.birds || []).slice(); weights = []; auto = false; nextPending = false; draw(); },
+    take(f) { frame = f; queue = (f.birds || []).slice(); weights = []; auto = false; nextPending = false; frameAll = false; draw(); },
     onOpen() { shell.refreshPlates(); },
     onClose() { if (frame) { L.flock?.releaseGroup?.(); frame = null; } },
     update(dt) {
+      if (frameAll) {
+        wait -= dt;
+        if (wait <= 0 || !queue.length) { while (queue.length) weighOne(); frameAll = false; draw(); }
+        return;
+      }
       if ((auto || nextPending) && queue.length) {
         wait -= dt;
         if (wait <= 0) { weighOne(); nextPending = false; wait = 0.4; if (!queue.length) auto = false; }
