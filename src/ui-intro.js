@@ -25,12 +25,17 @@ export const INTRO_CARDS = [
   { id: 'time', when: 'level-start', anchor: '.hud-bl .timebar', text: 'The farm clock: pause ({key:pause}), 1× and 4× ({key:speed1}, {key:speed4}). Next job ({key:nextJob}) skips to the next job. {key:menu} opens the menu (saves, settings, how to play); {key:map} opens the farm map.' },
   { id: 'watch', when: 'watch-shown', anchor: '.fw', text: 'The flock watch measures the birds every farm hour (weight, deaths, comfort, intake) beside this level’s line, and warns in words when a row turns red.' },
 ];
-const KICKER = { jobs: 'Your first morning · 1 of 3', signs: 'Your first morning · 2 of 3', time: 'Your first morning · 3 of 3', watch: 'The birds are in' };
+// fix round: the kicker follows the day (a first level played on day 30 is not 'your first morning'; the birds are 'in'
+// only on the chick day) and the number counts the cards of the group shown so far (the jobs card can wait for a job)
+const MORNING_DAY = 0;  // planning (-2), prep (-1) and chick day (0): 'Your first morning'; later: 'Where things are'
 const ARROW = 11;      // the arrow's length from the card's edge to the anchor
 const GUTTER = 16;
 
 const CSS = `
 .intro-card { position: absolute; z-index: 14; width: min(300px, calc(100vw - 32px)); padding: 13px 15px 12px; pointer-events: auto; }
+.card.intro-card { background-color: var(--panel-solid); }
+/* fix round: no HUD caption behind or beside a card (it showed through; it said the next thing while the card speaks) */
+.intro-on .caption { visibility: hidden; }
 .intro-card .intro-k { margin: 0 0 6px; }
 .intro-card .intro-text { margin: 0 0 11px; font-size: 14px; line-height: 1.45; color: var(--ink); }
 .intro-btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -87,45 +92,128 @@ export function createIntro(ctx, { root = null, claimKeys = null, busy = () => f
     const on = list.map(screen).filter((s) => s && s.d <= 25).sort((a, b) => a.d - b.d);
     return on[0] || null;
   }
+  /** Fix round: a sign's whole board on screen (its four corners projected; the boards face along z and lean back by
+   *  tilt), so the card keeps off the board and not only off one point of it. null when the board is not known. */
+  function boardRect(id) {
+    const f = ctx.props?.boardFrame?.(id), cam = ctx.camera, THREE = ctx.THREE;
+    if (!f || !cam || !THREE) return null;
+    const v = new THREE.Vector3(), dy = (f.h / 2) * Math.cos(f.tilt || 0), dz = (f.h / 2) * Math.sin(f.tilt || 0);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      v.set(f.x + (sx * f.w) / 2, f.y + sy * dy, f.z - sy * dz).project(cam);
+      if (v.z > 1) return null;
+      const px = ((v.x + 1) / 2) * window.innerWidth, py = ((1 - v.y) / 2) * window.innerHeight;
+      x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+    }
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
   function anchorBox(c) {
-    if (c.anchor === 'sign') { const s = signPoint(); return s ? { x: s.x - 12, y: s.y - 12, w: 24, h: 24, sign: s.id } : null; }
+    if (c.anchor === 'sign') {
+      const s = signPoint();
+      if (!s) return null;
+      const b = boardRect(s.id);
+      return b && b.x <= s.x && s.x <= b.x + b.w ? { ...b, sign: s.id, world: true } : { x: s.x - 12, y: s.y - 12, w: 24, h: 24, sign: s.id, world: true };
+    }
     const el = q(c.anchor);
     if (!visible(el)) return null;
     const r = el.getBoundingClientRect();
-    return { x: r.left, y: r.top, w: r.width, h: r.height };
+    return { x: r.left, y: r.top, w: r.width, h: r.height, el };
   }
-  /** The card beside its anchor (left, right, above, below: the first that fits the window), the arrow's tip on the anchor. */
+  // what a card must not cover (fix round): the HUD cards, the prompt and caption, the job marker on the farm and the
+  // edge pointers (the job's, the dead-bird and bucket chips); the anchor's own element is left out
+  const AVOID = ['.hud-tl .clock', '.hud-tl .gauges', '.fw', '.ljobs', '.hud-tr .tasks', '.hud-bl .timebar', '.hud-bl .help:not([hidden])', '.hud-bc .prompt', '.caption', '.alarm', '.edge-pointer'];
+  let markerObj = null;
+  function markerRect() {
+    const cam = ctx.camera, THREE = ctx.THREE;
+    if (!cam || !THREE || !ctx.scene) return null;
+    if (!markerObj || !markerObj.parent) markerObj = ctx.scene.getObjectByName('job-marker') || null;
+    if (!markerObj?.visible) return null;
+    const b = new THREE.Box3().setFromObject(markerObj), v = new THREE.Vector3();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      v.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y + 0.2 : b.min.y, i & 4 ? b.max.z : b.min.z).project(cam);
+      if (v.z > 1) return null;
+      const px = ((v.x + 1) / 2) * window.innerWidth, py = ((1 - v.y) / 2) * window.innerHeight;
+      x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+    }
+    return x1 < 0 || y1 < 0 || x0 > window.innerWidth || y0 > window.innerHeight ? null : { x: x0 - 6, y: y0 - 6, w: x1 - x0 + 12, h: y1 - y0 + 12, what: 'marker' };
+  }
+  function avoidRects(A) {
+    const out = [];
+    for (const sel of AVOID) {
+      for (const el of (root || document).querySelectorAll(sel)) {
+        if (!visible(el) || card.contains(el) || (A?.el && (A.el === el || A.el.contains(el) || el.contains(A.el)))) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) out.push({ x: r.left, y: r.top, w: r.width, h: r.height, what: sel });
+      }
+    }
+    const m = markerRect();
+    if (m) out.push(m);
+    return out;
+  }
+  const overlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  let lastPlace = null;   // { side, off }: the card keeps its place while it still fits (no jumping as the view moves)
+  /** The card beside its anchor: for a sign on the farm above or below it first, for a HUD card left or right first; each
+   *  side tries the card slid along it (its arrow still on the anchor). The first place that fits the window and covers no
+   *  HUD card, prompt, caption or job marker wins; when none is clear, the one that covers least. The arrow's tip on the anchor. */
   function place(A) {
     const W = window.innerWidth, H = window.innerHeight, cw = card.offsetWidth || 300, ch = card.offsetHeight || 140, g = ARROW;
-    const clampX = (x) => Math.max(GUTTER, Math.min(W - GUTTER - cw, x)), clampY = (y) => Math.max(GUTTER, Math.min(H - GUTTER - ch, y));
     let pos = null;
     if (A) {
-      const cy = A.y + A.h / 2, cx = A.x + A.w / 2;
-      const tries = [
-        { side: 'left', x: A.x - g - cw, y: clampY(cy - ch / 2) }, { side: 'right', x: A.x + A.w + g, y: clampY(cy - ch / 2) },
-        { side: 'up', x: clampX(cx - cw / 2), y: A.y - g - ch }, { side: 'down', x: clampX(cx - cw / 2), y: A.y + A.h + g },
-      ];
-      pos = tries.find((t) => t.x >= GUTTER - 0.5 && t.x + cw <= W - GUTTER + 0.5 && t.y >= GUTTER - 0.5 && t.y + ch <= H - GUTTER + 0.5) || null;
+      const avoid = avoidRects(A), inWin = (t) => t.x >= GUTTER - 0.5 && t.x + cw <= W - GUTTER + 0.5 && t.y >= GUTTER - 0.5 && t.y + ch <= H - GUTTER + 0.5;
+      const sides = A.world ? ['up', 'down', 'left', 'right'] : ['left', 'right', 'up', 'down'];
+      const cand = (side, off) => {
+        const across = side === 'left' || side === 'right', len = across ? ch : cw;
+        const start = (across ? A.y + A.h / 2 : A.x + A.w / 2) - len / 2 + off;
+        const t = { side, off,
+          x: side === 'left' ? A.x - g - cw : side === 'right' ? A.x + A.w + g : start,
+          y: side === 'up' ? A.y - g - ch : side === 'down' ? A.y + A.h + g : start };
+        // the arrow must still land on the anchor: the card's span and the anchor's span share room for it
+        const a0 = across ? A.y : A.x, a1 = a0 + (across ? A.h : A.w), c0 = across ? t.y : t.x;
+        const lo = Math.max(a0, c0 + 10 + g), hi = Math.min(a1, c0 + len - 10 - g);
+        if (hi < lo) return null;
+        t.along = (lo + hi) / 2 - c0 - g;
+        return t;
+      };
+      const tries = [];
+      if (lastPlace) tries.push(cand(lastPlace.side, lastPlace.off));
+      for (const side of sides) {
+        const len = side === 'left' || side === 'right' ? ch : cw, span = (side === 'left' || side === 'right' ? A.h : A.w) + len;
+        tries.push(cand(side, 0));
+        for (let d = 16; d <= span / 2; d += 16) tries.push(cand(side, -d), cand(side, d));
+      }
+      let best = null, bestCost = Infinity;
+      for (const t of tries) {
+        if (!t || !inWin(t)) continue;
+        const box = { x: t.x, y: t.y, w: cw, h: ch };
+        let cost = 0;
+        for (const r of avoid) cost += overlap(box, r);
+        if (cost === 0) { best = t; break; }
+        if (cost < bestCost) { bestCost = cost; best = t; }
+      }
+      pos = best;
     }
+    lastPlace = pos ? { side: pos.side, off: pos.off } : null;
     if (!pos) pos = { side: null, x: (W - cw) / 2, y: (H - ch) / 2 };
     card.style.left = `${Math.round(pos.x)}px`; card.style.top = `${Math.round(pos.y)}px`;
     arrow.hidden = !pos.side;
     if (pos.side) {
       arrow.dataset.side = pos.side;
-      const along = pos.side === 'left' || pos.side === 'right' ? Math.max(10, Math.min(ch - 10 - 2 * g, A.y + A.h / 2 - pos.y - g)) : Math.max(10, Math.min(cw - 10 - 2 * g, A.x + A.w / 2 - pos.x - g));
-      Object.assign(arrow.style, pos.side === 'left' ? { left: `${cw}px`, top: `${along}px`, right: '', bottom: '' } : pos.side === 'right' ? { left: `${-g}px`, top: `${along}px`, right: '', bottom: '' }
-        : pos.side === 'up' ? { top: `${ch}px`, left: `${along}px`, right: '', bottom: '' } : { top: `${-g}px`, left: `${along}px`, right: '', bottom: '' });
+      const along = `${Math.round(pos.along)}px`;
+      Object.assign(arrow.style, pos.side === 'left' ? { left: `${cw}px`, top: along, right: '', bottom: '' } : pos.side === 'right' ? { left: `${-g}px`, top: along, right: '', bottom: '' }
+        : pos.side === 'up' ? { top: `${ch}px`, left: along, right: '', bottom: '' } : { top: `${-g}px`, left: along, right: '', bottom: '' });
     }
     ring.hidden = !A;
     if (A) Object.assign(ring.style, { left: `${Math.round(A.x - 4)}px`, top: `${Math.round(A.y - 4)}px`, width: `${Math.round(A.w + 8)}px`, height: `${Math.round(A.h + 8)}px` });
   }
   function show(c) {
     current = c;
-    const group = INTRO_CARDS.filter((x) => x.when === c.when);
-    setTextOnce(kicker, KICKER[c.id] || 'Where things are');
+    const group = INTRO_CARDS.filter((x) => x.when === c.when), shown = group.filter((x) => x.id !== c.id && seen().includes(x.id)).length;
+    setTextOnce(kicker, kickerOf(c, shown + 1, group.length));
     setTextOnce(text, fillGuide(c.text, { keys: ctx.keys, settings: S }));
-    setTextOnce(next, group[group.length - 1].id === c.id ? 'Got it' : 'Next');
-    card.hidden = false;
+    setTextOnce(next, unseen(c.when).some((x) => x.id !== c.id && ready_(x)) ? 'Next' : 'Got it');
+    card.hidden = false; lastPlace = null;
+    (root || document.body).classList.add('intro-on');
     card.classList.remove('is-in'); void card.offsetWidth; if (!reducedMotion()) card.classList.add('is-in');
     place(anchorBox(c));
     if (!release && claimKeys) release = claimKeys(onKey);
@@ -135,15 +223,26 @@ export function createIntro(ctx, { root = null, claimKeys = null, busy = () => f
   function setTextOnce(el, t) { if (el.textContent !== t) el.textContent = t; }
   function hide() {
     current = null; card.hidden = true; ring.hidden = true;
+    (root || document.body).classList.remove('intro-on');
     if (release) { release(); release = null; }
   }
+  /** Fix round: the kicker from the day (a first level played on day 30 is not 'your first morning'; the birds are 'in'
+   *  only on the chick day) and the card's number among the cards of its group shown so far. */
+  function kickerOf(c, n, of) {
+    const day = ctx.env?.dayNumber ?? 0;
+    if (c.when === 'watch-shown') return day <= 1 ? 'The birds are in' : 'The flock watch';
+    return `${day <= MORNING_DAY ? 'Your first morning' : 'Where things are'} · ${n} of ${of}`;
+  }
+  // the jobs card waits until the job card has a job open (it names 'the top one … the job to do now')
+  const jobOpen = () => { try { const l = ctx.level?.jobs?.list?.(); return !Array.isArray(l) || l.some((i) => i.status === 'open'); } catch { return true; } };
+  const ready_ = (c) => (c.id !== 'jobs' || jobOpen()) && (c.anchor === 'sign' || visible(q(c.anchor)));
   function markSeen(id) { const s = seen(); if (!s.includes(id)) put('seen', [...s, id]); }
   function advance() {
     if (!current) return;
     markSeen(current.id);
-    const rest = unseen(current.when);
-    if (rest.length) { show(rest[0]); return; }
-    if (unseen('watch-shown').length === 0) put('done', true);
+    const rest = unseen(current.when), nx = rest.find(ready_);
+    if (nx) { show(nx); return; }
+    if (unseen('watch-shown').length === 0 && unseen('level-start').length === 0) put('done', true);
     hide();
   }
   function skip() {
@@ -166,9 +265,8 @@ export function createIntro(ctx, { root = null, claimKeys = null, busy = () => f
   function start(reason = 'level-start') {
     if (reason === 'again') { reset(); reason = 'level-start'; }
     if (current || !free()) return false;
-    const c = unseen(reason)[0];
+    const c = unseen(reason).find(ready_);
     if (!c) return false;
-    if (c.anchor !== 'sign' && !visible(q(c.anchor))) return false;
     return show(c);
   }
   function reset() { put('done', false); put('seen', []); }
@@ -182,7 +280,7 @@ export function createIntro(ctx, { root = null, claimKeys = null, busy = () => f
       if (current) {
         if (!free() && !ctx.ui?.openPanelId) { hide(); return; }       // a mode change under the card
         // a panel opened over the card (E on a sign): the card steps aside until it closes, then shows again
-        if (ctx.ui?.openPanelId) { card.hidden = true; ring.hidden = true; if (release) { release(); release = null; } return; }
+        if (ctx.ui?.openPanelId) { card.hidden = true; ring.hidden = true; (root || document.body).classList.remove('intro-on'); if (release) { release(); release = null; } return; }
         if (card.hidden) { show(current); return; }
         lastBoxes = anchorBox(current);
         place(lastBoxes);
@@ -192,12 +290,14 @@ export function createIntro(ctx, { root = null, claimKeys = null, busy = () => f
       // the moment: a level running with its job card up (a short settle), or the flock watch showing for the first time
       ready += dt;
       if (ready < 0.6) return;
-      if (unseen('level-start').length) start('level-start');
-      else if (unseen('watch-shown').length && visible(q('.fw'))) start('watch-shown');
+      if (unseen('level-start').length && start('level-start')) return;
+      if (unseen('watch-shown').length && visible(q('.fw'))) start('watch-shown');
     },
     state() {
       const box = (el) => { if (!el || el.hidden) return null; const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
-      return { active: !!current && !card.hidden, card: current?.id ?? null, anchorBox: current ? anchorBox(current) : null, cardBox: box(card), arrowBox: current && !arrow.hidden ? box(arrow) : null, text: current ? text.textContent : null, done: !!get('done', false), seen: seen() };
+      const A = current ? anchorBox(current) : null;
+      const strip = (r) => r && { x: r.x, y: r.y, w: r.w, h: r.h, ...(r.what ? { what: r.what } : {}), ...(r.sign ? { sign: r.sign } : {}) };
+      return { active: !!current && !card.hidden, card: current?.id ?? null, anchorBox: strip(A), avoidBoxes: current ? avoidRects(A).map(strip) : [], markerBox: current ? strip(markerRect()) : null, kicker: current ? kicker.textContent : null, cardBox: box(card), arrowBox: current && !arrow.hidden ? box(arrow) : null, text: current ? text.textContent : null, done: !!get('done', false), seen: seen() };
     },
   };
 }
