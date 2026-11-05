@@ -666,7 +666,7 @@ test('skills update: payoffs, views, systems and faults well formed; every job t
   for (const k of Object.keys(UNLOCKS)) assert(C.UNLOCK_SHOWS[k] && !VERDICT.test(C.UNLOCK_SHOWS[k]), `UNLOCK_SHOWS.${k}`);
   assert(Object.keys(C.UNLOCK_SHOWS).length === Object.keys(UNLOCKS).length, 'UNLOCK_SHOWS: one line per view unlock');
   for (const [k, v] of Object.entries(C.SKILL_VIEWS)) {
-    assert(UNLOCKS[k] && v.shows && v.where && !VERDICT.test(v.shows), `view ${k}`);
+    assert(UNLOCKS[k] && v.shows && v.where && v.saves && /^Saves /.test(v.saves) && !VERDICT.test(v.shows) && !VERDICT.test(v.saves), `view ${k}: shows, where and saves (the tree's level 1 row, final check)`);
     for (const j of v.jobs) assert(jobById(j), `view ${k}: job ${j}`);
     if (v.keyId) assert(KEY_ACTIONS.some((a) => a.id === v.keyId), `view ${k}: key ${v.keyId}`);
   }

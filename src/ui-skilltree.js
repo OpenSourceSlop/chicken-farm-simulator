@@ -7,7 +7,7 @@
 import { SKILL_LEVEL_POINTS, UNLOCKS, LEVELS, conditionLabel } from './config.js';
 import { milestoneTable } from './skills.js';
 // Skills update (SKILLS.md §6.1): the three steps per branch (live only; the Phase 5 tree otherwise)
-import { SKILLS_UPDATE, SKILL_STEP_NAMES, UNLOCK_SHOWS, unlockLevel, skillLevelPoints } from './config.js';
+import { SKILLS_UPDATE, SKILL_STEP_NAMES, UNLOCK_SHOWS, SKILL_VIEWS, unlockLevel, skillLevelPoints } from './config.js';
 import { nextLevelLine } from './job-words.js';
 import { fillKeys } from './key-words.js';
 import { injectStyle } from './ui-dom.js';
@@ -144,10 +144,14 @@ export function buildSkillTreePanel(L) {
       const state = reached ? (i === 3 && p && p.setting === false ? 'off in Settings' : i === 3 ? 'on' : '')
         : i === 3 && cd < 1 ? (toGo > 0 ? `${toGo} point${toGo === 1 ? '' : 's'} to go, then with your next flock` : 'comes with your next flock') : `${toGo} point${toGo === 1 ? '' : 's'} to go`;
       const also = (i === 1 ? views.slice(1) : views).map((v) => h('small', { class: 'step-also' }, `also: ${UNLOCK_SHOWS[v.key] || v.name}`));
-      const shows = i === 1 && views[0] ? h('small', { class: 'step-saves' }, UNLOCK_SHOWS[views[0].key] || '') : null;
+      const shows = i === 1 && views[0] ? h('small', { class: 'step-shows' }, UNLOCK_SHOWS[views[0].key] || '') : null;
+      // the final check: level 1 says what it saves and where it is (and its key) as levels 2 and 3 do (config SKILL_VIEWS)
+      const sv = i === 1 && views[0] ? SKILL_VIEWS[views[0].key] : null;
+      const l1 = sv ? [sv.saves ? h('small', { class: 'step-saves' }, `${sv.saves}`) : null,
+        h('small', { class: 'step-where' }, `Where: ${fillKeys(sv.where)}${sv.keyId ? fillKeys(` · press {key:${sv.keyId}}`) : ''}`)] : [];
       return h('li', { class: `${reached ? 'is-on' : ''}`, 'data-level': String(i) },
         h('b', null, `Level ${i} · ${SKILL_STEP_NAMES[i - 1]}`), ` · ${need[i - 1]} pts · `, fillKeys(name), state ? h('small', { class: 'step-state' }, ` · ${state}`) : null,
-        shows, p ? h('small', { class: 'step-saves' }, fillKeys(p.saves)) : null, p ? h('small', { class: 'step-where' }, `Where: ${fillKeys(p.where)}`) : null, ...also);
+        shows, ...l1, p ? h('small', { class: 'step-saves' }, fillKeys(p.saves)) : null, p ? h('small', { class: 'step-where' }, `Where: ${fillKeys(p.where)}`) : null, ...also);
     }));
     const ms = branchMilestones(skills, b.id);
     const two = (m) => (Array.isArray(m.points2) ? m.points2 : [m.points ?? 0, 0]);
