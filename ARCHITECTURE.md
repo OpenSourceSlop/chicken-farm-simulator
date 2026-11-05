@@ -1351,3 +1351,31 @@ climate controller".
 - **Open**: the night check is for the young-bird weeks; big birds' nights rely on the stops. The skip between levels (Continue
   from a result to the next level's 06:00) has no night check; its deaths come in the morning summary. A death spike after Skip
   anyway stops again only when the rate has doubled.
+- **The check round (after the merge, on main)**: the checker's five findings, each reproduced first.
+  1. *The controller's notes follow the settings now* (heat-diag.js `headingNow` / `headingWords`): the rate the house moves
+     at with the settings as they are (sim.js's equation, the brooders at the thermostat's demand; the last step's
+     `heatTerms` still carry a setting changed a moment ago) and where it settles at the outside air now. The losing state
+     is read from where the house heads (under the row with the brooders at full), not from the house alone: the tunnel
+     fan off at 21:00 (house 30.6 °C) reads at once "House 30.6 °C and rising about 5 °C an hour toward 34 °C with the
+     settings now: warming back to the brooder sign's row" (amber; red with the thermostat named when it heads over the
+     row: thermostat 40 → toward 39 °C); it read "more heat goes out …, the night is colder than they can make up for"
+     for 40 farm minutes. Cooling back from over the row reads so. The ideal's notes are unchanged.
+  2. *The night check card fits 960 × 600*: a column with a body that scrolls only if it must and the two keys pinned
+     under it; compact rows, a 700 px card, the source line at the 12 px floor. The farmer's card: 534 px in a 568 px room,
+     no scroll, the keys at 520–554 px (were 632 px of content, keys at 595–629 px); the same at 1280 × 800. The card is
+     solid (`.night .night-case`: the caption no longer shows through `.card`'s 86 % panel).
+  3. *A raised line shows at once*: `watch.raise` makes a new status object and drops the live copy (`liveStatus` cached
+     one per status and comfort key: the sunset line waited until the felt comfort next moved).
+  4. *The words say what happened*: trouble found at the skip's last farm hour with the skip at its target reads "Next job
+     reached 00:00: …" (06:00), not "stopped at", and records no stop (`level.skipStopped` stays for a skip cut short).
+     The card's subtitle names the skip as it will run (`nc.skipWords`, `nc.skipTo`): "Next job skips to 00:00, day 1.
+     With these settings, the night ahead to 07:00:" (the rows still read to the next 07:00 at least, so a skip to 00:00
+     sees the 03:00 low).
+  5. *A second level start is clean*: the stale samples were `farm.comfort` kept by `farm.start` (a cold night's
+     coldShare), sampled hourly by the reset watch before the chicks came (a cold warning at placement in the ideal).
+     `farm.start` puts the comfort back to a new farm's (in place); the watch's sample reads no comfort hour without birds.
+  Tests: `test-night.mjs` check rounds 1, 3, 4, 5 (item 2's skip from 17:05 now reaches its 00:00); `req-night` (from
+  `night-steps.mjs`) the card's fit and subtitle, and the Skip anyway step checks the wording as it happened (its skip from
+  17:33 reaches 00:00).
+  Results (960 × 600, seed 1, no console or page errors): `npm test` 445 ok; `test-night.mjs` (full) all passed;
+  `req-night` 19 PASS; `req-watch` 13; `p2-level1` 58; `hotfix-steps` 21.
