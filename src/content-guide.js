@@ -8,6 +8,16 @@
 // for the Time setting now. fillGuide(text, { keys, settings }) fills them (ui-guide.js draws the result; the intro cards
 // of ui-intro.js use it too).
 import { KEY_ACTIONS, codeLabel } from './keys.js';
+import { SKILLS_UPDATE } from './config.js';
+
+const SKILLS_TEXT = ['Points come from what happens on your farm when you do a branch’s jobs in play.',
+  'Each level of a branch unlocks a tool or a view. {key:skills} opens the **skill tree**.'];
+const SKILLS_TEXT_LIVE = ['Points come from what happens on your farm when you do a branch’s jobs in play. {key:skills} opens the **skill tree**.',
+  'Each branch has three levels. Level 1 (**See more**) shows you more: a view or a reading where the job is done.',
+  'Level 2 (**Faster**) makes a job of the branch faster: fewer steps, less walking, one press where there were many. Its key shows the sign’s working beside it.',
+  'Level 3 (**The equipment does it**) hands a routine job to the farm’s equipment once you have finished a flock. The job stays on the **job card** as a quick look at the reading.',
+  'Now and then a piece of equipment stops. The **flock watch** has an **Equipment** row: it says what stopped and where to look, and the job is done by hand again until you fix it.',
+  'Each milestone counts once in your first flock and once more in a later one. **Settings → Automation** switches the equipment off for every branch or one at a time.'];
 
 export const GUIDE = {
   title: 'How to play',
@@ -51,8 +61,9 @@ export const GUIDE = {
         'Each level has a key target. When the target is missed, you play the level again from its start, or from the level before when that is where the trouble began.',
         'After your first full cycle you can raise harder flocks: the hot season, the rainy season, a bad batch of chicks or a water problem.'] },
     { id: 'skills', head: 'Skill tree',
-      text: ['Points come from what happens on your farm when you do a branch’s jobs in play.',
-        'Each level of a branch unlocks a tool or a view. {key:skills} opens the **skill tree**.'] },
+      // Skills update (SKILLS.md §6.4): while config SKILLS_UPDATE.live the section says what the three steps do (game words
+      // only, no farming fact); with live false it reads as in Phase 5
+      get text() { return SKILLS_UPDATE.live ? SKILLS_TEXT_LIVE : SKILLS_TEXT; } },
     { id: 'time', head: 'Time',
       text: ['The **time bar** holds pause ({key:pause}), 1× ({key:speed1}) and 4× ({key:speed4}).',
         '{time:signs}',

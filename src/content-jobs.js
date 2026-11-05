@@ -223,6 +223,30 @@ export const jobById = (id) => ALL_JOBS.find((j) => j.id === id) || null;
 /** The card's "where" line of any job (Phase 2's or the cycle's). */
 export const jobWhere = (id) => JOB_WHERE[id] || JOB_WHERE_CYCLE[id] || JOB_WHERE_COND[id] || '';
 
+// Skills update (SKILLS.md §6.2): the where line of a job a payoff moves (the place and the check, never the value; general
+// words: the figures stay on the signs). Keys as {key:id} tokens, filled when read (keyWordValues below).
+const ORDER_IDS = ['p-order-feed', 'w2-order', 'w45-order', 'f-order'];
+const PHONE_IDS = ['p-order-feed', 'w2-order', 'w45-order', 'f-order', 'f-book', 'p-report', 'p-hunched', 'c-book'];
+const WEIGH_IDS = ['d7-weigh', 'w2-weigh', 'w3-weigh', 'w45-weigh28', 'w45-weigh35', 'f-weigh'];
+const each = (ids, text) => Object.fromEntries(ids.map((i) => [i, text]));
+export const JOB_WHERE_PAYOFF = {
+  pocketPhone: each(PHONE_IDS, 'The phone in your pocket: {key:phone} from anywhere (Farm Planning 2).'),
+  phoneRecord: each(['r-record', 'prep-record'], 'The phone in your pocket: {key:phone}, then Sign today’s record (Farm Planning 3).'),
+  siloOrder: each(ORDER_IDS, 'The silo gauge outside, north of the house: Order to 3 days (Feed 2); or the phone at the office desk.'),
+  waterAllLines: { 'r-drinkers': 'Water supply, south-west corner inside: Read the sight tubes (Water 2); then a cup test only at the regulator of a line that reads off.' },
+  frameWeigh: each(WEIGH_IDS, 'Bird scale: take the scale and frame, set the frame down in five parts of the house and Weigh the frame at each (Growth 2); the marker shows a part not weighed yet.'),
+  tallyBucket: each(['r-dead-am', 'r-dead-pm'], 'Dead birds on the floor: {key:use} picks up every one near you into the tally bucket, counted as they go in (Biosecurity 2); then empty it at the bin outside the south wall.'),
+  passCheck: { 'w2-check': 'Among the birds: walk slowly; each bird you see walk counts (Biosecurity 3), and {key:use} picks one up to watch it in the hand. Ten birds from three parts of the floor.' },
+};
+/** The order the where line takes a payoff in (the phone before the silo gauge: anywhere is nearest). */
+const WHERE_ORDER = ['pocketPhone', 'phoneRecord', 'waterAllLines', 'passCheck', 'frameWeigh', 'tallyBucket', 'siloOrder'];
+/** The card's where line as the payoffs give it now: has(key) -> the payoff holds for this job (the instance's variant or
+ *  the perks); the job's own line otherwise. */
+export function jobWhereNow(id, has = () => false) {
+  for (const k of WHERE_ORDER) { const t = JOB_WHERE_PAYOFF[k][id]; if (t && has(k)) return t; }
+  return jobWhere(id);
+}
+
 // One line of "where" for the open job on the card: the place and the check, never the value.
 export const JOB_WHERE = {
   'prep-gate': 'Walk through the foot dip beside the gate sign.',
@@ -266,4 +290,4 @@ export const JOB_WHERE = {
 
 // fix round: a title or a place line that names a farm key reads it as bound now (Settings → Keys)
 for (const j of ALL_JOBS) keyWordProps(j, ['title']);
-for (const t of [JOB_WHERE, JOB_WHERE_CYCLE, JOB_WHERE_COND]) keyWordValues(t);
+for (const t of [JOB_WHERE, JOB_WHERE_CYCLE, JOB_WHERE_COND, ...Object.values(JOB_WHERE_PAYOFF)]) keyWordValues(t);

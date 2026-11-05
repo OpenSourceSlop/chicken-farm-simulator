@@ -6,7 +6,7 @@
 //   const tab = createKeysTab({ ctx, onChange })   -> { el, refresh(), cancel(), capturing }
 //   frozen DOM hooks (PHASE5.md §8.10): [data-key-action="<id>"] on each row, [data-key-change] on its Change button
 import { h, button } from './ui-dom.js';
-import { KEY_ACTIONS, REBIND_WORDS, codeLabel } from './keys.js';
+import { KEY_ACTIONS, REBIND_WORDS, codeLabel, actionLive, actionWhat } from './keys.js';
 
 const GROUPS = [
   ['move', 'Walking and the view'],
@@ -45,7 +45,7 @@ export function createKeysTab({ ctx, onChange = () => {} }) {
     if (was) drawRow(was);
     if (words != null) status.textContent = words;
   }
-  const whatOf = (id) => KEY_ACTIONS.find((a) => a.id === id)?.what || id;
+  const whatOf = (id) => actionWhat(KEY_ACTIONS.find((a) => a.id === id)) || id;
 
   function change(id) {
     if (waiting === id) { cancel('Not changed.'); rows.get(id)?.btn?.focus(); return; }
@@ -79,13 +79,13 @@ export function createKeysTab({ ctx, onChange = () => {} }) {
 
   const groups = GROUPS.map(([g, title]) => {
     const list = h('div', { class: 'set-keys-group', role: 'group', 'aria-label': title }, h('h4', { class: 'label set-keys-head' }, title));
-    for (const a of KEY_ACTIONS.filter((x) => x.group === g)) {
+    for (const a of KEY_ACTIONS.filter((x) => x.group === g && actionLive(x))) {
       const keysEl = h('span', { class: 'set-keys-keys' });
       const fixed = a.fixed || a.follows;
-      const btn = fixed ? null : button({ class: 'btn btn--quiet set-keys-change', 'data-key-change': '', 'aria-label': `Change the key for: ${a.what}` }, 'Change');
+      const btn = fixed ? null : button({ class: 'btn btn--quiet set-keys-change', 'data-key-change': '', 'aria-label': `Change the key for: ${actionWhat(a)}` }, 'Change');
       btn?.addEventListener('click', () => change(a.id));
       const row = h('div', { class: 'set-keys-row', 'data-key-action': a.id },
-        h('span', { class: 'set-keys-what' }, a.what), keysEl,
+        h('span', { class: 'set-keys-what' }, actionWhat(a)), keysEl,
         btn || h('span', { class: 'set-keys-fixed', title: REBIND_WORDS.fixed }, FIXED_NOTE[a.id] || 'Fixed'));
       rows.set(a.id, { row, keysEl, btn });
       list.append(row);

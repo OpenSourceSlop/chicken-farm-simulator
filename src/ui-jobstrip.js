@@ -111,12 +111,12 @@ export function createJobStrip(L, panelId, { section = null, ctx = () => ({}), l
   const clear = () => { el.hidden = true; el.innerHTML = ''; };
   // the steps hotfix: where the farmer stands (the next place's way) and the clock's pause
   const from = () => { const p = L.player?.position; return p ? { x: p.x, z: p.z, inside: !!L.player.isInside } : null; };
-  const base = () => ({ env: L.env, farm: L.farm, records: L.records, skills: L.skills, props: L.props, flock: L.flock, engine: L.engine(), minmax: L.minmax, weighings: L.weighings,
+  const base = () => ({ env: L.env, farm: L.farm, records: L.records, skills: L.skills, perks: L.perks ?? null, props: L.props, flock: L.flock, engine: L.engine(), minmax: L.minmax, weighings: L.weighings,
     from: from(), paused: !!L.clockPaused?.(), ...ctx() });
   function update() {
     const engine = L.engine();
     if (!engine || L.farm?.mode !== 'level') { if (!el.hidden || last) clear(); last = ''; return; }
-    const list = stripsAt(engine, panelId, section, STRIPS_CYCLE);
+    const list = stripsAt(engine, panelId, section, STRIPS_CYCLE, L.perks ?? null);
     for (const s of list) if (s.here) sticky.set(s.inst.key, s);
     const here = [...sticky.values()].filter((s) => s.inst.status === 'open' || s.inst.status === 'done');
     const others = section === 'top' || section == null ? list.filter((s) => !s.here && !sticky.has(s.inst.key)) : [];

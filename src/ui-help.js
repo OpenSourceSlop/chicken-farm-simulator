@@ -4,6 +4,10 @@
 import { HELP_KEYS, promptVerb } from './content.js';
 import { h, button, store, uniqueId, setText } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
+import { SKILLS_UPDATE } from './config.js';
+// Skills update (SKILLS.md §3.0, §3.11): while live the views name their branch level and the pocket phone has its row
+const LIVE_SHORT = { floorView: 'Floor temperature view (Brooding 1)', comfortView: 'Comfort view of the flock (Comfort 1)', moistureView: 'Litter moisture view (Moisture 1)', phone: 'The pocket phone (Farm Planning 2)' };
+const shortWhat = (r) => (SKILLS_UPDATE.live && LIVE_SHORT[r.id]) || SHORT[r.id] || r.what;
 
 const HELP_SEEN_KEY = 'chicken-farm.help-dismissed';
 
@@ -46,7 +50,7 @@ export function legendRows(keys, mode = 'level') {
       continue;
     }
     done.add(r.id);
-    out.push({ ids: [r.id], keys: r.id === 'useDead' ? ['Shift', main('use')] : L(r.id).length ? L(r.id) : r.keys, what: SHORT[r.id] || r.what });
+    out.push({ ids: [r.id], keys: r.id === 'useDead' ? ['Shift', main('use')] : L(r.id).length ? L(r.id) : r.keys, what: shortWhat(r) });
   }
   return out;
 }

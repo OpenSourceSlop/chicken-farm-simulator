@@ -20,8 +20,12 @@ import { int, one, hhmm } from './ui-format.js';
 import { ventNeed, ventTableRows, timerAirM3h, knownFlock, nippleCmToday, rimCmNow, nippleInBand, rimInBand, flowToday, brooderRowC, luxOfDimmer,
   fansWorking, VENT_BAND, NIPPLE_DAY0_CM, PANS_ON_LITTER_CM, HEIGHT_BAND_CM, FLOW_BAND, CHICK_LUX, inletAirM3h, flapsWords } from './job-figures.js';
 // the steps hotfix: the next place of a job that spans several places, and the clock's pause
-import { jobPlaces, nextPlace, panelPlace, flowTodo } from './job-next.js';
-import { HELD_MIN } from './job-engine.js';
+import { jobPlaces, nextPlace, panelPlace, flowTodo, tubeTodo, placeKey } from './job-next.js';
+import { HELD_MIN, lineReading } from './job-engine.js';
+// Skills update (SKILLS.md §3.0, §6.2): the payoffs' rows at the job's places (easier now, handled, the level 1 view's line)
+import { SKILLS_UPDATE, AUTO_SYSTEMS } from './config.js';
+import { easierNowRows, handledLines, viewLine, viewsOfJob } from './job-words.js';
+import { handedParts, variantHas } from './job-variants.js';
 import { fillKeys } from './key-words.js'; // fix round: {key:id} tokens in strip lines, as the keys are bound now
 // Phase 4: the condition jobs' strips (they import the row helpers from here; nothing of theirs runs at load)
 import { STRIPS_COND } from './job-strips-cond.js';
@@ -196,6 +200,7 @@ export const STRIPS = {
   'r-drinkers': { panels: { drinker: null }, title: 'Check drinker flow and height',
     rows(c, inst) {
       const want = flowToday(c.env), nip = nippleCmToday(c.env);
+      if (inst.def.done?.of?.some?.((r) => r.tubes)) return tubeRows(c, inst, want, nip);
       return [line('A flow test on all four lines this round, each at its own regulator at the west end of the line (line 1 by the north wall, line 4 by the south wall).'),
         cmp('Flow target today', `drinker plate: age + 20 = ${want} ml/min (±${FLOW_BAND}: ${want - FLOW_BAND}–${want + FLOW_BAND})`, `nipples: plate about ${cm(nip)} today (±${HEIGHT_BAND_CM})`),
         ...c.farm.water.lines.map((l, i) => {
@@ -223,6 +228,43 @@ export const STRIPS = {
       step('Bring the barrow back here: Put the barrow back', (c.farm.litter.cover ?? 0) >= 0.95 && c.props?.carrying !== 'barrow'),
       note('With the barrow the clock runs slower; the barrow spreads a strip about 2.4 m wide.')] },
 };
+
+/** r-drinkers with the sight tubes (Water 2): each line's latest reading, tube or cup, and what it still needs. */
+function tubeRows(c, inst, want, nip) {
+  const from = inst.opensAt ?? -Infinity;
+  return [line('Read the sight tubes at the water supply: a line whose column stands at the drinker plate’s mark counts as tested. A cup test only on a line that reads off, at its own regulator.'),
+    cmp('Flow target today', `drinker plate: age + 20 = ${want} ml/min (±${FLOW_BAND}: ${want - FLOW_BAND}–${want + FLOW_BAND}); the tube’s mark for it`, `nipples: plate about ${cm(nip)} today (±${HEIGHT_BAND_CM})`),
+    ...c.farm.water.lines.map((l, i) => {
+      const rd = lineReading(l, from, c.env, true), todo = tubeTodo(l, inst, c.env);
+      const what = !rd ? 'not read this round' : rd.by === 'tube' ? `sight tube ${one(rd.columnCm)} cm${rd.inBand ? ', at the mark' : ', off the mark'}` : `cup test ${one(rd.mlMin)} ml/min`;
+      return step(`Line ${i + 1}${i === c.line ? ' (this line)' : ''}: ${what} · nipples ${cm(l.heightCm)}${rd && todo ? `: ${todo}` : ''}`, !todo);
+    }),
+    note('Blocked nipples do not show on a tube: the water meter and the birds show them.')];
+}
+/** The panels a payoff adds to a job's strip (the glance places, the sight tubes, the silo gauge, the pocket phone). */
+export function payoffPanels(inst, perks) {
+  if (!SKILLS_UPDATE.live || !inst) return [];
+  const out = new Set(), c = { perks };
+  for (const { system } of handedParts(inst.def)) for (const p of AUTO_SYSTEMS[system]?.glanceAt || []) out.add(p.startsWith('drinker-') ? 'drinker' : p);
+  if (inst.id === 'r-drinkers' && variantHas(inst.def, 'waterAllLines')) out.add('water-supply');
+  if (['p-order-feed', 'w2-order', 'w45-order', 'f-order'].includes(inst.id) && placeKey(inst, c, 'siloOrder')) out.add('silo');
+  if (['p-order-feed', 'w2-order', 'w45-order', 'f-order', 'f-book', 'p-report', 'p-blood', 'p-hunched', 'c-book', 'p-weak-batch'].includes(inst.id) && placeKey(inst, c, 'pocketPhone')) out.add('pocket-phone');
+  if ((inst.id === 'r-record' || inst.id === 'prep-record') && placeKey(inst, c, 'phoneRecord')) out.add('pocket-phone');
+  return [...out];
+}
+/** The payoffs' rows at the top of a job's strip (live only): what holds now, the handed-over parts, the level 1 view. */
+export function skillRows(c, inst) {
+  if (!SKILLS_UPDATE.live || !inst) return [];
+  const out = [];
+  let ez = [];
+  try { ez = c.perks?.easier?.(inst.id) || []; } catch { ez = []; }
+  for (const t of easierNowRows(ez)) out.push(line(t));
+  let hl = [];
+  try { hl = handledLines(inst, c.farm); } catch { hl = []; }
+  for (const x of hl) out.push(x.fault ? note(x.text) : line(x.text));
+  for (const v of viewsOfJob(inst.id)) { const t = viewLine(v, c.skills); if (t) out.push(note(t)); }
+  return out;
+}
 
 // ---------------- rows several strips share ----------------
 function meterRow(c, st) {
@@ -286,6 +328,7 @@ export function thenRows(c, inst, panelId) {
   if (!all || !all.length) return [];
   const np = nextPlace(inst, c, { from: c.from, skip });
   if (!np) return [];
+  if (np.phone) return [{ ...step(`Next: ${np.text}`), next: true }];   // the pocket phone: anywhere
   const here = !!skip && all.some((p) => p.id === skip);
   return [{ ...step(`${here ? 'Then walk to' : 'Next: walk to'} ${np.name}, ${np.way}: ${np.todo}.`), next: true }];
 }
@@ -298,7 +341,7 @@ export function pausedRows(c, inst, rows) {
 /** Every row a strip shows: its own rows (or the rule's parts), the next place, the pause line. */
 export function stripRows(S, c, inst, panelId) {
   const own = S ? S.rows({ ...c, inst }, inst) : partRows(c, inst);
-  return [...own, ...thenRows(c, inst, panelId), ...pausedRows(c, inst, own), ...heldRows(inst)];
+  return [...skillRows(c, inst), ...own, ...thenRows(c, inst, panelId), ...pausedRows(c, inst, own), ...heldRows(inst)];
 }
 /** PHASE4.md §15.2: a job held open past its window while the farmer does it says so (its close and the grace). */
 export function heldRows(inst) {
@@ -308,14 +351,17 @@ export function heldRows(inst) {
 }
 
 /** Every strip to show at a panel: the open jobs whose strip (or spot) names it, the current job first. */
-export function stripsAt(engine, panelId, section, extra = {}) {
+export function stripsAt(engine, panelId, section, extra = {}, perks = null) {
   if (!engine) return [];
   const want = panelId.startsWith('drinker-') ? 'drinker' : panelId;
   const cur = engine.current?.(), out = [];
   const open = engine.open?.() || [];
   for (const inst of [...(cur ? [cur] : []), ...open.filter((i) => i !== cur)]) {
     const S = STRIPS[inst.id] || extra[inst.id] || STRIPS_COND[inst.id];
-    const panels = S ? S.panels : { [spotPanel(inst.def.spot)]: 'top' };
+    let panels = S ? S.panels : { [spotPanel(inst.def.spot)]: 'top' };
+    // Skills update: the payoffs' places show the job's strip too (the glance, the sight tubes, the silo gauge, the phone)
+    const more = payoffPanels(inst, perks);
+    if (more.length) panels = { ...panels, ...Object.fromEntries(more.filter((p) => !(p in panels)).map((p) => [p, null])) };
     if (!(want in panels)) continue;
     const sec = panels[want];
     out.push({ inst, strip: S || null, section: sec ?? null, here: section == null || sec == null || sec === section });

@@ -12,7 +12,14 @@ import { CLEAN, DRINKER_LINES_Z, FARM, FLOOR_GRID, HEATERS, HEATER_HEIGHT, LEVEL
 import { BOARDS } from './content-signs.js';
 import { boardsForDay } from './content-signs-cycle.js';
 import { plateCondition } from './ui-boards.js'; // Phase 4: the run's condition for the merged boards
-import { jobWhere } from './content-jobs.js';
+import { jobWhereNow } from './content-jobs.js';
+// Skills update (SKILLS.md §6.2): the would-be-easier line, the handled lines (the fault's manual part first), the payoffs'
+// where lines and places (the phone: no marker), the Feed 2 silo line at the top of the card
+import { easierLine, handledLines } from './job-words.js';
+import { placeKey } from './job-next.js';
+import { fillKeys } from './key-words.js';
+import { injectStyle } from './ui-dom.js';
+import { SKILLS_UPDATE } from './config.js';
 import { FAN_Z } from './house-fans.js';
 import { EV } from './events.js';
 import { h, button, setText, uniqueId } from './ui-dom.js';
@@ -159,7 +166,15 @@ const BAR_TESTS = ['litter-covered', 'lines-flushed', 'pans-flooded', 'all-place
 const cardOrder = (eng) => { const g = eng.groups ? eng.groups() : null; return g ? [...g.pinned, ...g.problems, ...g.preTruck, ...g.rest] : (eng.open?.() || []); };
 const hasBar = (inst) => { const t = inst.def.done.type; return t === 'each' || t === 'count' || t === 'coverage' || t === 'all' || t === 'any' || (t === 'state' && BAR_TESTS.includes(inst.def.done.test)); };
 
+const SKILL_CSS = `
+.ljobs .job-easier { margin: 1px 0 2px; font-size: 11.5px; line-height: 1.3; color: var(--ink-faint); }
+.ljobs .job-handled { margin: 2px 0 0; font-size: 12px; line-height: 1.32; color: var(--ink-dim); }
+.ljobs .job-handled.is-fault { color: var(--ink); font-weight: 600; }
+.ljobs .ljobs-note { margin: 0 0 4px; padding: 3px 8px; border-radius: 6px; background: var(--panel-raised); font-size: 12px; line-height: 1.3; color: var(--ink); }
+`;
+
 export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook, onSkills, nextLabel }) {
+  injectStyle('ljobs-skills-style', SKILL_CSS);
   const titleId = uniqueId('ljobs-title');
   const head = h('h2', { class: 'label', id: titleId });
   const count = h('span', { class: 'jobs-count' });
@@ -186,9 +201,11 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
   nextBtn.addEventListener('click', onNext);
   nbBtn.addEventListener('click', onNotebook);
   skBtn.addEventListener('click', () => { dot.hidden = true; onSkills(); });
+  // Skills update: one line at the top of the card (the Feed 2 silo warning; ui.js sets it)
+  const topNote = h('p', { class: 'ljobs-note', hidden: true, role: 'status' });
   const card = h('section', { class: 'card jobs ljobs', 'aria-labelledby': titleId },
     h('header', { class: 'jobs-head' }, h('span', { class: 'jobs-icon', html: ICONS.clipboard, 'aria-hidden': 'true' }), head, count),
-    listWrap, h('footer', { class: 'ljobs-foot' }, nextBtn, nbBtn, skBtn), live);
+    topNote, listWrap, h('footer', { class: 'ljobs-foot' }, nextBtn, nbBtn, skBtn), live);
   parent.appendChild(card);
 
   const marker = createMarker(ctx, root, { name: 'job-marker', avoid });
@@ -235,11 +252,14 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     }
     return best;
   }
-  const cardCtx = () => ({ env: ctx.env, farm: ctx.farm, props: ctx.props, flock: ctx.flock, engine: L.engine() });
+  const cardCtx = () => ({ env: ctx.env, farm: ctx.farm, props: ctx.props, flock: ctx.flock, engine: L.engine(), perks: ctx.perks ?? null });
+  // Skills update: Show me (the flock watch's fix): the marker points to its place for AUTO.showMeH farm hours
+  let showMe = null;   // { spot, until }
   const here = (p) => ({ x: p.x, z: p.z, inside: !!ctx.player?.isInside });
   function nearestOf(list, p) { let b = null, bd = Infinity; for (const s of list) { const d = Math.hypot(s.x - p.x, s.z - p.z); if (d < bd) { bd = d; b = s; } } return b; }
   function spotFor(inst, p, own = false) {
     if (factsTarget && !own) return place(BOARD_SPOT[factsTarget]);
+    if (showMe && !own) { if (ctx.env.day < showMe.until) { const s = keySpot(showMe.spot); if (s) return place(s); } else showMe = null; }
     const d = inst.def, st = inst.st, carrying = ctx.props?.carrying;
     const heater = () => ({ x: nearestHeater(p).x, z: nearestHeater(p).z, y: HEATER_HEIGHT + 1.0, gz: 0 });
     switch (d.id) {
@@ -251,6 +271,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     // the steps hotfix: a job that spans several places points to its nearest unfinished place (the next regulator,
     // the silo after the feeder box, a part of the floor not sampled yet, the bin with the bucket in hand)
     const np = nextPlace(inst, cardCtx(), { from: here(p) });
+    if (np?.phone) return null;   // the pocket phone: anywhere, no marker
     if (np) return np.id.startsWith('floor:') ? ground(np.at, 1.6) : place(np.at);
     switch (d.id) {
       case 'd7-weigh': if (carrying === 'frame') return heater(); break;
@@ -278,6 +299,24 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
   }
 
   let sig = '', current = null, items = new Map(), soonEls = new Map();
+  /** Skills update: what the payoffs say on the current job's card lines (live false: the job's own where line only). */
+  function skillLines(inst) {
+    const c = cardCtx(), has = (k) => placeKey(inst, c, k);
+    const where = SKILLS_UPDATE.live ? jobWhereNow(inst.id, has) : jobWhereNow(inst.id);
+    if (!SKILLS_UPDATE.live) return { where, easier: '', handled: [] };
+    let easier = '';
+    try { easier = easierLine(ctx.perks?.easier?.(inst.id) || []); } catch { easier = ''; }
+    let handled = [];
+    try { handled = handledLines(inst, ctx.farm); } catch { handled = []; }
+    return { where, easier, handled };
+  }
+  /** The card draws again when a payoff comes or goes, or a fault opens or closes. */
+  function skillSig() {
+    if (!SKILLS_UPDATE.live) return '';
+    let f = '';
+    try { f = (ctx.farm?.autoCtl?.status?.()?.faults || []).map((x) => `${x.id}:${x.phase}`).join(','); } catch { f = ''; }
+    return `${ctx.perks?.version ?? 0}/${f}/${ctx.skills?.branches ? ctx.skills.branches().map((b) => b.points).join('.') : ''}`;
+  }
   function itemEl(inst, cls, extra) {
     const mark = h('span', { class: 'job-mark', 'aria-hidden': 'true' });
     const title = h('p', { class: 'job-title' }, inst.def.title);
@@ -303,7 +342,7 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     const waiting = all.filter((i) => i.status === 'waiting' && i.day === day && i.opensAt != null && (!i.def.after)).sort((a, b) => a.opensAt - b.opensAt);
     const missed = today.filter((i) => i.status === 'missed' && i.day === day);
     const done = today.filter((i) => i.status === 'done' && i.day === day);
-    const key = [day, cur?.key, factsTarget, ...[...g.pinned, ...g.problems, ...g.preTruck, ...g.rest, ...waiting, ...missed].map((i) => `${i.key}:${i.status}`), done.length].join('|');
+    const key = [day, cur?.key, factsTarget, ...[...g.pinned, ...g.problems, ...g.preTruck, ...g.rest, ...waiting, ...missed].map((i) => `${i.key}:${i.status}`), done.length, skillSig()].join('|');
     setText(head, roundLabel(env, eng.anchors, ctx.farm));
     setText(count, `${done.length} done`);
     if (key === sig) return;
@@ -316,14 +355,18 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
       const isCur = cur && inst.key === cur.key;
       let extra = null;
       if (isCur) {
-        const where = h('p', { class: 'job-where' }, h('span', { html: ICONS.pin, 'aria-hidden': 'true' }), h('span', null, jobWhere(inst.id)));
+        // Skills update: the would-be-easier line (one, small), one handled line per part (a fault's manual part first)
+        const sk = skillLines(inst);
+        const easier = sk.easier ? h('p', { class: 'job-easier' }, fillKeys(sk.easier)) : null;
+        const handled = sk.handled.map((x) => h('p', { class: `job-handled${x.fault ? ' is-fault' : ''}` }, fillKeys(x.text)));
+        const where = h('p', { class: 'job-where' }, h('span', { html: ICONS.pin, 'aria-hidden': 'true' }), h('span', null, sk.where));
         const next = h('p', { class: 'job-next', hidden: true });
         const links = inst.def.signs.length ? h('p', { class: 'job-facts' }, h('span', { class: 'job-facts-k' }, 'Facts:'),
           inst.def.signs.map((id) => { const b = button({ class: `fact-link${factsTarget === id ? ' is-on' : ''}` }, boardTitle(id, day)); b.addEventListener('click', (e) => { e.stopPropagation(); factsTarget = factsTarget === id ? null : id; sig = ''; }); return b; })) : null;
         const bar = h('span', { class: 'job-bar' });
         const prog = hasBar(inst) ? h('div', { class: 'job-progress' }, bar) : null;
         const ptext = hasBar(inst) ? h('p', { class: 'job-ptext' }) : null;
-        extra = [where, next, links, prog, ptext];
+        extra = [easier, ...handled, where, next, links, prog, ptext];
         items.set(inst.key, { bar, ptext, inst, next });
       }
       const it = itemEl(inst, `${cls}${isCur ? ' is-current' : ''}${inst.def.pin ? ' is-pin' : ''}`, extra);
@@ -440,7 +483,12 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     atJob: (key) => atKeys.has(key),
     atAnyJob: () => atKeys.size > 0,
     get factsTarget() { return factsTarget; },
-    reset() { factsTarget = null; sig = ''; dot.hidden = true; },
+    /** Skills update: one line at the top of the card (the Feed 2 silo warning), or null to clear it. */
+    setTopLine(text) { const t = text ? fillKeys(text) : ''; if (topNote.textContent !== t) setText(topNote, t); topNote.hidden = !t; },
+    /** Skills update (SKILLS.md §3.9): Show me — the marker points to a fix's place (a SPOTS key) until env.day `until`. */
+    pointTo(spot, until) { showMe = spot ? { spot, until } : null; },
+    get showMe() { return showMe ? { ...showMe } : null; },
+    reset() { factsTarget = null; sig = ''; dot.hidden = true; showMe = null; },
     refresh() { sig = ''; render(); },
     update(dt, panelOpen) {
       acc -= dt;

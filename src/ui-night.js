@@ -30,6 +30,7 @@ const CSS = `
 .nc-where { display: block; color: var(--ink-dim); }
 .nc-where b { color: var(--accent); font-weight: 600; }
 .nc-src { margin: 8px 0 0; color: var(--ink-faint); font-size: 12px; line-height: 1.35; }
+.nc-fault .nc-fault-fix { margin: 3px 0 0; min-height: 0; height: 24px; padding: 0 10px; font-size: 12px; }
 .nc-keys { flex: none; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding: 10px 18px 12px; border-top: 1px solid var(--panel-edge); }
 `;
 const ROWS = [['temp', 'Temperature'], ['air', 'Ventilation'], ['brooders', 'Brooders']];
@@ -76,7 +77,18 @@ export function registerNightPanel({ register, closePanel }) {
           R.dot.className = `fw-dot is-${r?.state || 'green'}`; R.dot.setAttribute('aria-label', WORD[r?.state] || ''); R.dot.title = WORD[r?.state] || '';
           setText(R.v, r?.text || '');
         }
-        off.replaceChildren(...(nc.problems || []).map((p) => h('li', null, `${cap(p.why)}.`, h('span', { class: 'nc-where' }, h('b', null, 'Where: '), `${p.check}.`))));
+        // Skills update (SKILLS.md §5.3): every open fault of the equipment is a row too, with its own Fix it (its panel and
+        // tab: the controller, the fan panel, a line's regulator, the phone); the model's rows { text, fix } as nc.faults or
+        // as problems marked fault
+        const faultRows = [...(nc.faults || []), ...(nc.problems || []).filter((p) => p.fault || p.kind === 'fault')];
+        const plain = (nc.problems || []).filter((p) => !(p.fault || p.kind === 'fault'));
+        off.replaceChildren(...plain.map((p) => h('li', null, `${cap(p.why)}.`, h('span', { class: 'nc-where' }, h('b', null, 'Where: '), `${p.check}.`))),
+          ...faultRows.map((p) => {
+            const t = p.text || `${cap(p.why || '')}.`;
+            const go = p.fix?.panel || p.fix?.spot ? button({ class: 'btn btn--quiet nc-fault-fix', 'data-night': 'fault-fix' }, 'Fix it') : null;
+            go?.addEventListener('click', () => { const f = handlers.onFix; closePanel(); f?.(p.fix); });
+            return h('li', { class: 'nc-fault' }, t, p.check ? h('span', { class: 'nc-where' }, h('b', null, 'Where: '), `${p.check}.`) : null, go);
+          }));
         fix.hidden = !nc.fix;
         setText(fix, nc.fix ? `Fix it at the controller (${TAB[nc.fix.tab] || 'Temperature tab'})` : 'Fix it at the controller');
       },

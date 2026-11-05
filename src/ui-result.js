@@ -15,6 +15,19 @@ import { int, one, two, num, hhmm } from './ui-format.js';
 import { weekTable } from './ui-records.js';
 import { harvestPage, cleanPage, replyLines } from './ui-letters.js';
 import { shortIn } from './ui-run.js';
+import { SKILLS_UPDATE } from './config.js';
+import { unlockCaption, groupUnlocks } from './job-words.js';
+import { fillKeys } from './key-words.js';
+
+/** Skills update: the payoffs and views this level unlocked (the caption's words, one line a level-up) and, on a failed level,
+ *  the equipment's faults met in it ("Fan stages off from day 25 08:23 to 10:23"). Nothing while live is false. */
+function skillsLines(res) {
+  if (!SKILLS_UPDATE.live || !res) return [];
+  const out = [], groups = groupUnlocks(res.unlocks || []);
+  if (groups.length) out.push(h('h3', { class: 'result-h' }, 'New on your skill tree'), h('ul', { class: 'result-points result-unlocks' }, groups.map((g) => h('li', null, fillKeys(unlockCaption(g))))));
+  if (!res.pass && res.faults?.length) out.push(h('p', { class: 'result-carried result-faults' }, h('b', null, 'The equipment in this level: '), res.faults.join(' · ')));
+  return out;
+}
 /** The hour a result ended at; 24:00 for a level that ended at the close of its day (a bad batch's claim, PHASE5.md §6.8.2). */
 const endHour = (res) => ((res.hour ?? 0) >= 24 ? '24:00' : hhmm(res.hour ?? 0));
 
@@ -197,6 +210,8 @@ export function buildResultPanel(L) {
       res.levelId !== 'plan' ? [h('h3', { class: 'result-h' }, isL1 ? 'Your week' : 'Your days'), isL1 ? yourWeek(L, res) : yourDays(L, def)] : null,
       h('h3', { class: 'result-h' }, 'Points earned'),
       pts.length ? h('ul', { class: 'result-points' }, pts.map((p) => h('li', null, h('b', null, `${branchName(p.branch)} +${p.points}`), ` · ${p.text}${p.detail ? ` · ${p.detail}` : ''}`))) : h('p', { class: 'result-note' }, 'No points this level.'),
+      // Skills update (SKILLS.md §6.3, §5.4): the level's new payoffs in the unlock caption's words; a failed level's faults
+      ...skillsLines(res),
       res.levelId !== 'plan' ? [h('h3', { class: 'result-h' }, isL1 ? 'The week in the book' : 'The days in the book'),
         weekTable(L, { dark: true, from: isL1 ? LEVEL1.startDay : def.startDay, to: isL1 ? LEVEL1.endDay : Math.min(def.endDay, 46) })] : null,
       h('p', { class: 'result-note' }, `Result at ${endHour(res)} on day ${fmt0(res.day ?? def.endDay)}.`)));
