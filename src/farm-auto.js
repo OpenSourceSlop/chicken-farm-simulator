@@ -111,7 +111,8 @@ export function autoAct(farm, env, id, a = {}) {
 const nextLightChange = (env) => { for (const d of AUTO.lightDays) { const t = d + AUTO.morningHour * H; if (t > env.day + 1e-9) return t; } return Infinity; };
 /** The farmer's own setting (SKILLS.md §4.2): his hand holds the system's part for a while; the fault module sees fixes. */
 function hand(farm, env, id, a = {}, viaBus = false) {
-  if (farm.mode !== 'level') return;
+  // the ideal's own play while quiet (a standard start, goto(auto)) is not the farmer's hand: no hold, no fix
+  if (farm.mode !== 'level' || farm.auto.quietN > 0) return;
   const A = farm.auto, h = A.hold, on = A.on, at6 = nextAt(env.day, AUTO.handHold.winch.untilHour);
   const line = a.line != null ? Math.round(a.line) : null;
   switch (id) {
