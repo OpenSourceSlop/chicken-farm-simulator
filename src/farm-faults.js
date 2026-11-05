@@ -73,7 +73,7 @@ export function faultWords(f, env, farm) {
     case 'winch-stall': {
       const L = lineN(f), cm = Math.round(farm.water.lines[L]?.heightCm ?? f.args.cm ?? 0), plate = Math.round(nippleHeightCmAt(Math.max(0, env.dayNumber)));
       return { what: `Line ${L + 1} winch motor stalled at ${Math.round(f.args.cm ?? cm)} cm (plate ${plate} cm) at ${hhmm(t0)}; the other lines go on rising.`, cause: 'the winch motor tripped its overload', place: `the drinker line ${L + 1} regulator`,
-        fix: 'winch it by hand to the drinker plate’s height and reset the motor', sign: 'drinker', spot: `drinkers.${L}`, line: L, night: `Line ${L + 1}’s winch motor is stalled at ${cm} cm; the drinker plate says ${plate} cm tonight and ${Math.round(nippleHeightCmAt(Math.max(0, env.dayNumber + 1)))} cm tomorrow.` };
+        fix: 'winch it by hand to the drinker plate’s height and reset the motor', sign: 'drinker', spot: `drinkers.${L}`, panel: `drinker-${L}`, tab: null, line: L, night: `Line ${L + 1}’s winch motor is stalled at ${cm} cm; the drinker plate says ${plate} cm tonight and ${Math.round(nippleHeightCmAt(Math.max(0, env.dayNumber + 1)))} cm tomorrow.` };
     }
     case 'timer-reset': {
       const t = timerFor(env, farm, 1), s = F.firstSetting || { fans: 1, onSec: 8, cycleSec: 300 };
@@ -92,7 +92,7 @@ export function faultWords(f, env, farm) {
       const fd = feedDays(farm, env), at = f.args.at ?? t0, late = env.hour >= 16;
       const due = late ? 'comes the day after tomorrow at 09:00' : 'comes tomorrow at 09:00';
       return { what: `The feed order of ${hhmm(at)} is not confirmed by the mill: ${fd.days != null ? one(fd.days) : '?'} days of feed in the silos.`, cause: 'the controller’s order never reached the mill: no truck is coming',
-        place: 'the silo gauge, or the phone', fix: 'order by hand: the office phone, the pocket phone or the silo gauge', sign: 'silo', spot: 'silo', panel: 'pocket-phone', tab: null,
+        place: 'the silo gauge, or the phone', fix: 'order by hand: the office phone, the pocket phone or the silo gauge', sign: 'silo', spot: 'silo', panel: 'pocket-phone', tab: null, orPanel: 'office',
         night: `The feed order of ${hhmm(at)} is not confirmed: ${fd.days != null ? one(fd.days) : '?'} days of feed in the silos. Ordered now${late ? ' (after 16:00)' : ''} the feed ${due}.` };
     }
     case 'scale-fouled': {

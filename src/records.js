@@ -171,6 +171,10 @@ export function createRecords({ farm, env, events } = {}) {
     row.condition = farm ? farm.condition ?? null : null;
     const cn = condNotes(day, ctx());
     if (cn.length) row.notes.push(...cn);
+    // Skills update (SKILLS.md §8): the day's equipment faults, and the skill lines the unlock captions wrote
+    const fn = faultNotes(day, farm);
+    if (fn.length) row.notes.push(...fn);
+    for (const n of notebook) if (n.day === day && n.kind === 'skill' && typeof n.value === 'string') row.notes.push(n.value);
     return row;
   };
 
@@ -202,7 +206,8 @@ export function createRecords({ farm, env, events } = {}) {
       let value = p.result === undefined || p.result === null || typeof p.result !== 'object' ? strip(p) : p.result;
       if (kind === 'fans' || kind === 'controller') value = { ...strip(p), ...(p.result && typeof p.result === 'object' ? p.result : {}) };
       if (kind === 'water.flow') value = { line: p.line, ...p.result };
-      if (kind === 'dead') value = p.byLook ? { n: p.n, byLook: { ...p.byLook } } : { n: p.n };
+      // Skills update (SKILLS.md §3.10): counted into the tally bucket (at: 'pickup') or at the bin; each bird once
+      if (kind === 'dead') value = { ...(p.byLook ? { n: p.n, byLook: { ...p.byLook } } : { n: p.n }), ...(p.at ? { at: p.at } : {}) };
       // Phase 3: the controller's humidity memory (the farm keeps it; the panel's payload may not carry it)
       if (kind === 'controller' && farm && farm.cyc && farm.cyc.on && farm.lastCtlRead) value = { ...value, rhMin: farm.lastCtlRead.rhMin, rhMax: farm.lastCtlRead.rhMax };
       if (kind === 'cull') value = { n: p.n, reason: p.reason };
@@ -258,6 +263,21 @@ export function createRecords({ farm, env, events } = {}) {
     });
     events.on(EV.HOUSE_ENTER, (p) => { if (live() && p && p.dipped === false) ex(today()).lapses++; });
     installCondRecords({ farm, env, events, ex, today, live });
+    // Skills update (SKILLS.md §8): the controllers' changes (kind 'auto': one line per system, a change within the farm hour
+    // folds into its line, as the settings lines do) and the equipment's faults (kind 'fault')
+    const autoAt = new Map();
+    events.on(EV.AUTO, (p) => {
+      if (!live() || !p || !p.text) return;
+      const i = autoAt.get(p.system), n = i != null ? notebook[i] : null;
+      if (n && n.kind === 'auto' && n.day === today() && env && Math.abs(env.hour - n.hour) < 1) { n.value = p.text; n.hour = r2(env.hour); return; }
+      records.note('auto', p.text);
+      autoAt.set(p.system, notebook.length - 1);
+    });
+    events.on(EV.FAULT, (p) => {
+      if (!live() || !p || !p.text || p.phase === 'dropped') return;
+      if (p.phase === 'found' && !p.alarm) return;
+      records.note('fault', p.text);
+    });
   }
   // A day nobody signed closes by itself at 06:00 the next morning.
   if (env && env.addStepper) {
@@ -269,6 +289,22 @@ export function createRecords({ farm, env, events } = {}) {
     });
   }
   return records;
+}
+
+const hhmmOf = (t) => { const m = Math.round((((t % 1) + 1) % 1) * 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+const FAULT_LABEL = { 'winch-stall': (f) => `line ${(f.args?.line ?? 0) + 1} winch stalled`, 'timer-reset': () => 'controller restarted on its first timer setting',
+  'stage-trip': () => 'fan stages off', 'sensor-drift': () => 'temperature sensor reading high', 'order-lost': () => 'feed order not confirmed', 'scale-fouled': () => 'bird scale platform fouled' };
+/** The day's faults of the equipment for its row: "Equipment: line 3 winch stalled 09:12–10:05". */
+export function faultNotes(day, farm) {
+  const out = [];
+  for (const f of farm?.auto?.faults || []) {
+    if (!f.id || f.startedAt == null || (f.phase !== 'open' && f.phase !== 'fixed')) continue;
+    const a = f.startedAt, b = f.fixedAt;
+    if (!(Math.floor(a + 1e-9) <= day && (b == null || Math.floor(b + 1e-9) >= day))) continue;
+    const from = Math.floor(a + 1e-9) === day ? hhmmOf(a) : '00:00', to = b != null && Math.floor(b + 1e-9) === day ? hhmmOf(b) : b == null ? 'open' : '24:00';
+    out.push(`Equipment: ${(FAULT_LABEL[f.id] || (() => f.id))(f)} ${from}–${to}`);
+  }
+  return out;
 }
 
 /** "Your week" for one row: what he set and read, beside the sign values. */

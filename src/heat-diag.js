@@ -228,6 +228,10 @@ export function causeWords(kind, env, farm, at = {}) {
     case 'floor': return { kind, sign: 'sign-litter', signName: 'the litter sign', place: 'litter', fix: null,
       why: `the house holds near the row (${fmtC(env.houseTemp)}, ${rowWords(env)}) with the brooders not at full, yet the ${b} feel colder: wet or thin litter under them, or a brooder out`,
       check: 'the litter under the chicks (squeeze a handful) and that each brooder burns' };
+    // Skills update (SKILLS.md §5.1): the controller's sensor reads high, the brooders hold the house under the row
+    case 'drift': { const d = farm?.auto?.drift || 0; return { kind, sign: 'sign-brooder', signName: 'the brooder sign (its sensor line)', place: 'controller', fix: { panel: 'controller', tab: 'temp' },
+      why: `the controller’s sensor reads ${one(d)} °C over the house thermometer: the brooders hold the house ${one(d)} °C under the row (${rowWords(env)})`,
+      check: `the sensor against the thermometer beside ${CTRL} (Check the sensor on its Temperature tab)` }; }
     case 'power': return { kind, sign: 'sign-power', signName: 'the power cut sign by the generator', place: 'generator', fix: null,
       why: 'the power is off: no brooder lights and no fan runs', check: 'the generator and its transfer switch at the generator house' };
     default: return { kind: 'capacity', sign: 'sign-brooder', signName: 'the brooder sign', place: 'controller', fix: { panel: 'controller', tab: 'temp' },
@@ -239,6 +243,8 @@ export function causeWords(kind, env, farm, at = {}) {
 /** The main cold cause now (or at `at`): the biggest fix, else the power, else the night beyond the brooders. */
 export function coldCause(env, farm, at = {}) {
   if (env.powerOn === false) return causeWords('power', env, farm);
+  // a drifted sensor (an open sensor-drift fault, 1 °C or more): the thermostat holds the house under the row
+  if ((farm?.auto?.drift || 0) >= 1 && !env.broodersUp && (farm.auto.faults || []).some((f) => f.phase === 'open' && f.id === 'sensor-drift')) return causeWords('drift', env, farm, at);
   const f = coldFixes(env, farm, at);
   // a brooder out chills the chicks around it more than the house mean shows (sim.js outAirDev, no radiant there)
   if (f.fixes.length) return causeWords(f.fixes[0].kind, env, farm, at);

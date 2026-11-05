@@ -90,7 +90,22 @@ export function cycleSummary(records, farm, run = {}) {
     // Phase 4 (PHASE4.md §3.3): the run's condition, and the farmer's last normal-season cycle beside it (plain numbers)
     condition: run && run.condition !== undefined ? run.condition : (farm && farm.condition) ?? null,
     compare: run && run.compare ? compareOf(run.compare) : null,
+    // Skills update (SKILLS.md §8): the level 3 equipment at work in this flock and the faults met (only when there were any)
+    ...autoSummary(farm),
   };
+}
+const AUTO_WORD = { winch: 'winches', timer: 'timer', stages: 'stages', brooders: 'brooders', feed: 'feed', lights: 'lights', scale: 'bird scale' };
+const hm = (t) => { const m = Math.round((((t % 1) + 1) % 1) * 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+/** { auto: { systems, faults: [{ id, day, from, to }], line } } or {} (no equipment worked this flock). */
+function autoSummary(farm) {
+  const A = farm && farm.auto;
+  if (!A) return {};
+  const systems = Object.keys(A.last || {}).filter((s) => AUTO_WORD[s]);
+  const faults = (A.faults || []).filter((f) => f.id && (f.phase === 'open' || f.phase === 'fixed') && f.startedAt != null)
+    .map((f) => ({ id: f.id, day: Math.floor(f.startedAt + 1e-9), from: hm(f.startedAt), to: f.fixedAt != null ? hm(f.fixedAt) : null }));
+  if (!systems.length && !faults.length) return {};
+  const line = `${systems.length ? `Level 3 at work: ${systems.map((s) => AUTO_WORD[s]).join(', ')}` : 'No level 3 equipment at work'}${faults.length ? `. Faults met: ${faults.map((f) => `${f.id.replace('-', ' ')} day ${f.day} ${f.from}${f.to ? `–${f.to}` : ''}`).join('; ')}` : ''}`;
+  return { auto: { systems, faults, line } };
 }
 /** The numbers of the last normal-season summary drawn beside a condition cycle's (no verdict). */
 function compareOf(c) {

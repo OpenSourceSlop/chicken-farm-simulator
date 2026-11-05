@@ -20,7 +20,11 @@ import { EV } from './events.js';
 import { pumpGauges } from './farm-cond-water.js';
 // the night fix (after Phase 5): the cold and heat causes from the house's heat balance (brooders at full and the house under
 // the row = too much air out, a brooder out or the pad; the thermostat named only when it is under the row, or over it)
-import { coldCause, hotCause, youngOf, DIAG } from './heat-diag.js';
+import { coldCause, hotCause, youngOf, DIAG, coldFixes, causeWords, fmtC } from './heat-diag.js';
+// Skills update (SKILLS.md §5.3, §3.9): the Equipment row and its warnings, the comfort lead and its fix
+import { AUTO_SYSTEMS, FAULTS, AUTO } from './config.js';
+import { faultWords, faultState } from './farm-faults.js';
+import { adviseFans } from './farm-fans.js';
 
 /** Model values of the watch (PHASE4.md §15.1; none is a sign fact). */
 export const WATCH = {
@@ -74,7 +78,10 @@ export function watchState(env, farm) {
     try { cold = coldCause(env, farm); hot = hotCause(env, farm); young = youngOf(env, farm); } catch { cold = hot = null; }
     house = { c: env.houseTemp, out: env.heaterLevel, full: env.heaterLevel >= DIAG.fullAt };
   }
+  const open = (farm?.auto?.faults || []).filter((f) => f.phase === 'open');
   return { cold, hot, young, house, condition: farm?.condition ?? null, sun: env?.sunHeatPerH ?? 0, powerOff: farm?.power?.on === false,
+    // Skills update (SKILLS.md §5.1): a drifted sensor holds the house under the row; tripped stages leave the fans where they were
+    drift: open.some((f) => f.id === 'sensor-drift') ? farm.auto.drift || 0 : 0, stageTrip: open.some((f) => f.id === 'stage-trip'),
     tankLow: !!T && farm?.condition === 'water' && ((T.levelPct ?? 100) < 30 || (T.pumpShare ?? 1) < 0.9 || !!T.fixing),
     windChill: env?.windChill ?? 0, airSpeed: env?.airSpeed ?? 0, fans: env?.fansEffective ?? 0, houseRH: env?.houseRH ?? 60,
     // Phase 5 (PHASE5.md §6.8.1, review round): the water condition's iron filter clogged (farm-cond-water.js condX.filterK)
@@ -97,6 +104,8 @@ export function causeOf(kind, age, st = {}) {
   if (st.tankLow && (kind === 'water' || kind === 'heat')) return TANK;
   switch (kind) {
     case 'cold': {
+      if ((st.drift ?? 0) >= 1) return { why: `${young ? 'the chicks' : 'the birds'} are cold: the controller’s sensor reads ${one(st.drift)} °C over the house thermometer, so the brooders hold the house ${one(st.drift)} °C under the row`,
+        sign: 'sign-brooder', signName: SIGN.brooder, place: 'controller', check: 'the controller’s sensor against the thermometer beside it (Check the sensor on the Temperature tab)' };
       // the night fix: the house's heat balance names what keeps it under the row (too much air out by the tunnel fans or
       // the timer, a brooder out, the pad, the thermostat only when it is under the row); older birds: the fans and the pad
       const d = st.cold, who = young ? 'the chicks are cold' : 'the birds are cold';
@@ -109,6 +118,8 @@ export function causeOf(kind, age, st = {}) {
     }
     case 'heat': {
       const hot = st.condition === 'hot' || (st.sun ?? 0) > 0, d = st.hot;
+      if (st.stageTrip) return { why: `the ${young ? 'chicks' : 'birds'} are hot: the fan stages are off and the fans stay where they were as the house warms`, sign: 'fan-panel', signName: 'the fan panel', place: 'fan-panel',
+        check: 'the fans at the fan panel by hand, then the stages on again (Set the stages)' };
       // the night fix: the thermostat over the row first (the brooders heat the house up to it); never named while at the row
       if (d && (d.kind === 'thermostatHot' || d.kind === 'fewFans')) return { why: `the ${young ? 'chicks' : 'birds'} are hot: ${d.why}`, sign: d.sign, signName: d.signName, place: d.place, check: d.check };
       if (young && st.condition === 'hot') return { why: 'the chicks are hot: the sun on the roof heats the closed house over the brooder sign’s row', sign: 'sign-brooder', signName: `${SIGN.brooder} (its hot-season line)`, place: 'pad-pump', check: 'the pad pump, then one tunnel fan at the fan panel' };
@@ -153,14 +164,58 @@ export function hourComfort(C, age) {
   return { cold, hot };
 }
 
+// ---------------- Skills update: the Equipment row (SKILLS.md §5.3) and the comfort fix (§3.9) ----------------
+const RANK = { green: 0, amber: 1, red: 2 };
+/** The Equipment row: { state, label: 'Equipment', value, detail, faults } while any system is on (or a fault is open), else null. */
+export function equipmentRow(env, farm) {
+  const A = farm?.auto;
+  if (!A || farm.mode !== 'level') return null;
+  const on = Object.keys(AUTO_SYSTEMS).filter((s) => A.on[s]), open = (A.faults || []).filter((f) => f.phase === 'open');
+  if (!on.length && !open.length) return null;
+  const faults = open.map((f) => { const w = faultWords(f, env, farm); return { id: f.id, system: f.system, state: faultState(farm, env, f), what: w.what, place: w.place, fix: w.fix, spot: w.spot, startedAt: f.startedAt }; });
+  const names = on.map((s) => AUTO_SYSTEMS[s].label).join(', ');
+  const worst = faults.filter((f) => f.state !== 'green').sort((a, b) => RANK[b.state] - RANK[a.state])[0];
+  if (!worst) return { state: 'green', label: 'Equipment', value: `${on.length} on · reading`, detail: names, faults };
+  return { state: worst.state, label: 'Equipment', value: worst.what, detail: `Look at ${worst.place}: ${worst.fix}.`, faults };
+}
+const COLD_CONTROL = {
+  air: (a) => (a.tunnelN > 0 && !a.stages ? 'the Tunnel fans row to 0 on the controller’s Ventilation tab' : 'the timer back to the vent sign’s setting on the controller’s Ventilation tab'),
+  brooderOut: () => 'the dark brooder relit on the brooding floor', pad: () => 'the Cooling pad off on the controller’s Ventilation tab',
+  thermostat: () => 'the thermostat up to the brooder sign’s row on the controller’s Temperature tab',
+};
+/** Comfort 2's fix for a cold or a hot warning: { text, panel, tab, spot } or null (nothing the farmer can set). */
+export function comfortFix(kind, env, farm) {
+  try {
+    if (kind === 'cold') {
+      const f = coldFixes(env, farm), x = f.fixes[0];
+      if (!x) return null;
+      const c = causeWords(x.kind, env, farm), panel = c.fix?.panel ?? null;
+      return { text: `Fix: ${COLD_CONTROL[x.kind] ? COLD_CONTROL[x.kind](f.air) : c.check}: the house then settles at ${fmtC(x.T)}`, panel, tab: c.fix?.tab ?? null, spot: panel === 'controller' ? 'controller' : x.kind === 'brooderOut' ? 'heater' : 'controller' };
+    }
+    const a = adviseFans(env, farm), young = (farm.age ?? 0) < 21;
+    return { text: `Fix: ${a.fans} tunnel fan${a.fans === 1 ? '' : 's'}, pad ${a.pad ? 'on' : 'off'} (heat sign) at the fan panel or the controller`, panel: young ? 'controller' : 'fan-panel', tab: young ? 'vent' : null, spot: young ? 'controller' : 'fanPanel' };
+  } catch { return null; }
+}
+
 export function createFlockWatch({ env, farm, events, records } = {}) {
   let ctxFn = null, samples = [], lastHour = null;
+  let lead = { comfortH: null, fix: false };   // Skills update: Comfort 2's lead (setLead, SKILLS.md §3.9)
   let mem = {};                 // kind -> { active, lastAt, clearSince }
   let warnings = [];
   let status = { on: false, rows: {}, last: null };
   let quiet = 0, live = { base: null, key: '', st: null };
 
+  let eqLive = { key: '', base: null, st: null };
+  /** The Equipment row read live (a fault shows at once, not at the next farm hour). */
   function liveStatus() {
+    const st = liveComfort(), eq = equipmentRow(env, farm);
+    if (!eq) return st;
+    const key = `${eq.state}|${eq.value}|${eq.faults.length}`;
+    if (eqLive.base === st && eqLive.key === key) return eqLive.st;
+    eqLive = { key, base: st, st: { ...st, rows: { ...st.rows, equipment: eq } } };
+    return eqLive.st;
+  }
+  function liveComfort() {
     const r = status.on && status.rows.comfort;
     if (!r || !(farm.flock?.alive > 0)) return status;
     const C = farm.comfort || {}, hc = hourComfort(C, farm.age ?? 0);
@@ -180,7 +235,15 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
     const f = fl.factors || {};
     const lp = env.lightProgram || { darkHours: 1 };
     const birds = fl.placed > 0 && fl.alive > 0, hc = birds ? hourComfort(C, age) : { cold: false, hot: false };   // no birds: no comfort hour
-    return { t: env.day, age, w: birds ? fl.meanWeightG * 1.02 : null, alive: fl.alive || 0,
+    // Skills update (SKILLS.md §5.1): a fouled automatic scale's day mean is not read: today's hand weighings (10 or more), else
+    // the last clean reading
+    let w = birds ? fl.meanWeightG * 1.02 : null;
+    if (w != null && (farm.auto?.faults || []).some((f) => f.phase === 'open' && f.id === 'scale-fouled')) {
+      const hw = (farm.stats?.weighed || []).filter((x) => Math.floor(x.t) === env.dayNumber).map((x) => x.weightG);
+      const prev = samples.length ? samples[samples.length - 1].w : null;
+      w = hw.length >= 10 ? hw.reduce((a, b) => a + b, 0) / hw.length : prev ?? w;
+    }
+    return { t: env.day, age, w, alive: fl.alive || 0,
       lost: L.deaths?.n ?? 0, dead: fl.deadTotal || 0, of: L.deaths?.of ?? 0, causes: { ...(fl.deadByCause || {}) },
       cold: hc.cold, hot: hc.hot, felt: C.feltMean ?? (C.meanOver ?? 0) + env.targetTemp, tgt: env.targetTemp, e: C.meanOver ?? 0,
       feedKg: fl.cumFeedKg || 0, waterL: farm.water?.meterL || 0, lit: !!env.lightsOn, litH: Math.max(1, 24 - (lp.darkHours || 0)),
@@ -365,7 +428,7 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
   function warnings_(rows, s) {
     const st = watchState(env, farm);   // the house now (the warning is raised in the hour's own sample step)
     const red = { weight: rows.weight?.state === 'red' && (rows.weight.P != null), deaths: rows.deaths?.state === 'red',
-      cold: (rows.comfort?.cold ?? 0) >= WATCH.comfortRed, hot: (rows.comfort?.hot ?? 0) >= WATCH.comfortRed, intake: rows.intake?.state === 'red',
+      cold: (rows.comfort?.cold ?? 0) >= (lead.comfortH ?? WATCH.comfortRed), hot: (rows.comfort?.hot ?? 0) >= (lead.comfortH ?? WATCH.comfortRed), intake: rows.intake?.state === 'red',
       supply: rows.supply?.state === 'red' };
     // the supply first: the tank falls hours before the birds' comfort, intake or deaths show it
     for (const kind of ['supply', 'cold', 'hot', 'weight', 'deaths', 'intake']) {
@@ -380,14 +443,43 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       if (quiet > 0) continue;
       const { text, c } = textOf(kind, rows, s, st);
       const day = Math.floor(s.t + 1e-9), hour = Math.round((s.t - day) * 24 * 100) / 100;
-      const w = { kind, state: 'red', text, cause: c.why, sign: c.sign, place: c.place, day, hour, t: s.t };
+      // Skills update (Comfort 2, SKILLS.md §3.9): the cold / hot warning names the fix and where it is set
+      const fix = lead.fix && (kind === 'cold' || kind === 'hot') ? comfortFix(kind, env, farm) : null;
+      const w = { kind, state: 'red', text: fix ? `${text} ${fix.text}.` : text, cause: c.why, sign: c.sign, place: c.place, day, hour, t: s.t, ...(fix ? { fix } : {}) };
       warnings.push(w);
       records?.note?.('watch', text);
       events?.emit?.(EV.WATCH, { ...w });
     }
   }
 
-  let lead = { comfortH: null, fix: false };   // Skills update: Comfort 2's lead (setLead; STUB)
+  /**
+   * Skills update (SKILLS.md §5.3): a red Equipment row (an amber one for the drift while the flock is under
+   * FAULTS['sensor-drift'].warnAmberUnderDays days) raises one warning per fault, kind 'equipment', with what stopped, the
+   * likely cause, where to look and its fix { text, panel, tab, spot }: a caption, a notebook line, the card's last line and
+   * a Next job skip's stop. Called on EV.FAULT 'start' / 'found' (at once) and at each farm hour (the drift's rise).
+   */
+  function equipmentWarn() {
+    if (!farm?.auto || farm.mode !== 'level') return null;
+    let raised = null;
+    for (const f of (farm.auto.faults || []).filter((x) => x.phase === 'open')) {
+      const state = faultState(farm, env, f), F = FAULTS[f.id] || {};
+      const warn = state === 'red' || (state === 'amber' && f.id === 'sensor-drift' && (farm.age ?? 0) < (F.warnAmberUnderDays ?? 7));
+      const key = `equipment:${f.id}:${f.startedAt}`, m = mem[key] || (mem[key] = { active: false, lastAt: null, clearSince: null });
+      if (!warn || m.active) continue;
+      m.active = true; m.lastAt = env.day;
+      if (quiet > 0) continue;
+      const w = faultWords(f, env, farm), day = Math.floor(env.day + 1e-9), hour = Math.round((env.day - day) * 24 * 100) / 100;
+      const fix = { text: `Fix: ${w.fix} at ${w.place}`, panel: w.panel ?? null, tab: w.tab ?? null, spot: w.spot ?? F.spot ?? null };
+      const ww = { kind: 'equipment', state: 'red', text: `${w.what} Likely cause: ${w.cause}. Look at ${w.place}: ${w.fix}.`, cause: w.cause, sign: w.sign, place: w.spot, day, hour, t: env.day, fault: f.id, fix };
+      warnings.push(ww); status = { ...status, last: ww }; live = { base: null, key: '', st: null };
+      records?.note?.('watch', ww.text);
+      events?.emit?.(EV.WATCH, { ...ww });
+      raised = ww;
+    }
+    return raised;
+  }
+  if (events) events.on(EV.FAULT, (p) => { if (p && (p.phase === 'start' || p.phase === 'found')) equipmentWarn(); });
+
   const watch = {
     attach(fn) { ctxFn = typeof fn === 'function' ? fn : null; },
     /** env stepper: one sample per farm hour while the level runs. */
@@ -403,6 +495,7 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       if (samples.length > WATCH.keepH) samples.splice(0, samples.length - WATCH.keepH);
       const rows = evaluate(L);
       if (rows) { warnings_(rows, samples[samples.length - 1]); status.last = warnings[warnings.length - 1] || null; live.base = null; }  // the card shows a new warning at once
+      equipmentWarn();
     },
     /** The card's rows: the hourly ones, with the comfort row's "now" and felt read live from the model (review round:
      *  a sudden change shows at once, not at the next farm hour; a green window with the birds hot or cold now is amber). */
@@ -427,9 +520,10 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
      *  setLead({ comfortH, fix }) — comfortH: the cold / hot hours of the last 8 that raise the comfort warning (null = the
      *  Phase 4 rule, WATCH.comfortRed); fix: true adds the fix to the cold / hot warning as w.fix = { text, panel, tab, spot }
      *  (panel / tab: what ui.js opens for "Show me" as the night check's fix does; spot: a SPOTS key for the job marker).
-     *  STUB: kept, no effect yet. lead() reads it back. */
+     *  lead() reads it back. equipmentRow / equipmentWarn: the Equipment row and its warnings (SKILLS.md §5.3). */
     setLead({ comfortH = null, fix = false } = {}) { lead = { comfortH, fix: !!fix }; return lead; },
     lead() { return { ...lead }; },
+    equipmentWarn,
     get warnings() { return warnings; },
     get samples() { return samples; },
     /** A new level (start, enter, replay): the samples and the warning memory start again. */
