@@ -523,10 +523,14 @@ export function createLevel(ctx, deps = {}) {
   function faultLines() {
     const out = [], from = startAt ?? -Infinity;
     for (const f of farm.auto?.faults || []) {
-      if (!f || !f.id || (f.phase !== 'open' && f.phase !== 'fixed') || !((f.startedAt ?? f.at ?? -Infinity) >= from - 1e-9)) continue;
+      // the final check: a fault still open at the end counts whenever it started (an earlier level's left open); a fixed
+      // one only if it started in this level
+      if (!f || !f.id || (f.phase !== 'open' && f.phase !== 'fixed')) continue;
+      if (f.phase === 'fixed' && !((f.startedAt ?? f.at ?? -Infinity) >= from - 1e-9)) continue;
       const s = splitDay(f.startedAt ?? f.at), what = FAULTS[f.id]?.what || 'Equipment fault';
       const to = f.fixedAt != null ? ` to ${splitDay(f.fixedAt).day === s.day ? '' : `day ${splitDay(f.fixedAt).day} `}${hhmm(splitDay(f.fixedAt).hour)}` : ', still open at the end';
-      out.push(`${what} from day ${s.day} ${hhmm(s.hour)}${to}`);
+      const before = (f.startedAt ?? f.at ?? Infinity) < from - 1e-9 ? ' (from an earlier level)' : '';
+      out.push(`${what} from day ${s.day} ${hhmm(s.hour)}${before}${to}`);
     }
     return out;
   }

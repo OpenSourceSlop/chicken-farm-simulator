@@ -506,5 +506,17 @@ await test('the rainy season: after each power cut the controller comes back wit
   assert(f.phase === 'fixed' && f.fixedBy === 'retry' && R.env.fanStages, `retry 2 h after the power: ${f.phase} ${f.fixedBy}`);
 });
 
+await test('a fault still open from an earlier level shows on a later level\'s fail screen ("The equipment in this level"); one fixed in an earlier level does not (final check 4)', () => {
+  const R = at('week2', 9, 8);
+  // the bad7 probe's case: a sensor drift from day 1 never checked, a winch stall of day 3 fixed then
+  R.farm.auto.faults.push({ id: 'sensor-drift', system: 'brooders', phase: 'open', at: 1.42912, startedAt: 1.42917, foundAt: 1.51319, fixedAt: null, args: {} });
+  R.farm.auto.faults.push({ id: 'winch-stall', system: 'winch', phase: 'fixed', at: 3.4, startedAt: 3.4, foundAt: 3.4, fixedAt: 3.45, args: { line: 1 } });
+  R.farm.flock.deadTotal += 400;                                   // past the week's mortality limit at the next record's close
+  R.level.debug.goto(9, 23.9, { auto: true });
+  const r = R.level.result;
+  assert(r && !r.pass, `week 2 failed: ${JSON.stringify(r && { pass: r.pass, reason: r.reason })}`);
+  assert(Array.isArray(r.faults) && r.faults.length === 1 && /^Temperature sensor reading high from day 1 10:18 \(from an earlier level\), still open at the end$/.test(r.faults[0]), `the fail screen's equipment line: ${JSON.stringify(r.faults)}`);
+});
+
 console.log(failed ? `${failed} failed` : 'all passed');
 process.exit(failed ? 1 : 0);
