@@ -83,6 +83,8 @@ export const MAX_DAY = 42;  // the last day of the flock; after it the clock kee
 // A steady output instead of an on/off relay that would flip every few real seconds at game speed.
 const HEAT_BAND = 1.5, HEAT_OFF_ABOVE = 0.3;
 const HEAT_RATE = 6.5;      // °C per hour from 8 brooders at full output
+/** The brooders' figures for the heat balance readers (heat-diag.js: where the house heads tonight). */
+export const HEAT = { rate: HEAT_RATE, band: HEAT_BAND, offAbove: HEAT_OFF_ABOVE };
 // Concrete slab under the litter (model, PHASE2.md §6.2): it follows the house air (+1 °C per unit
 // of brooder output) with a 30 h time constant and pulls the house air toward itself.
 export const SLAB = { tauH: 30, brooderC: 1.0, sinkPerH: 0.3, kBare: 0.1, kPerCm: 0.02 };
