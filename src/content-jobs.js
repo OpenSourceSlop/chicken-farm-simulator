@@ -37,6 +37,7 @@
 //     { type: 'all', of: [rules] }               every rule (each one latches when met)
 //     { type: 'any', of: [rules] }               one of the rules
 import { EV } from './events.js';
+import { keyWordProps, keyWordValues } from './key-words.js'; // fix round: {key:id} tokens filled when read
 import { JOBS_CYCLE, JOB_WHERE_CYCLE } from './content-jobs-cycle.js';
 // Phase 4 (PHASE4.md §4, §5): the condition jobs, made only in a run of their condition (job-engine.js filters by farm.condition)
 import { JOBS_COND, JOB_WHERE_COND } from './content-jobs-cond.js';
@@ -172,7 +173,7 @@ export const JOBS = [
     done: { type: 'coverage', frac: 0.35, sight: 2, listen: true, area: 'used', maxCells: 105 } }),
   R('r-controller-pm', [0, 14], 'pm', 'Read the afternoon temperature', {
     spot: 'controller', signs: ['sign-brooder'], branch: 'brooding', done: CONTROLLER_READ }),
-  R('r-litter', ROUTINE, 'pm', 'Check the litter (Q: squeeze a handful)', {
+  R('r-litter', ROUTINE, 'pm', 'Check the litter ({key:squeeze}: squeeze a handful)', {
     spot: 'signLitter', signs: ['sign-litter'], branch: null,
     done: { type: 'count', id: 'litter.squeeze', n: 3, sectors: 2, nearDrinker: 1 } }),
   R('r-dead-pm', ROUTINE, 'pm', 'Pick up dead birds', {
@@ -233,10 +234,10 @@ export const JOB_WHERE = {
   'prep-vent': 'Climate controller: the Ventilation section. The minimum ventilation sign hangs beside it.',
   'prep-flush': 'Water supply, south-west corner inside: open each flush valve, close it when the water runs clear (about 10 farm minutes a line, with the clock running).',
   'prep-record': 'Office desk on the porch: the prep page of the record book.',
-  'd0-floor': 'Brooding area: press T at your feet, in three different parts of the floor (the marker shows a part not measured yet).',
-  'd0-place': 'Chick boxes by the truck: E picks up a stack, E inside the brooding area tips it.',
+  'd0-floor': 'Brooding area: press {key:probe} at your feet, in three different parts of the floor (the marker shows a part not measured yet).',
+  'd0-place': 'Chick boxes by the truck: {key:use} picks up a stack, {key:use} inside the brooding area tips it.',
   'd0-grade': 'Chick sample table beside the boxes.',
-  'd0-vent': 'Among the chicks: E picks one up. Five chicks from three parts of the floor (the marker shows a part not sampled yet).',
+  'd0-vent': 'Among the chicks: {key:use} picks one up. Five chicks from three parts of the floor (the marker shows a part not sampled yet).',
   'd1-crop': 'Among the chicks: pick up ten from three parts of the floor and feel the crop (the marker shows a part not sampled yet).',
   'd7-weigh': 'Bird scale in the brooding area: take the scale and frame, set the frame down in five places (the marker shows a part not weighed yet).',
   'r-dips': 'Foot dip at the gate, then the dip at the house door.',
@@ -245,19 +246,23 @@ export const JOB_WHERE = {
   'r-walk': 'Walk the length of the brooding area; stand still a moment to look and listen.',
   'r-drinkers': 'Regulator at the west end of each of the four lines (line 1 by the north wall, line 4 by the south wall): a flow test on each, 1 farm minute with the clock running; then walk on to the next regulator.',
   'r-feeders': 'Feeder control box on the north wall (feed meter, every line on), then the silo gauge outside, north of the house.',
-  'r-dead-am': 'Dead birds on the floor: E picks them up. Count them at the bin outside the south wall.',
+  'r-dead-am': 'Dead birds on the floor: {key:use} picks them up. Count them at the bin outside the south wall.',
   'r-dips-pm': 'Foot dip at the house door.',
   'r-walk-pm': 'Walk the brooding area again; stand still a moment to look and listen.',
   'r-controller-pm': 'Climate controller: keep the panel open a moment to read it.',
-  'r-litter': 'On the litter: Q squeezes a handful. Two parts of the floor, one of them under a drinker line.',
-  'r-dead-pm': 'Dead birds on the floor: E picks them up. Count them at the bin outside the south wall.',
+  'r-litter': 'On the litter: {key:squeeze} squeezes a handful. Two parts of the floor, one of them under a drinker line.',
+  'r-dead-pm': 'Dead birds on the floor: {key:use} picks them up. Count them at the bin outside the south wall.',
   'r-record': 'Office desk on the porch: today’s page of the record book.',
   'p-brooder': 'The brooder that is not burning: E at it.',
   'p-cold-night': 'Between 20:00 and 24:00: the climate controller, then a short walk through the brooding area.',
   'p-water-drop': 'Water supply: the filter and its gauges, the meter, the lines (cleaning the filter takes 5 farm minutes).',
   'p-leak': 'The wet patch on the litter: look at the line above it.',
-  'p-wet-patch': 'Rice husk heap: take a sack of husk, then E on the wet patch.',
+  'p-wet-patch': 'Rice husk heap: take a sack of husk, then {key:use} on the wet patch.',
   'p-order-feed': 'Office desk on the porch: the phone.',
   'p-warm': 'Climate controller: the brooders (Temperature) and the minimum ventilation timer (Ventilation); the minimum ventilation sign beside it. Then the chicks must feel near the target for 30 farm minutes with the clock running.',
   'p-report': 'Office desk on the porch: the phone.',
 };
+
+// fix round: a title or a place line that names a farm key reads it as bound now (Settings → Keys)
+for (const j of ALL_JOBS) keyWordProps(j, ['title']);
+for (const t of [JOB_WHERE, JOB_WHERE_CYCLE, JOB_WHERE_COND]) keyWordValues(t);

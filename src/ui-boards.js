@@ -6,6 +6,7 @@
 //                                      that needs farm time folds its plate (plate.fold())
 //   PICS[pic]                          small pictograms for sign items
 import { BOARDS, BROODER_ROWS_L1, sourceLabel } from './content-signs.js';
+import { fillKeys } from './key-words.js'; // fix round: a fact's {key:id} token as the key is bound now
 import { boardsForDay } from './content-signs-cycle.js';
 import { BOARDS_COND } from './content-signs-cond.js';
 
@@ -65,7 +66,7 @@ export function buildBoardPanel(id, env, onClose) {
     h('p', { class: 'sign-where' }, h('span', { html: ICONS.pin, 'aria-hidden': 'true' }), b.where));
   const itemsOf = (bd) => bd.items.map((it) => h('li', { class: `board-item${it.pic ? ' has-pic' : ''}` },
     it.pic && PICS[it.pic] ? h('span', { class: 'board-pic', html: PICS[it.pic] }) : null,
-    h('div', null, h('p', { class: 'sign-text' }, it.text), src(it.source))));
+    h('div', null, h('p', { class: 'sign-text' }, fillKeys(it.text)), src(it.source))));
   const items = h('ul', { class: 'board-items' }, itemsOf(b));
 
   let todayRow = null, todayDay = null;
@@ -126,7 +127,7 @@ export function buildPlate(id, { open = true, day, condition } = {}) {
   const body = h('div', { class: 'plate-body', id: bodyId },
     h('ul', { class: 'plate-items' }, b.items.map((it) => h('li', null,
       it.pic && PICS[it.pic] ? h('span', { class: 'plate-pic', html: PICS[it.pic] }) : null,
-      h('p', null, it.text), src(it.source, 'src plate-src')))), note);
+      h('p', null, fillKeys(it.text)), src(it.source, 'src plate-src')))), note);
   const el = h('aside', { class: 'plate', 'aria-label': `Plate: ${b.title}` }, h('span', { class: 'rivet rivet--l', 'aria-hidden': 'true' }), h('span', { class: 'rivet rivet--r', 'aria-hidden': 'true' }), toggle, body);
   const set = (on) => { el.classList.toggle('is-open', on); toggle.setAttribute('aria-expanded', String(on)); body.hidden = !on; };
   toggle.addEventListener('click', () => set(!el.classList.contains('is-open')));

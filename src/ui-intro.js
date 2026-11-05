@@ -21,7 +21,7 @@ import { fillGuide } from './content-guide.js';
 
 export const INTRO_CARDS = [
   { id: 'jobs', when: 'level-start', anchor: '.hud-tr--level .ljobs', text: 'Your jobs for today. The top one is the job to do now: the orange marker on the farm shows its place, and the job says which sign holds its facts.' },
-  { id: 'signs', when: 'level-start', anchor: 'sign', text: 'Signs stand where you use their facts. Walk up to one and press E to read it; the small line under each fact names its source.' },
+  { id: 'signs', when: 'level-start', anchor: 'sign', text: 'Signs stand where you use their facts. Walk up to one and press {key:use} to read it; the small line under each fact names its source.' },
   { id: 'time', when: 'level-start', anchor: '.hud-bl .timebar', text: 'The farm clock: pause ({key:pause}), 1× and 4× ({key:speed1}, {key:speed4}). Next job ({key:nextJob}) skips to the next job. {key:menu} opens the menu (saves, settings, how to play); {key:map} opens the farm map.' },
   { id: 'watch', when: 'watch-shown', anchor: '.fw', text: 'The flock watch measures the birds every farm hour (weight, deaths, comfort, intake) beside this level’s line, and warns in words when a row turns red.' },
 ];

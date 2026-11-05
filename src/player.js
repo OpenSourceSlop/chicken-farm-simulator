@@ -100,6 +100,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
   // still walks at true speed and the controls stay responsive. Fixed steps (advance/settle at
   // 1/30 s, renderNow at 0) are untouched and stay deterministic.
   let lastNow = -1;
+  let frozen = false;
   function frameDt(dtIn) {
     const dt = Math.max(0, Math.min(dtIn || 0, MAX_REAL_DT));
     const now = performance.now() / 1000;
@@ -117,6 +118,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
     if (orbit) cam.rotate(camCtl.orbit(orbit));
     const wheel = input.takeWheel();
     if (wheel) cam.zoomBy(camCtl.wheel(wheel));
+    const moves = input.enabled && !frozen; // fix round: the user's pause freezes the farmer, the view still turns
     if (input.enabled) {
       const ra = input.rotateAxis();
       if (ra) cam.rotate(camCtl.keyTurn(ra, dt));
@@ -126,7 +128,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
 
     // Click to walk
     for (let c = input.takeClick(); c; c = input.takeClick()) {
-      const g = input.enabled && groundPoint(c.x, c.y);
+      const g = moves && groundPoint(c.x, c.y);
       if (g) walkTo(g.x, g.z, c.shift || c.double);
     }
 
@@ -134,7 +136,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
     let dx = 0, dz = 0, speed = 0;
     const running = input.running;
     input.axes(axes);
-    if (!input.enabled) cancelPath();
+    if (!moves) cancelPath();
     else if (axes.any) {
       cancelPath();
       const yaw = cam.yaw;
@@ -220,6 +222,9 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
       const p = root.position;
       return p.x > HOUSE_BOUNDS.xMin && p.x < HOUSE_BOUNDS.xMax && p.z > HOUSE_BOUNDS.zMin && p.z < HOUSE_BOUNDS.zMax;
     },
+    /** Fix round: true while the farm clock is paused by the player: no walking, no click or map walk (the view turns). */
+    get frozen() { return frozen; },
+    set frozen(v) { frozen = !!v; if (frozen) cancelPath(); },
     get inputEnabled() { return input.enabled; },
     set inputEnabled(v) {
       input.enabled = v;
@@ -244,7 +249,7 @@ export function createPlayer(ctx, { colliders = [] } = {}) {
       cam.setView(v);
       cam.snapTo(root.position);
     },
-    walkTo(x, z, run = false) { if (input.enabled) walkTo(x, z, run); },
+    walkTo(x, z, run = false) { if (input.enabled && !frozen) walkTo(x, z, run); },
     // Phase 2 (package "props", player-carry.js). carry(kind): the mesh of what the farmer holds,
     // called only by props.startCarry / props.drop: null | 'barrow' | 'sack' | 'boxes' (hand truck
     // with ten chick boxes) | 'bucket' | 'frame' (folded catching frame + hand scale) | 'chick';

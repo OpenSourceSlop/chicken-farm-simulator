@@ -13,6 +13,7 @@
 import { SPOTS, SPOTS2, SPOTS3, SPOTS4, FARM, HEATERS, BROOD_BOUNDS, BIRD_BOUNDS, DRINKER_LINES_Z, CLEAN, FLOOR_GRID } from './config.js';
 import { flowToday, nippleCmToday, nippleInBand, rimInBand, rimCmNow, LINES_UP_CM, PANS_UP_CM, NIPPLE_DAY0_CM, FLOW_BAND } from './job-figures.js';
 import { sectorOf } from './job-engine.js';
+import { fillKeys } from './key-words.js'; // fix round: the place's key as bound now
 
 const r1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
 const DOOR_IN = { x: -14, z: 5.0 }, DOOR_OUT = { x: -14, z: 7.8 };
@@ -87,10 +88,10 @@ function sectorPlaces(inst, c, todo) {
   return out;
 }
 const COUNT_TODO = {
-  'd0-floor': 'press T at your feet there', 'w2-lux': 'press L at bird height there', 'w45-air': 'press V at bird height there',
-  'd0-vent': 'pick up a chick there (E) and take its vent temperature', 'd1-crop': 'pick up a chick there (E) and feel its crop',
-  'w2-check': 'pick up a bird there (E) and watch it walk', 'w3-droppings': 'pick up a bird there (E) and look at its droppings',
-  'r-litter': 'squeeze a handful of litter there (Q)',
+  'd0-floor': 'press {key:probe} at your feet there', 'w2-lux': 'press {key:lux} at bird height there', 'w45-air': 'press {key:air} at bird height there',
+  'd0-vent': 'pick up a chick there ({key:use}) and take its vent temperature', 'd1-crop': 'pick up a chick there ({key:use}) and feel its crop',
+  'w2-check': 'pick up a bird there ({key:use}) and watch it walk', 'w3-droppings': 'pick up a bird there ({key:use}) and look at its droppings',
+  'r-litter': 'squeeze a handful of litter there ({key:squeeze})',
 };
 const WEIGH_IDS = new Set(['d7-weigh', 'w2-weigh', 'w3-weigh', 'w45-weigh28', 'w45-weigh35', 'f-weigh']);
 
@@ -162,7 +163,7 @@ export function jobPlaces(inst, c) {
     case 'p-cold-night': return [!met[0] && place('controller', 'keep it open a moment to read it'), !met[1] && floor(HEATERS[0].x, 0, 'the brooding floor', 'walk 30 % of it and look for huddles')].filter(Boolean);
     case 'p-heatwave': return [!met[0] && place('fanPanel', 'keep it open a moment to read it'), !met[1] && place('padPump', 'start the pump, then check the pad'),
       !met[2] && drinker(0, 'a flow test on the line (1 farm minute)')].filter(Boolean);
-    case 'f-ready': return [!met[0] && place('catchPanels', 'E puts them up'), parts[1] && !parts[1].met && place('controller', 'Lights: dimmer 20 % or less; at least 3 tunnel fans')].filter(Boolean);
+    case 'f-ready': return [!met[0] && place('catchPanels', '{key:use} puts them up'), parts[1] && !parts[1].met && place('controller', 'Lights: dimmer 20 % or less; at least 3 tunnel fans')].filter(Boolean);
     case 'p-blood': return [!met[0] && place('officeDesk', 'the phone: call the vet about blood in the droppings'), !met[1] && place('waterSupply', 'the Medicine tab: start the medicine')].filter(Boolean);
     // Phase 4: the condition jobs that span several places
     case 'h-brood-air': case 'h-young-heat': {
@@ -183,11 +184,11 @@ export function jobPlaces(inst, c) {
       if (carrying !== 'tape') return [place('officeDesk', 'take the tape measure')];
       const hook = props?.tapeHook, len = axis === 'length';
       if (!hook || hook.axis !== axis) return [floor(len ? -23 : -10, len ? 0 : -5.2, len ? 'the west end wall inside the house' : 'the north wall inside the house', 'E hooks the tape there')];
-      return [floor(len ? 23 : -10, len ? 0 : 5.2, len ? 'the east end wall' : 'the south wall', 'E reads the tape there')];
+      return [floor(len ? 23 : -10, len ? 0 : 5.2, len ? 'the east end wall' : 'the south wall', '{key:use} reads the tape there')];
     }
     case 'd0-place': {
-      if (carrying === 'boxes') return [floor(HEATERS[0].x, 0, 'the brooding area', 'E tips the stack onto the litter')];
-      return (farm?.flock?.inBoxes ?? 0) > 0 ? [place('boxStacks', 'E picks up the next stack')] : [];
+      if (carrying === 'boxes') return [floor(HEATERS[0].x, 0, 'the brooding area', '{key:use} tips the stack onto the litter')];
+      return (farm?.flock?.inBoxes ?? 0) > 0 ? [place('boxStacks', '{key:use} picks up the next stack')] : [];
     }
     case 'p-wet-patch': {
       const lk = farm?.water?.leak;
@@ -225,7 +226,7 @@ export function jobPlaces(inst, c) {
       const lame = (c.flock?.debug?.sickBirds?.() || []).filter((b) => b.lame), f = c.from || { x: -14, z: 0 };
       if (!lame.length) return null;
       const b = lame.reduce((a, q) => (Math.hypot(q.x - f.x, q.z - f.z) < Math.hypot(a.x - f.x, a.z - f.z) ? q : a));
-      return [floor(b.x, b.z, 'the nearest bird sitting apart', 'E picks it up; watch it walk (legs sign: cull gait 4–5)')];
+      return [floor(b.x, b.z, 'the nearest bird sitting apart', '{key:use} picks it up; watch it walk (legs sign: cull gait 4–5)')];
     }
     default: break;
   }
@@ -233,20 +234,20 @@ export function jobPlaces(inst, c) {
   if (inst.def.spot === 'dead') {
     if (carrying === 'bucket') return [place('deadBin', 'count them into the bin')];
     const near = c.flock?.dead?.near?.(c.from?.x ?? -14, c.from?.z ?? 0, 80) || [];
-    if (near.length) return [floor(near[0].x, near[0].z, 'the nearest dead bird', props?.bucketDown ? 'E puts it in the bucket you set down' : 'E picks it up')];
+    if (near.length) return [floor(near[0].x, near[0].z, 'the nearest dead bird', props?.bucketDown ? '{key:use} puts it in the bucket you set down' : '{key:use} picks it up')];
     // PHASE4.md §15.3: the bucket set down with birds in it: back to it, then the bin
     const b = props?.bucketDown;
-    return b && b.n > 0 ? [b.inside ? floor(b.x, b.z, 'the bucket you set down', 'E picks it up') : { id: 'bucket', at: { x: b.x, z: b.z, inside: false, label: 'Bucket' }, name: 'the bucket you set down', along: 'outside', todo: 'E picks it up' }] : null;
+    return b && b.n > 0 ? [b.inside ? floor(b.x, b.z, 'the bucket you set down', '{key:use} picks it up') : { id: 'bucket', at: { x: b.x, z: b.z, inside: false, label: 'Bucket' }, name: 'the bucket you set down', along: 'outside', todo: '{key:use} picks it up' }] : null;
   }
   if (WEIGH_IDS.has(id)) {
     if (carrying !== 'frame') return (st.list || []).length >= inst.def.done.n ? [] : [{ id: 'birdScale', at: SPOTS2.birdScale, name: 'the bird scale', along: 'in the house', todo: 'take the scale and frame' }];
-    return sectorPlaces(inst, c, 'set the frame down there (E)');
+    return sectorPlaces(inst, c, 'set the frame down there ({key:use})');
   }
   if (id in COUNT_TODO) {
     const more = sectorPlaces(inst, c, COUNT_TODO[id]);
     if (id === 'r-litter' && (inst.def.done.nearDrinker ?? 0) > (st.list || []).filter((x) => x.near).length) {
       const fz = c.from?.z ?? 0, z = DRINKER_LINES_Z.reduce((b, v) => (Math.abs(v - fz) < Math.abs(b - fz) ? v : b), DRINKER_LINES_Z[0]);
-      return [floor(Math.max(-22, Math.min(1, c.from?.x ?? -10)), z, 'under a drinker line', 'squeeze a handful there (Q)'), ...(more || [])];
+      return [floor(Math.max(-22, Math.min(1, c.from?.x ?? -10)), z, 'under a drinker line', 'squeeze a handful there ({key:squeeze})'), ...(more || [])];
     }
     return more;
   }
@@ -262,7 +263,7 @@ export function nextPlace(inst, c, { from = null, skip = null } = {}) {
   const f = from || { x: -14, z: 0, inside: true };
   const d = (p) => Math.hypot(p.at.x - f.x, p.at.z - f.z) + ((p.at.inside ?? true) !== (f.inside ?? true) ? 6 : 0);
   const best = left.slice().sort((a, b) => d(a) - d(b))[0];
-  const way = wayText(f, best), todo = way === 'right here' ? best.todo.replace(/ there\b/, ' here') : best.todo;
+  const t0 = fillKeys(best.todo), way = wayText(f, best), todo = way === 'right here' ? t0.replace(/ there\b/, ' here') : t0;
   return { ...best, todo, way, left: left.length, text: `${best.name.charAt(0).toUpperCase()}${best.name.slice(1)}, ${way}: ${todo}.` };
 }
 /** The id of the place a panel stands at (the strip's skip). */

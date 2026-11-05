@@ -194,7 +194,7 @@ export const STRIPS_CYCLE = {
     rows: (c) => [line(`Disinfected ${pct(c.farm.clean?.sprayShare)} of the floor · floor still wet ${pct(c.farm.clean?.wetShare)} (clean-out sign step 4: spray on a dry floor).`),
       note('Spray in three passes along the house; a wet patch takes the disinfectant weakly: spray it again once it is dry.')] },
   'w3-topup': { panels: { 'litter-heap': null },
-    rows: (c, inst) => [line(`Caked patches on the floor in use: ${pct(c.farm.litter?.cakedShare)} of it. Take the fork here, walk onto a caked patch and press E to fork it over (to 2 % or less).`),
+    rows: (c, inst) => [line(`Caked patches on the floor in use: ${pct(c.farm.litter?.cakedShare)} of it. Take the fork here, walk onto a caked patch and press {key:use} to fork it over (to 2 % or less).`),
       line('Then a sack of husk from here (Take a sack of husk) under a drinker line, E spreads it: four sacks, in two parts of the house.'),
       (() => { const L = inst.st.list || [], near = L.filter((x) => x.near).length, s = new Set(L.map((x) => x.s)).size; return step(`Sacks under the drinker lines: ${near} of 4, ${s} of 2 parts of the house`, near >= 4 && s >= 2); })()] },
   'w2-check': { panels: { 'bird-check': null }, rows: (c, inst) => [birdCount(inst, 10, 3), line('Watch each bird walk (gait 0–5). Legs sign: cull gait 4–5 the day you find them.')] },

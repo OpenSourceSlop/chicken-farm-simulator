@@ -76,8 +76,10 @@ export function createHud(parent, env) {
   });
   // The flock ends on day MAX_DAY: no jump may run the clock past its last midnight.
   const passesLastDay = (hrs) => env.dayNumber >= MAX_DAY && env.hour + hrs >= 24 - 1e-6;
+  // fix round: the player's pause in words beside the keys ('Paused · P to go on'): the farmer stands still meanwhile
+  const pauseNote = h('span', { class: 'timebar-paused', role: 'status', hidden: true });
   const timebar = h('section', { class: 'card timebar', 'aria-label': 'Time controls' },
-    playBtn, h('div', { class: 'seg', role: 'group', 'aria-label': 'Clock speed' }, speedBtns),
+    playBtn, pauseNote, h('div', { class: 'seg', role: 'group', 'aria-label': 'Clock speed' }, speedBtns),
     h('div', { class: 'timebar-sep', 'aria-hidden': 'true' }), skipBtn, morningBtn);
 
   // Phase 5 (PHASE5.md §6.6, review round): a mouse click leaves no focus on a time-bar key, so the keys go back to the farm
@@ -143,6 +145,7 @@ export function createHud(parent, env) {
       setAttr(skipBtn, 'title', endSkip ? `End of the flock (day ${MAX_DAY})` : 'Move the farm clock on by one hour');
     }
     const shownPaused = level ? level.userPaused : env.paused;
+    { const pt = level?.pausedText ? level.pausedText() : ''; if (pauseNote.hidden !== !pt) pauseNote.hidden = !pt; if (pt) setText(pauseNote, pt); }
     if (shownPaused !== lastPaused) {
       lastPaused = shownPaused;
       playBtn.innerHTML = shownPaused ? ICONS.play : ICONS.pause;

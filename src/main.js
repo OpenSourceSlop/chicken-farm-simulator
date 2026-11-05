@@ -28,6 +28,7 @@ import { createKeys } from './keys.js';
 import { createQuality } from './gfx-quality.js';
 import { createBootScreen } from './boot-screen.js';
 import { createSaves } from './saves.js';
+import { setKeyWords } from './key-words.js';
 
 function webglAvailable() {
   try {
@@ -54,6 +55,7 @@ async function start(saved = {}) {
   // Phase 5: the settings first (the sound, the graphics, reduced motion and the keys read them from the start)
   const settings = createSettings();
   const keys = createKeys(settings);
+  setKeyWords(keys); // fix round: the job, strip and sign words name the keys as bound now
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   // every shader program linked since start (PHASE5.md §6.5, review round: p5-gfx checks that none links after the warm-up;

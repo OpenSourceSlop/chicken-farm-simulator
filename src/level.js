@@ -240,6 +240,7 @@ export function createLevel(ctx, deps = {}) {
   // ---------------- clock speed (PHASE2.md §2): paused > sign > panel > carry > fast > work ----------------
   function clock() {
     const kind = ui?.panelKind;
+    if (userPaused && dark()) userPaused = false; // the dark house: every farm minute counts, P does not stop the clock
     if (userPaused || kind === 'paused') { env.paused = true; return; }
     env.paused = false;
     const placing = is(def, LEVEL1) && engine.anchors.truck != null && !fired.has('placed') && env.dayNumber === LEVEL1.arrivalDay;
@@ -709,7 +710,14 @@ export function createLevel(ctx, deps = {}) {
     get startAt() { return startAt; },
     hudHooks: {
       // the pause holds at once (not from the next frame): env.paused is set here too
-      togglePause() { userPaused = !userPaused; if (level.mode === 'level' && userPaused) env.paused = true; },
+      togglePause() {
+        // fix round: in the dark house the pause key is like Next job: it does not stop the clock (the alarm line says so)
+        if (!userPaused && level.mode === 'level' && !ended && dark()) { ui?.caption?.(`No pause while the house is dark: every farm minute counts.`, 4); return false; }
+        userPaused = !userPaused; if (level.mode === 'level' && userPaused) env.paused = true;
+        return true;
+      },
+      /** Fix round: the time bar's words while the player paused the clock ('Paused · P to go on'); '' otherwise. */
+      pausedText() { return userPaused && level.mode === 'level' ? `Paused · ${ctx.keys?.label?.('pause') ?? 'P'} to go on` : ''; },
       setFast(on) { fast = !!on; userPaused = false; },
       /** A panel action that waits on farm time (a flow test, pans filling, a flush): a clock the farmer paused runs
        *  again at normal speed (the open panel's own speed while it stays open). True if it was paused. */
@@ -934,6 +942,8 @@ export function createLevel(ctx, deps = {}) {
     replay() { return level.start({ seed }); },
     keepWalking() { if (!ended || inRun) return; level.mode = 'level'; ui?.closePanel?.(); ui?.setMode?.('level'); },
     update(dt) {
+      // fix round: the player's pause freezes the farmer too (no walk, no click or map walk; the view still turns)
+      { const freeze = level.mode === 'level' && userPaused; if (player && 'frozen' in player && player.frozen !== freeze) player.frozen = freeze; }
       if (level.mode === 'title' || level.mode === 'result') { env.paused = true; return; }
       if (level.mode !== 'level') return;
       if (ended) { // keep walking on the last day: the clock runs to 23:59, then stands; the level is over
@@ -962,6 +972,7 @@ export function createLevel(ctx, deps = {}) {
     },
     nextJob() {
       if (!inLevel() || free) return null;
+      if (ui?.busy?.open) return { refused: 'busy' }; // a long skip is waiting to run: no second one on its old hours
       const open = engine.open();
       const now = stepClock.now();
       // Phase 4: no skip while the house is dark (PHASE4.md §4.2): the marker stays on the power job
@@ -977,7 +988,14 @@ export function createLevel(ctx, deps = {}) {
       const hrs = (target - env.day) * 24;
       // a long jump (more than a day: the rest days) shows the busy card while the farm runs it
       const t0 = env.day;
-      if (hrs > 24 && ui?.busy?.run) { ui.busy.run(skipText(target), () => skip(hrs, { stopOnAlarm: true })); return { skipped: hrs }; }
+      if (hrs > 24 && ui?.busy?.run) {
+        // the hours are worked out again when it runs (fix round: a queued second press overshot by a day)
+        const ran = ui.busy.run(skipText(target), () => {
+          if (!inLevel() || ended) return;
+          skip(Math.max(0, (Math.min(target, engine.endAt()) - env.day) * 24), { stopOnAlarm: true });
+        });
+        return ran === false ? { refused: 'busy' } : { skipped: hrs };
+      }
       skip(hrs, { stopOnAlarm: true });
       const went = (env.day - t0) * 24;
       return went < hrs - 1 / 60 && stoppedAt ? { skipped: went, stopped: pinStopAt === env.day ? 'job' : 'alarm' } : { skipped: hrs };

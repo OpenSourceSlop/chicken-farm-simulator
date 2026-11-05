@@ -68,6 +68,9 @@ export function createMap(ctx, { register, openPanel, closePanel, jobCard = null
   }
   for (const t of ['pointerdown', 'mousedown', 'mouseup', 'click', 'dblclick']) window.addEventListener(t, swallow, true);
   function walkPoint(x, z, run = false) {
+    // fix round: the player's pause freezes the farmer: the map still shows the farm, the walk waits for the clock
+    const pausedText = ctx.level?.mode === 'level' ? ctx.level?.hudHooks?.pausedText?.() : '';
+    if (pausedText) { showTag(null, `<b>${pausedText}</b> · he walks there when the farm clock runs`); return false; }
     closePanel({ all: true });
     player?.walkTo?.(x, z, !!run);
     swallowUntil = inputClock.now() + 380; swallowAt = run ? null : { x, z };

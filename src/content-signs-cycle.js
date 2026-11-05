@@ -11,6 +11,7 @@
 // source: a key of config GUIDES, an array of keys, or 'week1-4' (sourceLabel in content-signs.js).
 // 'general' = general broiler practice. No page numbers anywhere (scripts/test-contracts.mjs checks).
 import { BOARDS } from './content-signs.js';
+import { keyWordProps } from './key-words.js'; // fix round: a fact's {key:id} token filled when read
 import { mergeBoardsP4 } from './content-signs-cond.js';   // Phase 4: the one merge (PHASE4.md §3.2)
 import { PHASE4 } from './config.js';
 
@@ -41,7 +42,7 @@ export const BOARDS_CYCLE = {
       it('From the second week give the birds a dark period every night: rest in the dark lowers sudden deaths and leg problems.'),
       it('About 4–6 hours of darkness in one block from day 8, kept until the last days before catching.'),
       it('Light at bird level about 20 lux from week 2 (30–40 lux in week 1).'),
-      it('Measure the light at bird height (L), under the lamps and between them.'),
+      it('Measure the light at bird height ({key:lux}), under the lamps and between them.'),
       it('Sudden death: big, well-grown birds found dead on their backs, legs up, often near the feeders.'),
       it('For catching dim the lights to about 10 lux at bird height: birds stay calm in low light.'),
     ],
@@ -239,3 +240,7 @@ export function boardsForDay(day, condition = null) {
 }
 
 export const BOARD_IDS_CYCLE = Object.keys(BOARDS_CYCLE);
+
+// fix round: a fact that names a farm key reads it as bound now
+for (const b of Object.values(BOARDS_CYCLE)) for (const it of b.items || []) keyWordProps(it, ['text']);
+for (const list of Object.values(BOARD_EXTRA_ITEMS)) for (const it of [].concat(list || [])) if (it && typeof it === 'object') keyWordProps(it, ['text']);

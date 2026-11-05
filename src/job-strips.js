@@ -22,11 +22,12 @@ import { ventNeed, ventTableRows, timerAirM3h, knownFlock, nippleCmToday, rimCmN
 // the steps hotfix: the next place of a job that spans several places, and the clock's pause
 import { jobPlaces, nextPlace, panelPlace, flowTodo } from './job-next.js';
 import { HELD_MIN } from './job-engine.js';
+import { fillKeys } from './key-words.js'; // fix round: {key:id} tokens in strip lines, as the keys are bound now
 // Phase 4: the condition jobs' strips (they import the row helpers from here; nothing of theirs runs at load)
 import { STRIPS_COND } from './job-strips-cond.js';
 
-export const step = (text, done = false) => ({ k: 'step', text, done: !!done });
-export const cmp = (what, sign, yours, bar = null) => ({ k: 'cmp', what, sign, yours, bar: bar == null ? null : typeof bar === 'object' ? bar : Math.max(0, Math.min(1, bar)) });
+export const step = (text, done = false) => ({ k: 'step', text: fillKeys(text), done: !!done });
+export const cmp = (what, sign, yours, bar = null) => ({ k: 'cmp', what, sign, yours: fillKeys(yours), bar: bar == null ? null : typeof bar === 'object' ? bar : Math.max(0, Math.min(1, bar)) });
 /** The vent row's bar (PHASE4.md §6.3): the share of the need on a 0–160 % scale with the sign's 90–130 % marked. */
 export const ventBar = (share) => ({ v: Math.max(0, share || 0), band: [...VENT_BAND], max: 1.6 });
 /** "over the sign's 90–130 %" / "under …" when the share is outside the band (else ''). */
@@ -38,8 +39,8 @@ export function rowShiftC(c) {
   return dl && dl.targetShiftC && d >= 0 && d <= (dl.shiftDays ?? 3) ? dl.targetShiftC : 0;
 }
 export const SHIFT_WORDS = 'the sign’s row + 1 °C (weak batch)';
-export const line = (text) => ({ k: 'line', text });
-export const note = (text) => ({ k: 'note', text });
+export const line = (text) => ({ k: 'line', text: fillKeys(text) });
+export const note = (text) => ({ k: 'note', text: fillKeys(text) });
 export const time = (text, bar) => ({ k: 'time', text, bar: Math.max(0, Math.min(1, bar ?? 0)) });
 /** How long something takes in farm time (the steps hotfix): a time row without a bar; a paused clock adds its line. */
 export const wait = (text) => ({ k: 'time', text, bar: null, farm: true });
@@ -113,7 +114,7 @@ const lightAt = (env, farm) => env.lightProgram || farm.light || { darkStart: 2,
 const lightRows = (c, { sign, signLux }) => {
   const p = lightAt(c.env, c.farm);
   return [cmp('Light a day', sign, `${one(24 - (p.darkHours ?? 1))} h (24 − ${one(p.darkHours ?? 1)} h dark from ${hhmm(p.darkStart ?? 2)})`),
-    cmp('Light at chick level', signLux, `dimmer ${pct(p.dimmer)} ≈ ${int(luxOfDimmer(p.dimmer))} lux (press L at chick level to measure)`)];
+    cmp('Light at chick level', signLux, `dimmer ${pct(p.dimmer)} ≈ ${int(luxOfDimmer(p.dimmer))} lux (press {key:lux} at chick level to measure)`)];
 };
 
 // ---------------- the brooding week's jobs ----------------
@@ -164,7 +165,7 @@ export const STRIPS = {
         cmp('Thermostat', `brooder sign, day 0: ${row} °C`, C1(sp)),
         step(near ? `Thermostat ${C1(sp)}: within 1 °C of the sign’s ${row} °C` : `Press ${sp < row ? 'Raise' : 'Lower'} the brooder thermostat (0.5 °C a press) to ${row - 1}–${row + 1} °C`, near),
         step(`Brooders: ${brooderState(c.env)}`, c.env.heatersOn),
-        line(`House now ${C1(c.env.houseTemp)}: it warms over the night (the job itself is done once the thermostat is set and the brooders burn). Measure the floor with T tomorrow from 06:00.`)];
+        line(`House now ${C1(c.env.houseTemp)}: it warms over the night (the job itself is done once the thermostat is set and the brooders burn). Measure the floor with {key:probe} tomorrow from 06:00.`)];
     } },
   'prep-lights': { panels: { controller: 'lights' }, title: 'Light program for the chicks',
     rows: (c, inst) => [...lightRows(c, { sign: 'light plate: 23 h', signLux: `light plate: ${CHICK_LUX[0]}–${CHICK_LUX[1]} lux (dimmer 50–67 %)` }),

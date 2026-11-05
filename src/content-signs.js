@@ -13,6 +13,7 @@
 // The Phase 1 boards (sign-gate, sign-brooder) keep their 3D look from content.js; their Level 1
 // item lists are here (a superset of the Phase 1 lines, with the source tags of PHASE2.md §5).
 import { GUIDES, targetTempAt } from './config.js';
+import { keyWordProps } from './key-words.js'; // fix round: a fact's {key:id} token filled when read
 
 /** "Week 1 guide / Broiler Ventilation" from a key or keys; 'week1-4' = the four week guides. */
 export function sourceLabel(src) {
@@ -46,7 +47,7 @@ export const BOARDS = {
       { text: 'House temperature 34 °C on day 1, falling to 20 °C by day 35.', source: ['week1', 'vent'] },
       { text: 'Pre-heat the house so the floor reaches 28–30 °C before the chicks arrive.', source: 'week1' },
       { text: 'Read the chicks: huddled under the brooders = cold; along the walls, wings out, beaks open = hot; evenly spread, eating and drinking = comfortable.', source: 'week1-4', pic: 'spread' },
-      { text: 'Measure the floor with a thermometer at chick level (T), in several places.', source: 'general' },
+      { text: 'Measure the floor with a thermometer at chick level ({key:probe}), in several places.', source: 'general' },
       { text: 'On every round, check that each brooder is burning.', source: 'general' },
     ],
   },
@@ -85,7 +86,7 @@ export const BOARDS = {
     title: 'Litter', kicker: 'Rice husk', where: 'Inside, north wall, at the brooding curtain',
     items: [
       { text: 'Keep the litter at or below 30 % moisture.', source: 'vent' },
-      { text: 'Squeeze a handful (Q): falls apart = dry; holds, then breaks when you open the hand = right; sticks together = too wet.', source: 'general', pic: 'squeeze' },
+      { text: 'Squeeze a handful ({key:squeeze}): falls apart = dry; holds, then breaks when you open the hand = right; sticks together = too wet.', source: 'general', pic: 'squeeze' },
       { text: 'Spread 5–10 cm of dry rice husk evenly before pre-heating.', source: 'general' },
       { text: 'Wet spots under the drinkers: look for a leaking nipple or too much pressure, then cover the spot with fresh litter.', source: 'general' },
     ],
@@ -165,3 +166,6 @@ export const BOARDS = {
 
 /** Every board/plate id a job may link to (content-jobs.js `signs`). */
 export const BOARD_IDS = Object.keys(BOARDS);
+
+// fix round: a fact that names a farm key reads it as bound now
+for (const b of Object.values(BOARDS)) for (const it of b.items || []) keyWordProps(it, ['text']);

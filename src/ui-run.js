@@ -141,9 +141,11 @@ export function createBusyCard(root) {
     get open() { return !el.hidden; },
     /** Show the card, then run `fn` once the browser has painted it. */
     run(msg, fn) {
+      if (!el.hidden) return false; // fix round: a second press while the first long job waits is not queued
       setText(text, msg); el.hidden = false;
       const go = () => { try { fn(); } finally { el.hidden = true; } };
       if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => setTimeout(go, 30)); else go();
+      return true;
     },
   };
 }

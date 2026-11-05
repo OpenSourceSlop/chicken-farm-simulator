@@ -68,7 +68,7 @@ export const STRIPS_COND = {
       line(`Storm flaps: ${c.farm.house?.flapsClosed ? 'closed (the inlets give 70 % of the timer air: open them again when the storm has passed)' : 'open'} · ${c.farm.weatherNow?.rain ? 'raining now' : 'no rain now'}.`),
       step('Ventilation: close the Storm flaps on the south inlets', inst.status === 'done')] },
   'p-rain-patch': { panels: { 'litter-heap': null }, title: 'Fresh litter on the wet strip by the south wall',
-    rows: (c, inst) => { const n = (inst.st?.list || []).length; return [line('Take a sack of husk here, walk to the wet strip along the south wall and press E on it.'), step(`Sacks on the wet strip: ${n} of 3`, n >= 3)]; } },
+    rows: (c, inst) => { const n = (inst.st?.list || []).length; return [line('Take a sack of husk here, walk to the wet strip along the south wall and press {key:use} on it.'), step(`Sacks on the wet strip: ${n} of 3`, n >= 3)]; } },
   'p-damp2': { panels: { controller: 'top' },
     rows: (c, inst) => [cmp('Humidity in', 'air and vent signs (rainy season): more air carries the damp out; this job: at or under 85 %', `${int(c.env.houseRH)} %`), ...ventRows(c, { purpose: false }), ...partRows(c, inst)] },
   // ---------------- a bad batch of chicks ----------------

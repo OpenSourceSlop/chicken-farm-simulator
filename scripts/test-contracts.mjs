@@ -598,6 +598,36 @@ test('phase 5 merged words: sound captions, intro cards, map places, menu, setti
   assert(!Object.values(BOARD_COND_ITEMS).some((byBoard) => Object.entries(byBoard).some(([b, items]) => b !== 'sign-heat' && items.some((it) => /eat less in the hottest hours/.test(it.text)))), 'the appetite line only on the heat sign');
 });
 
+test('fix round: no job, strip, Next: line, sign fact or intro card names a farm key as a bare letter (the {key:id} tokens follow a rebind)', async () => {
+  const files = ['content-jobs.js', 'content-jobs-cycle.js', 'content-jobs-cond.js', 'content-signs.js', 'content-signs-cycle.js', 'content-signs-cond.js',
+    'job-next.js', 'job-strips.js', 'job-strips-cycle.js', 'job-strips-cond.js', 'ui-intro.js'];
+  const BARE = /\((?:Shift\+)?[EQTLVG]\)|\([EQTLVG]:|[Pp]ress(?:es)? [EQTLVG]\b|\b[EQTLVG] (?:picks|squeezes|puts|reads|tips|on the)\b|with [EQTLVG]\b/;
+  const bad = [];
+  for (const f of files) {
+    readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8').split('\n').forEach((ln, i) => {
+      const code = ln.replace(/^\s*\/\/.*$/, '').replace(/\s\/\/ .*$/, '');
+      for (const m of code.matchAll(/'([^'\\]|\\.)*'|`([^`\\]|\\.)*`/g)) if (BARE.test(m[0])) bad.push(`${f}:${i + 1} ${m[0].slice(0, 70)}`);
+    });
+  }
+  assert(!bad.length, `bare key letters: ${bad.join(' | ')}`);
+  // a rebind reads at once in a title, a place line, a strip line and a sign fact
+  const { setKeyWords } = await import('../src/key-words.js');
+  const { createKeys } = await import('../src/keys.js');
+  const st = { v: {}, get(p) { return this.v[p]; }, set(p, x) { this.v[p] = x; } };
+  const keys = createKeys(st);
+  setKeyWords(keys);
+  try {
+    keys.rebind('probe', 'KeyY'); keys.rebind('squeeze', 'KeyB');
+    const { jobById, jobWhere } = await import('../src/content-jobs.js');
+    const { line } = await import('../src/job-strips.js');
+    assert(/press Y at your feet/.test(jobWhere('d0-floor')), `d0-floor after the rebind: ${jobWhere('d0-floor')}`);
+    assert(/\(B: squeeze/.test(jobById('r-litter').title), `r-litter title: ${jobById('r-litter').title}`);
+    assert(line('press {key:probe} there').text === 'press Y there', 'a strip line');
+    assert(BOARDS['sign-brooder'].items.some((it) => /chick level \(Y\)/.test(it.text)), 'the brooder sign fact');
+  } finally { setKeyWords(null); }
+  assert(/press T at your feet/.test((await import('../src/content-jobs.js')).jobWhere('d0-floor')), 'the defaults again with no keys object');
+});
+
 let failed = 0;
 for (const t of tests) {
   try { await t.fn(); console.log(`ok   ${t.name}`); } catch (e) { failed++; console.log(`FAIL ${t.name}: ${e.message}`); }

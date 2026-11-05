@@ -68,6 +68,7 @@ const MOVE_IDS = ['forward', 'back', 'left', 'right', 'run', 'turnLeft', 'turnRi
 // the level's own keys, each to its action (the views and meters come with the level, PHASE3.md §13.6); the bucket's key
 // ('bucket', KeyG by default: PHASE4.md §15.3) is acted on here only, as every other farm key
 const LEVEL_IDS = ['squeeze', 'probe', 'notebook', 'skills', 'floorView', 'lux', 'air', 'comfortView', 'moistureView'];
+const FARM_TOOL_IDS = ['squeeze', 'probe', 'lux', 'air']; // fix round: the tools that read the farm rest while the player paused the clock
 const P1_IDS = new Set(['sign-gate', 'controller', 'sign-brooder']); // what E reaches in the sandbox
 const TWO_HANDS_PANELS = new Set(['chick-table', 'chick-grading']);    // PHASE4.md §15.3 (c): panels that handle chicks
 const clockText = (t) => { const m = Math.round((((t % 1) + 1) % 1) * 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
@@ -441,6 +442,9 @@ export function createUI(ctx, deps) {
     onSkills: () => togglePanel('skilltree'),
     nextLabel: () => ctx.level?.nextLabel?.() ?? 'Next job',
   });
+  // fix round: a rebind shows at once in the job card's titles, details and Next: lines (their {key:id} tokens)
+  try { ctx.keys?.subscribe?.(() => { try { jobCard.refresh?.(); } catch { /* the card draws again next refresh */ } }); } catch { /* no keys */ }
+
   nextBar.addEventListener('click', () => ctx.level?.nextJob());
   const deadMarks = createDeadMarks(ctx, root, { avoid, jobPointer: () => jobCard.pointerEl });
   const watchCard = createWatchCard(root, ctx);
@@ -551,7 +555,7 @@ export function createUI(ctx, deps) {
     return out;
   }
   function setBucketDown() {
-    if (props?.carrying !== 'bucket') { if (props?.bucketDown) caption.show('The bucket stands where you set it down: E picks it up there.'); return false; }
+    if (props?.carrying !== 'bucket') { if (props?.bucketDown) caption.show(`The bucket stands where you set it down: ${K.label('use')} picks it up there.`); return false; }
     return props.setBucketDown({ auto: false });
   }
   function useTarget(t) {
@@ -629,6 +633,8 @@ export function createUI(ctx, deps) {
       try { used = keyClaims[i](e) === true; } catch (err) { console.error('key claim failed', err); }
       if (used) { e.stopImmediatePropagation(); return; }
     }
+    // fix round: the busy card (a long skip or a standard start waiting to run) takes every key until it is done
+    if (busy.open) { e.preventDefault(); e.stopImmediatePropagation(); return; }
     if (narrow.open) return;
     if (panels.openId) {
       let used = false;
@@ -646,6 +652,10 @@ export function createUI(ctx, deps) {
     if (inFormControl(e.target) && (ARROW_KEYS.has(k) || (e.code || '').startsWith('Arrow'))) { e.stopImmediatePropagation(); return; }
     if (typingInControl(e.target)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // fix round: while the player paused the clock the farm's own keys rest (E, G and the tools); the panels still open
+    if (mode === 'level' && ctx.level?.hudHooks?.userPaused && !e.repeat && (is(e, 'use') || is(e, 'useDead') || is(e, 'bucket') || K.actionOf(e, FARM_TOOL_IDS))) {
+      e.preventDefault(); caption.show(ctx.level.hudHooks.pausedText?.() || 'Paused', 3); return;
+    }
     if ((is(e, 'use') || is(e, 'useDead')) && !e.repeat) {
       // Shift+E in a level: the dead bird (or the bucket) when a chick job keeps them off E
       const target = is(e, 'useDead') && mode === 'level' && chickJob() ? deadTarget() : nearestTarget();
@@ -784,7 +794,7 @@ export function createUI(ctx, deps) {
       alarmT = Math.max(0, alarmT - dt);
       const show = mode === 'level' && (dark || alarmT > 0) && !!alarmMsg;
       if (alarm.hidden === show) alarm.hidden = !show;
-      if (show) setText(alarmText, `${alarmMsg}${dark ? ' The farm clock runs slower while the house is dark (every farm minute counts); Next job does not skip.' : ''}${ctx.level?.skipStopped && Math.abs(ctx.level.skipStopped.at - env.day) < 2 / 1440 ? ' The Next job skip stopped here.' : ''}`);
+      if (show) setText(alarmText, `${alarmMsg}${dark ? ` The farm clock runs slower while the house is dark (every farm minute counts); Next job does not skip and ${ctx.keys?.label?.('pause') ?? 'P'} does not pause.` : ''}${ctx.level?.skipStopped && Math.abs(ctx.level.skipStopped.at - env.day) < 2 / 1440 ? ' The Next job skip stopped here.' : ''}`);
       { const off = panels.openId || narrow.open || title.open || busy.open; prompt.show(off ? null : nearestTarget(), off ? [] : promptAlts()); }
     },
     // hooks for level.js, the integrator and tests
