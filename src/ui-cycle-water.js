@@ -11,6 +11,11 @@ import { buildPlate } from './ui-boards.js';
 import { machineRow, toggleKey, readout } from './ui-equipment.js';
 import { int, one } from './ui-format.js';
 import { makeTabs, whenText, hoursText, mainShut } from './ui-cycle-kit.js';
+// Skills update (SKILLS.md §3.1): the sight tubes, the trend, the winch motors (supplySkills / drinkerSkills below)
+import { EQUIP } from './config.js';
+import { columnsNow, COLUMN_BAND_CM } from './farm-auto.js';
+import { nippleCmToday } from './job-figures.js';
+import { skillBox, workLine, oneKey, row as skRow, note as skNote, perkHas, perkAuto, live, autoStatus, openFault, holdText, faultText, atText, ensureSkillsStyle } from './ui-cycle-skills.js';
 
 const FROM_DAY = 8;
 
@@ -145,4 +150,172 @@ export function cycleWaterParts(L, { linesSec, foldPlates, needTime = null }) {
     update() { sync(); },
     fold() { vacPlate.fold(); medPlate.fold(); },
   };
+}
+
+// ---------------- Skills update (SKILLS.md §3.1, §5.1, §12.9): the sight tubes, the trend, the winch motors ----------------
+// Water 2 (waterAllLines): the sight-tube board at the supply, Read the sight tubes -> water.columns {} (each line's
+// column against the drinker plate's mark for the day; every line keeps lastColumn), the lines that read off named with
+// their regulator. Water 1 (waterTrend): the Trend key beside the meter. Water 3 (autoWinch): the four heights against the
+// plate with each motor's state; at the regulator the motor's row, Reset the motor (auto.reset { system: 'winch', line })
+// and the farmer's winching holding until 06:00. Everything behind the perks: with live false nothing here shows.
+const TUBE_MAX = EQUIP.pressureCm[1];
+/** The sight-tube board: four clear tubes, the red mark at the plate's column, the blue water (cm) of each line. */
+function tubesSvg(cols) {
+  const W = 260, H = 120, top = 10, bot = 104, y = (cm) => bot - (Math.max(0, Math.min(TUBE_MAX, cm)) / TUBE_MAX) * (bot - top);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" aria-hidden="true"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="5" fill="#eceae2" stroke="var(--plate-edge)"/>
+    ${cols.map((c, i) => { const x = 22 + i * 62; return `<rect x="${x}" y="${top}" width="16" height="${bot - top}" rx="7" fill="#fbfbf8" stroke="#8d8a80"/>
+      <rect x="${x + 3}" y="${y(c.cm).toFixed(1)}" width="10" height="${(bot - y(c.cm)).toFixed(1)}" rx="4" fill="#3d8fd6"/>
+      <path d="M${x - 5} ${y(c.markCm).toFixed(1)}h26" stroke="#d2382b" stroke-width="2.4"/>
+      <text x="${x + 8}" y="${H - 4}" font-size="10" text-anchor="middle" fill="#3b3a34" font-family="var(--font-display)">${i + 1}</text>`; }).join('')}</svg>`;
+}
+const offWords = (c) => { const d = c.cm - c.markCm; return Math.abs(d) <= COLUMN_BAND_CM + 1e-9 ? 'at the mark' : `${one(Math.abs(d))} cm ${d < 0 ? 'under' : 'over'} the mark`; };
+const sameDay = (env, t) => Number.isFinite(t) && Math.floor(t + 1e-9) === Math.floor(env.day + 1e-9);
+/** The Trend key's graph (Water 1), drawn for the panel's width at its own scale (12 px labels): bars litres per 1,000
+ *  birds a day, the dashed line water : feed on its own 0–3 axis (the record book's water graph, ui-summary waterSvg). */
+function trendSvg(pts) {
+  const W = 480, H = 150, padL = 34, padR = 30, padT = 10, padB = 22;
+  const d0 = Math.min(...pts.map((p) => p.d)), n = Math.max(7, Math.max(...pts.map((p) => p.d)) - d0 + 1);
+  const vmax = Math.max(50, ...pts.map((p) => p.v || 0)) * 1.1, bw = (W - padL - padR) / n;
+  const X = (d) => padL + (d - d0 + 0.5) * bw, Y = (v) => H - padB - (Math.max(0, v) / vmax) * (H - padT - padB), RY = (r) => H - padB - (Math.min(3, Math.max(0, r)) / 3) * (H - padT - padB);
+  const ink = 'fill="var(--lcd-ink)" font-size="12" font-family="var(--font-display)"';
+  const bars = pts.filter((p) => Number.isFinite(p.v)).map((p) => `<rect x="${(X(p.d) - bw * 0.35).toFixed(1)}" y="${Y(p.v).toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${(H - padB - Y(p.v)).toFixed(1)}" fill="var(--lcd-ink)" opacity="0.45"/>`).join('');
+  const rp = pts.filter((p) => Number.isFinite(p.ratio));
+  const line = rp.map((p, i) => `${i ? 'L' : 'M'}${X(p.d).toFixed(1)} ${RY(p.ratio).toFixed(1)}`).join('');
+  const days = pts.filter((p, i) => i === 0 || i === pts.length - 1 || (p.d - d0) % 3 === 0).map((p) => `<text x="${X(p.d).toFixed(1)}" y="${H - 6}" text-anchor="middle" ${ink}>${p.d}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Water per 1,000 birds by day (bars) and water to feed (dashed line)">
+    <path d="M${padL} ${H - padB}H${W - padR}" stroke="var(--lcd-ink)"/>${bars}
+    ${line ? `<path d="${line}" fill="none" stroke="var(--lcd-ink)" stroke-width="2" stroke-dasharray="5 3"/>` : ''}
+    <text x="${padL - 4}" y="${padT + 10}" text-anchor="end" ${ink}>${Math.round(vmax)}</text><text x="${padL - 4}" y="${H - padB}" text-anchor="end" ${ink}>0</text>
+    <text x="${W - padR + 4}" y="${padT + 10}" ${ink}>3</text><text x="${W - padR + 4}" y="${H - padB}" ${ink}>0</text>${days}</svg>`;
+}
+
+/** The water supply's payoff parts: { trendKey, trendEl, el, onOpen(), update() }. */
+export function supplySkills(L) {
+  const { env, farm } = L;
+  ensureSkillsStyle();
+  // Water 1: the Trend key beside the meter (the record book's graph of the last 14 days, inline)
+  let trendOpen = false;
+  const trendKey = oneKey('Trend', () => { trendOpen = !trendOpen; drawTrend(); }, { label: 'Trend: water per 1,000 birds, the last 14 days' });
+  trendKey.hidden = true; trendKey.setAttribute('data-skill-key', 'waterTrend');
+  const trendEl = h('div', { class: 'cyc-chart', hidden: true });
+  function drawTrend() {
+    const on = live() && perkHas(L, 'waterTrend') && farm.mode === 'level';
+    trendKey.hidden = !on;
+    trendKey.setAttribute('aria-expanded', String(on && trendOpen));   // a disclosure (shows the graph under the meter), not a lit switch
+    trendEl.hidden = !(on && trendOpen);
+    if (trendEl.hidden) return;
+    const rows = (L.records?.rows ? L.records.rows() : []).filter((r) => r.day >= Math.max(0, env.dayNumber - 14) && r.day <= env.dayNumber);
+    const k = rows.map((r) => `${r.day}|${r.waterPerBirdMl}`).join(',');
+    if (trendEl.__k === k) return;
+    trendEl.__k = k;
+    trendEl.innerHTML = rows.length >= 2 ? `<p class="ctrl-chart-k">Last 14 days · litres per 1,000 birds (bars), water : feed (dashed, 0–3) · Water 1</p>${trendSvg(rows.map((r) => ({ d: r.day, v: r.waterPerBirdMl, ratio: r.waterFeedRatio })))}`
+      : '<p class="ctrl-chart-k">Water trend: it draws from two signed days of the record book</p>';
+  }
+  // Water 2: the sight-tube board
+  const board = h('div', { class: 'skl-board' });
+  const readKey = oneKey('Read the sight tubes', () => readTubes());
+  const tubeWork = workLine();
+  const tubeRows = h('div', { class: 'skl-tubes' });
+  const offNote = skNote();
+  let read = null; // { day, at, lines }
+  function readTubes() {
+    const r = L.act('water.columns', {}) || {};
+    read = { day: env.dayNumber, at: env.timeLabel, lines: Array.isArray(r.lines) ? r.lines : [] };
+    draw(true);
+  }
+  // (what a column means is on the water supply plate beside the panel: the sign's line, general practice)
+  const tubes = skillBox('waterAllLines', 'Sight-tube board · one tube a line', board, skRow(readKey, tubeWork.el), tubeRows, offNote);
+  // Water 3: the winch motors
+  const winchTable = h('div');
+  const winchNote = skNote();
+  const winch = skillBox('autoWinch', 'Winch motors · the drinker plate’s height', winchTable, winchNote);
+  const el = h('div', null, tubes.el, winch.el);
+  let key = '';
+  function draw(force) {
+    const on2 = perkHas(L, 'waterAllLines') && farm.mode === 'level';
+    tubes.show(on2);
+    if (on2) {
+      let cols = [];
+      try { cols = columnsNow(farm, env); } catch { cols = []; }
+      const k = cols.map((c) => `${c.cm}|${c.markCm}`).join(',');
+      if (force || board.__k !== k) { board.__k = k; board.innerHTML = tubesSvg(cols); }
+      const r = read && read.day === env.dayNumber ? read : null;
+      const d = Math.max(0, env.dayNumber);
+      tubeWork.set(r ? `Read ${r.at}: ${r.lines.filter((c) => c.inBand).length} of ${r.lines.length} lines at the mark (${one(r.lines[0]?.markCm)} cm for day ${d})` : `Red mark: the drinker plate’s column for day ${d}, ${one(cols[0]?.markCm)} cm`,
+        r ? 'A line at its mark counts as flow-tested today.' : 'A line read at its mark counts as flow-tested today.');
+      const rk = r ? r.lines.map((c) => `${c.cm}|${c.inBand}`).join(',') : '';
+      if (force || tubeRows.__k !== rk) {
+        tubeRows.__k = rk;
+        tubeRows.replaceChildren(...(r ? r.lines : []).map((c) => h('span', { class: `skl-tube${c.inBand ? '' : ' is-off'}`, 'data-line': String(c.line) }, `Line ${c.line + 1}`, h('span', null, `${one(c.cm)} cm`), h('small', null, offWords(c)))));
+      }
+      const off = r ? r.lines.filter((c) => !c.inBand) : [];
+      setText(offNote, !r ? '' : off.length ? off.map((c) => `Line ${c.line + 1}: a cup test at the line ${c.line + 1} regulator (west end); its pressure ${c.cm < c.markCm ? '+' : '−'} key ${c.cm < c.markCm ? 'raises' : 'lowers'} the column.`).join(' ') : 'Every line reads at the mark: no cup test on these lines today.');
+      offNote.hidden = !r;
+    }
+    const on3 = farm.mode === 'level' && (perkAuto(L, 'winch') || !!openFault(L, 'winch-stall'));
+    winch.show(on3);
+    if (on3) {
+      const st = autoStatus(L, 'winch'), plate = nippleCmToday(env);
+      const rows = farm.water.lines.map((l, i) => {
+        const stall = openFault(L, 'winch-stall', i), held = holdText(L, 'winch', i);
+        return [i, l.heightCm, stall ? `stalled at ${int(l.heightCm)} cm` : held ? 'held: your winching' : st.on ? 'running' : 'off'];
+      });
+      const k = `${rows.map((r) => `${r[1]}|${r[2]}`).join(',')}|${plate}`;
+      if (force || k !== key) {
+        key = k;
+        winchTable.replaceChildren(h('table', { class: 'skl-table' }, h('thead', null, h('tr', null, ['Line', 'Nipples', 'Plate', 'Motor'].map((t) => h('th', { scope: 'col' }, t)))),
+          h('tbody', null, rows.map(([i, cm, w]) => h('tr', null, h('th', { scope: 'row' }, String(i + 1)), h('td', null, `${int(cm)} cm`), h('td', null, `${int(plate)} cm`), h('td', null, w))))));
+      }
+      const f = st.faults[0];
+      setText(winchNote, f ? `${faultText(L, f)}. Winch the line by hand to the plate at its regulator and reset the motor there.` : st.text || 'The motors keep each line at the drinker plate’s height, at most 2 cm a farm hour.');
+      winchNote.classList.toggle('skl-note--fault', !!f);
+    }
+  }
+  return {
+    trendKey, trendEl, el,
+    /** the last read of today (the harness and the strip read it): { day, at, lines } | null */
+    lastRead: () => (read && read.day === env.dayNumber ? read : null),
+    onOpen() { trendOpen = false; drawTrend(); draw(true); },
+    update() { drawTrend(); draw(false); },
+  };
+}
+
+/** A drinker regulator's payoff parts: this line's sight tube read today (Water 2), its winch motor (Water 3). */
+export function drinkerSkills(L, line) {
+  const { env, farm } = L;
+  ensureSkillsStyle();
+  const tubeLine = workLine();
+  const tubes = skillBox('waterAllLines', 'This line’s sight tube at the water supply', skRow(tubeLine.el));
+  const motorLine = workLine();
+  let said = '';
+  const reset = oneKey('Reset the motor', () => {
+    const r = L.act('auto.reset', { system: 'winch', line }) || {};
+    said = r.reset ? `Motor reset ${env.timeLabel}: it follows the drinker plate again.` : `Reset pressed ${env.timeLabel}: the motor answers once the line is at the plate’s height.`;
+    draw();
+  }, { label: `Reset the line ${line + 1} winch motor` });
+  const motorNote = skNote();
+  const motor = skillBox('autoWinch', `Line ${line + 1} winch motor`, skRow(motorLine.el, reset), motorNote);
+  const el = h('div', null, tubes.el, motor.el);
+  function draw() {
+    const l = farm.water.lines[line], lc = l.lastColumn;
+    const on2 = perkHas(L, 'waterAllLines') && farm.mode === 'level' && !!lc && sameDay(env, lc.at);
+    tubes.show(on2);
+    if (on2) {
+      let mark = null;
+      try { mark = columnsNow(farm, env)[line]?.markCm; } catch { mark = null; }
+      tubeLine.set(`Read ${atText(env, lc.at)}: ${one(lc.cm)} cm${mark != null ? `, mark ${one(mark)} cm` : ''} · ${lc.inBand ? 'at the mark: this line counts as flow-tested today' : 'off the mark: a cup test here'}`,
+        lc.inBand ? '' : 'The pressure + key raises the column, − lowers it.');
+    }
+    const stall = openFault(L, 'winch-stall', line);
+    const on3 = farm.mode === 'level' && (perkAuto(L, 'winch') || !!stall);
+    motor.show(on3);
+    if (!on3) return;
+    const held = holdText(L, 'winch', line), plate = nippleCmToday(env);
+    motorLine.set(stall ? `Stalled at ${int(l.heightCm)} cm (plate ${int(plate)} cm)` : held ? `Held: ${held}` : `Running: the nipples follow the drinker plate, ${int(plate)} cm today`,
+      stall ? 'Winch the line by hand to the plate’s height, then reset the motor.' : 'Your own winching of this line holds until 06:00.');
+    reset.hidden = !stall;
+    setText(motorNote, said || (stall ? faultText(L, stall) : ''));
+    motorNote.hidden = !motorNote.textContent;
+  }
+  return { el, onOpen() { said = ''; draw(); }, update() { draw(); } };
 }

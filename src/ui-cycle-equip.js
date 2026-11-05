@@ -11,6 +11,11 @@ import { machineRow, toggleKey, readout } from './ui-equipment.js';
 import { int, one } from './ui-format.js';
 import { whenText, machineJob, progressBar, historyOf, knownBirds } from './ui-cycle-kit.js';
 import { farmTimeNote } from './ui-farmtime.js';
+// Skills update (SKILLS.md §3.6, §5.1, §6.5): siloSkills / feederSkills below
+import { HARVEST, LEVEL1, AUTO, feedTypeForDay } from './config.js';
+import { feedDays } from './farm-silos.js';
+import { knownAliveOf, rimCmNow } from './job-figures.js';
+import { skillBox, workLine, oneKey, row as skRow, note as skNote, perkHas, perkAuto, live, autoStatus, openFault, holdText, faultText, atText, glanceFor, ensureSkillsStyle } from './ui-cycle-skills.js';
 
 const level = (L) => L.farm.mode === 'level';
 const TYPE_FILL = { starter: 'var(--sign-yellow)', grower: '#c98f3a', finisher: '#9c6a34' };
@@ -141,7 +146,8 @@ export function cycleSiloParts(L) {
     });
     const k = silos.map((s) => `${Math.round(s.kg / 50)}:${(s.layers || []).map((l) => l.type).join('/')}`).join('|');
     if (strip.__k !== k) { strip.__k = k; strip.innerHTML = silosSvg(silos); }
-    const on = !!skills?.unlocked?.('siloDays');
+    // Skills update: while live the days of feed are siloSkills' line (feedDays, Feed 2), not this readout
+    const on = !live() && !!skills?.unlocked?.('siloDays');
     daysBox.hidden = !on;
     if (on) {
       const rows = historyOf(env).filter((r) => Number.isFinite(r.feedKg));
@@ -190,4 +196,119 @@ export function cycleHeapParts(L) {
       }
     },
   };
+}
+
+// ---------------- Skills update (SKILLS.md §3.6, §5.1, §6.5): the silo gauge's days of feed and its orders ----------------
+// Feed 2 (siloOrder, with the siloDays view at level 2 while live): the days of feed from farm-silos feedDays (one figure for
+// the gauge, the warning, the phone and the feed controller), the 2-day line, Order to 3 days and from day 36 Order to the
+// catch (feed.order { kg, type, silo, from: 'silo' }) each with its working before and after the press and the farm-time
+// note. Feed 3 (autoFeed): the controller's orders and the mill's confirmation (or the order-lost fault's words); at the
+// feeder box the rims the controller keeps. The glance at both (AUTO_SYSTEMS.feed.glanceAt).
+const sumKg = (list) => (list || []).reduce((a, o) => a + (o.kg || 0), 0);
+const typeLabel = (t) => (TYPE_NAME[t] || t || '').toLowerCase();
+/** The type an open order job asks for, else the feed of the coming days. */
+function orderType(env, jobs) {
+  const open = (id) => jobs.some((i) => i.id === id && (i.status === 'open' || i.status === 'waiting') && i.day === env.dayNumber);
+  if (open('w2-order')) return 'grower';
+  if (open('w45-order')) return 'finisher';
+  return feedTypeForDay(Math.max(0, env.dayNumber) + 2).id;
+}
+/** Order to 3 days (the order job's own figure: the known birds × the feed sign at the next 3 days' middle). */
+export function orderTo3(env, farm, jobs = []) {
+  const f = farm.feed, birds = knownAliveOf(farm.flock) || LEVEL1.chicksPlaced, age = Math.max(0, flockAgeAt(env.day));
+  const perDay = (birds * feedStdGAt(age + 1.5)) / 1000, need = Math.min(3 * perDay, EQUIP.siloCapacityKg - 50);
+  const type = orderType(env, jobs), silo = FEED_TYPES.find((t) => t.id === type)?.silo ?? 0;
+  const cyc = !!(farm.cyc?.on && f.silos);
+  const inSilo = cyc ? f.silos[silo].kg : f.siloKg || 0, coming = cyc ? sumKg((f.pending || []).filter((o) => o.silo === silo)) : f.order?.kg || 0;
+  const kg = Math.max(0, Math.ceil((need - inSilo - coming) / 10) * 10);
+  const where = cyc ? `silo ${silo + 1}` : 'the silo';
+  const text = kg > 0 ? `3 days × ${int(perDay)} kg − ${int(inSilo)} kg in ${where}${coming ? ` − ${int(coming)} kg on the way` : ''} → ${int(kg)} kg ${cyc ? typeLabel(type) : 'feed'}`
+    : `3 days × ${int(perDay)} kg: ${where} holds ${int(inSilo + coming)} kg with what is on the way, nothing to order`;
+  return { kg, type, silo, perDay, inSilo, coming, text };
+}
+/** Order to the catch (from day 36): to the withdrawal (about 11 h before the catch) with about 300 kg left (under 1.2 t). */
+export function orderToCatch(env, farm) {
+  const f = farm.feed, birds = knownAliveOf(farm.flock), age = Math.max(0, flockAgeAt(env.day));
+  const catchAt = farm.harvest?.catchAt ?? HARVEST.catchDefault.day + HARVEST.catchDefault.hour / 24;
+  const days = Math.max(0, catchAt - 11 / 24 - env.day), eat = (birds * feedStdGAt(age + days / 2) * days) / 1000;
+  const have = f.silos ? f.silos.reduce((a, x) => a + x.kg, 0) + sumKg(f.pending) : (f.siloKg || 0) + (f.order?.kg || 0);
+  const kg = Math.max(0, Math.ceil((eat - have + 300) / 10) * 10);
+  const text = `to the withdrawal (${atText(env, catchAt - 11 / 24)}): ${one(days)} days × ${int(eat / Math.max(0.01, days))} kg − ${int(have)} kg in the silos and on the way → ${kg > 0 ? `${int(kg)} kg finisher, about ${int(have + kg - eat)} kg left` : 'nothing to order'}`;
+  return { kg, type: 'finisher', silo: FEED_TYPES.find((t) => t.id === 'finisher')?.silo ?? 0, text };
+}
+
+export function siloSkills(L) {
+  const { env, farm } = L;
+  ensureSkillsStyle();
+  const glance = glanceFor(L, 'silo');
+  const daysLine = workLine(), warn = skNote('skl-note--fault');
+  const w3 = workLine(), wC = workLine(), said = skNote();
+  const note = farmTimeNote();
+  const order = (o) => {
+    if (!(o.kg > 0)) { setText(said, `Nothing ordered at ${env.timeLabel}: ${o.text}.`); said.hidden = false; return; }
+    const r = L.act('feed.order', { kg: o.kg, type: o.type, silo: o.silo, from: 'silo' }) || {};
+    const label = typeLabel(r.type || o.type) || 'feed';
+    // the working stays beside the order sent (SKILLS.md §6.5: before and after the press)
+    setText(said, r.arriveDay != null ? `Ordered ${int(r.kg ?? o.kg)} kg of ${label} at ${env.timeLabel} (${o.text}): the feed truck comes day ${r.arriveDay}, ${String(r.arriveHour ?? 9).padStart(2, '0')}:00.` : `Ordered ${int(o.kg)} kg at ${env.timeLabel} (${o.text}).`);
+    note.start('the feed truck comes as farm time passes (Next job skips ahead)');
+    sync();
+  };
+  const k3 = oneKey('Order to 3 days', () => order(orderTo3(env, farm, L.jobs())));
+  const kC = oneKey('Order to the catch', () => order(orderToCatch(env, farm)));
+  const box = skillBox('siloOrder', 'Days of feed and the order', daysLine.el, warn, skRow(k3, w3.el), skRow(kC, wC.el), said, note.el);
+  const autoLine = workLine(), autoNote = skNote();
+  const auto = skillBox('autoFeed', 'The feed controller’s orders', autoLine.el, autoNote);
+  const el = h('div', null, box.el, auto.el);
+  function sync() {
+    const lvl = farm.mode === 'level';
+    if (box.show(lvl && (perkHas(L, 'siloOrder') || (live() && perkHas(L, 'siloDays'))))) {
+      let fd = null;
+      try { fd = feedDays(farm, env); } catch { fd = null; }
+      const per = fd?.kgPerDay ? `${int(knownAliveOf(farm.flock))} birds × ${int((fd.kgPerDay * 1000) / Math.max(1, knownAliveOf(farm.flock)))} g` : '';
+      daysLine.set(fd?.days != null ? `About ${one(fd.days)} days of feed at today’s intake (${per}, the feed sign)` : 'Days of feed: no birds to feed yet',
+        (fd?.bySilo || []).length > 1 ? fd.bySilo.map((x, i) => `silo ${i + 1}: ${int(x.kg)} kg, ${x.days != null ? `${one(x.days)} days` : '—'}`).join(' · ') : '');
+      const coming = sumKg(farm.feed.pending) + (farm.feed.order?.kg || 0);
+      setText(warn, fd?.days != null && fd.days <= AUTO.orderAtDays && !coming ? `About ${one(fd.days)} days of feed left: an order here or at the phone.` : '');
+      warn.hidden = !warn.textContent;
+      const has2 = perkHas(L, 'siloOrder');
+      const o3 = orderTo3(env, farm, L.jobs());
+      k3.hidden = !has2; w3.set(has2 ? o3.text : '');
+      const catchOn = has2 && env.dayNumber >= 36 && !farm.harvest?.result;
+      kC.hidden = !catchOn;
+      const oc = catchOn ? orderToCatch(env, farm) : null;
+      wC.set(oc ? oc.text : '');
+      said.hidden = !said.textContent;
+    }
+    const lost = openFault(L, 'order-lost');
+    if (auto.show(lvl && (perkAuto(L, 'feed') || !!lost))) {
+      const st = autoStatus(L, 'feed'), last = farm.auto?.last?.feed;
+      // an order the model marks lost or unconfirmed (o.lost / o.confirmed === false) reads so; else the mill confirmed it
+      const pend = (farm.feed.pending || []).map((o) => `${int(o.kg)} kg ${typeLabel(o.type)}${o.by === 'auto' ? ' (the controller)' : ''}, due day ${o.arriveDay} ${String(o.arriveHour ?? 9).padStart(2, '0')}:00, ${o.lost || o.confirmed === false ? 'not confirmed by the mill' : 'confirmed by the mill'}`);
+      autoLine.set(lost ? faultText(L, lost) : pend.length ? `On the way: ${pend.join(' · ')}` : 'No order on the way',
+        lost ? 'Order by hand: Order to 3 days here, or the phone.' : last?.text || st.text || 'The controller orders to 3 days at 2 days of feed, to day 35.');
+      autoLine.el.classList.toggle('skl-note--fault', !!lost);
+      setText(autoNote, env.dayNumber > AUTO.lastAutoOrderDay ? 'From day 36 the last order is yours: only you know the catch.' : '');
+      autoNote.hidden = !autoNote.textContent;
+    }
+  }
+  let acc = 0;
+  return { el, onOpen() { glance.onOpen(); setText(said, ''); acc = 0; sync(); }, update(dt) { glance.update(dt); acc -= dt || 0; if (acc <= 0) { acc = 0.25; sync(); } } };
+}
+
+/** The feeder box's Feed 3 row: the rims the feed controller keeps (each line held by the farmer's own setting to 06:00). */
+export function feederSkills(L) {
+  const { env, farm } = L;
+  ensureSkillsStyle();
+  const glance = glanceFor(L, 'feeder-box');
+  const line = workLine();
+  const box = skillBox('autoFeed', 'Feeder rims and the feed orders', line.el);
+  function sync() {
+    if (!box.show(farm.mode === 'level' && perkAuto(L, 'feed'))) return;
+    const d = env.dayNumber, held = farm.feed.lines.map((l, i) => (holdText(L, 'feed', i) ? i + 1 : null)).filter(Boolean);
+    const lost = openFault(L, 'order-lost');
+    line.set(d < AUTO.rimFromDay ? 'Days 0–3 the pans stay on the litter; the controller keeps the rims from day 4.' : `The controller keeps the rims at the feeder plate’s ${int(rimCmNow(env))} cm${held.length ? ` · line ${held.join(', ')} held by your setting until 06:00` : ''}`,
+      lost ? faultText(L, lost) : (farm.feed.pending || []).length ? `Feed order on the way: ${(farm.feed.pending || []).map((o) => `${int(o.kg)} kg, day ${o.arriveDay}`).join(' · ')}, confirmed by the mill` : '');
+  }
+  let acc = 0;
+  return { el: box.el, onOpen() { glance.onOpen(); acc = 0; sync(); }, update(dt) { glance.update(dt); acc -= dt || 0; if (acc <= 0) { acc = 0.25; sync(); } } };
 }

@@ -12,6 +12,10 @@ import { equipShell, machineRow, toggleKey, stepper } from './ui-equipment.js';
 import { ROTOR, FAN_INDEXES, lineChart, historyOf, machineJob, progressBar, padCheckOf } from './ui-cycle-kit.js';
 import { heldWaitText } from './ui-farmtime.js';
 import { humidityTerm } from './farm-heat.js';
+// Skills update (SKILLS.md §3.3): the fan suggestion (Ventilation 2), the stage table the controller keeps (Ventilation 3)
+import { adviseFans } from './farm-auto.js';
+import { one } from './ui-format.js';
+import { skillBox, workLine, oneKey, row as skRow, note as skNote, perkHas, perkAuto, openFault, holdText, faultText, autoStatus, glanceFor } from './ui-cycle-skills.js';
 
 /**
  * What the birds feel, °C (PHASE4.md §6.12, the heat sign's "felt: the fan panel's Birds feel reading"): the model's
@@ -26,6 +30,16 @@ export function birdsFeel(env, farm) {
   const model = farm?.mode === 'level' && farm?.cyc?.on && Number.isFinite(fm);
   const felt = model ? fm : base;
   return { felt, chill, damp, rest: felt - base, model };
+}
+
+// Skills update (SKILLS.md §3.3, §6.5): /** Ventilation 2 (fanAdvice): the heat sign's fans and pad for now (farm-auto adviseFans). -> { fans, pad, text } */
+export function fanAdviceFor(env, farm) {
+  let a = null;
+  try { a = adviseFans(env, farm); } catch { a = null; }
+  const fans = Math.max(0, Math.min(FAN_COUNT, Math.round(a?.fans ?? 0))), pad = !!a?.pad;
+  const felt = birdsFeel(env, farm).felt;
+  const tail = `${`${fans} tunnel fan${fans === 1 ? '' : 's'}`}, pad ${pad ? 'on' : 'off'}`;
+  return { fans, pad, text: a?.why ? `${a.why}` : `Heat sign, day ${Math.max(0, env.dayNumber)}, house ${one(env.houseTemp)} °C, birds feel ${one(felt)} °C → ${tail}`, tail };
 }
 
 const READ_AFTER = 2; // real seconds open before the panel counts as read (as the controller)
@@ -82,7 +96,14 @@ export function buildFanPanel(api) {
   const padIn = toggleKey('Run the pad by hand', 'Put the pad in the table', () => { draft.padOn = !draft.padOn; refresh(); }, 'Pad · in the table');
   const setStages = button({ class: 'key key--wide key--apply' }, 'Set the stages');
   const stagesOff = button({ class: 'key key--wide' }, 'Stages off');
-  setStages.addEventListener('click', () => { L.act('vent.stages', { stages: draft.stages.map((s) => ({ ...s })), padOverC: draft.padOn ? draft.padOverC : null }); waits(); refresh(); });
+  setStages.addEventListener('click', () => {
+    // Skills update (SKILLS.md §3.3, §5.1): after a stage trip this key switches the stages on again (no new key)
+    const tripped = !!openFault(L, 'stage-trip');
+    L.act('vent.stages', { stages: draft.stages.map((s) => ({ ...s })), padOverC: draft.padOn ? draft.padOverC : null });
+    if (tripped && openFault(L, 'stage-trip')) L.act('auto.reset', { system: 'stages' });
+    stageSaid = tripped ? `Stages switched on again at ${env.timeLabel}.` : perkAuto(L, 'stages') ? `Your stage table set at ${env.timeLabel}.` : '';
+    waits(); refresh();
+  });
   stagesOff.addEventListener('click', () => { L.act('vent.stages', { stages: null, padOverC: null }); waits(); refresh(); });
   const stages = h('div', { class: 'ctrl-timer cyc-stages', hidden: true },
     h('p', { class: 'ctrl-timer-k' }, 'Fan stages', h('small', null, ' · the house °C over the target sets the fans')),
@@ -91,8 +112,36 @@ export function buildFanPanel(api) {
     h('div', { class: 'cyc-stage' }, h('span', { class: 'fan-name' }, 'Pad'), h('span', { class: 'ctrl-keys' }, padStage.els), h('span', { class: 'ctrl-keys' }, padIn.el)),
     h('div', { class: 'ctrl-apply' }, stagesOff, setStages));
   const chart = h('div', { class: 'cyc-chart', hidden: true });
+  // Skills update: the suggestion and Set as suggested (Ventilation 2); the stage table the controller keeps (Ventilation 3)
+  const advWork = workLine();
+  let advSaid = '', stageSaid = '';
+  const advKey = oneKey('Set as suggested', () => {
+    const a = fanAdviceFor(env, L.farm);
+    env.setFans(a.fans); L.uiAct('vent.fans', { n: env.fansManual ?? env.fansOn, by: 'advice' });
+    env.setPad(a.pad); L.uiAct('vent.pad', { on: env.padOn, by: 'advice' });
+    advSaid = `Set at ${env.timeLabel}: ${a.tail}`;
+    waits(); refresh();
+  }, { label: 'Set the tunnel fans and the pad as suggested' });
+  const advice = skillBox('fanAdvice', 'Fans and pad for now', skRow(advKey, advWork.el));
+  const keepLine = workLine(), keepNote = skNote();
+  const keeps = skillBox('autoStages', 'The controller’s stage table', skRow(keepLine.el), keepNote);
+  stages.prepend(keeps.el);
+  const glance = glanceFor(L, 'fan-panel');
   shell.main.append(lcd.el, h('div', { class: 'fanbank' }, fans.map((f) => f.el)),
-    h('div', { class: 'cyc-controls' }, hint, allOff, allOn, pad.el), shell.timeNote.el, stages, chart);
+    h('div', { class: 'cyc-controls' }, hint, allOff, allOn, pad.el), advice.el, shell.timeNote.el, stages, chart);
+  function drawSkills() {
+    const lvl = L.farm?.mode === 'level';
+    if (advice.show(lvl && perkHas(L, 'fanAdvice'))) { const a = fanAdviceFor(env, L.farm); advWork.set(a.text, advSaid); }
+    const trip = openFault(L, 'stage-trip');
+    if (keeps.show(lvl && (perkAuto(L, 'stages') || !!trip))) {
+      const own = holdText(L, 'stagesTable'), fansHeld = holdText(L, 'stages'), st = autoStatus(L, 'stages');
+      keepLine.set(trip ? faultText(L, trip) : own ? `Your own stage table: ${own}` : fansHeld ? `Your fans or pad: ${fansHeld}` : `The controller keeps the stage table for day ${Math.max(0, env.dayNumber)} (Ventilation 3)`,
+        trip ? 'Set the fans by hand, then Set the stages switches the stages on again.' : st.text || stageSaid || '');
+      setText(keepNote, trip ? '' : stageSaid);
+      keepNote.hidden = !keepNote.textContent;
+      keepLine.el.classList.toggle('skl-note--fault', !!trip);
+    }
+  }
 
   let openFor = 0, readThis = false, lastRead = null;
   function readNow() {
@@ -138,8 +187,10 @@ export function buildFanPanel(api) {
     });
     pad.set(!!env.padOn);
     setText(hint, env.fanStages ? 'The stage table runs the fans.' : env.ventTimer ? `Timer: ${env.ventTimer.fans} fan${env.ventTimer.fans === 1 ? '' : 's'} ${env.ventTimer.onSec}/${env.ventTimer.cycleSec} s` : 'Timer off');
-    const st = !!skills?.unlocked?.('tunnelStages');
+    // Skills update: the stage table also shows while the controller keeps it (Ventilation 3) or after a stage trip
+    const st = !!skills?.unlocked?.('tunnelStages') || (L.farm?.mode === 'level' && (perkAuto(L, 'stages') || !!openFault(L, 'stage-trip')));
     stages.hidden = !st;
+    drawSkills();
     if (st) {
       stageRows.forEach((r, i) => { r.over.set(`+${fmt1(draft.stages[i].overC)}`, '°C'); r.nf.set(String(draft.stages[i].fans)); });
       padStage.set(`+${fmt1(draft.padOverC)}`, '°C'); padIn.set(draft.padOn);
@@ -150,12 +201,14 @@ export function buildFanPanel(api) {
     el: shell.el,
     onOpen() {
       shell.refreshPlates(); openFor = 0; readThis = false;
+      glance.onOpen(); advSaid = ''; stageSaid = '';
       const s = env.fanStages;
       if (s?.stages?.length) { s.stages.slice(0, 3).forEach((x, i) => Object.assign(draft.stages[i], x)); draft.padOn = s.padOverC != null; if (s.padOverC != null) draft.padOverC = s.padOverC; }
     },
     update(dt, force) {
       openFor += dt;
       if (!readThis && openFor >= READ_AFTER) { readThis = true; readNow(); }
+      glance.update(dt);
       acc -= dt; chartAcc -= dt;
       if (force || acc <= 0) { acc = 0.15; refresh(); }
       if (force || chartAcc <= 0) { chartAcc = 1; drawChart(); }

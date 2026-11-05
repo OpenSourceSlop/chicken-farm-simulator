@@ -1,0 +1,440 @@
+[
+ {
+  "wait": 800
+ },
+ {
+  "clearStorage": true
+ },
+ {
+  "eval": "__game.stop(), window.__open = () => document.querySelector('#hud .panel:not([hidden])'), 'stopped: the new keys of the panels package at 960 × 600 (SKILLS.md §15.3)'"
+ },
+ {
+  "eval": "(() => {\n  // shown: not hidden, a box, and its centre inside every scrolling or clipping box around it (a list scrolled past it hides it)\n  const V = (e, clip = true) => {\n    if (!e || !(e instanceof Element)) return false;\n    if (e.closest('[hidden], [aria-hidden=\"true\"], .sr-only')) return false;\n    const r = e.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false;\n    const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || cs.display === 'none') return false;\n    if (!clip) return true;\n    const c = { x: r.left + r.width / 2, y: r.top + r.height / 2 };\n    for (let n = e.parentElement; n && n !== document.body; n = n.parentElement) {\n      const s = getComputedStyle(n);\n      if (/(auto|scroll|hidden)/.test(`${s.overflowX} ${s.overflowY}`)) { const b = n.getBoundingClientRect(); if (c.x < b.left || c.x > b.right || c.y < b.top || c.y > b.bottom) return false; }\n    }\n    return true;\n  };\n  const rgb = (s) => { const m = s && s.match(/rgba?\\(([^)]+)\\)/); if (!m) return null; const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p[3] == null ? 1 : p[3]]; };\n  const most = (s) => { let best = null; for (const m of String(s).matchAll(/rgba?\\(([^)]+)\\)/g)) { const c = rgb(m[0]); if (c && (!best || c[3] > best[3])) best = c; } return best; };\n  // the backgrounds behind the text: an ancestor counts only where the text's centre lies inside its box (a label set\n  // outside its tick mark, top: 15px, sits on the panel, not on the tick)\n  const inside = (n, c) => { const r = n.getBoundingClientRect(); return c.x >= r.left && c.x <= r.right && c.y >= r.top && c.y <= r.bottom; };\n  const bg = (e) => { const layers = [], er = e.getBoundingClientRect(), c0 = { x: er.left + er.width / 2, y: er.top + er.height / 2 }; for (let n = e; n && n !== document.documentElement; n = n.parentElement) { if (n !== e && !inside(n, c0)) continue; const cs = getComputedStyle(n); let c = rgb(cs.backgroundColor); if ((!c || c[3] === 0) && /gradient/.test(cs.backgroundImage)) c = most(cs.backgroundImage); if (c && c[3] > 0) { layers.push(c); if (c[3] >= 0.99) break; } } let base = [201, 196, 184]; for (let i = layers.length - 1; i >= 0; i--) { const c = layers[i]; base = base.map((v, k) => v * (1 - c[3]) + c[k] * c[3]); } return base; };\n  const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };\n  const contrast = (e) => { const cs = getComputedStyle(e); let op = 1; for (let n = e; n && n !== document.documentElement; n = n.parentElement) op *= +getComputedStyle(n).opacity; const fg = rgb(cs.color) || [255, 255, 255, 1], b = bg(e), a = fg[3] * op; const f = b.map((v, k) => v * (1 - a) + fg[k] * a); const x = lum(f), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };\n  window.__floors = (root) => {\n    const out = [], seen = new Set(), list = typeof root === 'string' ? [...document.querySelectorAll(root)] : [root];\n    let n = 0;\n    for (const r of list) {\n      const tw = document.createTreeWalker(r, NodeFilter.SHOW_TEXT);\n      while (tw.nextNode()) {\n        const t = tw.currentNode, txt = t.textContent.trim();\n        if (!txt || !/[A-Za-z0-9]/.test(txt)) continue;\n        const e = t.parentElement;\n        if (!e || seen.has(e) || !V(e)) continue;\n        seen.add(e); n++;\n        const cs = getComputedStyle(e), px = parseFloat(cs.fontSize);\n        const caps = cs.textTransform === 'uppercase' || (txt.length >= 2 && /[A-Z]/.test(txt) && txt === txt.toUpperCase());\n        const src = !!e.closest('.src, .src-k, .book-src, .wk-src, .plate-src');\n        const floor = caps || src ? 11 : 12;\n        const tag = `\"${txt.slice(0, 28)}\" (${(e.getAttribute('class') || e.tagName).slice(0, 40)})`;\n        if (px < floor - 0.01) out.push(`${px}px under ${floor}: ${tag}`);\n        else if (caps || src) { const k = contrast(e); if (k < 4.5) out.push(`contrast ${k.toFixed(2)}: ${tag}`); }\n      }\n    }\n    return { n, bad: out };\n  };\n  window.__rings = (root) => {\n    const sel = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex=\"-1\"])';\n    const r = typeof root === 'string' ? document.querySelector(root) : root;\n    const els = r ? [...r.querySelectorAll(sel)].filter((e) => V(e, false)) : [];\n    const bad = [];\n    for (const e of els) {\n      e.focus({ preventScroll: true });\n      const cs = getComputedStyle(e);\n      const ok = document.activeElement === e && ((cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 2) || (cs.boxShadow && cs.boxShadow !== 'none'));\n      if (!ok) bad.push(`${(e.getAttribute('class') || e.tagName).slice(0, 30)} \"${(e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 24)}\"`);\n    }\n    return { n: els.length, bad };\n  };\n  window.__fid = () => { const a = document.activeElement; if (!a || a === document.body) return 'body'; const d = a.dataset || {}; return d.menu || d.titleAction || d.place || d.mapView || d.tab || (a.getAttribute('aria-label') || a.textContent || a.tagName).trim().slice(0, 40); };\n  return 'a11y helpers ready';\n})()"
+ },
+ {
+  "eval": "(() => { const s = document.createElement('style'); s.id = 'skills-a11y-rest'; s.textContent = '#hud .key:hover { background: linear-gradient(180deg, var(--key-hi), var(--key)) !important; }'; document.head.append(s); return 'keys measured at rest'; })()"
+ },
+ {
+  "eval": "(() => { __game.config.SKILLS_UPDATE.live = true; __game.perks.allow(true); for (const b of [\"water\",\"moisture\",\"heating\",\"lighting\",\"ventilation\",\"feed\",\"growth\",\"planning\",\"brooding\",\"biosecurity\",\"comfort\"]) __game.skills.debug.force(b, 3); __game.startLevel({ seed: 1 }); __game.level.debug.goto(0, 14, { auto: true }); return 'live on, every branch at 3, the brooding week at ' + __game.env.timeLabel + ' on day ' + __game.env.dayNumber; })()"
+ },
+ {
+  "eval": "__game.ui.closePanel(), \"closed\""
+ },
+ {
+  "eval": "__game.events.emit('bird:pick', { index: 7, x: -12, z: 0, purpose: 'vent' }), 'a chick in the hand (EV.BIRD_PICK, vent)'"
+ },
+ {
+  "eval": "__game.ui.openPanelId === 'chick-in-hand' ? 'open already' : __game.ui.openPanel('chick-in-hand')"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'chick in hand (Next chick): floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'chick in hand (Next chick): ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: chick in hand (Next chick)"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'chick in hand (Next chick): ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: chick in hand (Next chick)"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'chick in hand (Next chick): no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: chick in hand (Next chick)"
+ },
+ {
+  "shot": "skills-panels-chick-in-hand"
+ },
+ {
+  "expect": "(() => { const b = [...__open().querySelectorAll('button')].find((x) => x.textContent.trim() === 'Next chick'); return b && b.offsetParent !== null && 'Next chick shows for the vent sample'; })()",
+  "label": "Next chick on the chick in hand"
+ },
+ {
+  "eval": "(() => { __game.ui.closePanel(); __game.cycleAt(36, 10); for (const b of [\"water\",\"moisture\",\"heating\",\"lighting\",\"ventilation\",\"feed\",\"growth\",\"planning\",\"brooding\",\"biosecurity\",\"comfort\"]) __game.skills.debug.force(b, 3); for (const k of Object.keys(__game.farm.auto.on)) __game.farm.auto.on[k] = true; __game.farm.debug.fault('winch-stall', { line: 2 }); return 'day ' + __game.env.dayNumber + ' ' + __game.env.timeLabel + ', ' + __game.perks.list().filter((p) => p.has).length + ' payoffs, a stalled winch on line 3'; })()"
+ },
+ {
+  "eval": "__game.ui.closePanel(), \"closed\""
+ },
+ {
+  "eval": "__game.ui.openPanelId === 'controller' ? 'open already' : __game.ui.openPanel('controller')"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'controller, Temperature: floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'controller, Temperature: ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: controller, Temperature"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'controller, Temperature: ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: controller, Temperature"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'controller, Temperature: no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: controller, Temperature"
+ },
+ {
+  "shot": "skills-panels-controller"
+ },
+ {
+  "clickText": "Ventilation",
+  "in": "#hud .panel:not([hidden]) .ctrl-tabs"
+ },
+ {
+  "advance": 0.8
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'controller, Ventilation: floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'controller, Ventilation: ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: controller, Ventilation"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'controller, Ventilation: ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: controller, Ventilation"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'controller, Ventilation: no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: controller, Ventilation"
+ },
+ {
+  "shot": "skills-panels-controller-vent"
+ },
+ {
+  "clickText": "Lights",
+  "in": "#hud .panel:not([hidden]) .ctrl-tabs"
+ },
+ {
+  "advance": 0.4
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'controller, Lights: floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'controller, Lights: ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: controller, Lights"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'controller, Lights: ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: controller, Lights"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'controller, Lights: no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: controller, Lights"
+ },
+ {
+  "eval": "__game.ui.closePanel(), \"closed\""
+ },
+ {
+  "eval": "__game.ui.openPanelId === 'fan-panel' ? 'open already' : __game.ui.openPanel('fan-panel')"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'fan panel: floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'fan panel: ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: fan panel"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'fan panel: ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: fan panel"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'fan panel: no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: fan panel"
+ },
+ {
+  "shot": "skills-panels-fan-panel"
+ },
+ {
+  "eval": "__game.ui.closePanel(), \"closed\""
+ },
+ {
+  "eval": "__game.ui.openPanelId === 'water-supply' ? 'open already' : __game.ui.openPanel('water-supply')"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "clickText": "Read the sight tubes",
+  "in": "#hud .panel:not([hidden])"
+ },
+ {
+  "clickText": "Trend",
+  "in": "#hud .panel:not([hidden])"
+ },
+ {
+  "advance": 0.3
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'water supply: floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'water supply: ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: water supply"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'water supply: ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: water supply"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'water supply: no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: water supply"
+ },
+ {
+  "shot": "skills-panels-water-supply"
+ },
+ {
+  "eval": "__game.ui.closePanel(), \"closed\""
+ },
+ {
+  "eval": "__game.ui.openPanelId === 'drinker-2' ? 'open already' : __game.ui.openPanel('drinker-2')"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'line 3 regulator (motor stalled): floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'line 3 regulator (motor stalled): ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: line 3 regulator (motor stalled)"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'line 3 regulator (motor stalled): ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: line 3 regulator (motor stalled)"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'line 3 regulator (motor stalled): no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: line 3 regulator (motor stalled)"
+ },
+ {
+  "shot": "skills-panels-drinker-2"
+ },
+ {
+  "eval": "__game.ui.closePanel(), \"closed\""
+ },
+ {
+  "eval": "__game.ui.openPanelId === 'silo' ? 'open already' : __game.ui.openPanel('silo')"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'silo gauge: floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'silo gauge: ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: silo gauge"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'silo gauge: ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: silo gauge"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'silo gauge: no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: silo gauge"
+ },
+ {
+  "shot": "skills-panels-silo"
+ },
+ {
+  "eval": "__game.ui.closePanel(), \"closed\""
+ },
+ {
+  "eval": "__game.ui.openPanelId === 'feeder-box' ? 'open already' : __game.ui.openPanel('feeder-box')"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'feeder box: floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'feeder box: ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: feeder box"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'feeder box: ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: feeder box"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'feeder box: no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: feeder box"
+ },
+ {
+  "shot": "skills-panels-feeder-box"
+ },
+ {
+  "eval": "__game.ui.closePanel(), \"closed\""
+ },
+ {
+  "eval": "__game.ui.openPanelId === 'bird-scale' ? 'open already' : __game.ui.openPanel('bird-scale')"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'bird scale display: floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'bird scale display: ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: bird scale display"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'bird scale display: ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: bird scale display"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'bird scale display: no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: bird scale display"
+ },
+ {
+  "shot": "skills-panels-bird-scale"
+ },
+ {
+  "eval": "__game.ui.closePanel(), \"closed\""
+ },
+ {
+  "eval": "__game.ui.openPanelId === 'pocket-phone' ? 'open already' : __game.ui.openPanel('pocket-phone')"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'pocket phone: floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'pocket phone: ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: pocket phone"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'pocket phone: ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: pocket phone"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'pocket phone: no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: pocket phone"
+ },
+ {
+  "shot": "skills-panels-pocket-phone"
+ },
+ {
+  "eval": "__game.ui.closePanel(), \"closed\""
+ },
+ {
+  "eval": "(() => { const ids = (__game.flock.catchGroup(-6, 2, 10) || []).map((b) => b.index); __game.events.emit('frame:set', { x: -6, z: 2, birds: ids }); return 'the frame set down with ' + ids.length + ' birds'; })()"
+ },
+ {
+  "eval": "__game.ui.openPanelId === 'weigh' ? 'open already' : __game.ui.openPanel('weigh')"
+ },
+ {
+  "advance": 1.2
+ },
+ {
+  "eval": "(() => { const e = document.querySelector(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); e?.scrollIntoView({ block: 'center' }); return 'the first new part scrolled into view: ' + (e?.getAttribute('data-payoff') || e?.getAttribute('data-skill-key') || 'none'); })()"
+ },
+ {
+  "press": "Shift"
+ },
+ {
+  "eval": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"), rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return 'weigh panel (Weigh the frame, Records): floors ' + f.n + (f.bad.length ? ' UNDER: ' + f.bad.slice(0, 6).join(' | ') : ' ok') + '; rings ' + n + (bad.length ? ' NONE: ' + bad.slice(0, 6).join(' | ') : ' ok'); })()"
+ },
+ {
+  "expect": "(() => { const f = __floors(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\"); return f.n > 0 && !f.bad.length && 'weigh panel (Weigh the frame, Records): ' + f.n + ' new texts at or over their floor'; })()",
+  "label": "the text floors: weigh panel (Weigh the frame, Records)"
+ },
+ {
+  "expect": "(() => { const rs = [...document.querySelectorAll(\"#hud .panel:not([hidden]) [data-payoff]:not([hidden]), #hud .panel:not([hidden]) [data-skill-key]:not([hidden])\")].map((e) => __rings(e.matches('button') ? e.parentElement : e)); const n = rs.reduce((a, r) => a + r.n, 0), bad = rs.flatMap((r) => r.bad); return !bad.length && 'weigh panel (Weigh the frame, Records): ' + n + ' new focusable keys, each with its ring'; })()",
+  "label": "the focus rings: weigh panel (Weigh the frame, Records)"
+ },
+ {
+  "expect": "(() => { const p = __open(), q = p.getBoundingClientRect(), keys = [...p.querySelectorAll('[data-payoff]:not([hidden]) button, .equip-btns button')].filter((b) => b.offsetParent !== null); const side = p.scrollWidth - p.clientWidth, page = document.documentElement.scrollWidth - innerWidth; const out = keys.filter((b) => { const r = b.getBoundingClientRect(); return r.left < q.left - 1 || r.right > q.right + 1; }); return side <= 1 && page <= 0 && !out.length && 'weigh panel (Weigh the frame, Records): no sideways scroll, ' + keys.length + ' keys inside the panel'; })()",
+  "label": "fits 960 × 600: weigh panel (Weigh the frame, Records)"
+ },
+ {
+  "shot": "skills-panels-weigh"
+ },
+ {
+  "expect": "(() => { const b = [...__open().querySelectorAll('button')].find((x) => x.textContent.trim() === 'Weigh the frame'); const t = __open().textContent; return b && b.offsetParent !== null && /Day 36 target [\\d,]+ g \\(records\\)/.test(t) && 'Weigh the frame and the Records line show'; })()",
+  "label": "Weigh the frame and the Records line"
+ },
+ {
+  "eval": "(() => { __game.ui.closePanel(); for (const b of [\"water\",\"moisture\",\"heating\",\"lighting\",\"ventilation\",\"feed\",\"growth\",\"planning\",\"brooding\",\"biosecurity\",\"comfort\"]) __game.skills.debug.force(b, null); __game.config.SKILLS_UPDATE.live = false; __game.perks.allow(false); return 'back to live off'; })()"
+ }
+]
