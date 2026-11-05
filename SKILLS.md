@@ -371,7 +371,13 @@ day 25, house 31.2 °C, birds feel 27.0 °C → 4 fans, pad off"* and a key *Set
 rules the ideal farmer plays (`idealFans` / `idealPad` / `fansForFeel` / `eveningPad`, moved into one module both the profiles
 and the controller import without changing the ideal's play) — never more than the sign says. The heat jobs complete on their
 state tests as now. Time saved (estimate): about 20 s per hot afternoon (reading the sign and stepping) and, at the controller,
-the walk to the fan panel (about 20 s of play and 15 farm minutes).
+the walk to the fan panel (about 20 s of play and 15 farm minutes). **The controller sees no fan turn** (the last check round):
+its read (`fans.read { at: 'controller' }`) finds what the controller's own read finds (the birds panting, the damp heat) and
+does r-fans-pm, never what needs eyes on the fans: a slipped belt (`fan-belt`: its lamp is on, it moves no air) is found at the
+fan panel or walking past the fans, and the heat wave's look at the fans (`p-heatwave`'s *Fans: read the fan panel*, the
+`heatwave-ready` milestone) is the fan panel's. A switched-on fan whose belt slipped shows in the controller's box as *"Fan 4
+draws little current while switched on (its motor runs light): go and look at it in the east end wall."*; the notebook calls
+such a reading *Controller · fans*, the record book's row *Fans read … at the controller*.
 
 **Level 3 · `autoStages` (system `stages`) — The controller keeps the fan stage table for the birds' age.** *Saves the walk to
 the fan panel every afternoon and stepping the fans through the heat.* The existing Ventilation 2 view `tunnelStages` lets the
@@ -430,8 +436,9 @@ three vent temperatures, one from each part, and six crops."* The job card's pro
 its where line and the strip row name the smaller sample with the standard beside it; the chick-in-hand panel's tally reads
 *"Vent temperatures: 1 of 3 chicks from 1 of 3 parts of the floor (Brooding 2: an experienced stockman's smaller sample; the
 standard is 5)"*. The milestones follow the job: `vent-checked` with 3 chicks from 3 parts, `vent-band` all but one of the
-first 3 (2 of 3; 4 of the first 5 without), read from `farm.stats.samples` (level.js keeps the day's sample when such a job
-opens; `skills-rules-payoff.js sampleNeed`). The extras stay: the catch reach goes from 1.2 m to **2.0 m**
+first 3 (2 of 3; 4 of the first 5 without), a bad batch's `crop48` 90 % full of the day's 6 crops (10 without; the last check
+round), read from `farm.stats.samples` (level.js keeps the day's sample when such a job opens; `skills-rules-payoff.js
+sampleNeed`). The extras stay: the catch reach goes from 1.2 m to **2.0 m**
 (`AUTO.chickReachM`) and the chick-in-hand panel's *Next chick* puts the chick down and takes the nearest other chick within
 2.5 m (`AUTO.nextChickM`, the same part of the floor) without closing the panel; with one vent chick a part it helps the
 crops (2 a part). Time saved (skill-time, §14.2): the vent sample 40.6 s → 28.5 s of play, the crops 71.6 s → 47.0 s;
@@ -663,7 +670,7 @@ keeps its rule, whose manual part still works); `jd.variant = { v, keys, parts }
 | `stage-trip` | stages | the stage output trips after a blip: the fans stay at the stage they had and no longer follow the heat. **Rainy season:** after each power cut while `stages` is on, the controller comes back on the generator or the mains with its stages off | Equipment row red at once (*"Fan stages off since 08:23"*); the comfort row as the house warms | set the fans by hand at the fan panel or the controller and switch the stages on again (*Set the stages*: `vent.stages`, or `auto.reset { system: 'stages' }`) | planned trips start 07:00–10:00 only (the fans at the morning's low stages); the fans keep turning at their last stage; the controller's high-temperature alarm at the target + 5 °C (`alarmOverC`) raises the alarm banner, and its retry puts the stages back 4 farm hours after that alarm (`retryH`; 8 h after the trip with no alarm, `maxH`; after a rainy cut: 2 h after the power is back, `cutRetryH`). Review round: the earlier 2 h retry always came before the heat, so an ignored trip changed nothing; measured now: met at the alarm 0 heat deaths, left alone on day 30 20 heat deaths (0.57 → 0.91 %), the level still passing. The review proposed 11:00–15:00 starts: measured, a trip then leaves the fans at their afternoon stage and costs nothing, so the morning window stays |
 | `sensor-drift` | brooders | the controller's temperature sensor reads high, drifting +0.5 °C a farm hour to +2.5 °C (+3.5 °C in the brooding week's nights, 18:00–06:00, `nightMaxC`: the review round; left alone from day 2 the day 7 weight falls 5.24 → 4.69 × the chick weight): the brooders hold the sensor at the row, the house runs under it | not self-detected: the Equipment row compares the sensor with the house thermometer (the HUD's House gauge, the dial by the controller) — amber over 1 °C apart (2 h in), red over 2 °C (4 h in); **while the flock is under 7 days the amber row raises the warning** (`warnAmberUnderDays`); the comfort row (cold hours); the night check | *Check the sensor against the thermometer* on the Temperature tab (`auto.calibrate`): **the only fix**. A hand thermostat setting meanwhile holds the drifted sensor at his figure (it can make up the degrees, it does not fix the sensor; the row stays amber or red) | days 0–21 (brooders on), starts 07:00–15:00; +2.5 °C at most; chicks warned within 2 farm hours |
 | `order-lost` | feed | the next automatic order (armed at the planned time, within 24 farm hours) is never confirmed by the mill: no truck | the gauge shows *not confirmed*: Equipment row amber at once, red 6 farm hours later; the silo days fall | order by hand (the office phone, the pocket phone, the silo key: `feed.order`; review round: an order that brings the reachable feed and every order on the way to 2 days or more) | only an order at ≥ 1.8 days of feed is lost; ordered before 16:00 the truck comes the next day (the silo plate), so the pans never run short when it is ordered the same day; no armed order within 24 h: dropped |
-| `scale-fouled` | scale | litter on the platform: the scale reads about 6 % light and counts a quarter of the birds | the Equipment row amber (*"Bird scale: 140 weighings today, about 600 before"*); the weight row then reads the hand weighings when there are 10 or more | *Clean the platform* at the bird scale (`scale.clean`); weigh by hand (*Weigh the frame* with Growth 2) | starts 07:00–15:00; review round: with Growth 3 on and no hand weighing the weigh-in reads the platform's own figure of the weigh-in morning (09:00–12:00, `stats.scaleDay`), about 6 % light while fouled, and the result line names the fouled scale (week 3 left alone 936 g, cleaned 996 g); on a weigh day the fouled scale raises the flock watch's warning (a skip stops) |
+| `scale-fouled` | scale | litter on the platform: the scale reads about 6 % light and counts a quarter of the birds | the Equipment row amber (*"Bird scale: 140 weighings today, about 600 before"*); the weight row then reads the hand weighings when there are 10 or more | *Clean the platform* at the bird scale (`scale.clean`); weigh by hand (*Weigh the frame* with Growth 2) | starts 07:00–15:00; review round: with Growth 3 on and no hand weighing the weigh-in reads the platform's own figure of the weigh-in morning (09:00–12:00, `stats.scaleDay`), about 6 % light while fouled, and the result line names the fouled scale (week 3 left alone 936 g, cleaned 996 g); on a weigh day the fouled scale raises the flock watch's warning (a skip stops); a borderline weigh-in the fouled platform decided says so with the clean figure, the brooding week's day 7 too (*"the fouled platform decided it: clean, it would have read about 172 g, 4.18 × the chick weight"*, the last check round) |
 
 Lighting, the helper, the comfort view, the passing check and the phone record have no fault (open question 4).
 
@@ -750,8 +757,9 @@ feed, call the vet or book the crew."* · *"Moisture 2: Fill the timer. One pres
 (Heating 2 the Temperature tab, Lighting 2 the Lights tab) · *"Brooding 1: the floor thermometer view. Press F anywhere in
 the house."* (C and M the same). A level 3 adds *"Switch it off in Settings → Automation."* The notebook line keeps the long
 words (`unlockCaption`: the step, the name, where, what it saves, the views it brings). The caption narrows to the gap between
-the watch card and the job card when it would cross them, and rises above an edge pointer's pill under it (the job's distance,
-the dead birds', a fault's; `ui.js placeCaption`). The unlocks the finished flock opens (`gate: true`) wait for the next level
+the watch card and the job card when it would cross them, and then rises above an edge pointer's pill under the narrowed
+caption (the job's distance, the dead birds', a fault's; `ui.js placeCaption`: the width first, so a pill the narrowed caption
+already clears lifts nothing; after a lift the width again). The unlocks the finished flock opens (`gate: true`) wait for the next level
 start and show as one caption listing the branches. No caption for `key: null` (a force or a restore) or while
 `run.standardPlaying`. On the result screen the level's new payoffs are listed under its points with the same words.
 
@@ -1373,6 +1381,22 @@ profiles: level 2 everywhere after flock 1, level 3 from flock 2); every skills 
 skills-tree 23, skills-scene 34, skills-play 71 …), p3-cycle 140, req-night 19, p2-level1 58 and phase1-jobs (4 of 4) PASS
 without console or page errors (ARCHITECTURE.md *Skills update — the final check fix round*). Screenshots:
 `shots/skills-final-fix/`.
+
+### 16.5 The last check fix round (after 3b79382)
+The last check left four items; each was confirmed (a node probe or a browser run at 960 × 600) and fixed in its own commit:
+
+| # | What was left | What changed |
+| --- | --- | --- |
+| 1 | A bad batch's `crop48` needed 10 crops, so with Brooding 2 (6 crops) it could never be earned | the rule reads the day's sample (`skills-rules-payoff.js sampleNeed(farm, 'sample.crop', 2)`: 6 with Brooding 2, the boards' 10 without), as `vent-checked`, `vent-band` and `weighed-weekly` do (§3.5) |
+| 2 | The brooding week's day-7 weigh-in read the fouled platform (Growth 3, no hand weighing) without the week levels' words | `level.js computeResultL1` shares `cleanPlatformG` with the week levels: the fail text names the automatic scale and its fouled platform and, when the platform decided a borderline weigh-in, *"the fouled platform decided it: clean, it would have read about 172 g, 4.18 × the chick weight"* (`scaleDecided`, `scaleCleanG`, `scaleCleanRatio`); the weight card *"… its platform fouled (about 6 % light): clean, about 4.18 ×; not weighed by hand"*; the fail screen's bird scale line (§5.1) |
+| 3 | Ventilation 2's read at the controller found a slipped fan belt and the heat wave's look at the fans without the farmer seeing a fan | `fans.read { at: 'controller' }` finds only what the controller's read finds (the panting, the damp heat) and still does r-fans-pm; the belt is found at the fan panel or walking past the fans; `p-heatwave`'s *Fans: read the fan panel* and `heatwave-ready` need the fan panel; the controller's box shows *"Fan 4 draws little current while switched on (its motor runs light): go and look at it in the east end wall."* (§3.3) |
+| 4 | Cosmetics | a fans reading taken at the controller is *Controller · fans* in the notebook and *Fans read … at the controller* in the record book; `placeCaption` narrows the caption before it decides the lift (Water 2's caption at 960 × 600 was lifted to bottom 202 px with the narrowed caption clear of the pill; now it stays); the helper's contact shadows lie just above the litter plane indoors (y 0.028 over the litter's 0.02; 0.012 outside) |
+
+**Results of the round (main, seed 1, 960 × 600):** `npm test` 524 ok, all passed; `node scripts/skill-progress.mjs --assert`: the §2.5
+targets all met (both profiles pass every level of both flocks; level 2 everywhere after flock 1, level 3 from flock 2); every
+skills steps file PASS without console or page errors — skills-auto 6, skills-design-stubs 10, skills-fault 9, skills-feed 10,
+skills-minvent 9, skills-panels-a11y 38, skills-phone 10, skills-play 71, skills-review 26, skills-scene 35, skills-tree 23,
+skills-water 14, skills-weigh 35 — and p4-bad 17, p4-hot 43, req-night 19. Screenshots: `shots/skills-last-fix/`.
 
 ## 17. Open questions for the farmer
 1. **The pace of level 3:** level 3 now comes once a first flock is finished (13 points over both flocks): a careful player

@@ -1441,7 +1441,8 @@ set false (a steps file or a node test) the game is the Phase 5 game: test-sim b
   4 / 9 / 13 bar, *comes with your next flock* for a first flock at 13, and *on* / *off in Settings* for level 3.
 - **Level 2 (Faster)**: the sight tubes at the water supply (four lines in one click; a cup test only at a line that reads
   off), *Fill the timer* (the vent sign's need at 110 % in one press, the working beside the key), the fan panel's and the
-  controller's *Set as suggested* (the fans read at the controller too since the final check), *Set to the sign's row* and
+  controller's *Set as suggested* (the fans read at the controller too since the final check; a slipped belt and the heat
+  wave's look at the fans stay the fan panel's since the last check), *Set to the sign's row* and
   the pre-heat line, the smaller chick samples (3 vent chicks, 6 crops; *Next chick* and the 2 m reach as extras: the final
   check), the silo gauge's days of feed with the 2-day warning and *Order to 3 days* / *Order to the catch* there, *Program for
   days N–M*, hand weighing from 25 birds (three parts of the house; *Weigh the frame*, each frame in one press, as the extra:
@@ -1626,4 +1627,36 @@ browser run at 960 × 600, the helper's measured lowest point) and fixed in its 
   skills-tree 23, skills-water 14, skills-weigh 35 (by real input: 25 birds from three parts 0.82 min against the 50-bird
   *Weigh all* run's 1.42 min, 58 %; the 3-chick vent sample); p3-cycle 140, req-night 19, p2-level1 58, phase1-jobs 4 of 4
   tasks. Screenshots in `shots/skills-final-fix/`.
+
+
+## Skills update — the last check fix round (after 3b79382)
+The last check left four items (SKILLS.md §16.5); each was confirmed first (a node probe, a browser run at 960 × 600) and fixed
+in its own commit.
+- **crop48 and Brooding 2**: `skills-rules-cond.js crop48` needs `sampleNeed(farm, 'sample.crop', 2).n` crops (6 with Brooding
+  2's smaller sample kept in `farm.stats.samples`, the boards' 10 without) instead of a fixed 10.
+- **The brooding week's fouled platform**: `level.js cleanPlatformG(plat)` (the reading less its fouled hours' light share,
+  `FAULTS['scale-fouled'].readLowPct`) serves `weekResult` and `computeResultL1`; the brooding week's result adds
+  `scaleDecided`, `scaleCleanG`, `scaleCleanRatio` when the fouled platform decided a borderline day 7 (the ratio under
+  `fail.weightRatioMin`, the clean one at or over it, deaths within the limit); its fail text names the automatic scale and
+  its fouled platform; `ui-result.js` the brooding week's weight card (*its platform fouled (about 6 % light): clean, about
+  4.18 ×*); the fail screen's bird scale line was already keyed on `scaleDecided`.
+- **The controller sees no fan turn**: `farm-cycle-problems.js cycleSymptoms` `fans.read` with `a.at === 'controller'` finds
+  the heat problems and the damp heat (as `controller.read`), never `fan-belt` or `heat-wave`, and sets no `heat-wave.read`;
+  `content-jobs-cycle.js p-heatwave`'s fans part matches `A('fans.read', { at: undefined })` (a read without `at`: events.js
+  `matchPayload` compares the key); `skills-rules-cycle.js heatwave-ready` skips fans notes taken at the controller;
+  `ui-cycle-controller.js` the fan box's hint (`[data-fan-hint]`) for a switched-on fan in `env.fansBroken`. r-fans-pm stays
+  `A('fans.read')`, done at either place.
+- **Cosmetics**: `ui-notebook.js noteLabel` (*Controller · fans*), `ui-records.js` the Today ledger's row *Fans read* with
+  *at the controller* on such a reading, `ui-format.js` the fans fallback; `ui.js placeCaption` narrow → lift → narrow again
+  after a lift (at most three rounds); `props-helper.js` contact discs at y 0.028 on the litter (`HOUSE` footprint), 0.012 off it,
+  the hand truck's disc by its own place.
+- **Tests**: test-skills (crop48 with and without Brooding 2's 6 crops), test-auto (the brooding week's fouled day 7: the
+  model's reading and a borderline one it decided; Ventilation 2's controller read and the slipped belt, the heat wave's job part
+  and readiness); `skills-review.json` (the controller's hint and the belt found at the fan panel by real input, the notebook's
+  and the record book's labels, `placeCaption`'s order with a test pill), `skills-scene.json` (the contact discs over the litter
+  while the helper tips).
+- **Results** (main, seed 1, 960 × 600): `npm test` 524 ok, all passed; `skill-progress --assert` all met; steps files, each
+  without console or page errors: skills-auto 6, skills-design-stubs 10, skills-fault 9, skills-feed 10, skills-minvent 9,
+  skills-panels-a11y 38, skills-phone 10, skills-play 71, skills-review 26, skills-scene 35, skills-tree 23, skills-water 14,
+  skills-weigh 35, p4-bad 17, p4-hot 43, req-night 19. Screenshots in `shots/skills-last-fix/`.
 
