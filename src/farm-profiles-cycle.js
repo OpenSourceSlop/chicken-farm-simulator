@@ -16,7 +16,9 @@
 // browser cannot import a script) at its stops, base controls only (no vent.stages).
 import { EQUIP, LIGHT_PRESETS, HARVEST, CLEAN, WEATHER, LEVEL1, PLAN_LEVEL, levelOfDay, feedStdGAt, flowTargetAt, nippleHeightCmAt, feederRimCmAt, targetTempAt, PLACEMENT_DAY, feedTypeForDay, HEAT, HEAT_P4 } from './config.js';
 import { signTimer } from './farm-profiles.js';
-import { condProfile, condStops, applyCondRound, condAm, condAnswer, condFanPlan, fansForFeel } from './farm-profiles-cond.js';
+import { condProfile, condStops, applyCondRound, condAm, condAnswer, condFanPlan } from './farm-profiles-cond.js';
+import { idealFans, idealPad, eveningPad, fansForFeel } from './farm-fans.js';
+export { idealFans, idealPad, eveningPad };
 import { feedLeftKg } from './farm-silos.js';
 
 /** Profile names (keys of CYCLE_TARGETS in scripts/test-cycle.mjs). */
@@ -70,20 +72,9 @@ export function cycleProfileOf(name, { condition = null } = {}) {
   return { ...base, ...c, ...(c.catch ? { catch: c.catch } : {}), ...(name === 'hotNoPad' ? { pads: 'never' } : {}) };
 }
 
-// ---- the fan plan (scripts/cycle-refs.mjs idealFans / idealPad, the contract's ideal) ----
+// ---- the fan plan: idealFans / idealPad / eveningPad live in farm-fans.js (Skills update: one module for the ideal and the
+// controllers' advice) ----
 export const IDEAL_STOPS = [6.25, 9, 11, 13.25, 15.5, 18.5, 21];
-export function idealFans(env, age) {
-  const over = env.outsideTemp - env.targetTemp;
-  if (age >= 21) return Math.max(0, Math.min(6, Math.ceil((over - 1) / 1.2)));
-  if (age >= 14) return Math.max(0, Math.min(4, Math.round(over / 1.5)));
-  return 0;
-}
-export function idealPad(env, fans) {
-  const want = fans >= 6 && env.outsideTemp - env.targetTemp >= 10;
-  if (env.padOn && (env.houseRH > 90 || !want)) return false;
-  if (!env.padOn && want && env.outsideRH < 75) return true;
-  return env.padOn;
-}
 
 /** The rounds of each calendar day from fromDay to toDay (inclusive), in time order. */
 export function cycleStops(fromDay, toDay, condition = null) {
@@ -189,8 +180,6 @@ function fanPlan(farm, env, act, P, day) {
 /** The evening line (config HEAT_P4): big birds, 18:00 to 21:00. */
 const eveningOn = (env, age, P) => !P.noTunnel && age >= HEAT_P4.padEveningFromAge && env.hour >= 18 && env.hour < HEAT_P4.eveningUntil;
 const eveningFans = (farm, env) => 6;
-/** The pads on the evening line: while the outside air is at or over about 30 °C and the house RH at or under the pad plate's limit. */
-export const eveningPad = (env, P = {}) => P.pads !== 'never' && env.outsideTemp >= HEAT_P4.padEveningAboveC - 1e-9 && env.houseRH <= HEAT.padOffAboveRH;
 /** Tomorrow's 05:00 outside temperature (the weather's low and the level's weather events). */
 function nightLow(env) {
   const w = WEATHER[env.weather] || WEATHER.normal, t = env.dayNumber + 1 + 5 / 24;

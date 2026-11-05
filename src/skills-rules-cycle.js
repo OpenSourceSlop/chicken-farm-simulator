@@ -3,6 +3,7 @@
 // records (notebook, rows, missed jobs) and the checkpoint's ctx, and returns { tier, detail } or null (nothing
 // to measure yet). Package "sim", pure logic. The detail is the measured value in plain words, never a verdict.
 import { PLAN_CONTRACT, HARVEST, HEAT, CLEAN, weightAt, nippleHeightCmAt, flowTargetAt, houseSector, levelById } from './config.js';
+import { weighDayDone } from './skills-rules-payoff.js';
 
 const prob = (farm, id) => farm.problems.find((p) => p.id === id) || null;
 const day = (farm, d) => (farm.stats.daily && farm.stats.daily[d]) || {};
@@ -172,7 +173,8 @@ const RULES_B = {
   'catch-light': (farm) => { const r = farm.harvest.result; if (!r) return null; return { tier: (r.luxMax ?? 99) <= 12 ? 0 : null, detail: `${r.luxMax} lux at bird height through the catch` }; },
   // ---------------- Growth & Performance ----------------
   'w14-weight': weight(14), 'w21-weight': weight(21), 'w35-weight': weight(35),
-  'weighed-weekly': (farm) => { const n = [7, 14, 21, 28, 35, 40].filter((d) => farm.stats.weighed.filter((x) => Math.floor(x.t) === d).length >= 50).length; return { tier: n === 6 ? 0 : null, detail: `50 birds weighed on ${n} of the 6 weigh days` }; },
+  // Skills update (SKILLS.md §2.3): a clean scale read with 300 weighings or more counts as the day's weighing (Growth 3)
+  'weighed-weekly': (farm) => { const n = [7, 14, 21, 28, 35, 40].filter((d) => weighDayDone(farm, d)).length; return { tier: n === 6 ? 0 : null, detail: `50 birds weighed on ${n} of the 6 weigh days` }; },
   'harvest-fcr': (farm) => { const r = farm.harvest.result; if (!r || r.fcr == null) return null; return { tier: tierAt(r.fcr, [(v) => v <= 1.75 + 1e-9, (v) => v <= 1.65 + 1e-9]), detail: `feed conversion ${r.fcr.toFixed(2)}` }; },
   'harvest-uniformity': (farm) => { const r = farm.harvest.result; if (!r || r.uniformityPct == null) return null; return { tier: r.uniformityPct >= 70 ? 0 : null, detail: `uniformity ${Math.round(r.uniformityPct)} % at the day ${r.uniformityDay} weighing` }; },
   'epef': (farm) => { const r = farm.harvest.result; if (!r || r.epef == null) return null; return { tier: tierAt(r.epef, [(v) => v >= 340, (v) => v >= 390]), detail: `production efficiency ${r.epef}` }; },
