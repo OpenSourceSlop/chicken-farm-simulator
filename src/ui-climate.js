@@ -18,6 +18,23 @@ import { createJobStrip } from './ui-jobstrip.js';
 import { timerAirM3h, luxOfDimmer, ventNeed, inletAirM3h, flapsWords } from './job-figures.js';
 // the steps hotfix: a setting a held job waits on runs a paused clock again, with a note under the display
 import { farmTimeNote, heldWaitText } from './ui-farmtime.js';
+// the night fix (after Phase 5): what the brooders do and why, the thermostat beside the sign's row, the ventilation's
+// warnings (tunnel fans for young birds, the brooders at full and losing) and the floor, from the house's heat balance
+import { controllerNotes } from './heat-diag.js';
+import { injectStyle } from './ui-dom.js';
+const NOTE_CSS = `
+.ctrl-note { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 8px; align-items: start; margin: 6px 0 0; padding: 6px 8px; border-radius: 6px; background: var(--panel-sunk); color: var(--ink); font-size: 12.5px; line-height: 1.45; }
+.ctrl-note .fw-dot { margin-top: 3px; }
+.ctrl-note--floor { color: var(--ink-dim); }
+.ctrl-notes { display: grid; gap: 6px; margin: 4px 0 8px; }
+.ctrl-notes:empty { display: none; }
+`;
+/** One note line: the watch's state dot and the words (refreshed in place). */
+function noteLine(cls = '') {
+  const dot = h('span', { class: 'fw-dot', role: 'img' }), text = h('span');
+  const el = h('p', { class: `ctrl-note ${cls}`, hidden: true }, dot, text);
+  return { el, set(n) { el.hidden = !n; if (!n) return; const c = `fw-dot is-${n.state || 'green'}`; if (dot.className !== c) dot.className = c; dot.setAttribute('aria-label', { green: 'steady', amber: 'watch', red: 'alert' }[n.state] || ''); setText(text, n.text); } };
+}
 
 const READ_AFTER = 2; // real seconds open before the controller counts as read
 
@@ -77,7 +94,12 @@ export function buildLevelControllerPanel(L) {
   const spOut = out(), heatState = h('span');
   const setpoint = (d) => { env.setHeaterSetpoint(env.heaterSetpoint + d); L.uiAct('heat.setpoint', { value: env.heaterSetpoint }); waits(); refresh(); };
   const chart = h('div', { class: 'ctrl-chart' });
-  secs[0].append(row('Brooder thermostat', heatState, key('Lower the brooder thermostat by 0.5 °C', ICONS.minus, () => setpoint(-0.5)), spOut, key('Raise the brooder thermostat by 0.5 °C', ICONS.plus, () => setpoint(0.5))), chart);
+  // the night fix: the thermostat beside the brooder sign's row, the brooders' output and what the house does, the floor
+  injectStyle('ctrl-night-style', NOTE_CSS);
+  const spNote = noteLine('ctrl-note--sp'), tempNote = noteLine('ctrl-note--temp'), floorNote = noteLine('ctrl-note--floor');
+  const ventNotes = h('div', { class: 'ctrl-notes ctrl-notes--vent' });
+  secs[0].append(row('Brooder thermostat', heatState, key('Lower the brooder thermostat by 0.5 °C', ICONS.minus, () => setpoint(-0.5)), spOut, key('Raise the brooder thermostat by 0.5 °C', ICONS.plus, () => setpoint(0.5))),
+    spNote.el, tempNote.el, chart, floorNote.el);
 
   // Ventilation. In a level env.fansOn also counts the timer fans while they run: step the fans
   // switched on by hand (env.fansManual).
@@ -98,7 +120,7 @@ export function buildLevelControllerPanel(L) {
     waits(); refresh();
   });
   timerOff.addEventListener('click', () => { const t = { fans: draft.fans, onSec: 0, cycleSec: draft.cycleSec }; draft.onSec = 0; L.act('vent.timer', t); waits(); refresh(); });
-  secs[1].append(
+  secs[1].append(ventNotes,
     row('Tunnel fans', 'running all the time, switched by hand: air along the floor, for big birds in the heat', key('One tunnel fan fewer', ICONS.minus, () => manualFans(-1)), fanOut,
       key('One tunnel fan more', ICONS.plus, () => manualFans(1))),
     timerBox = h('div', { class: 'ctrl-timer' },
@@ -173,7 +195,9 @@ export function buildLevelControllerPanel(L) {
     setText(clock, `DAY ${fmt0(env.dayNumber)}  ${env.timeLabel}`);
     setText(readFlag, lastRead ? `READ ${lastRead}` : '');
     flags.heat.classList.toggle('is-on', env.heatersOn);
-    setText(flags.fans, `FANS ${env.fansOn}/${FAN_COUNT}`); flags.fans.classList.toggle('is-on', env.fansOn > 0);
+    // the night fix: the tunnel fans by hand on their own flag (the timer's fans are the TIMER flag)
+    const tn = env.fansManual ?? env.fansOn;
+    setText(flags.fans, `TUNNEL ${tn}/${FAN_COUNT}`); flags.fans.classList.toggle('is-on', tn > 0);
     const t = env.ventTimer;
     setText(flags.timer, t ? `TIMER ${t.fans}× ${t.onSec}/${t.cycleSec}s` : 'TIMER OFF'); flags.timer.classList.toggle('is-on', !!t);
     const p = env.lightProgram || {};
@@ -192,6 +216,12 @@ export function buildLevelControllerPanel(L) {
     setText(tAir, ventLine(env, farm, draft));
     const vt = env.ventTimer;
     setText(tNow, `Timer now: ${vt && vt.fans > 0 && vt.onSec > 0 ? `${vt.fans} fan${vt.fans === 1 ? '' : 's'}, ${vt.onSec} s on in every ${vt.cycleSec} s = ${int(timerAirM3h(vt))} m³/h` : 'off'}`);
+    // the night fix: the notes from the heat balance (cheap: a few steady-state solves only while the house is cold)
+    let n = null;
+    try { n = controllerNotes(env, farm); } catch (err) { n = null; }
+    spNote.set(n?.sp); tempNote.set(n?.temp); floorNote.set(n?.floor);
+    const vk = (n?.vent || []).map((x) => `${x.state}|${x.text}`).join('\n');
+    if (ventNotes.__k !== vk) { ventNotes.__k = vk; ventNotes.replaceChildren(...(n?.vent || []).map((x) => { const l = noteLine('ctrl-note--vent'); l.set(x); return l.el; })); }
     setText(lStart, hhmm(lp.darkStart)); setText(lHours, `${fmt1(lp.darkHours)} h`); setText(lDim, `${Math.round(lp.dimmer * 100)} %`);
     setText(lightDay, `a day · light ${fmt1(24 - lp.darkHours)} h a day`); setText(dimLux, `light while on · about ${int(luxOfDimmer(lp.dimmer))} lux at bird level`);
   }

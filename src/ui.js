@@ -190,7 +190,9 @@ export function createUI(ctx, deps) {
   const floorLegend = h('div', { class: 'floor-legend', hidden: true, role: 'img', 'aria-label': 'Floor thermometer view: litter surface temperature, blue 24 °C to orange 36 °C' },
     h('p', { class: 'floor-legend-k' }, h('span', null, 'Floor thermometer view'), h('kbd', { class: 'kbd' }, 'F')),
     h('div', { class: 'floor-legend-bar', style: `background: linear-gradient(90deg, ${rampCss})` }),
-    h('div', { class: 'floor-legend-ticks' }, FLOOR_TEMP_RAMP.map(([t], i) => h('span', null, i === FLOOR_TEMP_RAMP.length - 1 ? `${t} °C` : `${t}`))));
+    h('div', { class: 'floor-legend-ticks' }, FLOOR_TEMP_RAMP.map(([t], i) => h('span', null, i === FLOOR_TEMP_RAMP.length - 1 ? `${t} °C` : `${t}`))),
+    // the night fix: where a cold floor comes from (the litter follows the air above it and the pre-heated concrete under it)
+    h('p', { class: 'floor-legend-sub' }, 'The litter follows the house air above it and the concrete under it. A floor that cools comes from cold air or a short pre-heat: the climate controller’s Temperature and Ventilation tabs.'));
   root.appendChild(floorLegend);
   // Phase 3 views (C comfort, M litter moisture; PHASE3.md §9.1): continuous ramps, a legend in °C or %
   const rampLegend = (title, key, ramp, unit, label, tickWords = null) => {
@@ -478,7 +480,10 @@ export function createUI(ctx, deps) {
     });
     return true;
   }
-  const skipStopped = (t) => { if (mode === 'level' && t?.text) caption.show(t.text, 16, { now: true }); };
+  let stopText = null;
+  const skipStopped = (t) => { if (mode === 'level' && t?.text) { stopText = t.text; caption.show(t.text, 16, { now: true }); } };
+  // the next skip: a stop caption still showing is the last skip's (the card and the notebook keep it)
+  const skipStarted = () => { if (stopText && caption.now?.text === stopText) caption.clear(); stopText = null; };
   events.on(EV.NIGHT, (p) => { if (mode === 'level' && p?.notable && p.text) caption.show(p.text, 12, { soft: true }); });
   // the first-play pointers (PHASE5.md §6.1): their keys through claimKeys; they wait while a panel, the title or the busy card shows
   const intro = createIntro(ctx, { root, claimKeys: (fn) => claimKeys(fn), busy: () => busy.open || title.open || narrow.open, mode: () => mode });
@@ -592,7 +597,9 @@ export function createUI(ctx, deps) {
     events.emit(EV.PROBE, { kind: 'floor', x: p.x, z: p.z, value: r.tempC });
     floatRead.show(`Floor ${one(r.tempC)} °C`);
     // the brooder sign's figure beside the reading (the clarity round): the farmer compares
-    if (env.dayNumber <= 0) caption.show(`Floor ${one(r.tempC)} °C · brooder sign: 28–30 °C before the chicks arrive. A cold floor: raise the brooder thermostat (pre-heat).`);
+    if (env.dayNumber <= 0 && !(farm?.flock?.placed > 0)) caption.show(`Floor ${one(r.tempC)} °C · brooder sign: 28–30 °C before the chicks arrive. A cold floor: raise the brooder thermostat (pre-heat).`);
+    // the night fix: with chicks on it the floor follows the air above it and the concrete under it (the controller says why)
+    else if (farm?.mode === 'level' && farm.flock?.placed > 0) caption.show(`Floor ${one(r.tempC)} °C · house air ${one(env.houseTemp)} °C. The litter follows the air above it and the concrete under it: a floor that cools comes from cold air (the climate controller: the brooders’ output on its Temperature tab, the air going out on its Ventilation tab).`);
   }
   // L: the light meter at bird level (lux at your feet); V: the air meter at bird height (PHASE3.md §6.12)
   function luxMeter() {
@@ -843,6 +850,7 @@ export function createUI(ctx, deps) {
     // the night fix: level.js calls these (the night check card; a skip stopped on trouble); nightInfo for the harness
     nightCheck,
     skipStopped,
+    skipStarted,
     get nightInfo() { return nightUI.info; },
     // Phase 5 (PHASE5.md §8.6): the hubs other packages add to, and the screens they open
     menu,

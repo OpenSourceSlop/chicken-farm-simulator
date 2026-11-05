@@ -13,6 +13,8 @@ import { AIR, EQUIP, HEATERS, OUTSIDE_WATER_GM3, PAD_EFF, WEATHER, PLACEMENT_DAY
 import { HEAT, SLAB, absHumSat, wetBulbOf } from './sim.js';
 import { ventNeed, inletAirM3h, onSecFor, VENT_BAND } from './job-figures.js';
 import { windChillP4 } from './farm-tuning.js';
+import { comfortNow } from './farm-comfort.js';
+import { houseComfort } from './farm-house.js';
 
 /** Model values of the diagnosis (none is a sign fact). */
 export const DIAG = {
@@ -99,6 +101,23 @@ export function chillOf(env, farm, houseC, tunnelN = env.fansEffective ?? 0) {
   return speed * (3.0 - 1.6 * clamp((age + PLACEMENT_DAY - 7) / 28, 0, 1));
 }
 
+/**
+ * What the birds feel with the house at `houseC` and the brooders at `output`: the farm's own comfort model on a copy of the
+ * env (farm-comfort.js comfortNow in the brooding week, farm-house.js houseComfort from Week 2; the radiant under the
+ * brooders, the wind chill, the litter), so the night check reads the coldest hour as the flock watch would read it.
+ * -> { e, meanOver, coldShare, pantShare, coldDeathPerH, heatDeathPerH, cold, hot } (cold / hot: the flock watch's hour rule)
+ */
+export function comfortAt(env, farm, { houseC = env.houseTemp, output = env.heaterLevel } = {}) {
+  const e2 = Object.create(env), age = ageOf(env, farm);
+  e2.houseTemp = houseC; e2.heaterLevel = output; e2.windChill = chillOf(env, farm, houseC);
+  const out = {};
+  if (farm.cyc && farm.cyc.on) houseComfort(e2, farm, out, age, farm.flock?.meanWeightG);
+  else comfortNow(e2, out, { litter: farm.litter, age });
+  out.cold = age < 14 ? (out.coldShare ?? 0) >= 0.5 : (out.coldDeathPerH ?? 0) > 1e-5;
+  out.hot = (out.pantShare ?? 0) >= 0.5 || (out.heatDeathPerH ?? 0) > 1e-5;
+  return out;
+}
+
 /** The weather event sun on the roof at time t (°C/h; sim.js weatherHeat with its 2 h ramps). */
 export function sunAt(env, t) {
   let q = 0;
@@ -157,7 +176,9 @@ export function causeWords(kind, env, farm, at = {}) {
         const extra = a.timerShare > DIAG.airOver ? `; the timer adds ${int(a.timerM3h)} m³/h (${timerWords(a.timer)})` : `; the timer alone gives ${int(a.timerM3h)} m³/h`;
         return { kind, ...(young ? fanSign : { sign: 'sign-heat', signName: 'the heat and tunnel fans sign' }), place: young ? 'controller' : 'fan-panel', fix: { panel: 'controller', tab: 'vent' },
           why: `${plural(a.tunnelN, 'tunnel fan')} run${a.tunnelN === 1 ? 's' : ''} all the time: ${int(a.tunnelM3h)} m³/h along the floor, ${times(a.total / Math.max(1, a.need))} the ${need}${extra}`,
-          check: young ? `the Tunnel fans row on ${CTRL}’s Ventilation tab (switch them off: the timer gives the ${b} their air)` : `the tunnel fans at the fan panel or on ${CTRL}’s Ventilation tab (fewer fans while the night is cool)` };
+          check: age < 8 ? `the Tunnel fans row on ${CTRL}’s Ventilation tab (switch them off: the timer gives the ${b} their air)`
+            : young ? `the tunnel fans at the fan panel or on ${CTRL}’s Ventilation tab (off for the night once the evening cools: the timer gives the ${b} their air)`
+              : `the tunnel fans at the fan panel or on ${CTRL}’s Ventilation tab (fewer fans while the night is cool)` };
       }
       const t = a.timer, set = t ? `${onSecFor(a.need, t.fans, t.cycleSec)} s on in every ${t.cycleSec} s with ${plural(t.fans, 'fan')}` : '';
       return { kind, sign: 'sign-vent', signName: 'the minimum ventilation sign', place: 'controller', fix: { panel: 'controller', tab: 'vent' },
@@ -180,6 +201,12 @@ export function causeWords(kind, env, farm, at = {}) {
     case 'warmAir': return { kind, sign: 'sign-vent', signName: 'the minimum ventilation sign (its hot-afternoon line)', place: 'controller', fix: { panel: 'controller', tab: 'vent' },
       why: `the brooders are off and ${sunAt(env, env.day) > 0 ? 'the sun on the roof and the warm air hold' : 'the warm air holds'} the house over the row (${rowWords(env)})`,
       check: `the minimum ventilation timer on ${CTRL}’s Ventilation tab (more fan time while it is hot, back to the table when it cools)` };
+    case 'fewFans': {
+      const working = FAN_COUNT - (env.fansBroken?.length || 0), n = Math.max(0, env.fansEffective ?? 0);
+      return { kind, sign: 'sign-heat', signName: 'the heat and tunnel fans sign (its lines for big birds)', place: 'fan-panel', fix: null,
+        why: `${n} of ${working} tunnel fans run${env.padOn ? '' : ' and the pad pump is off'} with the house at ${fmtC(env.houseTemp)}: the birds cannot lose their heat`,
+        check: `the fan panel at the east end (more tunnel fans${env.padOn ? '' : '; the pads while the air outside is over about 30 °C'})` };
+    }
     case 'floor': return { kind, sign: 'sign-litter', signName: 'the litter sign', place: 'litter', fix: null,
       why: `the house holds near the row (${fmtC(env.houseTemp)}, ${rowWords(env)}) with the brooders not at full, yet the ${b} feel colder: wet or thin litter under them, or a brooder out`,
       check: 'the litter under the chicks (squeeze a handful) and that each brooder burns' };
@@ -205,5 +232,48 @@ export function coldCause(env, farm, at = {}) {
 /** The main heat cause of young birds: the thermostat over the row, else the warm air with the brooders off; null if neither. */
 export function hotCause(env, farm) {
   if (!env.broodersUp && env.powerOn !== false && env.heaterSetpoint >= rowOf(env) + DIAG.spOverC) return causeWords('thermostatHot', env, farm);
-  return youngOf(env, farm) ? causeWords('warmAir', env, farm) : null;
+  if (youngOf(env, farm)) return causeWords('warmAir', env, farm);
+  // big birds: fewer tunnel fans running than the house has working
+  const working = FAN_COUNT - (env.fansBroken?.length || 0);
+  return env.powerOn !== false && (env.fansEffective ?? 0) < working ? causeWords('fewFans', env, farm) : null;
+}
+
+/**
+ * The climate controller's notes (ui-climate.js): what the brooders do and why, the thermostat beside the brooder sign's
+ * row, the ventilation's warnings and the floor. -> { sp, temp, vent: [], floor } each { state, text } (green / amber /
+ * red, the flock watch's steady / watch / alert); only { vent: [] } outside a level.
+ */
+export function controllerNotes(env, farm) {
+  const out = { vent: [] };
+  if (!farm || farm.mode !== 'level' || !env.levelClimate) return out;
+  const row = rowOf(env), sp = env.heaterSetpoint, young = youngOf(env, farm), b = birdsWord(env, farm), placed = farm.flock?.placed > 0 && farm.flock?.alive > 0;
+  const a = airOf(env, farm), lvl = env.heaterLevel || 0, full = lvl >= DIAG.fullAt, house = env.houseTemp, d = Math.max(0, env.dayNumber);
+  const t = env.heatBudget ? env.heatBudget() : null, trend = t ? t.wallsCh + t.airCh + t.brooderCh + t.birdsCh + t.sunCh + t.slabCh : 0;
+  const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+  if (!env.broodersUp && young && env.dayNumber >= -1) {
+    const over = sp - row;
+    out.sp = { state: over >= DIAG.spOverC ? 'red' : over <= -DIAG.spUnderC ? 'amber' : 'green',
+      text: `Brooder sign: ${rowC(row)} for day ${d} · yours ${rowC(sp)}${over >= DIAG.spOverC ? `: ${one(over)} °C over the sign’s row; once the air is right the house will overheat the ${b}`
+        : over <= -DIAG.spUnderC ? `: ${one(-over)} °C under the sign’s row` : ''}` };
+  }
+  const cold = placed && full && house < Math.min(sp, row) - 1 ? coldCause(env, farm) : null;
+  const how = trend < -0.15 ? `falling ${one(-trend)} °C an hour at ${fmtC(house)}` : `holding at ${fmtC(house)}`;
+  if (!env.broodersUp) {
+    const n = env.brooderOut?.length || 0, head = `Brooders at ${int(lvl * 100)} %${n ? ` (${plural(n, 'brooder')} out)` : ''}`;
+    if (env.powerOn === false) out.temp = { state: 'red', text: 'No power: the brooders cannot light.' };
+    else if (cold) out.temp = { state: 'red', text: `${head} and the house ${how}, ${one(row - house)} °C under the row: more heat goes out than they put back. ${cap(cold.why)}. Where: ${cold.check}.` };
+    else if (young && placed && house > row + 2 && sp >= row + DIAG.spOverC) out.temp = { state: 'red', text: `${head}: the house is at ${fmtC(house)}, ${one(house - row)} °C over the row; the thermostat at ${rowC(sp)} keeps them heating up to it.` };
+    else if (young && placed && house > row + 2 && lvl < 0.05) { const w = causeWords('warmAir', env, farm); out.temp = { state: 'amber', text: `${head}: ${w.why}. Where: ${w.check}.` }; }
+    else out.temp = { state: 'green', text: `${head} · they hold the house at ${fmtC(house)}${young ? ` (the brooder sign’s row ${rowC(row)})` : ''}.` };
+  }
+  if (placed && young && a.tunnelN > 0 && !a.stages) {
+    const line = `${plural(a.tunnelN, 'tunnel fan')} running all the time: ${int(a.tunnelM3h)} m³/h along the floor, ${times(a.total / Math.max(1, a.need))} the ${int(a.need)} m³/h that ${int(a.birds)} ${b} need now`;
+    if (ageOf(env, farm) < 8) out.vent.push({ state: 'red', text: `${line}. The minimum ventilation sign keeps the tunnel fans off for young chicks: the timer below gives their air.` });
+    else if (house <= row + 0.5) out.vent.push({ state: 'red', text: `${line}, with the house at or under the row: they take out heat the brooders must put back (the heat sign: as few tunnel fans as the heat allows for young birds).` });
+    else out.vent.push({ state: 'amber', text: `${line}. Young birds: as few tunnel fans as the heat allows (the heat sign); off again once the house is back at the row.` });
+  }
+  if (cold && !out.vent.length) out.vent.push({ state: 'red', text: `The brooders are at full and the house is ${how}, ${one(row - house)} °C under the row: more air goes out than they can heat. ${cap(cold.why)}.` });
+  if (placed && a.need > 0 && a.timerShare > DIAG.airOver && !cold && house <= row + 0.5) out.vent.push({ state: 'amber', text: `The timer gives ${int(a.timerM3h)} m³/h, ${times(a.timerShare)} the ${int(a.need)} m³/h the ${b} need now: more than the vent sign’s 90–130 % takes out heat the brooders must put back.` });
+  out.floor = { state: 'green', text: 'The floor (the litter) follows the house air above it and the concrete under it: the concrete warms slowly over the pre-heat and holds that warmth for a day or more. The brooder sign wants the floor at 28–30 °C before the chicks come. A floor that cools in the day comes from cold air (the air going out: the Ventilation tab) or a short pre-heat (the thermostat, this tab).' };
+  return out;
 }

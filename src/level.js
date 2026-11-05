@@ -558,6 +558,7 @@ export function createLevel(ctx, deps = {}) {
     ui?.closePanel?.();
     let stopped = false;
     trouble = null;
+    if (stopOnAlarm) ui?.skipStarted?.();
     // a saved start inside the level is taken exactly at its 06:00 (PHASE3.md §11)
     for (const s of innerStarts(env.day, target)) {
       if (s.t > env.day + 1e-9 && !advance((s.t - env.day) * 24, stopOnAlarm)) { stopped = true; break; }
@@ -1179,6 +1180,8 @@ export function createLevel(ctx, deps = {}) {
       },
       /** Start a problem now (the farm decides the symptom when the farmer meets it). */
       trigger(id) { farm.debug?.trigger?.(id); },
+      /** The night fix: where a confirmed Next job press would land now, and the hours of night in it. */
+      nextSkip() { const target = skipTarget(engine.open()); return { target, nightH: nightHoursIn(env.day, target) }; },
       /** Show the result screen now. forcePass true / false makes a passing / failing level for the harness. */
       result(forcePass) {
         const r = computeResult('debug');

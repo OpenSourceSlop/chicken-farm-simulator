@@ -1,7 +1,7 @@
 // HUD: farm clock card, gauge strip (measured values only) and time controls. Owner: systems/UI agent.
 import { FAN_COUNT, TIME, WEATHER, LEVEL1 } from './config.js';
 import { MAX_DAY } from './sim.js';
-import { h, button, setText, setAttr, fmt1, fmt0 } from './ui-dom.js';
+import { h, button, setText, setAttr, fmt1, fmt0, injectStyle } from './ui-dom.js';
 import { ICONS, weatherIcon } from './ui-icons.js';
 
 const SPEEDS = [
@@ -39,6 +39,11 @@ export function createHud(parent, env) {
   const pips = [];
   for (let i = 0; i < FAN_COUNT; i++) { const p = h('span', { class: 'pip' }); pips.push(p); pipWrap.appendChild(p); }
   const fans = gauge('', ICONS.fan, 'Fans', pipWrap);
+  // the night fix (after Phase 5): in a level the tunnel fans (by hand, running all the time) apart from the timer's fans
+  // ("1 tunnel" over "Timer 1 · 8 s / 300 s"); the pips: tunnel fans lit, a timer fan outlined while its on-part runs
+  const fansSub = h('div', { class: 'gauge-sub', hidden: true });
+  fans.el.appendChild(fansSub);
+  injectStyle('hud-fans-style', '.pip.is-timer { background: transparent; box-shadow: inset 0 0 0 1.5px var(--lcd); }');
   const burner = gauge('gauge--burner', null, 'Brooders');
   const flame = h('span', { class: 'flame', html: ICONS.flame, 'aria-hidden': 'true' });
   const burnerText = h('span');
@@ -129,8 +134,18 @@ export function createHud(parent, env) {
     setGauge(outside.value, fmt1(env.outsideTemp), '°C');
     setGauge(humid.value, fmt0(env.houseRH), '%');
     setText(humidSub, `outside ${fmt0(env.outsideRH)} %`);
-    setGauge(fans.value, String(env.fansOn), `/ ${FAN_COUNT}`);
-    for (let i = 0; i < pips.length; i++) pips[i].classList.toggle('is-on', i < env.fansOn);
+    if (env.levelClimate) {
+      const tn = Math.max(0, env.fansManual ?? 0), t = env.ventTimer, timerOn = t && t.fans > 0 && t.onSec > 0;
+      setGauge(fans.value, String(tn), 'tunnel');
+      if (fansSub.hidden) fansSub.hidden = false;
+      setText(fansSub, timerOn ? `Timer ${t.fans} · ${t.onSec} s / ${t.cycleSec} s` : 'Timer off');
+      setAttr(fans.el, 'aria-label', `Fans: ${tn} tunnel fan${tn === 1 ? '' : 's'} by hand; timer ${timerOn ? `${t.fans} fan${t.fans === 1 ? '' : 's'}, ${t.onSec} s on in every ${t.cycleSec} s` : 'off'}`);
+      for (let i = 0; i < pips.length; i++) { pips[i].classList.toggle('is-on', i < tn); pips[i].classList.toggle('is-timer', i >= tn && i < env.fansOn); }
+    } else {
+      setGauge(fans.value, String(env.fansOn), `/ ${FAN_COUNT}`);
+      if (!fansSub.hidden) { fansSub.hidden = true; setAttr(fans.el, 'aria-label', 'Fans'); }
+      for (let i = 0; i < pips.length; i++) { pips[i].classList.toggle('is-on', i < env.fansOn); pips[i].classList.remove('is-timer'); }
+    }
     setText(burnerText, env.heatersOn ? 'On' : 'Off');
     burner.el.classList.toggle('is-on', env.heatersOn);
 

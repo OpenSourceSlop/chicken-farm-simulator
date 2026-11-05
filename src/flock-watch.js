@@ -110,7 +110,7 @@ export function causeOf(kind, age, st = {}) {
     case 'heat': {
       const hot = st.condition === 'hot' || (st.sun ?? 0) > 0, d = st.hot;
       // the night fix: the thermostat over the row first (the brooders heat the house up to it); never named while at the row
-      if (d && d.kind === 'thermostatHot') return { why: `the ${young ? 'chicks' : 'birds'} are hot: ${d.why}`, sign: d.sign, signName: d.signName, place: d.place, check: d.check };
+      if (d && (d.kind === 'thermostatHot' || d.kind === 'fewFans')) return { why: `the ${young ? 'chicks' : 'birds'} are hot: ${d.why}`, sign: d.sign, signName: d.signName, place: d.place, check: d.check };
       if (young && st.condition === 'hot') return { why: 'the chicks are hot: the sun on the roof heats the closed house over the brooder sign’s row', sign: 'sign-brooder', signName: `${SIGN.brooder} (its hot-season line)`, place: 'pad-pump', check: 'the pad pump, then one tunnel fan at the fan panel' };
       if (young && hot) return { why: 'the chicks are hot: the warm afternoon heats the closed house over the brooder sign’s row', sign: 'sign-vent', signName: `${SIGN.vent} (its hot-afternoon line)`, place: 'controller', check: 'the minimum ventilation timer at the climate controller (more fan time while it is hot, back to the table when it cools)' };
       if (young && d) return { why: `the chicks are hot: ${d.why}`, sign: d.sign, signName: d.signName, place: d.place, check: d.check };

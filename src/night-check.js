@@ -13,8 +13,10 @@
 //                                      EV.NIGHT { day, text, deaths, byCause, notable }); serialize / restore / reset
 import { AIR } from './config.js';
 import { EV } from './events.js';
+import { causeOf, watchState } from './flock-watch.js';
+const DEATH_KIND = { cold: 'cold', heat: 'heat', dehydration: 'water', weak: 'weak', starveout: 'weak', box: 'weak', sds: 'sds', legs: 'legs', disease: 'disease', respiratory: 'air' };
 import { DIAG, airOf, hoursAhead, coldFixes, causeWords, coldCause, hotCause, rowOf, rowWords, rowC, fmtC, youngOf, birdsWord,
-  timerWords, nextAt } from './heat-diag.js';
+  timerWords, nextAt, comfortAt } from './heat-diag.js';
 
 /** Model values of the night check and the stops (none is a sign fact). */
 export const NIGHT = {
@@ -47,7 +49,11 @@ export function nightCheck(env, farm, { toDay } = {}) {
   const to = Math.max(toDay ?? 0, nextAt(env.day, 7));
   const ah = hoursAhead(env, { toDay: to }), cold = ah.cold, lit = (8 - (env.brooderOut?.length || 0)) / 8;
   const problems = [];
-  if (cold.houseC < row - DIAG.coldC) {
+  // what the birds feel at the coldest hour, as the flock watch reads an hour (the farm's comfort model with the brooders'
+  // radiant, the tunnel fans' wind chill and the litter), or the house air itself 2 °C or more under the brooder sign's row
+  const felt = comfortAt(env, farm, { houseC: cold.houseC, output: cold.output });
+  const coldNight = felt.cold || cold.houseC < row - DIAG.coldC;
+  if (coldNight) {
     const f = coldFixes(env, farm, { outC: cold.outC, sunCh: cold.sunCh });
     const kinds = f.fixes.map((x) => x.kind);
     if (!kinds.length) kinds.push(env.brooderOut?.length ? 'brooderOut' : 'capacity');
@@ -73,7 +79,7 @@ export function nightCheck(env, farm, { toDay } = {}) {
   const needShare = cold.needFor(row) / Math.max(1e-6, lit);
   const has = (k) => problems.some((p) => p.kind === k);
   const lines = {
-    temp: { state: has('thermostatHot') || has('thermostat') ? 'red' : cold.houseC < row - DIAG.coldC ? 'amber' : 'green',
+    temp: { state: has('thermostatHot') || has('thermostat') ? 'red' : coldNight ? 'amber' : 'green',
       text: `House ${fmtC(env.houseTemp)} now. ${cap(rowWords(env))}. Thermostat ${rowC(sp)}${spWords}.` },
     air: { state: has('air') || has('pad') || has('airLow') ? 'red' : a.share > DIAG.airOver ? 'amber' : 'green',
       text: `Air going out now ${int(a.total)} m³/h: ${a.tunnelN ? `${plural(a.tunnelN, 'tunnel fan')} ${int(a.tunnelM3h)} (on by hand, running all the time) and ` : 'no tunnel fan; '}the timer ${int(a.timerM3h)} (${timerWords(a.timer)}). ${int(a.birds)} ${b} need about ${int(a.need)} m³/h (the vent sign’s table)${env.padOn ? '. The pad pump is on' : ''}.` },
@@ -137,7 +143,10 @@ export function createSkipGuard(env, farm, watch) {
       if (spike && !spiked) {
         spiked = true;
         const main = by[0]?.[0], b = birdsWord(env, farm);
-        const why = main === 'cold' ? coldReport(env, farm, fall) : main === 'heat' ? (youngOf(env, farm) ? hotReport(env, farm) : { text: 'See the heat and tunnel fans sign; check the fan panel and the pad pump.', fix: null }) : { text: 'See the flock health sign; check the dead birds’ causes and the records book.', fix: null };
+        // young birds' cold and heat: the heat balance's report; everything else (big birds' heat, disease, thirst …): the
+        // flock watch's cause for that kind of death, with the farm's state (the fans, the pads, the power, the tank)
+        const other = () => { const c = causeOf(DEATH_KIND[main] ?? null, farm.age ?? 0, watchState(env, farm)); return { text: `Likely cause: ${c.why}. See ${c.signName}; check ${c.check}.`, fix: null }; };
+        const why = main === 'cold' ? coldReport(env, farm, fall) : main === 'heat' && youngOf(env, farm) ? hotReport(env, farm) : other();
         return { kind: 'spike', text: `${plural(Math.round(rate * dt), b.replace(/s$/, ''), b)} died in the last farm hour${main ? `, mostly of ${CAUSE_WORD[main] || main}` : ''}. ${why.text}`, fix: why.fix };
       }
       if (!spike) spiked = false;

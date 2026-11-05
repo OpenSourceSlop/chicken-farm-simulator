@@ -63,8 +63,7 @@ export function registerNightPanel({ register, closePanel }) {
       el, kind: 'paused',
       draw(nc) {
         info = nc;
-        const to = nc.to != null ? ` · the night to ${hhmm(nc.to)}` : '';
-        setText(sub, `The farm clock stands still. The skip runs through the night${to}; with these settings:`);
+        setText(sub, `The farm clock stands still. The skip runs through the night; tonight${nc.to != null ? ` to ${hhmm(nc.to)}` : ''} with these settings:`);
         for (const [id] of ROWS) {
           const r = nc.lines?.[id], R = rows[id];
           R.dot.className = `fw-dot is-${r?.state || 'green'}`; R.dot.setAttribute('aria-label', WORD[r?.state] || ''); R.dot.title = WORD[r?.state] || '';
