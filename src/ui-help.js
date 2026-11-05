@@ -82,6 +82,7 @@ export function createHelp(arg = HELP_KEYS, seenKey0 = HELP_SEEN_KEY) {
       list.append(h('dt', { 'data-legend': row.ids?.join(' ') || null }, ks), h('dd', null, row.what));
     }
     card?.classList.toggle('help--wide', count > 12);
+    if (typeof fit === 'function') fit();
     if (toggleBtn) {
       const hk = keyWord('help', 'H');
       toggleBtn.title = `Controls (${hk})`;
@@ -101,8 +102,24 @@ export function createHelp(arg = HELP_KEYS, seenKey0 = HELP_SEEN_KEY) {
   render();
   if (keys?.subscribe) keys.subscribe(() => render());
 
+  // the legend kept under the top-left cards (the clock and the gauges wrap to two rows at 960 x 600 since the fan
+  // gauge): when it would reach them it gets the room left and scrolls inside, as the flock watch's warning does
+  function fit() {
+    if (!card || card.hidden || typeof document === 'undefined' || !card.getBoundingClientRect) return;
+    card.style.maxHeight = ''; card.style.overflowY = '';
+    const tl = document.querySelector?.('#hud .hud-tl');
+    if (!tl || !card.isConnected) return;
+    const r = card.getBoundingClientRect(), k = tl.getBoundingClientRect();
+    if (!r.height || !k.height || r.left >= k.right || r.top >= k.bottom + 4) return;
+    const scale = card.offsetHeight ? r.height / card.offsetHeight : 1, room = (r.bottom - k.bottom - 8) / (scale || 1);
+    if (room < 120) return;
+    card.style.maxHeight = `${Math.floor(room)}px`; card.style.overflowY = 'auto';
+  }
+  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', () => fit());
+
   function set(show) {
     card.hidden = !show;
+    fit();
     const hk = keyWord('help', 'H');
     toggleBtn.setAttribute('aria-expanded', String(show));
     toggleBtn.setAttribute('aria-label', show ? `Hide the controls (${hk})` : `Show the controls (${hk})`);
