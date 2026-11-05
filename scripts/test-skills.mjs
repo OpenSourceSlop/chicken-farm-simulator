@@ -14,6 +14,7 @@ import { MILESTONES_PAYOFF } from '../src/skills-payoff.js';
 import { RULES_PAYOFF, weighDayDone, sampleNeed } from '../src/skills-rules-payoff.js';
 import { RULES } from '../src/skills-rules.js';
 import { RULES_CYCLE } from '../src/skills-rules-cycle.js';
+import { RULES_COND } from '../src/skills-rules-cond.js';
 import { weighInBird } from '../src/farm-flock.js';
 import { runCycle } from '../src/farm-profiles-cycle-run.js';
 import { cycleProfileOf } from '../src/farm-profiles-cycle.js';
@@ -138,6 +139,20 @@ await test('the farmer\'s choice: the milestones follow Growth 2\'s 25 birds and
   const ws = Array.from({ length: 25 }, (_, i) => weighInBird(fl, rng, i, 0.3));
   const m = ws.reduce((a, b) => a + b, 0) / 25, u = (100 * ws.filter((x) => Math.abs(x - m) <= 0.1 * m).length) / 25;
   assert(Math.abs(m - 480) < 20 && u >= 60 && u <= 80, `25 birds: mean ${m.toFixed(0)} g, uniformity ${u.toFixed(0)} % (a cv 10 % flock: about 68 %)`);
+});
+
+await test('a bad batch\'s crop48 follows Brooding 2\'s 6 crops (farm.stats.samples), the boards\' 10 without', () => {
+  const crops = (n, full = n) => ({ notebook: Array.from({ length: n }, (_, i) => ({ kind: 'crop', day: 2, hour: 9 + i * 0.05, value: { crop: i < full ? 'full-soft' : 'empty' } })) });
+  const farm = { stats: {} };
+  assert(sampleNeed(farm, 'sample.crop', 2).n === 10 && RULES_COND.crop48(farm, crops(6)) === null, 'no smaller sample: 6 crops fall short of the 10 (nothing to measure)');
+  assert(RULES_COND.crop48(farm, crops(10)).tier === 0, 'the standard: 10 crops all full earn it');
+  farm.stats.samples = { 'sample.crop': { 2: { n: 6, sectors: 3 } } };
+  const r = RULES_COND.crop48(farm, crops(6));
+  assert(r && r.tier === 0 && /100 %/.test(r.detail), `Brooding 2: 6 crops all full earn crop48 (${JSON.stringify(r)})`);
+  assert(RULES_COND.crop48(farm, crops(6, 5)).tier == null, 'Brooding 2: 5 of 6 full (83 %) is under the 90 %');
+  assert(RULES_COND.crop48(farm, crops(5)) === null, 'Brooding 2: 5 crops are not yet the 6');
+  farm.stats.samples = { 'sample.crop': { 1: { n: 6, sectors: 3 } } };
+  assert(RULES_COND.crop48(farm, crops(6)) === null, 'a smaller sample on day 1 (d1-crop) does not change day 2\'s');
 });
 
 await test('the ideal earns every new milestone; noDark misses dark-fin, no day 28 weigh-in misses w28-weight, no afternoon fans read in week 3 misses fans-w3', () => {

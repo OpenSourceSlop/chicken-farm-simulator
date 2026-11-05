@@ -3,6 +3,7 @@
 // (notebook) and the checkpoint's ctx, and returns { tier, detail } or null (nothing to measure yet). Package "sim",
 // pure logic. The detail is the measured value in plain words, never a verdict.
 import { CONDITIONS } from './config.js';
+import { sampleNeed } from './skills-rules-payoff.js';
 
 const prob = (farm, id) => farm.problems.find((p) => p.id === id) || null;
 const st = (farm) => (farm.condX && farm.condX.st) || {};
@@ -68,7 +69,8 @@ export const RULES_COND = {
   },
   crop48: (farm, records) => {
     const c = notes(records, 'crop', 2).filter((n) => n.hour >= 8 && n.hour < 12.5).map((n) => n.value && n.value.crop);
-    if (c.length < 10) return null;
+    // the day's sample: 10 crops, 6 with Brooding 2's smaller sample (farm.stats.samples, as vent-checked and weighed-weekly)
+    if (c.length < sampleNeed(farm, 'sample.crop', 2).n) return null;
     const full = c.filter((x) => x === 'full-soft').length / c.length;
     return { tier: full >= 0.9 ? 0 : null, detail: `${Math.round(100 * full)} % of the crops full at 48 hours` };
   },
