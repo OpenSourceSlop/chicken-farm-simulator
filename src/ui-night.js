@@ -12,23 +12,25 @@ import { sourceLabel } from './content-signs.js';
 
 export const NIGHT_PANEL = 'night-check';
 const CSS = `
-.night { --p5-w: 620px; width: min(var(--p5-w), calc(100% - 2 * var(--gutter))); }
-.night-case { padding: 20px 22px 18px; background-color: var(--panel-solid); }
-.night-head { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; padding-right: 92px; }
-.night-head .icon { grid-row: span 2; align-self: start; font-size: 26px; color: var(--accent); }
-.night-head h2 { margin: 0; font: 600 20px/1.2 var(--font-display); color: var(--ink); }
-.night-head p { margin: 0; color: var(--ink-dim); font: 600 13px/1.35 var(--font-display); letter-spacing: 0.03em; }
-.nc-rows { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
-.nc-row { display: grid; grid-template-columns: 14px 92px minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 10px; border-radius: 6px; background: var(--panel-raised); }
+.night { --p5-w: 700px; width: min(var(--p5-w), calc(100% - 2 * var(--gutter))); display: flex; flex-direction: column; overflow: hidden; }
+.night > .panel-close { top: 12px; right: 14px; }
+.night .night-case { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; background-color: var(--panel-solid); }
+.nc-body { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 14px 18px 8px; }
+.night-head { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: center; padding-right: 96px; }
+.night-head .icon { grid-row: span 2; align-self: start; font-size: 22px; color: var(--accent); }
+.night-head h2 { margin: 0; font: 600 18px/1.2 var(--font-display); color: var(--ink); }
+.night-head p { margin: 0; color: var(--ink-dim); font: 600 12.5px/1.35 var(--font-display); letter-spacing: 0.02em; }
+.nc-rows { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; }
+.nc-row { display: grid; grid-template-columns: 12px 100px minmax(0, 1fr); gap: 8px; align-items: start; padding: 5px 10px; border-radius: 6px; background: var(--panel-raised); }
 .nc-row .fw-dot { margin-top: 4px; }
-.nc-k { font: 600 12px/1.4 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
-.nc-v { font-size: 13px; line-height: 1.45; color: var(--ink); }
-.nc-off-k { margin: 14px 0 6px; font: 600 14px/1.2 var(--font-display); color: var(--ink); }
-.nc-off { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13px; line-height: 1.45; color: var(--ink); }
+.nc-k { font: 600 11px/1.65 var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-dim); }
+.nc-v { font-size: 13px; line-height: 1.4; color: var(--ink); }
+.nc-off-k { margin: 10px 0 4px; font: 600 13.5px/1.2 var(--font-display); color: var(--ink); }
+.nc-off { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 13px; line-height: 1.4; color: var(--ink); }
 .nc-where { display: block; color: var(--ink-dim); }
 .nc-where b { color: var(--accent); font-weight: 600; }
-.nc-src { margin: 12px 0 0; color: var(--ink-faint); font-size: 11px; line-height: 1.4; }
-.nc-keys { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.nc-src { margin: 8px 0 0; color: var(--ink-faint); font-size: 12px; line-height: 1.35; }
+.nc-keys { flex: none; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding: 10px 18px 12px; border-top: 1px solid var(--panel-edge); }
 `;
 const ROWS = [['temp', 'Temperature'], ['air', 'Ventilation'], ['brooders', 'Brooders']];
 const WORD = { green: 'steady', amber: 'watch', red: 'alert' };
@@ -54,10 +56,12 @@ export function registerNightPanel({ register, closePanel }) {
     const skip = button({ class: 'btn', 'data-night': 'skip' }, 'Skip anyway');
     fix.addEventListener('click', () => { const f = handlers.onFix; closePanel(); f?.(info?.fix); });
     skip.addEventListener('click', () => { const f = handlers.onSkip; closePanel(); f?.(); });
+    // the check round: the body scrolls if it must, the two keys stay pinned under it (960 x 600: both always in view)
     el.append(h('div', { class: 'night-case card' },
-      h('header', { class: 'night-head' }, h('span', { class: 'icon', html: ICONS.moon || ICONS.thermometer || '', 'aria-hidden': 'true' }), h('h2', { id: titleId }, 'Before the night'), sub),
-      list, h('p', { class: 'nc-off-k' }, 'What is off, and where to set it'), off,
-      h('p', { class: 'nc-src' }, `The rows: the brooder sign’s table (${sourceLabel(['week1', 'vent'])} for day 1; the other rows general practice) and the minimum ventilation sign’s table (general practice). Where the house heads tonight: the farm’s own heat balance with these settings.`),
+      h('div', { class: 'nc-body' },
+        h('header', { class: 'night-head' }, h('span', { class: 'icon', html: ICONS.moon || ICONS.thermometer || '', 'aria-hidden': 'true' }), h('h2', { id: titleId }, 'Before the night'), sub),
+        list, h('p', { class: 'nc-off-k' }, 'What is off, and where to set it'), off,
+        h('p', { class: 'nc-src' }, `The rows: the brooder sign (${sourceLabel(['week1', 'vent'])} for day 1; other days general practice) and the minimum ventilation sign (general practice); where the house heads: the farm’s heat balance with these settings.`)),
       h('div', { class: 'nc-keys' }, skip, fix)), closeBtn);
     built = {
       el, kind: 'paused',

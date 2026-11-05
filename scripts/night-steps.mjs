@@ -50,6 +50,9 @@ export function nightSteps() {
     exp(`${open('night-check')} && __game.env.day - window.__t0 < 1 / 24 && 'the night check, the clock held' + ${t()}`, 'item 1: Next job through the night shows the night check first'),
     exp(`(() => { const c = ${card}; return /^red /.test(c) && /1 tunnel fan runs all the time: 36,000 m³\\/h/.test(c) && /Tunnel fans row/.test(c) && /thermostat is at 40 °C, 6\\.0 °C over the row: once the air is right/.test(c) && !/check the thermostat at/.test(c) && 'card: ' + c; })()`,
       'item 1 / 7: it names the tunnel fan (its airflow against the need, where to switch it off) and the thermostat over the row'),
+    exp(`(() => { const p = document.querySelector('${PANEL}.night'), b = p.querySelector('.nc-body'), r = (s) => p.querySelector(s).getBoundingClientRect(), f = r('[data-night=fix]'), k = r('[data-night=skip]');
+      return p.scrollHeight <= p.clientHeight + 1 && b.scrollHeight <= b.clientHeight + 1 && f.bottom <= innerHeight && k.bottom <= innerHeight && f.top >= 0 && 'the card ' + p.clientHeight + ' px in a ' + innerWidth + ' x ' + innerHeight + ' window, no scroll; Skip anyway and Fix it at ' + Math.round(k.top) + '-' + Math.round(k.bottom) + ' px'; })()`,
+      'check round 2: the card fits the window with both keys in view (no scroll)'),
     shot('night-04-night-check-tunnel'),
     click('Fix it at the controller'), adv(0.4),
     exp(`${open('controller')} && document.querySelector('${PANEL} .ctrl-tab[aria-selected="true"]')?.textContent === 'Ventilation' && 'Fix it: the controller on its Ventilation tab'`, 'Fix it opens the controller on the Ventilation tab'),
