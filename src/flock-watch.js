@@ -401,7 +401,7 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       samples.push(sample(L));
       if (samples.length > WATCH.keepH) samples.splice(0, samples.length - WATCH.keepH);
       const rows = evaluate(L);
-      if (rows) { warnings_(rows, samples[samples.length - 1]); status.last = warnings[warnings.length - 1] || null; }  // the card shows a new warning at once
+      if (rows) { warnings_(rows, samples[samples.length - 1]); status.last = warnings[warnings.length - 1] || null; live.base = null; }  // the card shows a new warning at once
     },
     /** The card's rows: the hourly ones, with the comfort row's "now" and felt read live from the model (review round:
      *  a sudden change shows at once, not at the next farm hour; a green window with the birds hot or cold now is amber). */
@@ -415,7 +415,9 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       if (quiet > 0 || !text) return null;
       const day = Math.floor(env.day + 1e-9), hour = Math.round((env.day - day) * 24 * 100) / 100;
       const w = { kind, state: 'red', text, cause, sign, place, day, hour, t: env.day };
-      warnings.push(w); status.last = w;
+      // the check round: a new status object, so the live copy (liveStatus caches one per status and comfort key) is
+      // made again at the card's next read: the line shows at once, not when the felt comfort next moves 0.1 °C
+      warnings.push(w); status = { ...status, last: w }; live = { base: null, key: '', st: null };
       records?.note?.('watch', text);
       events?.emit?.(EV.WATCH, { ...w });
       return w;

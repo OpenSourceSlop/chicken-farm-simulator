@@ -198,6 +198,20 @@ test('check round 1: the controller’s notes follow the settings now — the tu
   }
 });
 
+test('check round 3: a line raised by watch.raise (the sunset line, a stop) is on the flock watch card at once (no cached copy from before it)', () => {
+  const F = day0(SET.farmer, 18);
+  F.level.update(0.016);
+  F.env.skipHours(18.55 - F.env.hour);
+  const before = F.level.watch.status();               // the card's read just before sunset (the live copy cached)
+  assert(before.on && before.rows.comfort && before.last?.kind !== 'night', `before: on ${before.on}, last ${before.last?.kind}`);
+  F.level.update(0.016);                                 // the running clock passed 18:30: the sunset line
+  const w = F.level.watch.warnings.at(-1), now = F.level.watch.status();
+  assert(w?.kind === 'night' && /^Sunset, and the night ahead: 1 tunnel fan runs all the time/.test(w.text), `raised: ${w?.text?.slice(0, 90)}`);
+  assert(now.last === w && now.rows.comfort, `the card's next read: ${now.last?.kind} ${now.last?.text?.slice(0, 60)}`);
+  const s = F.level.watch.raise({ kind: 'stop', text: 'Next job stopped at 19:00: a test line.' });
+  assert(F.level.watch.status().last === s, 'a second raise shows at once too');
+});
+
 test('item 5: older birds’ nights — four tunnel fans on day 16 (the check, then the watch stop names them); the hot season’s day 30 with no fan (a stop names the fans and pads)', () => {
   const R = makeRun();
   R.run.startRun({ seed: 1, at: 'week3' });
