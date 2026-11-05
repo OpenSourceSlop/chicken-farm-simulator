@@ -51,7 +51,7 @@ export function branchMilestones(skills, branch) {
 }
 
 export function buildSkillTreePanel(L) {
-  injectStyle('tree-skills-style', TREE_CSS);
+  try { injectStyle('tree-skills-style', TREE_CSS); } catch { /* a page without a full document (node tests) */ }
   const titleId = uniqueId('tree-title');
   const { el, closeBtn } = dialogShell('tree', titleId, L.close);
   const grid = h('div', { class: 'tree-grid' });

@@ -43,7 +43,7 @@ export function splitWarning(text) {
 }
 
 export function createWatchCard(root, ctx) {
-  injectStyle('fw-skills-style', SKILL_CSS);
+  try { injectStyle('fw-skills-style', SKILL_CSS); } catch { /* a page without a full document (node tests) */ }
   const title = h('h2', { class: 'label' }, 'Flock watch');
   const sub = h('span', { class: 'fw-sub' });
   const fold = button({ class: 'fw-fold', 'aria-label': 'Fold the flock watch', title: 'Fold or open the flock watch', 'aria-expanded': 'true' }, '–');

@@ -174,7 +174,7 @@ const SKILL_CSS = `
 `;
 
 export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook, onSkills, nextLabel }) {
-  injectStyle('ljobs-skills-style', SKILL_CSS);
+  try { injectStyle('ljobs-skills-style', SKILL_CSS); } catch { /* a page without a full document (node tests) */ }
   const titleId = uniqueId('ljobs-title');
   const head = h('h2', { class: 'label', id: titleId });
   const count = h('span', { class: 'jobs-count' });
