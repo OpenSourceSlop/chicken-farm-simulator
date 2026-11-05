@@ -100,7 +100,9 @@ export function orderFeed(feed, env, a) {
   const kg = Math.max(0, Math.min(room, Math.round(a.kg ?? 0)));
   if (!kg) return { arriveDay: null, arriveHour: null, kg: 0, type, silo, roomKg: Math.round(room) };
   const arriveDay = env.dayNumber + (env.hour < 16 ? 1 : 2), arriveHour = 9;
-  const o = { kg, type, silo, arriveDay, arriveHour, orderedAt: env.day };
+  // Skills update (integration): who ordered (the feed controller's `by: 'auto'`, the silo gauge's or the pocket phone's
+  // `from`) stays on the order, so the silo gauge can say which are the controller's; a Phase 5 order carries neither
+  const o = { kg, type, silo, arriveDay, arriveHour, orderedAt: env.day, ...(a.by ? { by: a.by } : {}), ...(a.from ? { from: a.from } : {}) };
   feed.pending.push(o);
   feed.orders.push({ ...o, arrivedAt: null });
   return { arriveDay, arriveHour, kg, type, silo, roomKg: Math.round(room) };

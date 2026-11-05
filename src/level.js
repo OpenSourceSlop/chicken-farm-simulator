@@ -73,7 +73,7 @@ import { createFlockWatch } from './flock-watch.js'; // PHASE4.md §15.1: the fl
 // the night fix (after Phase 5): the night check before a skip through the night, the skip's stops, the morning summary
 import { nightCheck, nightHoursIn, createSkipGuard, createNightLog, NIGHT } from './night-check.js';
 // Skills update (SKILLS.md §4.2, §15.2): the jobs as the payoffs make them, the controllers on from the perks, quiet ideal play
-import { jobVariant } from './job-variants.js';
+import { jobVariant, baseDoneId } from './job-variants.js';
 import { AUTO, AUTO_SYSTEMS, FAULTS } from './config.js';
 
 const H = 1 / 24;
@@ -302,7 +302,7 @@ export function createLevel(ctx, deps = {}) {
 
   // ---------------- PHASE4.md §15.2: no job closes while the farmer is doing it ----------------
   let noHold = 0;                   // > 0 while a skip or goto(auto) runs: nothing is held then
-  const SAMPLE_JOB = (inst) => inst.def.done?.id === 'sample.weigh' || inst.id === 'd0-vent' || inst.id === 'd1-crop' || inst.id === 'w2-check' || inst.id === 'w3-droppings'
+  const SAMPLE_JOB = (inst) => baseDoneId(inst.def) === 'sample.weigh' || inst.id === 'd0-vent' || inst.id === 'd1-crop' || inst.id === 'w2-check' || inst.id === 'w3-droppings'
     || inst.def.spot === 'lame' || inst.def.spot === 'sick';
   const toolOf = (r) => (!r ? null : r.tool || (r.of || []).map(toolOf).find(Boolean) || null);
   /** The panels showing an open job's strip (the open one, the ones finishing a machine job in the background). */
@@ -319,7 +319,7 @@ export function createLevel(ctx, deps = {}) {
     const c = props?.carrying;                                                      // (c) its bird or tool in his hands
     if (!c) return false;
     if (c === 'chick' && SAMPLE_JOB(inst)) return true;
-    if (c === 'frame' && inst.def.done?.id === 'sample.weigh') return true;
+    if (c === 'frame' && baseDoneId(inst.def) === 'sample.weigh') return true;
     if (c === 'barrow' && (inst.id === 'prep-litter' || inst.id === 'w2-ready')) return true;
     if (c === 'boxes' && (inst.def.closeOn === 'placed' || inst.def.done?.test === 'all-placed')) return true;
     return toolOf(inst.def.done) === c;
@@ -346,7 +346,7 @@ export function createLevel(ctx, deps = {}) {
   // ---------------- checkpoints, the end ----------------
   const closed = (key) => { const i = engine.byKey(key); return !!i && i.closesAt != null && env.day >= i.closesAt - 1e-7; };
   const doneOrClosed = (key) => { const i = engine.byKey(key); return !!i && (i.status === 'done' || i.status === 'missed' || closed(key)); };
-  const weighInst = (d) => engine.list().find((i) => i.day === d && i.def.done?.id === 'sample.weigh' && i.def.kind !== 'problem');
+  const weighInst = (d) => engine.list().find((i) => i.day === d && baseDoneId(i.def) === 'sample.weigh' && i.def.kind !== 'problem');
   function checks() {
     if (!inLevel() || free) return;
     const f = farm.flock;
@@ -1058,7 +1058,7 @@ export function createLevel(ctx, deps = {}) {
       if (env.dayNumber !== lastDay) { lastDay = env.dayNumber; emitLevel({ phase: 'day' }); }
       const list = engine.list();
       const open = (id) => list.some((i) => i.id === id && i.status === 'open');
-      const weighOpen = list.some((i) => i.status === 'open' && i.def.done?.id === 'sample.weigh' && i.def.kind !== 'problem');
+      const weighOpen = list.some((i) => i.status === 'open' && baseDoneId(i.def) === 'sample.weigh' && i.def.kind !== 'problem');
       level.sampling = open('d0-vent') ? 'vent' : open('d1-crop') ? 'crop' : weighOpen ? 'weigh'
         : env.dayNumber >= 8 && (open('w2-check') || open('w3-droppings')) ? 'bird' : null;
       if (saveIn != null && (saveIn -= dt) <= 0) saveIdle();

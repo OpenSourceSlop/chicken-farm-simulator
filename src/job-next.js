@@ -20,7 +20,7 @@ import { SPOTS, SPOTS2, SPOTS3, SPOTS4, FARM, HEATERS, BROOD_BOUNDS, BIRD_BOUNDS
 import { flowToday, nippleCmToday, nippleInBand, rimInBand, rimCmNow, LINES_UP_CM, PANS_UP_CM, NIPPLE_DAY0_CM, FLOW_BAND } from './job-figures.js';
 import { sectorOf, lineReading } from './job-engine.js';
 import { AUTO_SYSTEMS, SKILL_SHORT, SKILLS_UPDATE } from './config.js';
-import { variantHas, PLACE_KEYS } from './job-variants.js';
+import { variantHas, PLACE_KEYS, baseRule } from './job-variants.js';
 import { fillKeys } from './key-words.js'; // fix round: the place's key as bound now
 
 const r1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
@@ -124,7 +124,8 @@ const BROOD_COL = ['west', 'middle', 'east'], HOUSE_COL = ['west end', 'west mid
 // frame: the catching frame only goes down on the brooding floor (props.js), so with the skills update
 // the weighing parts of the house are the ones it reaches (the east middle at its brooding end).
 function sectorPlaces(inst, c, todo, frame = false) {
-  const r = inst.def.done, st = inst.st;
+  const { rule: r, st } = baseRule(inst.def, inst.st);
+  if (!r || !st) return null;
   if ((r.type !== 'count' && r.type !== 'seen') || !r.sectors) return null;
   const have = new Set((st.list || []).map((x) => x.s)), need = r.sectors;
   if (have.size >= need) return (st.list || []).length >= r.n ? [] : null;   // any part of the floor will do now
@@ -319,7 +320,8 @@ export function jobPlaces(inst, c) {
     return b && b.n > 0 ? [b.inside ? floor(b.x, b.z, 'the bucket you set down', '{key:use} picks it up') : { id: 'bucket', at: { x: b.x, z: b.z, inside: false, label: 'Bucket' }, name: 'the bucket you set down', along: 'outside', todo: '{key:use} picks it up' }] : null;
   }
   if (WEIGH_IDS.has(id)) {
-    if (carrying !== 'frame') return (st.list || []).length >= inst.def.done.n ? [] : [{ id: 'birdScale', at: SPOTS2.birdScale, name: 'the bird scale', along: 'in the house', todo: 'take the scale and frame' }];
+    const b = baseRule(inst.def, st);   // a weigh job handed to the bird scale (Growth 3): its own count under the glance
+    if (carrying !== 'frame') return (b.st?.list || []).length >= (b.rule?.n ?? Infinity) ? [] : [{ id: 'birdScale', at: SPOTS2.birdScale, name: 'the bird scale', along: 'in the house', todo: 'take the scale and frame' }];
     return sectorPlaces(inst, c, 'set the frame down there ({key:use})', true);
   }
   if (id in COUNT_TODO) {

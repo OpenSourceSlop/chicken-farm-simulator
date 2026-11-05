@@ -243,6 +243,32 @@ The model package replaces the estimate with `runCycle('normal')` and the `~` ti
 records the measured table here (§16). A run started at the brooding week has no plan points (Farm Planning then reaches level 1
 in a flock; noted). A weaker farmer (10 points in a branch after flock 1) reaches level 3 in that branch within flock 2.
 
+**Measured at the integration** (main with `live` on, `node scripts/skill-progress.mjs --compare 4,9,15`: `runCycle` plays both
+profiles through both flocks, the normal's flock 2 with the perks it earned and the faults met by hand; every level of both
+flocks passed by both profiles; points per flock slot):
+
+| Branch | Ideal: flock 1 · flock 2 · L2 day | Normal: flock 1 · flock 2 · L2 day (the award) | L3 (both) | L3 job days felt in flock 2 |
+| --- | --- | --- | --- | --- |
+| Farm Planning | 19 · 19 · day 21 | 18 · 18 · day 21 (records-w23) | flock 2 start | 48 of 48 |
+| Biosecurity & Health | 20 · 21 · day 19 | 19 · 19 · day 19 (cocci-treated) | flock 2 start | 2 of 2 |
+| Chick Arrival & Brooding | 16 · 13 · day 7 | 15 · 12 · day 7 (day7-weight) | flock 2 start | 1 of 1 |
+| Body Temperature & Comfort | 15 · 15 · day 35 | 14 · 13 · day 35 (panting-short) | flock 2 start | 42 of 42 |
+| Heat & Ventilation | 20 · 21 · day 27 | 17 · 18 · day 27 (fan-fixed) | flock 2 start | 27 of 27 |
+| Moisture & Min. Ventilation | 14 · 14 · day 21 | 14 · 14 · day 21 (litter-w3) | flock 2 start | 7 of 7 |
+| Heating | 14 · 14 · day 14 | 14 · 14 · day 14 (nights-w2) | flock 2 start | 1 of 1 |
+| Water | 20 · 19 · day 7 | 17 · 16 · day 7 (ratio-steady) | flock 2 start | 9 of 9 |
+| Feed & Digestion | 16 · 15 · day 21 | 14 · 14 · day 21 (rim-w3) | flock 2 start | 10 of 10 |
+| Lighting | 16 · 16 · day 14 | 13 · 13 · day 21 (lame-w3) | flock 2 start | 2 of 2 |
+| Growth & Performance | 20 · 11 · day 28 | 20 · 11 · day 28 (w28-weight) | flock 2 start | 6 of 6 |
+
+Every branch of both profiles is at level 2 after flock 1 and at level 3 from flock 2's start (§2.5's asserts all met, in npm
+test through test-skills). With `--compare 4,9,15` the ideal's Moisture and Heating reach level 3 only on day 7 of flock 2 (6 of
+7 and 0 of 1 job days felt), and the normal's Moisture, Heating, Feed and Lighting on day 7 (6 of 7, 0 of 1, 10 of 10, 1 of 2)
+and Comfort on day 14 (27 of 42): 13 holds. The normal differs from §2.4's slip list as the model package measured it: Phase
+2's `smallMistakes` cost Heating's cold night and every weigh-in to day 21, so the normal keeps the filter found on day 4 and
+the missed morning flow tests (days 1–3) and drops the pressure, thermostat, line-height and day-23 air-speed slips. Growth
+earns 11 in flock 2 (with Growth 3 the hand weighings stop; w14, w21 and w35-weight count hand weighings only).
+
 ## 3. The payoffs, branch by branch (`config.PAYOFFS`, `config.SKILL_VIEWS`, `config.UNLOCK_SHOWS`)
 Every payoff entry carries `{ branch, level, step: 'faster' | 'auto', name, saves, where, jobs, by }` (+ `system` and `fault`
 for an automated one). `saves` is the tree's plain-words line, `where` the unlock caption's "use it at …", `jobs` the job ids the

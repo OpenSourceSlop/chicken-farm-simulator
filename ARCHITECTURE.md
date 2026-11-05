@@ -1423,3 +1423,70 @@ the sight tubes (`water.columns`) instead of four test valves; no sample size ch
 every round; the pocket phone panel stub, `L.perks`, the watch's `setLead` stub, one home for `preheatHours` and `feedDays`;
 `UNLOCK_SHOWS` for all 33 views. Results: `npm test` all passed (449 ok, then test-contracts' tally case: 450), build 1,544.8 KB,
 `cold-hot` without errors, `skills-design-stubs` 10 PASS, `p5-design-stubs` 20 PASS, the §2.5 targets met.
+
+## Skills update — as integrated
+`SKILLS.md` is the spec. The four packages were merged with `--no-ff` in §16's order (**model**, **jobs**, **panels**, **scene**;
+no file touched by two packages, no conflict), `npm test` passing after each, then wired, switched on and played through
+together. **`config.SKILLS_UPDATE.live` is true on main**: the thresholds are 4 / 9 / 13 with the level 3 gate (a finished flock),
+milestones count once per flock slot (two slots), every branch level brings its payoff, and the farm's equipment does the
+level 3 jobs. Under automation (a steps file, `navigator.webdriver`) no payoff acts until `__game.perks.allow(true)`, so the
+Phase 1 sandbox, Phase 2's brooding week, Phase 3's cycle, Phase 4's conditions, Phase 5's panels and the night fix play as
+before; node tests that build their own world make no perks unless they ask (`runCycle(name, { perks })`). With the switch
+set false (a steps file or a node test) the game is the Phase 5 game: test-sim byte-identical, every Phase 5 digest unchanged.
+
+### What the player has now (SKILLS.md §3–§7)
+- **Three steps per branch** on the tree (*See more*, *Faster*, *The equipment does it*), each with its *saves* line, where it
+  is used, the view under it in plain words (`UNLOCK_SHOWS`), the two-flock points (*first flock · another flock*) on a
+  4 / 9 / 13 bar, *comes with your next flock* for a first flock at 13, and *on* / *off in Settings* for level 3.
+- **Level 2 (Faster)**: the sight tubes at the water supply (four lines in one click; a cup test only at a line that reads
+  off), *Fill the timer* (the vent sign's need at 110 % in one press, the working beside the key), the fan panel's and the
+  controller's *Set as suggested*, *Set to the sign's row* and the pre-heat line, *Next chick* and the 2 m reach, the silo
+  gauge's days of feed with the 2-day warning and *Order to 3 days* / *Order to the catch* there, *Program for days N–M*,
+  *Weigh the frame* (each part's birds in one press, 1 s), the earlier comfort warning with its fix (*Show me*), the tally
+  bucket (every dead bird within 2.5 m in one E, counted at pickup, 15 kg), the pocket phone (R anywhere, the time bar's key).
+- **Level 3 (the equipment does it)**: seven controllers (winches, timer, fan stages, brooders, feed, lights, bird scale) act
+  only through `farm.act` by `'auto'` or the env setters; a handed-over job becomes *any of*: a quick look at the reading in
+  band, or the job by hand (the card: *handled by the controller (Water 3) · look at …*); the farmer's own setting holds
+  (06:00, 18:00 or 2 h); the comfort colours on entering, the symptom tags within 2 m and the passing check, the arrival
+  day's helper, the daily record on the phone. `r-drinkers` and `r-feeders` are never handed over; no payoff changes a
+  sample size or a pass rule.
+- **Faults**: one plan per flock (drawn at the brooding week's start, saved), six faults (winch stall, timer reset, stage
+  trip with its high temperature alarm, sensor drift, lost feed order, fouled scale), each raised on the flock watch's
+  Equipment row with what, cause and place, stopping a Next job skip, on the night check with its *Fix it* place, and fixed
+  by the job by hand; never one on a level's last day, never silently costing a level (a failed level lists them).
+- **Settings → Automation** (the seventh tab, drawn only while live): *all*, then one switch per branch's level 3.
+
+### Wiring and contracts settled at the merge
+- **package.json**: `npm test` adds `test-skills`, `test-auto --quick`, `test-payoffs`, `skill-time --assert`, `test-tally`.
+- **main.js**: `__game.feedDays()` (farm-silos `feedDays`, the figure the silo gauge, the phone and the Feed 2 warning read;
+  the steps files hook the silo from it).
+- **ui.js**: EV.FAULT `found` with `alarm: true` (the stage trip's high temperature alarm) raises the alarm banner with the
+  fault's words (the model's contract note 7).
+- **The milestone table**: `ui-skilltree.js` (`branchMilestones`) and `level.js` (the level's points list) read
+  `skills.milestoneTable()` — the seven new milestones while live — instead of `ALL_MILESTONES_P4` (note 10).
+- **ui-climate.js**: while the sensor drifts the thermostat shows the figure the farmer set (`farm.autoCtl.setpointC()`), the
+  LCD the sensor (note 3); a step from the panel still lands on his figure (the model adds the drift back for a bus step).
+- **ui-cycle-equip.js**: the silo gauge's days line names its rate: *the feed meter's last 24 hours* when `feedDays.how` is
+  `meter`, *the feed sign* otherwise (it always said *the feed sign*).
+- **ui-settings-style.js**: seven tabs at 960 px: each label takes its own width (`:has(> .set-tab:nth-child(7))`), none cut.
+- **The job variant is taken when an instance is made** (`job-engine createDay`, the day the clock enters): a level forced
+  after the day's jobs exist changes their places and keys only from the next day. The panels' steps files (skills-water,
+  skills-feed) now force their level before the standard start.
+- **Contracts as the packages built them** (SKILLS.md §12 holds; additions): `installAuto(farm, env, events)` takes the bus;
+  `farm.autoCtl` `ok(system, inst, part)`, `quiet(on)`, `status()` (`systems[s] { state, text, since, label, branch }`,
+  `faults`, `last`), `sensorC()`, `setpointC()`, `scale()`; `farm.auto` adds `mem` and `setC` (saved); EV.FAULT phases `start`,
+  `found` (`red`, `alarm`), `fixed`, `dropped`, and `armed` / `hit` for a lost order before it opens; `watch.equipmentWarn()`,
+  `equipmentRow(env, farm)`, `setLead({ comfortH, fix })`; `nightCheck` puts fault rows in `problems` and `faults` (any age);
+  records kinds `auto`, `fault`, `skill`; `level.syncAuto()`, `level.perks`, `run.standardPlaying`; `ui.openPhone()`,
+  `ui.showMe(fix)`, `ui.gateWaiting`; `jobCard.setTopLine`, `jobCard.pointTo`; `stripsAt(…, perks)`; results `unlocks`,
+  `faults`; key action `phone` (R, live only); the panels' `fillTimerFor`, `rowFor`, `weekProgramFor`, `fanAdviceFor`,
+  `orderTo3`, `orderToCatch`; the scene's `props.bucketTally`, `props.helper`, `flock.catcher.nextNearest`, `flock.tags()`,
+  EV.BIRD_SEEN, chick box state `reserved`, `dead.count { at: 'pickup' | 'bin' }`, EV.DEAD_DROP `counted`.
+- **Tests made explicit about the switch** (main now runs with it on): test-contracts (the brooding week's own board lines
+  apart from the general skills lines; *no skills line* and *nothing while live is false* with the switch set false; the open
+  fault among the plan's items), test-payoffs (*perks off* and *live false* cases), test-settings (*live false: no phone key*),
+  test-tally (the Phase 4 bucket path); each passes with the switch on and off.
+- **Steps files**: skills-fault and skills-auto read the job's variant from `inst.def.variant` and click the real *Reset the
+  motor* and *Check the sensor* keys (no `auto.reset` / `auto.calibrate` fallback); skills-weigh waits the frame's second
+  and requires the *Weigh the frame* key; p5-settings counts seven tabs while live (Automation scrolls as Keys does, no label
+  cut); skills-design-stubs reads the live default.

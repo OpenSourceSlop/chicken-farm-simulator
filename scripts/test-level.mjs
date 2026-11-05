@@ -280,5 +280,29 @@ test('skills update: farm.auto.on from the perks after start, enter and restore,
   } finally { SKILLS_UPDATE.live = was; }
 });
 
+// integration: the weigh-in checkpoint read the job's top rule; a weigh job handed to the bird scale (Growth 3) is
+// any[ GLANCE, the job as before ], so the week never ended on its signing (skills-play.json: week 3 still open at 21:00)
+test('skills update: a week whose weigh job the bird scale takes over (Growth 3) still ends on its signing after the weigh-in', () => {
+  const was = SKILLS_UPDATE.live;
+  SKILLS_UPDATE.live = true;
+  try {
+    const w = makeWorld();
+    const settings = { v: {}, get(p) { return this.v[p]; } };
+    const perks = createPerks({ skills: w.skills, settings, events: w.events, allowed: true });
+    w.skills.debug.force('growth', 3);
+    const L = makeLevelWith(w, perks);
+    L.level.start({ seed: 1 });
+    L.level.debug.goto(7, 21, { auto: true });
+    if (!L.level.result) L.level.debug.goto(8, 6.05);
+    assert(L.level.result?.pass, 'the ideal brooding week passes with Growth 3');
+    assert(L.level.enter('week2'), 'enter week 2');
+    L.level.debug.goto(14, 21, { auto: true });
+    const wi = L.level.jobs.list().find((i) => i.key === 'w2-weigh@14');
+    assert(wi?.def.variant?.parts?.scale === 'whole' && wi.status === 'done', `w2-weigh@14 handed to the scale and done: ${JSON.stringify(wi && { v: wi.def.variant, s: wi.status })}`);
+    const r = L.level.result;
+    assert(r?.levelId === 'week2' && r.pass, `week 2 ends on the day 14 signing: ${L.level.mode} ${JSON.stringify(r && { id: r.levelId, pass: r.pass, w: r.weightG })}`);
+  } finally { SKILLS_UPDATE.live = was; }
+});
+
 console.log(failed ? `${failed} failed` : 'all passed');
 process.exit(failed ? 1 : 0);

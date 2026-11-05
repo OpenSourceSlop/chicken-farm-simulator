@@ -15,8 +15,8 @@
 //  5. weigh    day 21 08:24: the weekly weighing with Weigh the frame (Growth 2) in five parts, before the automatic scale
 //              has its 300 birds; w3-weigh done; the week passes
 import { W, adv, ev, exp, shot, press, click, E, esc, job, START, write, until, nextTo,
-  gateToHouse, controllerRead, feederBox, waterMeter, walkFloor, deadPick, houseOut, toBin, binCount, deadSweep, outToHouse,
-  atFans, fansAll, birdChecks, nightThenRecord, nightAtController, autoTo, passed, morning } from './p3-cycle-steps.mjs';
+  gateToHouse, controllerRead, feederBox, walkFloor, deadPick, houseOut, toBin, binCount, deadSweep, outToHouse,
+  atFans, fansAll, birdChecks, nightThenRecord, nightAtController, autoTo, passed, morning, afternoon } from './p3-cycle-steps.mjs';
 
 const BRANCHES = ['planning', 'biosecurity', 'brooding', 'comfort', 'ventilation', 'moisture', 'heating', 'water', 'feed', 'lighting', 'growth'];
 const PANEL = '#hud .panel:not([hidden])';
@@ -44,15 +44,16 @@ const startWeek3 = (force) => [
   exp(`__game.level.def.id === 'week3' && __game.env.dayNumber === 15 && 'week 3 at ' + __t()`, `week 3 from its standard start (${force ? 'every branch at level 3' : 'no skill'})`),
 ];
 
-/** p3-cycle's afternoon of day 16 (the fan panel at the east end, five droppings checks walking west, the squeezes). */
-const afternoon16 = () => [...outToHouse(),
-  ...atFans([shot(`sp-fans-16`), ...fansAll(false)], 'day 16 afternoon: the fan panel'), job('r-fans-pm@16', 'the fans and the house read in the afternoon heat'),
-  ...birdChecks(3, 'Look at the vent and droppings', 'sp-droppings', [[18, 2.2], [6, -2], [-6, 2.2]]),
-  W(-4, 0.8, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3),
-  ...birdChecks(2, 'Look at the vent and droppings', 'sp-droppings-b', [[-12, -2], [-18, 2.2]]),
-  W(-20, -1.95, 0.5), press('q'), adv(0.3),
-  job('w3-droppings@16', 'droppings checked on five birds from three parts of the house'),
-  ...deadPick(6), ...houseOut(), ...toBin(), ...binCount(), ...deadSweep(),
+/** p3-cycle's afternoon of day 16 (its own helper: the fan panel at the east end, the walk west with five droppings checks
+ *  and the squeezes, the listen stop, the dead birds, the bin). */
+const afternoon16 = () => [
+  ...afternoon({ day: 16, whole: true, east: [...atFans([shot('sp-fans-16'), ...fansAll(false)], 'day 16 afternoon: the fan panel'), job('r-fans-pm@16', 'the fans and the house read in the afternoon heat')],
+    squeezed: true,
+    inside: [...birdChecks(3, 'Look at the vent and droppings', 'sp-droppings', [[18, 2.2], [6, -2], [-6, 2.2]]),
+      W(-4, 0.8, 0.5), press('q'), adv(0.3), W(-8, 1.95, 0.5), press('q'), adv(0.3),
+      ...birdChecks(2, 'Look at the vent and droppings', 'sp-droppings-b', [[-12, -2], [-18, 2.2]]),
+      W(-20, -1.95, 0.5), press('q'), adv(0.3),
+      job('w3-droppings@16', 'droppings checked on five birds from three parts of the house')] }),
   job('p-heat3@16', 'Birds panting in the afternoon: handled at the fan panel')];
 
 // ---------------- 1. day 16 with no skill ----------------
@@ -65,8 +66,9 @@ export function partNone() {
     ...nextTo(13), ev(`'Next job -> ' + __t()`),
     ...afternoon16(),
     ...nightThenRecord(16, 2),
-    ev(`__timerEnd('day 16 none')`), exp(`__missed(16) === '' && 'every job of day 16 done (no skill)'`, 'day 16 with no skill: every job done by real input'),
-    ev(`'regulator visits ' + __acts.filter((a) => a.id === 'water.flowtest').length + ' flow tests'`),
+    ev(`__timerEnd('day 16 none')`), ev(`'not done on day 16: ' + (__missed(16) || 'none')`),
+    exp(`__missed(16) === '' && 'every job of day 16 done (no skill)'`, 'day 16 with no skill: every job done by real input'),
+    ev(`'day 16 cup tests at the regulators: ' + __acts.filter((a) => a.id === 'water.flowtest' && a.t >= 16 && a.t < 17).length`),
   ];
 }
 
@@ -115,7 +117,8 @@ export function partSkilled() {
     exp(`(() => { const a = __autos.filter((x) => x.system === 'stages' && x.t >= 16); return a.length > 0 && 'the stage table ran the tunnel fans: ' + a.slice(-1)[0].text + ' (' + __game.env.fansOn + ' fans at ' + __t() + ')'; })()`, 'Ventilation 3: the stage table runs the tunnel fans in the morning heat'),
     ...afternoon16(),
     ...nightAndPhone(16),
-    ev(`__timerEnd('day 16 skills')`), exp(`__missed(16) === '' && 'every job of day 16 done (every branch at 3)'`, 'day 16 with every branch at level 3: every job done by real input'),
+    ev(`__timerEnd('day 16 skills')`), ev(`'not done on day 16: ' + (__missed(16) || 'none')`),
+    exp(`__missed(16) === '' && 'every job of day 16 done (every branch at 3)'`, 'day 16 with every branch at level 3: every job done by real input'),
     exp(`(() => { const a = __timed['day 16 none'], b = __timed['day 16 skills']; if (!a || !b) return 'one part only: ' + (a || b).text; const r = b.min / a.min; return r < 0.95 && 'day 16 play: ' + a.min.toFixed(2) + ' min with no skill, ' + b.min.toFixed(2) + ' min with every branch at 3 (' + Math.round(100 * r) + ' %), ' + (a.min - b.min).toFixed(2) + ' min saved'; })()`,
       'SKILLS.md §14.2: day 16 by real input, every branch at 3 against none'),
   ];
@@ -129,6 +132,7 @@ export function partNight() {
     ev(`__game.ui.openPanelId === 'night-check' ? ([...document.querySelectorAll('${PANEL} button')].find((b) => /Skip anyway/.test(b.textContent))?.click(), 'the night check: ' + document.querySelector('${PANEL}').textContent.replace(/\\s+/g, ' ').slice(0, 160)) : 'no night check (nothing off)'`), adv(0.4),
     until(`__game.env.dayNumber === 17 && __game.env.hour >= 5.9 || __game.level.skipStopped !== window.__s0`, 60, 0.5),
     ev(`'after the night skip: ' + __t() + (__game.level.skipStopped !== window.__s0 ? ' (stopped: ' + __game.level.skipStopped.trouble + ')' : '')`),
+    ev(`'the controllers in the night: ' + __autos.slice(__a0).map((x) => x.system + ': ' + x.text).join(' | ').slice(0, 600) + ' · pending ' + JSON.stringify(__game.farm.feed.pending)`),
     exp(`(() => { const o = __autos.slice(__a0).find((x) => x.system === 'feed' && /order/i.test(x.text)), p = __game.farm.feed.pending.find((x) => x.by === 'auto'); return o && p && 'the feed controller ordered in the night: ' + o.text + '; on the way: ' + p.kg + ' kg ' + p.type + ' due day ' + p.arriveDay + ' ' + String(p.arriveHour ?? 9).padStart(2, '0') + ':00'; })()`,
       'Feed 3: the feed controller orders at the 2-day rule while the farmer sleeps'),
     exp(`__game.records.notebook.some((n) => n.kind === 'auto' && /[Ff]eed/.test(String(n.value)) && n.day >= 16) && 'the notebook keeps the controller’s order'`, 'the order in the notebook (kind auto)'),

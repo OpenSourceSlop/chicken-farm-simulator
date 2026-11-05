@@ -153,6 +153,17 @@ export function rebuildVariant(jd, saved, perks) {
   return applyVariant(jd, { keys: Array.isArray(saved.keys) ? saved.keys : [], parts: saved.parts && typeof saved.parts === 'object' ? saved.parts : {} });
 }
 /** The system of an instance's handed-over parts: [{ system, part }] (from its variant). */
+/** The job's own rule (and its state) under a whole hand-over any[ GLANCE, the job as before ] (integration): the code
+ *  that reads a rule's shape — level.js's weigh-in checkpoint and sample jobs, job-next's frame places — reads this one, so
+ *  a weigh job handed to the bird scale (Growth 3) still ends its week on the signing and still leads the frame. */
+export function baseRule(def, st) {
+  let r = def?.done, s = st;
+  while (r && r.type === 'any' && r.handled && r.part === 'whole' && Array.isArray(r.of) && r.of.length === 2) { r = r.of[1]; s = s?.parts?.[1]; }
+  return { rule: r, st: s };
+}
+const baseId = (def) => baseRule(def).rule?.id;
+/** The id of the action the job's own rule counts (sample.weigh, chicks.grade …), under any whole hand-over. */
+export const baseDoneId = baseId;
 export const handedParts = (def) => Object.entries(def?.variant?.parts || {}).map(([system, part]) => ({ system, part }));
 /** The variant applied a payoff key to this job (the rule, title or places of the instance). */
 export const variantHas = (def, key) => !!def?.variant?.keys?.includes(key);
