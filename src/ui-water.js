@@ -10,7 +10,9 @@ import { ICONS } from './ui-icons.js';
 import { equipShell, machineRow, readout, stepper, toggleKey } from './ui-equipment.js';
 import { int, one, signedPct, hhmm } from './ui-format.js';
 // Phase 3 (package "panels"): main valve, Vaccine / Medicine / Clean-out tabs, the water test kit
-import { cycleWaterParts } from './ui-cycle-water.js';
+import { cycleWaterParts, supplySkills, drinkerSkills } from './ui-cycle-water.js';
+// Skills update (SKILLS.md §3.1, §12.9): the glance at the winch motors' heights (Water 3)
+import { glanceFor } from './ui-cycle-skills.js';
 import { nippleCmToday, NIPPLE_DAY0_CM, HEIGHT_BAND_CM } from './job-figures.js';
 
 const GAME_MIN = 1 / 1440;
@@ -55,6 +57,9 @@ export function buildDrinkerPanel(L, line) {
         machineRow('Pressure', 'Water column in the sight tube', ...press.els).el,
         h('div', { class: 'flowtest' }, cup, h('div', null, flow.el, bar)), testBtn, shell.timeNote.el)),
     heightText);
+  // Skills update: this line's sight tube read today (Water 2), its winch motor and Reset the motor (Water 3), the glance
+  const sk = drinkerSkills(L, line), glance = glanceFor(L, `drinker-${line}`);
+  shell.main.append(sk.el);
 
   function viewSvg() {
     const l = farm.water.lines[line];
@@ -114,9 +119,10 @@ export function buildDrinkerPanel(L, line) {
     stripCtx: () => ({ line }),
     /** A test still running: the panel host keeps updating it after the panel closes, until it is recorded. */
     busy: () => !!test,
-    onOpen() { isOpen = true; },
+    onOpen() { isOpen = true; sk.onOpen(); glance.onOpen(); },
     onClose() { isOpen = false; },
     update(dt, force) {
+      if (isOpen) glance.update(dt);
       if (test) {
         const t = Math.min(1, (env.day - test.start) / GAME_MIN);
         bar.firstChild.style.transform = `scaleX(${t.toFixed(3)})`;
@@ -132,7 +138,7 @@ export function buildDrinkerPanel(L, line) {
         }
       }
       acc -= dt;
-      if (force || acc <= 0) { acc = 0.25; draw(force); }
+      if (force || acc <= 0) { acc = 0.25; draw(force); sk.update(); }
     },
   };
 }
@@ -183,6 +189,11 @@ export function buildWaterSupplyPanel(L) {
       h('div', { class: 'supply-box' }, h('p', { class: 'supply-k' }, 'Main filter'), gauges, filt.el, h('div', { class: 'equip-btns' }, readFilter, clean), cleanBar)),
     valvesK,
     h('div', { class: 'ctrl-rows supply-valves' }, valves.map((v) => v.row.el)), overview);
+  // Skills update: the Trend key beside the meter (Water 1), the sight-tube board (Water 2), the winch motors (Water 3)
+  const sk = supplySkills(L), glance = glanceFor(L, 'water-supply');
+  readMeter.after(sk.trendKey);
+  linesSec.querySelector('.supply-top').after(sk.trendEl);
+  valvesK.before(sk.el);
   const cyc = cycleWaterParts(L, { linesSec, foldPlates: () => shell.foldPlates(), needTime: (t) => shell.needTime(t) });
   shell.main.append(cyc.bar, shell.timeNote.el, linesSec, ...cyc.secs);
   let isOpen = false;
@@ -231,11 +242,14 @@ export function buildWaterSupplyPanel(L) {
   drawGauges();
   return {
     el: shell.el,
-    onOpen() { isOpen = true; shell.refreshPlates(); cyc.onOpen(); },
+    onOpen() { isOpen = true; shell.refreshPlates(); cyc.onOpen(); sk.onOpen(); glance.onOpen(); },
+    /** Skills update: the sight tubes read today ({ day, at, lines } | null; the harness reads it). */
+    tubesRead: () => sk.lastRead(),
     /** The filter cleaning finishes in the background when the panel closes (the panel host keeps updating it). */
     busy: () => !!cleaning,
     onClose() { isOpen = false; },
     update(dt, force) {
+      if (isOpen) glance.update(dt);
       if (cleaning) {
         const t = Math.min(1, (env.day - cleaning.start) / (5 * GAME_MIN));
         cleanBar.firstChild.style.transform = `scaleX(${t.toFixed(3)})`;
@@ -248,7 +262,7 @@ export function buildWaterSupplyPanel(L) {
         }
       }
       acc -= dt;
-      if (force || acc <= 0) { acc = 0.25; refresh(); cyc.update(); }
+      if (force || acc <= 0) { acc = 0.25; refresh(); cyc.update(); sk.update(); }
     },
   };
 }

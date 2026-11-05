@@ -4,7 +4,7 @@
 // Phase 4 (PHASE4.md §1.2, §1.7, §3.3): the summary names the run's condition, draws the farmer's last normal-season
 // cycle beside a condition cycle (plain numbers, no verdict), marks the levels that came from a standard start and,
 // after a finished cycle, offers the Harder flocks (ui-run.js createHarderCards).
-import { SKILL_BRANCHES, weightAt, feedStdGAt, flockAgeAt, conditionLabel, levelById } from './config.js';
+import { SKILL_BRANCHES, weightAt, feedStdGAt, flockAgeAt, conditionLabel, levelById, UNLOCKS, unlockLevel } from './config.js';
 import { createHarderCards } from './ui-run.js';
 import { condIn } from './content.js';
 import { h, button, uniqueId, nodes } from './ui-dom.js';
@@ -43,8 +43,9 @@ export function dayChart({ series, title, unit = '', yMin = 0, yMax = null, W = 
     <text x="${padL}" y="12" font-size="10">${legend}${unit ? ` (${unit})` : ''}</text><text x="${W - padR}" y="${H - 4}" font-size="10" text-anchor="end">day</text></svg>`;
 }
 
-/** Phase 2's water graph (bars: litres per 1,000 birds; dashed: water : feed on its own axis 0-3), any days. */
-function waterSvg(pts) {
+/** Phase 2's water graph (bars: litres per 1,000 birds; dashed: water : feed on its own axis 0-3), any days. Skills update:
+ *  exported for the water supply panel's Trend key (Water 1, ui-cycle-water.js). */
+export function waterSvg(pts) {
   const W = 760, H = 220, padL = 40, padR = 52, padT = 22, padB = 30;
   if (!pts.length) return '<p class="book-note">No signed rows yet.</p>';
   const d0 = Math.min(...pts.map((p) => p.d)), n = Math.max(8, Math.max(...pts.map((p) => p.d)) - d0 + 1);
@@ -79,23 +80,26 @@ export function graphsPage(L) {
   const rows = (L.records.rows ? L.records.rows() : []).filter((r) => r.day >= 0 && r.day <= 46);
   const u = (k) => !!L.skills?.unlocked?.(k);
   const out = [];
+  // Skills update (SKILLS.md §15.3 item 8): each graph's hint names its level by unlockLevel (Feed's graph at level 3 while
+  // live); with live false every level is the one these hints always named
+  const lv = (key) => unlockLevel(UNLOCKS[key]);
   const add = (key, lock, title, chart, note) => {
-    if (!u(key)) { out.push(locked(lock)); return; }
+    if (!u(key)) { out.push(locked(typeof lock === 'function' ? lock(lv(key)) : lock)); return; }
     out.push(h('h3', { class: 'book-h' }, title), h('div', { class: 'graph', html: chart }), note ? h('p', { class: 'book-note' }, note) : null);
   };
-  add('waterTrend', 'The water trend graph comes with Water level 1 on the skill tree.', 'Water per 1,000 birds (L) and water : feed by day',
+  add('waterTrend', (n) => `The water trend graph comes with Water level ${n} on the skill tree.`, 'Water per 1,000 birds (L) and water : feed by day',
     waterSvg(rows.map((r) => ({ d: r.day, v: r.waterPerBirdMl, ratio: r.waterFeedRatio }))));
-  add('weightGraph', 'The weight curve comes with Growth & Performance level 2.', 'Weight against the target (g)',
+  add('weightGraph', (n) => `The weight curve comes with Growth & Performance level ${n}.`, 'Weight against the target (g)',
     dayChart({ title: 'Weight', series: [{ pts: rows.map((r) => [r.day, r.weightG]), label: 'line: your flock (scale and weighings)' },
       { pts: rows.map((r) => [r.day, r.targetWeightG || weightAt(r.day)]), dash: true, ink2: true, label: 'dashed: the target (bird scale plate)' },
       { kind: 'dots', pts: rows.filter((r) => r.weightSource === 'weighed').map((r) => [r.day, r.weightG]), label: 'dots: hand weighings' }] }));
-  add('feedGraph', 'The feed graph comes with Feed & Digestion level 2.', 'Feed per bird per day (g) against the feed plate',
+  add('feedGraph', (n) => `The feed graph comes with Feed & Digestion level ${n}.`, 'Feed per bird per day (g) against the feed plate',
     dayChart({ title: 'Feed per bird', series: [{ kind: 'bars', pts: rows.map((r) => [r.day, r.feedPerBirdG]), label: 'bars: your flock' },
       { pts: rows.map((r) => [r.day, feedStdGAt(Math.max(0, flockAgeAt(r.day + 0.25)))]), dash: true, ink2: true, label: 'dashed: the feed program sign' }] }));
-  add('gasGraph', 'The gas graph comes with Heating level 2.', 'Gas used (kg) between two gauge readings',
+  add('gasGraph', (n) => `The gas graph comes with Heating level ${n}.`, 'Gas used (kg) between two gauge readings',
     dayChart({ title: 'Gas used', series: [{ kind: 'bars', pts: rows.map((r) => [r.day, r.gasKgUsed]), label: 'bars: kg between readings' }] }),
     'The gas tank plate: in the cool season 6,000 chicks to day 21 burn about 200–300 kg of gas.');
-  add('comfortGraph', 'The comfort graph comes with Body Temperature & Comfort level 2.', 'House minimum and maximum against the target (°C)',
+  add('comfortGraph', (n) => `The comfort graph comes with Body Temperature & Comfort level ${n}.`, 'House minimum and maximum against the target (°C)',
     dayChart({ title: 'House temperature', yMin: 10, series: [{ pts: rows.map((r) => [r.day, r.houseMaxC]), label: 'top line: house maximum' }, { pts: rows.map((r) => [r.day, r.houseMinC]), label: 'lower line: house minimum' },
       { pts: rows.map((r) => [r.day, r.targetC]), dash: true, ink2: true, label: 'dashed: the brooder sign target' }] }));
   return out;
