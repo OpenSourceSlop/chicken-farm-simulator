@@ -45,6 +45,15 @@ export const BOARD_SPOTS3 = [
 ];
 /** Phase 4 (content-signs-cond.js BOARDS_COND): the power cut board beside the generator, rainy season only. */
 export const BOARD_SPOTS4 = [{ id: 'sign-power', ...SPOTS4.signPower }];
+/** Fix round (the first-play signs card): a board's face in the world, { x, y, z, w, h, tilt } (its centre, size and lean
+ *  back), so the HUD can project its four corners and keep a card off the whole board. null for an unknown id. */
+export function boardFrame(id) {
+  if (id === 'sign-gate') return { x: SPOTS.signGate.x, y: 0.85 + 1.45 / 2, z: SPOTS.signGate.z, w: 2.6, h: 1.45, tilt: 0.33 };
+  if (id === 'sign-brooder') return { x: SPOTS.signBrooder.x, y: 1.6, z: FACE_Z + 0.05, w: 1.2, h: 0.95, tilt: 0 };
+  const s = [...BOARD_SPOTS, ...BOARD_SPOTS3, ...BOARD_SPOTS4].find((b) => b.id === id);
+  if (!s) return null;
+  return s.inside ? { x: s.x, y: 1.55, z: FACE_Z + 0.046, w: BOARD_W, h: BOARD_H, tilt: 0 } : { x: s.x, y: 0.74, z: s.z, w: BOARD_W, h: BOARD_H, tilt: OUT_TILT };
+}
 
 // A short line for the 3D board: the first sentence, or the part before a colon when that part
 // says enough on its own. The full text is on the E panel.

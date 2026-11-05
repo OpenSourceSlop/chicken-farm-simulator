@@ -57,5 +57,16 @@
   {"press": "j"},
   {"wait": 2500},
   {"expect": "Math.abs(__game.env.day - 67.25) < 1e-3 && __game.level.mode === 'result' && __game.ui.openPanelId === 'result' && 'J twice on the last rest days: day ' + __game.env.day.toFixed(3) + ' mode ' + __game.level.mode + ' panel ' + __game.ui.openPanelId", "label": "the busy card: a second J while the long skip waits is not queued (day 67.25, the result open)"},
-  {"shot": "p5-fix-busy-twice"}
+  {"shot": "p5-fix-busy-twice"},
+
+  {"eval": "__game.ui.intro.allow(false), __game.run.startRun({ seed: 1, at: 'level1', condition: 'water' }), __game.run.startLevel('weeks45', { from: 'standard', condition: 'water' }), __game.level.debug.goto(29, 7.5, { auto: true, profile: 'waterPumpUnfixed' }), __game.level.debug.goto(30, 12.6, { auto: true, profile: 'waterPumpUnfixed' }), 'the water condition on ' + __t()"},
+  {"state": {"farmer": {"x": -30, "z": 14, "yaw": 0}}},
+  {"eval": "__game.settings.set('interface.watch', 'folded'), 'the watch folded'"},
+  {"advance": 1.2},
+  {"expect": "(() => { const items = [...document.querySelectorAll('#hud .fw-mini .fw-mini-i')].filter((i) => !i.hidden), bad = items.filter((i) => { const d = i.querySelector('.fw-dot'), st = (d.className.match(/is-(\\w+)/) || [])[1]; return !d.getAttribute('aria-label') || !d.title || (st !== 'green' && !/ · (watch|alert)$/.test(i.textContent)); }); const red = items.filter((i) => i.querySelector('.fw-dot.is-red')); return items.length && !bad.length && red.length && 'folded: ' + items.map((i) => i.textContent + '[' + i.querySelector('.fw-dot').getAttribute('aria-label') + ']').join(' | '); })()", "label": "a11y: the folded strip names each state (aria-label and title) and a non-steady item says its word"},
+  {"shot": "p5-fix-watch-folded"},
+  {"eval": "__game.settings.set('interface.watch', 'shown'), 'shown'"},
+  {"advance": 1.2},
+  {"expect": "(() => { const rows = [...document.querySelectorAll('#hud .fw-row')].filter((r) => !r.hidden && r.dataset.state && r.dataset.state !== 'green'); const glyph = (d) => { const cs = getComputedStyle(d), after = getComputedStyle(d, '::after').content; return d.classList.contains('is-amber') ? cs.clipPath && cs.clipPath !== 'none' : d.classList.contains('is-red') ? /!/.test(after) && cs.borderRadius !== '50%' : false; }; const bad = rows.filter((r) => { const d = r.querySelector('.fw-dot'); return !glyph(d) || !d.getAttribute('aria-label'); }); return rows.length && !bad.length && 'non-steady rows with their shape: ' + rows.map((r) => r.dataset.row + ':' + r.dataset.state).join(', '); })()", "label": "a11y: every non-steady row shows its state's shape (watch a triangle, alert a square with !)"},
+  {"shot": "p5-fix-watch-shown"}
 ]

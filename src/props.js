@@ -49,7 +49,7 @@ import { SPOTS2, SPOTS4, HEATERS, DRINKER_LINES_Z, BROOD_BOUNDS, LEVEL1, FLOOR_G
 import { Batch, makePropMaterials, createBoxPool } from './props-kit.js';
 import { withOcclusionFade } from './world-util.js';
 import { buildFloorStates } from './props-floor.js';
-import { buildBoards } from './props-boards.js';
+import { buildBoards, boardFrame } from './props-boards.js';
 import { buildEquipment } from './props-equip.js';
 import { buildYard } from './props-yard.js';
 import { buildTrucks } from './props-truck.js';
@@ -482,6 +482,8 @@ export function buildProps(ctx, { house } = {}) {
     },
     highlighted: [],
     highlight(ids = []) { props.highlighted = [...ids]; boards.setTabs(props.highlighted); },
+    /** Fix round: a board's face in the world ({ x, y, z, w, h, tilt }; the first-play signs card keeps off it). */
+    boardFrame,
     reset() {
       if (props.carrying) props.drop();
       props.bucketDown = null; showCarry(null);

@@ -39,8 +39,8 @@ export function createWatchCard(root, ctx) {
   }));
   // the compact strip (narrow screens, all steady): the four dots and their labels
   const mini = h('button', { class: 'fw-mini', type: 'button', title: 'Open the flock watch', 'aria-label': 'Open the flock watch' },
-    ROWS.map((id) => h('span', { class: 'fw-mini-i', 'data-row': id }, h('span', { class: 'fw-dot', role: 'img' }), LABEL[id])));
-  const miniDots = [...mini.querySelectorAll('.fw-dot')], miniItems = [...mini.querySelectorAll('.fw-mini-i')];
+    ROWS.map((id) => h('span', { class: 'fw-mini-i', 'data-row': id }, h('span', { class: 'fw-dot', role: 'img' }), LABEL[id], h('span', { class: 'fw-mini-w', hidden: true }))));
+  const miniDots = [...mini.querySelectorAll('.fw-dot')], miniItems = [...mini.querySelectorAll('.fw-mini-i')], miniWords = [...mini.querySelectorAll('.fw-mini-w')];
   const warnWhere = h('b', { class: 'fw-warn-where' }), warnWhat = h('span');
   const warn = h('p', { class: 'fw-warn', hidden: true, tabindex: '-1' }, h('span', { class: 'fw-warn-in' }, warnWhere, ' ', warnWhat));
   const more = button({ class: 'fw-more', hidden: true, 'aria-label': 'Show more of the warning' }, 'more below ▾');
@@ -96,7 +96,11 @@ export function createWatchCard(root, ctx) {
       ROWS.forEach((id, i) => {
         const r = st.rows[id], R = rows[id];
         if (r && r.state !== 'green') calm = false;
-        miniDots[i].className = `fw-dot is-${r ? r.state : 'none'}`;
+        // fix round: a shape and a word for every state, not the colour alone (steady ●, watch ▲, alert ■ with !)
+        const cls = `fw-dot is-${r ? r.state : 'none'}`, word = r ? WATCH_STATES[r.state] || '' : '';
+        if (miniDots[i].className !== cls) { miniDots[i].className = cls; miniDots[i].setAttribute('aria-label', word); miniDots[i].title = word; }
+        const mw = r && r.state !== 'green' ? ` · ${word}` : '';
+        if (miniWords[i].textContent !== mw) { miniWords[i].textContent = mw; miniWords[i].hidden = !mw; }
         if (miniItems[i].hidden !== !r) miniItems[i].hidden = !r;
         const sig = r ? `${r.state}|${r.value}|${r.detail}` : '';
         if (sig === R.sig) return;
