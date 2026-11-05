@@ -13,7 +13,7 @@ const H = 1 / 24;
 const int = (v) => Math.round(v).toLocaleString('en-US');
 const hhmm = (t) => { const m = Math.round((((t % 1) + 1) % 1) * 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 const lines4 = (n) => (n === 4 ? 'lines 1–4' : `line${n === 1 ? '' : 's'}`);
-export const isOpen = (farm, system) => (farm.auto.faults || []).some((f) => f.phase === 'open' && f.system === system && !f.afterCutPending);
+export const isOpen = (farm, system) => (farm.auto.faults || []).some((f) => f.phase === 'open' && f.system === system);
 const held = (farm, env, key, line) => { const h = farm.auto.hold[key]; const t = line == null ? h : h && h[line]; return Number.isFinite(t) && t > env.day + 1e-9; };
 
 /** One controller step that changed something: the action (quiet, by auto) and its EV.AUTO. */

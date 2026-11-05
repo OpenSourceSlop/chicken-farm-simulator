@@ -193,6 +193,8 @@ export function weekProgramFor(day) {
  *   fans    the fan suggestion and Set as suggested (Ventilation 2: vent.fans / vent.pad { by: 'advice' })
  *   lights  Program for days N–M (Lighting 2: light.program { …, by: 'week' })
  */
+/** A controller's text without its own leading label ("Timer: 1 fan …" → "1 fan …"; "Controller: timer stepped …"). */
+export const unlabel = (t) => String(t || '').replace(/^(Winches|Timer|Controller|Fan stages|Brooders|Feed|Feeder lines|Lights|Bird scale): /, '');
 export function controllerSkills(L, { draft, lp, refresh, waits }) {
   const { env, farm } = L;
   ensureSkillsStyle();
@@ -300,10 +302,11 @@ export function controllerSkills(L, { draft, lp, refresh, waits }) {
       const k = on.map((s) => { const w = sysWords(s); return `${s}|${w.state}|${w.text}`; }).join('\n');
       if (sysList.__k !== k) {
         sysList.__k = k;
-        sysList.replaceChildren(...on.map((s) => { const w = sysWords(s); return h('p', { class: `skl-note${w.state === 'fault' ? ' skl-note--fault' : ''}` }, h('b', null, `${AUTO_SYSTEMS[s].label}: `), w.text); }));
+        // (review round: the model's texts start with their own label, "Timer: …": the bold label once)
+        sysList.replaceChildren(...on.map((s) => { const w = sysWords(s); return h('p', { class: `skl-note${w.state === 'fault' ? ' skl-note--fault' : ''}` }, h('b', null, `${AUTO_SYSTEMS[s].label}: `), unlabel(w.text)); }));
       }
       const lines = sinceRead(L, on, since);
-      setText(sinceEl, lines.length ? `Since ${since == null ? 'the level began' : `your read at ${atText(env, since)}`}: ${lines.map((x) => `${x.label}: ${x.text}${x.at != null ? ` (${atText(env, x.at)})` : ''}`).join(' · ')}` : since == null ? '' : `No change since your read at ${atText(env, since)}.`);
+      setText(sinceEl, lines.length ? `Since ${since == null ? 'the level began' : `your read at ${atText(env, since)}`}: ${lines.map((x) => `${x.label}: ${unlabel(x.text)}${x.at != null ? ` (${atText(env, x.at)})` : ''}`).join(' · ')}` : since == null ? '' : `No change since your read at ${atText(env, since)}.`);
       sinceEl.hidden = !sinceEl.textContent;
     }
   }

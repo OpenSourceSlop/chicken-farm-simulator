@@ -30,9 +30,11 @@ export const SKILL_BOARD_ITEMS = {
   'sign-chicks': [
     it('Two people tipping the boxes get the chicks onto the litter in half the time; weigh the sample box before the first stack is tipped.'),
   ],
+  // (review round: the plate already says when to order and when the truck comes; the skills line adds only the order's
+  // confirmation and the slide valves the gauge's days read)
   silo: [
-    it('Order when the silo holds about two days of feed: the mill brings it the next day if you order before 16:00, else the day after.'),
     it('An automatic order is a message to the mill: look for its confirmation on the gauge.'),
+    it('The gauge’s days count the silos whose slide valve is open: a full silo behind a shut valve feeds no pan.'),
   ],
   'controller-lights': [it('Dawn and dusk dimming over about 20 minutes keeps the birds calm when the lights change.', g, 8)],
   'bird-scale': [

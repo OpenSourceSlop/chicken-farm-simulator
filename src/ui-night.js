@@ -66,6 +66,7 @@ export function registerNightPanel({ register, closePanel }) {
       return h('li', { class: 'nc-row', 'data-row': id }, dot, h('span', { class: 'nc-k' }, label), v);
     }));
     const off = h('ol', { class: 'nc-off' });
+    const src = h('p', { class: 'nc-src' }, `The rows: the brooder sign (${sourceLabel(['week1', 'vent'])} for day 1; other days general practice) and the minimum ventilation sign (general practice); where the house heads: the farm’s heat balance with these settings.`);
     const fix = button({ class: 'btn btn--accent', 'data-night': 'fix' }, 'Fix it at the controller');
     const skip = button({ class: 'btn', 'data-night': 'skip' }, 'Skip anyway');
     fix.addEventListener('click', () => { const f = handlers.onFix; closePanel(); f?.(info?.fix); });
@@ -74,8 +75,7 @@ export function registerNightPanel({ register, closePanel }) {
     el.append(h('div', { class: 'night-case card' },
       h('div', { class: 'nc-body' },
         h('header', { class: 'night-head' }, h('span', { class: 'icon', html: ICONS.moon || ICONS.thermometer || '', 'aria-hidden': 'true' }), h('h2', { id: titleId }, 'Before the night'), sub),
-        list, h('p', { class: 'nc-off-k' }, 'What is off, and where to set it'), off,
-        h('p', { class: 'nc-src' }, `The rows: the brooder sign (${sourceLabel(['week1', 'vent'])} for day 1; other days general practice) and the minimum ventilation sign (general practice); where the house heads: the farm’s heat balance with these settings.`)),
+        list, h('p', { class: 'nc-off-k' }, 'What is off, and where to set it'), off, src),
       h('div', { class: 'nc-keys' }, skip, fix)), closeBtn);
     built = {
       el, kind: 'paused',
@@ -87,6 +87,7 @@ export function registerNightPanel({ register, closePanel }) {
         setText(sub, `The farm clock stands still. ${nc.skipWords || 'Next job skips through the night'}. With these settings, the night ahead${ahead}:`);
         // the review round: no climate rows past the young weeks (nightCheck gives lines {} then): the list hides
         list.hidden = !Object.keys(nc.lines || {}).length;
+        src.hidden = list.hidden;
         for (const [id] of ROWS) {
           const r = nc.lines?.[id], R = rows[id];
           R.dot.className = `fw-dot is-${r?.state || 'green'}`; R.dot.setAttribute('aria-label', WORD[r?.state] || ''); R.dot.title = WORD[r?.state] || '';

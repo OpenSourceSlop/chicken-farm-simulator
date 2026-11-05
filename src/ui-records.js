@@ -73,11 +73,33 @@ export const WEEK_TABS = [
  * (keys.js action `phone`) while perks.has('pocketPhone').
  */
 export function buildPocketPhonePanel(L) { return buildRecordsPanel(L, { pocket: true }); }
+/** The review round: the pocket phone looks like a phone (a narrow dark frame, a status bar with the farm clock in its head,
+ *  the contacts as rows), the records book keeps its paper. Scoped to .book--pocket. */
+const PHONE_CSS = `
+.book.book--pocket { width: min(390px, calc(100% - 2 * var(--gutter))); border-radius: 26px; padding: 10px; background: #1d2126; border: 2px solid #3a4148; box-shadow: 0 18px 48px rgba(0,0,0,.45); }
+.book--pocket .book-cover { background: #11151a; border-radius: 18px; padding: 8px 8px 10px; }
+.book--pocket .book-head { color: #e9eef2; border-bottom: 1px solid #2b333b; padding: 4px 112px 8px 6px; }
+.book--pocket .book-head h2 { color: #f4f7f9; font-size: 15px; }
+.book--pocket .book-head p { color: #9fb0bd; }
+.book--pocket .book-icon { color: #7fd18f; }
+.book--pocket .book-paper { background: #f5f7f8; background-image: none; border-radius: 12px; margin-top: 8px; padding: 6px 10px 10px; box-shadow: none; }
+.book--pocket .book-paper::before { display: none; }
+.book--pocket .book-h { margin: 10px 0 4px; padding: 6px 8px; border-radius: 8px; background: #e3eaee; font-size: 13.5px; color: #1d2a33; }
+.book--pocket .book-h::before { content: '☎'; margin-right: 6px; color: #2f8a4a; }
+.book--pocket .book-row { flex-wrap: wrap; }
+`;
+let phoneStyled = false;
+function injectPhoneStyle() {
+  if (phoneStyled || typeof document === 'undefined') return;
+  phoneStyled = true;
+  try { const st = document.createElement('style'); st.id = 'css-pocket-phone'; st.textContent = PHONE_CSS; document.head.append(st); } catch { /* the book's look */ }
+}
 
 export function buildRecordsPanel(L, { pocket = false } = {}) {
   const { env, records, farm } = L;
   const titleId = uniqueId('book-title');
   const { el, closeBtn } = dialogShell(pocket ? 'book book--pocket' : 'book', titleId, L.close);
+  if (pocket) injectPhoneStyle();
   // the pocket phone's actions carry from: 'pocket' (the desk's book sends them exactly as before)
   const FROM = pocket ? { from: 'pocket' } : {};
   const ALL_TABS = [
@@ -175,7 +197,7 @@ export function buildRecordsPanel(L, { pocket = false } = {}) {
     ensureSkillsStyle();
     const d = env.dayNumber, row = records.row?.(d), wait = signWait();
     const work = workLine();
-    const key = button({ class: 'btn btn--paper btn--ink' }, 'Sign today’s record');
+    const key = button({ class: 'btn btn--paper btn--ink' }, wait && !row?.signed ? 'Sign today’s record · from 16:00' : 'Sign today’s record');
     key.addEventListener('click', () => { records.sign(env.dayNumber); pocketSaid = `Today’s record signed on the phone at ${env.timeLabel}.`; render(); });
     key.disabled = !!row?.signed || wait;
     work.set(row?.signed ? pocketSaid || 'Today’s record is signed.' : wait ? 'The day’s record is signed in the evening, from 16:00.' : 'The record book fills itself from your readings and the farm’s meters; signing closes today’s row.');
@@ -194,7 +216,7 @@ export function buildRecordsPanel(L, { pocket = false } = {}) {
     const type = feedType || feedTypeForDay(Math.max(0, d)).id;
     phoneStrip.update();
     const out = [phoneStrip.el];
-    if (pocket) out.push(...pocketTop());
+    // (review round: the day's record row at the foot of the phone, after the contacts)
     // feed mill
     const typeBtns = FEED_TYPES.map((t) => { const b = button({ class: 'btn btn--paper', 'aria-pressed': String(t.id === type) }, t.label); b.addEventListener('click', () => { feedType = t.id; render(); }); return b; });
     const kgBtns = kgOpts.map((k) => { const b = button({ class: 'btn btn--paper', 'aria-pressed': String(k === kg) }, `${int(k)} kg`); b.addEventListener('click', () => { kg = k; render(); }); return b; });
@@ -265,6 +287,7 @@ export function buildRecordsPanel(L, { pocket = false } = {}) {
       out.push(h('h3', { class: 'book-h' }, 'Hatchery'), h('p', { class: 'book-note' }, c.bookedDay != null ? `The next chicks: day ${c.bookedDay}.` : 'No chicks booked yet.'),
         h('div', { class: 'book-row' }, days, book), h('p', { class: 'book-note', 'aria-live': 'polite' }, phoneLines.hatchery));
     }
+    if (pocket) out.push(...pocketTop());
     return out;
   }
 

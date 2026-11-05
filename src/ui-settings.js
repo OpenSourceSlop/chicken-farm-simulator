@@ -13,7 +13,9 @@ import { dialogShell } from './ui-panels.js';
 import { createKeysTab } from './ui-settings-keys.js';
 import { SETTINGS_CSS } from './ui-settings-style.js';
 import { fillGuide } from './content-guide.js';
-import { SKILLS_UPDATE } from './config.js';
+import { SKILLS_UPDATE, SKILL_SHORT, skillLevelPoints } from './config.js';
+/** The review round: an Automation row under level 3 dimmed with a lock before its label. */
+const LOCK_CSS = '.set-list .is-locked { opacity: 0.55; } .set-list .is-locked > label::before, .set-list .is-locked .set-label::before { content: "\\1F512\\00A0"; font-size: 11px; }';
 
 export const SETTINGS_ID = 'settings';
 /** The line of plain words under each tab (what it changes; no farming fact). {key:…} tokens are the live keys. */
@@ -88,9 +90,14 @@ export function registerSettingsPanel({ register, openPanel, closePanel, ctx, me
   function drawAutoNotes() {
     if (!autoNotes.size) return;
     for (const [branch, n] of autoNotes) {
-      let lvl = 3;
-      try { lvl = ctx.skills?.level?.(branch) ?? 3; } catch { lvl = 3; }
+      let lvl = 3, pts = 0;
+      try { lvl = ctx.skills?.level?.(branch) ?? 3; pts = ctx.skills?.points?.(branch) ?? 0; } catch { lvl = 3; }
       n.hidden = lvl >= 3;
+      // the review round: a branch under level 3 reads dimmed with a lock and how far off it is (its stored choice kept)
+      const row = n.parentElement, toGo = Math.max(0, (skillLevelPoints()[2] ?? 13) - pts);
+      if (row) { row.classList.toggle('is-locked', lvl < 3); row.querySelectorAll('input, button').forEach((x) => x.setAttribute('aria-disabled', String(lvl < 3))); }
+      const t = `Comes with ${SKILL_SHORT[branch] || branch} 3${toGo > 0 ? ` · ${toGo} point${toGo === 1 ? '' : 's'} to go` : ' · with your next flock'}`;
+      if (n.textContent !== t) n.textContent = t;
     }
   }
   injectStyle('settings-style', SETTINGS_CSS);
@@ -129,7 +136,7 @@ export function registerSettingsPanel({ register, openPanel, closePanel, ctx, me
         const c = settingControl(p, it, S.get(p), (v) => S.set(p, v));
         ctls.set(p, c); list.append(c.el);
         // a branch under level 3: its switch stays (set ahead), with "comes with level 3" beside it
-        if (g === 'automation' && k !== 'all') { const n = h('span', { class: 'set-note set-auto-note', hidden: true }, 'comes with level 3'); c.el.append(n); autoNotes.set(k, n); }
+        if (g === 'automation' && k !== 'all') { const n = h('span', { class: 'set-note set-auto-note', hidden: true }, 'comes with level 3'); c.el.append(n); autoNotes.set(k, n); injectStyle('settings-lock-style', LOCK_CSS); }
       }
       sec.append(list);
       if (g === 'graphics') { govLine = h('p', { class: 'set-gov', role: 'status' }, ''); sec.append(govLine); }

@@ -97,7 +97,9 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
     }
     if (!best) return null;
     const room = tally ? ctx.props.bucketRoom() : null;
-    const label = room && room.n <= 0 ? `dead bird${k > 1 ? 's' : ''} (the bucket is full)` : k > 1 ? `${k} dead birds` : 'dead bird';
+    // the review round: the tally's count in the prompt ("Pick up 3 dead birds · 5 in the bucket"), not only on its rim
+    const inB = tally ? Math.round(ctx.props.bucketTally?.n || 0) : 0, tail = inB > 0 ? ` · ${inB} in the bucket` : '';
+    const label = room && room.n <= 0 ? `dead bird${k > 1 ? 's' : ''} (the bucket is full${inB > 0 ? `: ${inB} in it` : ''})` : k > 1 ? `${k} dead birds${tail}` : `dead bird${tail}`;
     return { id: 'dead-bird', label, verb: 'Pick up', x: best.x, z: best.z,
       // a bird right at his feet (0.8 m) beats the board or machine whose 2 m reach he stands in
       radius: reach, inside: true, priority: 6, nearRadius: 0.8, nearPriority: 15,

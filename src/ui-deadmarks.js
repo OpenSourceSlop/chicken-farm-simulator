@@ -216,7 +216,8 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
       faultChips.forEach((c, k) => {
         const f = faultList[k];
         if (!f) { c.el.hidden = true; return; }
-        placeChip(c, f.x, f.y, f.z, f.text, [...rectOf(jobPointer?.()), ...farmerRect(p), ...faultChips.slice(0, k).filter((x) => !x.el.hidden).map((x) => x.el.getBoundingClientRect())]);
+        // (over its place: past a HUD card sideways, never pushed off by the farmer's own figure)
+        placeChip(c, f.x, f.y, f.z, f.text, [...rectOf(jobPointer?.()), ...faultChips.slice(0, k).filter((x) => !x.el.hidden).map((x) => x.el.getBoundingClientRect())]);
       });
       shown.faults = faultList.map((f) => ({ id: f.id, text: f.text }));
       // Biosecurity 3: the symptom tags of the birds he passes (none unless the perks hold passCheck: flock-tags.js)

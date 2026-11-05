@@ -181,6 +181,9 @@ html.reduce-motion .boot-bar::before { animation: none; width: 100%; opacity: 0.
 .fw-warn-where { font-weight: 600; color: var(--ink); }
 .fw-warn[hidden] { display: none; }
 .fw-warn.is-clamp:not(.is-open) { max-height: 74px; overflow: hidden; }   /* Skills review: an equipment warning's 4 lines */
+.floor-legend.is-mini .floor-legend-k, .floor-legend.is-mini .floor-legend-sub { display: none; }   /* Skills review: Comfort 3's legend folded */
+.floor-legend-ticks--words span { overflow-wrap: anywhere; text-align: center; }
+.miles .mile-pts { white-space: nowrap; }
 /* narrow screens, every row steady: a compact strip of the four dots (it opens on amber or red, and on a click) */
 .fw-mini { display: none; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; padding: 0; border: 0; background: none; color: var(--ink-dim); font: 600 12px/1.2 var(--font-display); letter-spacing: 0.03em; cursor: pointer; }
 .fw-mini-i { display: inline-flex; align-items: center; gap: 4px; }
@@ -850,7 +853,7 @@ html.reduce-motion .boot-bar::before { animation: none; width: 100%; opacity: 0.
 .branch-levels li.is-on { color: var(--ink); }
 .branch-levels b { font-family: var(--font-display); }
 .miles { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.miles li { display: grid; grid-template-columns: 34px 1fr; gap: 6px; font-size: 12.5px; line-height: 1.3; color: var(--ink-dim); }
+.miles li { display: grid; grid-template-columns: max-content 1fr; gap: 8px; font-size: 12.5px; line-height: 1.3; color: var(--ink-dim); }
 .miles li.is-earned { color: var(--ink); }
 .mile-pts { font: 700 13px/1.25 var(--font-display); color: var(--ink-faint); }
 .miles li.is-earned .mile-pts { color: var(--accent); }

@@ -169,8 +169,9 @@ export function buildLevelControllerPanel(L) {
   const strips = [createJobStrip(L, 'controller', { section: 'top', ctx: sctx, label: SECTION }),
     ...['temp', 'vent', 'lights'].map((sec) => createJobStrip(L, 'controller', { section: sec, ctx: sctx }))];
   secs.forEach((sec, i) => sec.prepend(strips[i + 1].el));
-  el.append(h('div', { class: 'ctrl-case' }, screws, brand, h('div', { class: 'ctrl-plate' }, lcd, strips[0].el, skc.top, timeNote.el,
-    h('div', { class: 'ctrl-tabs', role: 'tablist' }, tabBtns), secs)), closeBtn);
+  // (review round: the level 3 controllers box under the tabs, so the tabs and their one-press keys sit above the fold)
+  el.append(h('div', { class: 'ctrl-case' }, screws, brand, h('div', { class: 'ctrl-plate' }, lcd, strips[0].el, timeNote.el,
+    h('div', { class: 'ctrl-tabs', role: 'tablist' }, tabBtns), secs, skc.top)), closeBtn);
   showTab(0);
 
   let openFor = 0, readThisOpening = false;

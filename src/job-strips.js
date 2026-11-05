@@ -254,15 +254,20 @@ export function payoffPanels(inst, perks) {
 }
 /** The payoffs' rows at the top of a job's strip (live only): what holds now, the handed-over parts, the level 1 view. */
 export function skillRows(c, inst) {
-  if (!SKILLS_UPDATE.live || !inst) return [];
-  const out = [];
+  // the review round: no skill rows in a done strip; each skill line once per panel (c.skillSeen, shared by the panel's
+  // strips of one draw); one payoff or view line per strip besides the handled parts; the Comfort 2 line belongs to the
+  // flock watch card (its Show me), not to a panel's strips
+  if (!SKILLS_UPDATE.live || !inst || (inst.status && inst.status !== 'open')) return [];
+  const out = [], seen = c.skillSeen instanceof Set ? c.skillSeen : null;
+  const once = (t) => { if (!t || (seen && seen.has(t))) return false; if (seen) seen.add(t); return true; };
   let ez = [];
-  try { ez = c.perks?.easier?.(inst.id) || []; } catch { ez = []; }
-  for (const t of easierNowRows(ez)) out.push(line(t));
+  try { ez = (c.perks?.easier?.(inst.id) || []).filter((e) => e.key !== 'earlyWarning'); } catch { ez = []; }
+  let promo = 0;
+  for (const t of easierNowRows(ez)) if (promo < 1 && once(t)) { out.push(line(t)); promo++; }
   let hl = [];
   try { hl = handledLines(inst, c.farm); } catch { hl = []; }
-  for (const x of hl) out.push(x.fault ? note(x.text) : line(x.text));
-  for (const v of viewsOfJob(inst.id)) { const t = viewLine(v, c.skills); if (t) out.push(note(t)); }
+  for (const x of hl) if (once(x.text)) out.push(x.fault ? note(x.text) : line(x.text));
+  for (const v of viewsOfJob(inst.id)) { const t = viewLine(v, c.skills); if (promo < 1 && once(t)) { out.push(note(t)); promo++; } }
   return out;
 }
 

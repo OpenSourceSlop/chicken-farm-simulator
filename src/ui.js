@@ -216,7 +216,7 @@ export function createUI(ctx, deps) {
   };
   // the warm half follows the birds' own panting threshold at this age (flock-shader.js uHotFrom)
   const comfortLegend = rampLegend('Comfort view', 'C', COMFORT_RAMP, '°C', 'Comfort view: each bird by what it feels, blue colder than the target, white at the target, orange where panting starts at this age, red 3 °C past it',
-    ['cold', 'cool', 'right', 'panting starts', 'too hot']);
+    ['cold', 'cool', 'right', 'pants', 'too hot']);   // (review round: short words, so no two cells run together)
   const comfortSub = h('p', { class: 'floor-legend-sub' });
   comfortLegend.append(comfortSub);
   let comfortSubText = '';
@@ -227,6 +227,7 @@ export function createUI(ctx, deps) {
   };
   const moistureLegend = rampLegend('Litter moisture view', 'M', MOISTURE_RAMP, '%', 'Litter moisture view: light sand 10 % to dark brown 50 %');
   const views = { comfort: false };
+  let comfortShownFor = 0;
   const busy = createBusyCard(root);
   const floatRead = createFloatLabel(root, ctx);
   const narrow = createNarrowNotice(root);
@@ -813,6 +814,29 @@ export function createUI(ctx, deps) {
     hudScaleNow = s;
   }
   let hudScaleNow = 1;
+  // the review round: a caption that would cross the flock watch card or the job card is narrowed to the gap between them
+  // (centred there), so it never covers their keys (Show me, Next job); with no card in its way it keeps its place
+  let capAcc = 0, capEl = null;
+  function placeCaption(dt) {
+    if ((capAcc -= dt) > 0) return;
+    capAcc = 0.2;
+    capEl = capEl || root.querySelector('.caption');
+    const el = capEl;
+    if (!el || el.hidden) return;
+    el.style.left = ''; el.style.maxWidth = '';
+    const W = root.clientWidth, r = el.getBoundingClientRect();
+    let L = 0, R = W, hit = false;
+    for (const c of [root.querySelector('.fw'), root.querySelector('.ljobs')]) {
+      if (!c || c.hidden || !c.offsetParent) continue;
+      const q = c.getBoundingClientRect();
+      if (!(q.width > 0) || q.bottom < r.top - 4 || q.top > r.bottom + 4 || q.right < r.left - 4 || q.left > r.right + 4) continue;
+      hit = true;
+      if ((q.left + q.right) / 2 < W / 2) L = Math.max(L, q.right + 10); else R = Math.min(R, q.left - 10);
+    }
+    if (!hit || R - L < 200) return;
+    el.style.left = `${Math.round((L + R) / 2)}px`;
+    el.style.maxWidth = `${Math.floor((R - L) / (hudScaleNow || 1))}px`;
+  }
   applyHudScale();
   window.addEventListener('resize', applyHudScale);
   try { ctx.settings?.subscribe?.((c) => { if (c.key === 'hudScale') { applyHudScale(); hudAcc = 0; } }, 'interface'); } catch { /* no store */ }
@@ -935,8 +959,14 @@ export function createUI(ctx, deps) {
       floorLegend.hidden = !(mode === 'level' && props?.overlay?.floorTemp);
       comfortLegend.hidden = !(mode === 'level' && views.comfort);
       if (!comfortLegend.hidden) syncComfortSub();
+      // the review round: while Comfort 3 keeps the colours on, the legend folds to its bar and words after 8 s (C off and on
+      // again opens it whole)
+      comfortShownFor = comfortLegend.hidden ? 0 : comfortShownFor + dt;
+      const mini = comfortShownFor > 8 && SKILLS_UPDATE.live && !!ctx.perks?.has?.('comfortAlways');
+      if (comfortLegend.classList.contains('is-mini') !== mini) comfortLegend.classList.toggle('is-mini', mini);
       moistureLegend.hidden = !(mode === 'level' && props?.overlay?.moisture);
       caption.update(dt);
+      placeCaption(dt);
       intro.update(dt);
       floatRead.update(dt);
       // the alarm banner: while the house is dark, and a while after an alarm symptom

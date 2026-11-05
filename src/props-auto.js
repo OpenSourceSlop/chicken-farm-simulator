@@ -21,6 +21,8 @@ import { columnsNow, COLUMN_BAND_CM } from './farm-auto.js';
 import { reducedMotion } from './world-cond.js';
 
 const GREY = 0x8f989f, DARK = 0x2b2f33, WHITE = 0xeef1f2, CLEAR = 0xcfe9f0;
+/** The review round: the lamps' halo and the tubes' ticks on the screen (px across; the camera's zoom keeps them so). */
+const HALO_PX = 14, TICK_PX = 10;
 // the board stands just west of the water station, facing the same way (toward the door and the default camera)
 const TB = { u: -0.99, w: 0.42, y0: 0.86, y1: 1.6, cmTop: 40 };
 const TUBE_DU = [-0.135, -0.045, 0.045, 0.135];
@@ -99,10 +101,28 @@ export function buildAutoEquipment(ctx, { pool, mats, group }) {
   const lampMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
   const lamps = instancedParts(new THREE.SphereGeometry(0.042, 8, 6), lampMat, DRINKER_LINES_Z.length, { cast: false });
   lamps.name = 'props-auto-lamps'; lamps.visible = false; group.add(lamps);
+  // the review round: a halo round each lamp that keeps a size on the screen (HALO_PX across; a stalled motor's 3x), and a
+  // round tick over each sight tube (TICK_PX: green at its mark, amber off it) — the lamps' own unlit material, so no new
+  // shader program; scaled each frame from the camera's distance
+  const unit = new THREE.SphereGeometry(1, 10, 8);
+  const haloMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, transparent: true, opacity: 0.42, depthWrite: false });
+  const halos = instancedParts(unit, haloMat, DRINKER_LINES_Z.length, { cast: false });
+  halos.name = 'props-auto-halos'; halos.visible = false; halos.renderOrder = 17; group.add(halos);
+  const ticks = instancedParts(unit, lampMat, 4, { cast: false });
+  ticks.name = 'props-auto-ticks'; ticks.visible = false; group.add(ticks);
   const slot = (n) => Array.from({ length: n }, () => pool.slot());
   const S = { cols: slot(4), marks: slot(4), bands: slot(4), drums: slot(4), stripes: slot(4), needle: pool.slot(), litter: slot(6) };
   const T = placer(new Batch(), WATER.x, WATER.z, WATER.face);   // its P() for the pool parts on the board
-  const st = { t: 0, acc: 0, cols: null, lampState: ['off', 'off', 'off', 'off'], prevY: [NaN, NaN, NaN, NaN], spin: [0, 0, 0, 0], ang: [0, 0, 0, 0], status: null, shown: {} };
+  const st = { t: 0, acc: 0, cols: null, lampState: ['off', 'off', 'off', 'off'], prevY: [NaN, NaN, NaN, NaN], spin: [0, 0, 0, 0], ang: [0, 0, 0, 0], shown: {} };
+  /** The world radius that is `px` pixels across on the screen at a point (the camera's projection; the canvas height). */
+  const _cp = new THREE.Vector3();
+  function radiusForPx(px, x, y, z) {
+    const cam = ctx.camera, H = ctx.renderer?.domElement?.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 600) || 600;
+    if (!cam) return 0.05;
+    cam.getWorldPosition(_cp);
+    const d = Math.max(0.5, Math.hypot(x - _cp.x, y - _cp.y, z - _cp.z)), p11 = cam.projectionMatrix.elements[5] || 2.75;
+    return (px * d) / (p11 * H);
+  }
   const _m = new THREE.Matrix4(), _c = new THREE.Color(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), zero = new THREE.Matrix4().makeScale(0, 0, 0);
   const LAMP = { green: 0x5cff6a, red: 0xff3a2a, off: 0x2f3a2f };
 
@@ -114,8 +134,9 @@ export function buildAutoEquipment(ctx, { pool, mats, group }) {
       st.t += dt;
       const live = !!SKILLS_UPDATE.live && farm?.mode === 'level', P = ctx.perks;
       const has = (k) => live && !!P?.has?.(k);
+      // (review round: the 4 Hz autoCtl.status() poll nothing read is gone; the parts read farm.auto directly)
       const refresh = (st.acc -= dt) <= 0;
-      if (refresh) { st.acc = 0.25; st.status = live && farm.autoCtl?.status ? farm.autoCtl.status() : null; }
+      if (refresh) st.acc = 0.25;
       // ---- the sight tubes (Water 2) ----
       const showTubes = has('waterAllLines');
       tubes.visible = showTubes;
@@ -126,17 +147,23 @@ export function buildAutoEquipment(ctx, { pool, mats, group }) {
           const h = Math.max(0.004, Math.min(TB.cmTop, c.cm) * M_PER_CM);
           let [x, z] = T.P(du, 0.012);
           // the water fills the clear tube up to its column (a box a little wider than the tube)
-          pool.set(S.cols[i], x, TB.y0 + h / 2, z, 0.027, h, 0.027, c.inBand ? 0x3a86d0 : 0x2f6fb5, WATER.face);
+          pool.set(S.cols[i], x, TB.y0 + h / 2, z, 0.027, h, 0.027, c.inBand ? 0x3a86d0 : 0xe0a030, WATER.face);   // amber off its mark
+          // the tick over the tube: green at the mark, amber off it, TICK_PX across whatever the zoom
+          const ty = TB.y1 + 0.09, tr = Math.max(0.018, radiusForPx(TICK_PX, x, ty, z));
+          _p.set(x, ty, z); _s.setScalar(tr); ticks.setMatrixAt(i, _m.compose(_p, _q.identity(), _s)); ticks.setColorAt(i, _c.set(c.inBand ? LAMP.green : 0xffb020));
           pool.set(S.marks[i], x, TB.y0 + c.markCm * M_PER_CM, z, 0.05, 0.007, 0.033, 0xd8322f, WATER.face);
           [x, z] = T.P(du, -0.018);
           pool.set(S.bands[i], x, TB.y0 + c.markCm * M_PER_CM, z, 0.04, 2 * COLUMN_BAND_CM * M_PER_CM, 0.004, 0xbfe3c4, WATER.face);
         });
+        _s.set(1, 1, 1);
+        ticks.instanceMatrix.needsUpdate = true; if (ticks.instanceColor) ticks.instanceColor.needsUpdate = true;
       } else if (st.shown.tubes) { hideAll(S.cols); hideAll(S.marks); hideAll(S.bands); }
+      ticks.visible = showTubes && !!st.cols;
       st.shown.tubes = showTubes;
       // ---- the winch motors (Water 3) ----
       const stalls = live ? openOf(farm, 'winch') : [];
       const showWinch = has('autoWinch') || stalls.length > 0;
-      winches.visible = lamps.visible = showWinch;
+      winches.visible = lamps.visible = halos.visible = showWinch;
       if (showWinch) {
         const on = !!farm.auto?.on?.winch, hold = farm.auto?.hold?.winch || {};
         const blink = reducedMotion() ? 1 : (st.t % 0.9) < 0.55 ? 1 : 0;
@@ -147,7 +174,13 @@ export function buildAutoEquipment(ctx, { pool, mats, group }) {
           st.lampState[i] = state;
           const col = state === 'stalled' ? (blink ? LAMP.red : LAMP.off) : state === 'running' ? LAMP.green : LAMP.off;
           _p.set(WX + 0.06, WY + 0.16, z + 0.04); _q.identity();   // on the lid: seen from the camera above
+          _s.set(1, 1, 1);
           lamps.setMatrixAt(i, _m.compose(_p, _q, _s)); lamps.setColorAt(i, _c.set(col));
+          // its halo: HALO_PX across (a stalled motor's 3x, blinking with its lamp); none while the motor is off or held
+          const hr = state === 'stalled' || state === 'running' ? radiusForPx(HALO_PX * (state === 'stalled' ? 3 : 1), _p.x, _p.y, _p.z) : 0;
+          _s.setScalar(Math.max(0, hr) * (state === 'stalled' && !blink ? 0.6 : 1));
+          halos.setMatrixAt(i, _m.compose(_p, _q, _s)); halos.setColorAt(i, _c.set(state === 'stalled' ? LAMP.red : LAMP.green));
+          _s.set(1, 1, 1);
           // the drum turns while the line moves (its height from the house: farm.water.lines[i].heightCm)
           const y = lineY ? lineY[i] : NaN;
           if (Number.isFinite(st.prevY[i]) && Math.abs(y - st.prevY[i]) > 1e-5) st.spin[i] = Math.sign(y - st.prevY[i]) * 1.2;
@@ -157,7 +190,8 @@ export function buildAutoEquipment(ctx, { pool, mats, group }) {
           pool.set(S.stripes[i], WX + 0.21 + Math.sin(st.ang[i]) * 0.041, WY - Math.cos(st.ang[i]) * 0.041, z + 0.04, 0.014, 0.014, 0.135, 0xe8a23a, 0, 0, st.ang[i]);
         });
         lamps.instanceMatrix.needsUpdate = true; if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true;
-      } else if (st.shown.winch) { hideAll(S.drums); hideAll(S.stripes); for (let i = 0; i < 4; i++) lamps.setMatrixAt(i, zero); lamps.instanceMatrix.needsUpdate = true; }
+        halos.instanceMatrix.needsUpdate = true; if (halos.instanceColor) halos.instanceColor.needsUpdate = true;
+      } else if (st.shown.winch) { hideAll(S.drums); hideAll(S.stripes); for (let i = 0; i < 4; i++) { lamps.setMatrixAt(i, zero); halos.setMatrixAt(i, zero); } lamps.instanceMatrix.needsUpdate = true; halos.instanceMatrix.needsUpdate = true; }
       st.shown.winch = showWinch;
       // ---- the sensor and the dial thermometer (Heating 3) ----
       const showSensor = has('autoBrooders') || (live && ((farm.auto?.drift || 0) !== 0 || openOf(farm, 'brooders').length > 0));
@@ -186,6 +220,6 @@ export function buildAutoEquipment(ctx, { pool, mats, group }) {
         sensor: sensor.visible, dialC: sensor.visible ? +ctx.env?.houseTemp?.toFixed?.(1) : null,
         scale: scale.visible, fouled: !!st.shown.fouled };
     },
-    meshes: { tubes, winches, sensor, scale, lamps },
+    meshes: { tubes, winches, sensor, scale, lamps, halos, ticks },
   };
 }

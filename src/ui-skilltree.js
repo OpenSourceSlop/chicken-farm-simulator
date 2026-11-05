@@ -22,6 +22,7 @@ const TREE_CSS = `
 /** Every milestone the tree lists: skills.js milestoneTable() (Phase 2's, the cycle's and the conditions'; the Skills
  *  update's seven while config SKILLS_UPDATE.live). */
 import { h, button, uniqueId } from './ui-dom.js';
+import { reducedMotion } from './motion.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
 
@@ -131,7 +132,8 @@ export function buildSkillTreePanel(L) {
         h('div', { class: 'branch-top' }, h('span', { html: badge(b.id, b.level) }), h('div', null, h('h3', null, b.name), pips)),
         h('div', { class: 'branch-pts' }, h('b', null, String(b.points)), b.points === 1 ? ' point' : ' points'), bar,
         h('p', { class: 'branch-later branch-next' }, nextLine));
-      card.addEventListener('click', () => { picked = b.id; render(); });
+      // (review round: the picked branch's detail scrolls into view, so the levels' saves / where lines show)
+      card.addEventListener('click', () => { picked = b.id; render(); try { miles.querySelector('.branch-detail')?.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' }); } catch { /* old browsers */ } });
       return card;
     }));
     const b = branches.find((x) => x.id === picked);
@@ -152,7 +154,7 @@ export function buildSkillTreePanel(L) {
     const listEl = h('ul', { class: 'miles' }, ms.map((m) => {
       const best = m.tiers[m.tiers.length - 1].points, [p1, p2] = two(m), detail = L.skillDetail(m.id);
       return h('li', { class: m.tier != null || p1 || p2 ? 'is-earned' : '' },
-        h('span', { class: 'mile-pts', title: 'first flock · another flock' }, `${p1} · ${p2}`, h('small', null, `/${best}`)),
+        h('span', { class: 'mile-pts', title: 'first flock · another flock' }, `1st ${p1}/${best} · 2nd ${p2}/${best}`),
         h('span', null, m.text, m.condition ? h('small', { class: 'mile-cond' }, ` · ${conditionLabel(m.condition)}`) : null,
           h('small', { class: 'mile-level' }, ` · ${LEVEL_SHORT[m.level] || m.level}`), (m.tier != null || p1 || p2) && detail ? h('small', { class: 'mile-detail' }, detail) : null));
     }));

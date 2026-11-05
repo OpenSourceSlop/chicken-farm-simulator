@@ -16,6 +16,7 @@ import { lightsOk, rowFor, timerFor, winchTarget } from '../src/farm-auto-ctl.js
 import { nightCheck, createSkipGuard } from '../src/night-check.js';
 import { equipmentRow } from '../src/flock-watch.js';
 import { adviseFans } from '../src/farm-fans.js';
+import { unlabel } from '../src/ui-cycle-controller.js';
 
 let failed = 0;
 const QUICK = process.argv.includes('--quick');
@@ -380,6 +381,14 @@ await test('Heating 2\'s row key with a drifting sensor: the thermostat shows th
   R.events.emit(EV.ACTION, { id: 'heat.setpoint', value: R.env.heaterSetpoint, c: R.env.heaterSetpoint, by: 'row', result: undefined });
   assert(Math.abs(R.farm.autoCtl.setpointC() - row) < 1e-6 && Math.abs(R.env.heaterSetpoint - (row - drift)) < 1e-6, `shows ${R.farm.autoCtl.setpointC()} (row ${row}), holds ${R.env.heaterSetpoint}`);
   assert(a.faults.some((f) => f.id === 'sensor-drift' && f.phase === 'open'), 'the drift stays open (Check the sensor is the fix)');
+});
+await test('the controllers box (review round): no line reads "X: X:" (the bold label once before the model\'s text, in the list and the since line)', () => {
+  const R = at('weeks45', 25, 12, Object.keys(AUTO_SYSTEMS));
+  R.env.skipHours(3);
+  const st = R.farm.autoCtl.status();
+  const lines = [...Object.entries(st.systems).map(([s2, w]) => `${AUTO_SYSTEMS[s2].label}: ${unlabel(w.text)}`), ...R.autos.map((a) => `${AUTO_SYSTEMS[a.system].label}: ${unlabel(a.text)}`)];
+  const bad = lines.filter((t) => /^([A-Z][a-z]+(?: [a-z]+)?): \1:/.test(t) || /^[A-Z][a-z]+(?: [a-z]+)?: (Winches|Timer|Controller|Fan stages|Brooders|Feed|Feeder lines|Lights|Bird scale): /.test(t));
+  assert(lines.length >= 7 && !bad.length, `stutters: ${bad.slice(0, 3).join(' | ')}`);
 });
 /** A fault at (lv, d, h) in runCycle with every system on: met by hand on the rounds, or left (handFix false). */
 const faultRun = (lv, d, h, id, opts, handFix) => { let done = false; return runCycle('ideal', { perks: 'all', from: lv, to: lv, handFix, onWorld: (w) => w.env.addStepper((e) => { if (!done && w.farm.mode === 'level' && e.day >= d + h / 24) { done = true; w.farm.debug.fault(id, opts); } }) }); };

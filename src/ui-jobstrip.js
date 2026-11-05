@@ -112,7 +112,7 @@ export function createJobStrip(L, panelId, { section = null, ctx = () => ({}), l
   // the steps hotfix: where the farmer stands (the next place's way) and the clock's pause
   const from = () => { const p = L.player?.position; return p ? { x: p.x, z: p.z, inside: !!L.player.isInside } : null; };
   const base = () => ({ env: L.env, farm: L.farm, records: L.records, skills: L.skills, perks: L.perks ?? null, props: L.props, flock: L.flock, engine: L.engine(), minmax: L.minmax, weighings: L.weighings,
-    from: from(), paused: !!L.clockPaused?.(), ...ctx() });
+    from: from(), paused: !!L.clockPaused?.(), skillSeen: new Set(), ...ctx() });
   function update() {
     const engine = L.engine();
     if (!engine || L.farm?.mode !== 'level') { if (!el.hidden || last) clear(); last = ''; return; }
