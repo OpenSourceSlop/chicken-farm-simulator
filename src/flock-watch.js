@@ -179,8 +179,8 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
     const fl = farm.flock, C = farm.comfort || {}, age = farm.age;
     const f = fl.factors || {};
     const lp = env.lightProgram || { darkHours: 1 };
-    const hc = hourComfort(C, age);
-    return { t: env.day, age, w: fl.placed > 0 && fl.alive > 0 ? fl.meanWeightG * 1.02 : null, alive: fl.alive || 0,
+    const birds = fl.placed > 0 && fl.alive > 0, hc = birds ? hourComfort(C, age) : { cold: false, hot: false };   // no birds: no comfort hour
+    return { t: env.day, age, w: birds ? fl.meanWeightG * 1.02 : null, alive: fl.alive || 0,
       lost: L.deaths?.n ?? 0, dead: fl.deadTotal || 0, of: L.deaths?.of ?? 0, causes: { ...(fl.deadByCause || {}) },
       cold: hc.cold, hot: hc.hot, felt: C.feltMean ?? (C.meanOver ?? 0) + env.targetTemp, tgt: env.targetTemp, e: C.meanOver ?? 0,
       feedKg: fl.cumFeedKg || 0, waterL: farm.water?.meterL || 0, lit: !!env.lightsOn, litH: Math.max(1, 24 - (lp.darkHours || 0)),

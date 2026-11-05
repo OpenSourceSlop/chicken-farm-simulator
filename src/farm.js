@@ -125,6 +125,10 @@ export function createFarm(env, { events } = {}) {
         feed: createFeed(), litter: createLitter(), problems: createProblems(level), stats: freshStats(), truckLeft: false, drinkLh: 0, ctlMem: null, comfortH: 0, litAcc: { h: 0, drop: 0, leak: 0, spill: [0, 0, 0, 0] },
         light: { darkStart: 2, darkHours: 1, dimmer: 1, luxAtBirds: EQUIP.luxMax }, vent: { fans: 0, onSec: 0, cycleSec: 300 } });
       farm.flock.weightQuantile = makeQuantile(farm.flock);
+      // the check round: what the birds felt goes with the old flock (in place: one object for the farm's life); the flock
+      // watch samples it hourly, and a second start read the last farm's cold night before the chicks came
+      for (const k of Object.keys(farm.comfort)) delete farm.comfort[k];
+      Object.assign(farm.comfort, { e: 0, meanOver: 0, coldShare: 0, pantShare: 0 });
       if (!keepClock) { env.setDay(level.startDay); env.setHour(level.startHour); }
       env.setWeather(level.weather);
       env.forceHouseTemp(null);

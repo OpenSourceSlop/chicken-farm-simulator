@@ -212,6 +212,18 @@ test('check round 3: a line raised by watch.raise (the sunset line, a stop) is o
   assert(F.level.watch.status().last === s, 'a second raise shows at once too');
 });
 
+test('check round 5: a second level start on the same farm starts the flock watch clean (no cold hours from the last farm’s comfort before the chicks come)', () => {
+  const R = makeRun(), sig = () => R.level.watch.samples.map((x) => `${x.t.toFixed(3)}:${x.cold ? 'C' : x.hot ? 'H' : '-'}${x.felt.toFixed(1)}`).join(' ');
+  R.level.start({ seed: 1 }); R.level.debug.goto(0, 17, { auto: true });
+  const fresh = sig(), fw = R.level.watch.warnings.length;
+  R.env.setHeaterSetpoint(30); R.env.setFans(2); R.env.skipHours(10);   // a cold night: the farm's comfort is cold at its end
+  assert(R.farm.comfort.coldShare > 0.5, `the first farm's night: cold share ${R.farm.comfort.coldShare}`);
+  R.level.start({ seed: 1 });
+  assert(!R.level.watch.samples.length && !R.level.watch.warnings.length && !R.level.watch.status().on && !(R.farm.comfort.coldShare > 0), 'the watch and the comfort clean at the start');
+  R.level.debug.goto(0, 17, { auto: true });
+  assert(sig() === fresh && R.level.watch.warnings.length === fw, `second start: ${R.level.watch.warnings.map((x) => x.text.slice(0, 60)).join(' | ')} · ${sig().slice(0, 120)}`);
+});
+
 test('item 5: older birds’ nights — four tunnel fans on day 16 (the check, then the watch stop names them); the hot season’s day 30 with no fan (a stop names the fans and pads)', () => {
   const R = makeRun();
   R.run.startRun({ seed: 1, at: 'week3' });
