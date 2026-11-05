@@ -13,7 +13,7 @@ import { key } from './ui-controller.js';
 import { buildPlate } from './ui-boards.js';
 import { int, one } from './ui-format.js';
 // Phase 3 (package "panels"): feed withdrawal and pan wash, two silos and slide valves, fork and scraper
-import { cycleFeederParts, cycleSiloParts, cycleHeapParts } from './ui-cycle-equip.js';
+import { cycleFeederParts, cycleSiloParts, cycleHeapParts, siloSkills, feederSkills } from './ui-cycle-equip.js';
 // the clarity round: the open job done here, its steps, the sign's target beside the live value
 import { createJobStrip } from './ui-jobstrip.js';
 // the steps hotfix: an action that waits on farm time runs a paused clock again and says so
@@ -152,7 +152,9 @@ export function buildFeederPanel(L) {
   const trayRow = machineRow('Feed trays and chick paper', 'by the brooders, for small chicks to find feed from the first hour (chick arrival sign)', trays.el);
   trayRow.led.classList.add('led--run');
   trayRow.el.hidden = true;
-  shell.main.append(strip.el, h('div', { class: 'ctrl-rows' }, rows.map((r) => r.row.el), trayRow.el, cyc.els[0]), shell.timeNote.el, legend, timeNote, h('div', { class: 'equip-reads' }, meter.el, readBtn), cyc.els[1]);
+  // Skills update (SKILLS.md §3.6): the rims the feed controller keeps and its orders (Feed 3), the glance
+  const sk = feederSkills(L);
+  shell.main.append(strip.el, h('div', { class: 'ctrl-rows' }, rows.map((r) => r.row.el), trayRow.el, cyc.els[0]), sk.el, shell.timeNote.el, legend, timeNote, h('div', { class: 'equip-reads' }, meter.el, readBtn), cyc.els[1]);
 
   function panSvg(l) {
     // side view: litter line, pan at its rim height, feed heaped by fill (flood = heaped above the rim)
@@ -164,7 +166,7 @@ export function buildFeederPanel(L) {
       ${fill > 0.02 ? `<path d="M43 ${(y + 2).toFixed(1)}Q60 ${fy.toFixed(1)} 77 ${(y + 2).toFixed(1)}z" fill="var(--sign-yellow)"/>` : ''}
       <text x="86" y="${(y + 8).toFixed(1)}" font-size="9" fill="var(--key-sub)" font-family="var(--font-display)">${fmt0(rim)} cm</text></svg>`;
   }
-  let acc = 0;
+  let acc = 0, open = false;
   function refresh() {
     rows.forEach((r, i) => {
       const l = farm.feed.lines[i];
@@ -184,11 +186,11 @@ export function buildFeederPanel(L) {
   }
   return {
     el: shell.el,
-    onOpen() { shell.refreshPlates(); strip.onOpen(); cyc.onOpen?.(); },
+    onOpen() { shell.refreshPlates(); strip.onOpen(); cyc.onOpen?.(); sk.onOpen(); open = true; },
     /** A pan wash still running finishes in the background when the box closes (the panel host keeps updating it). */
     busy: () => !!cyc.busy?.(),
-    onClose() { cyc.onClose(); strip.onClose(); },
-    update(dt, force) { acc -= dt; if (force || acc <= 0) { acc = 0.25; refresh(); cyc.update(); strip.update(); timeNote.hidden = !!shell.timeNote.text || !farm.feed.lines.some((l) => l.running && l.turning); } },
+    onClose() { cyc.onClose(); strip.onClose(); open = false; },
+    update(dt, force) { if (open) sk.update(dt); acc -= dt; if (force || acc <= 0) { acc = 0.25; refresh(); cyc.update(); strip.update(); timeNote.hidden = !!shell.timeNote.text || !farm.feed.lines.some((l) => l.running && l.turning); } },
   };
 }
 
@@ -203,7 +205,9 @@ export function buildSiloPanel(L) {
   const p2 = h('div', { class: 'silo-wrap' }, strip, h('div', { class: 'equip-reads equip-reads--col' }, reading.el, readBtn,
     h('p', { class: 'equip-note' }, 'The office phone orders feed.')));
   const cyc = cycleSiloParts(L);
-  shell.main.append(p2, cyc.el);
+  // Skills update (SKILLS.md §3.6): the days of feed and the orders at the gauge (Feed 2), the controller's orders (Feed 3)
+  const sk = siloSkills(L);
+  shell.main.append(p2, cyc.el, sk.el);
   function draw() {
     const cap = EQUIP.siloCapacityKg, kg = Math.max(0, farm.feed.siloKg);
     const ticks = [0, 1000, 2000, 3000, 4000, 5000, 6000].map((t) => {
@@ -217,8 +221,9 @@ export function buildSiloPanel(L) {
   let acc = 0;
   return {
     el: shell.el,
-    onOpen() { shell.refreshPlates(); },
+    onOpen() { shell.refreshPlates(); sk.onOpen(); },
     update(dt, force) {
+      sk.update(dt);
       acc -= dt;
       if (!(force || acc <= 0)) return;
       acc = 0.5;
