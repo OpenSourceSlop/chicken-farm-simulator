@@ -32,7 +32,7 @@
 //   scale.clean {}                 -> { cleaned: bool }                      the platform cleaned (scale-fouled fixed)
 //   water.columns {}               -> { lines: [{ line, cm, markCm, inBand }] } the sight tubes (Water 2); every line keeps
 //                                     lastColumn { cm, inBand, at }
-import { AUTO, AUTO_SYSTEMS, LEVEL1, LIGHT_PRESETS, flowTargetAt, SKILL_SHORT, SKILLS_UPDATE, HEAT, HEAT_P4, FAN_COUNT, flockAgeAt } from './config.js';
+import { AUTO, AUTO_SYSTEMS, FAULTS, LEVEL1, LIGHT_PRESETS, flowTargetAt, SKILL_SHORT, SKILLS_UPDATE, HEAT, HEAT_P4, FAN_COUNT, flockAgeAt } from './config.js';
 import { EV } from './events.js';
 import { WATER, lineFlow } from './farm-water.js';
 import { planFaults, stepFaults, openFaults, installFaultDebug, faultHand, faultAct, faultWords, dropQuiet } from './farm-faults.js';
@@ -79,7 +79,7 @@ const dayNoise = (seed, day, k = 0) => { let s = (Math.imul((seed | 0) + 7919, 2
 export function scaleNow(farm, env) {
   const fl = farm.flock, day = env.dayNumber, fouled = openFaults(farm).some((f) => f.id === 'scale-fouled');
   if (!(fl.placed > 0) || !(fl.alive > 0) || env.hour < 8) return { day, n: 0, meanG: null, uniformityPct: null, fouled };
-  const F = { readLowPct: 6, countShare: 0.25 }, f = fouled ? F.countShare : 1;
+  const F = FAULTS['scale-fouled'], f = fouled ? F.countShare : 1;
   const n = Math.round(AUTO.scalePerDay * Math.min(1, (env.hour - 8) / 12) * f);
   const mean = fl.meanWeightG * (1 + (AUTO.scaleNoisePct / 100) * dayNoise(farm.seed, day)) * (fouled ? 1 - F.readLowPct / 100 : 1);
   return { day, n, meanG: n > 0 ? Math.round(mean) : null, uniformityPct: n > 0 ? Math.round(fl.uniformityPct || 0) : null, fouled };
