@@ -247,7 +247,8 @@ export function stepFaults(farm, env, hrs) {
       if (power && (env.day - from) * 24 >= F.retryH - 1e-9) fixFault(farm, env, f, 'retry');
       if (!power) f.powerBackAt = null; else if (f.powerBackAt == null) f.powerBackAt = +env.day.toFixed(5);
     }
-    if (f.id === 'order-lost' && !f.red && since >= F.redAfterH - 1e-9) f.red = true;
+    // no confirmation from the mill redAfterH after the order: the row turns red (the watch warns at once)
+    if (f.id === 'order-lost' && !f.red && since >= F.redAfterH - 1e-9) { f.red = true; emitFault(farm, env, f, 'found', { red: true }); }
   });
 }
 /** The Equipment row's state of an open fault: 'red' (the controller knows, or the drift over redC), 'amber' (a lost order's

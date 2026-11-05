@@ -39,8 +39,9 @@ function crossed(farm, env, key, h) {
 
 // ---------------- Water 3: the drinker winches ----------------
 export const winchTarget = (env) => Math.round(nippleHeightCmAt(Math.max(0, env.dayNumber)));
-/** Model values: the winch motor's own speed for a line more than 6 cm off the plate (not the age-following rate). */
-export const WINCH_FAST = { overCm: 6, cmPerH: 30 };
+/** Model values: the winch motor's own speed for a line more than 3 cm off the plate (out of the plate's band: the prep day's
+ *  lowering from the clean-out height); in the band it follows the age at AUTO.winchCmPerH. */
+export const WINCH_FAST = { overCm: 3, cmPerH: 30 };
 function stepWinch(farm, env) {
   if (catchNear(farm, env) || !flockOn(farm)) return;
   const want = winchTarget(env), stall = (farm.auto.faults || []).find((f) => f.phase === 'open' && f.id === 'winch-stall');
