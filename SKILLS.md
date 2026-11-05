@@ -369,9 +369,17 @@ the walk to the fan panel (about 20 s of play and 15 farm minutes).
 the fan panel every afternoon and stepping the fans through the heat.* The existing Ventilation 2 view `tunnelStages` lets the
 farmer set a stage table (`vent.stages` → `env.setFanStages`); Ventilation 3 hands that table to the controller: from day 15 it
 keeps `env.setFanStages` at **the table for the age** (`adviseFans` over the house's range: the heat sign's stages, the young
-birds' line, the pad only from day 21, off over the pad plate's 90 % RH, the evening rule from day 28), rewritten at 06:00 and
-whenever the age's table changes. The farmer's own table (*Set the stages*) holds until the next 06:00; his own fans or pad
-(`vent.fans` / `vent.pad`) take the table off for 2 farm hours, then it comes back (the panel says when). After a trip *Set the
+birds' line, the pad for big birds, off over the pad plate's 90 % RH, the evening rule from day 28), rewritten at 06:00 and
+whenever the age's table changes. **Review round:** in the hot season the young birds (days 8–20) get the hot heat sign's
+young-birds line from the suggestion and the table: the pad with one tunnel fan in week 2, two or three in week 3, while the
+outside air is over about 30 °C and the air not over the pad plate's RH (the table's pad row over +3 °C, with a 1 °C / 5 % RH
+differential so it does not flicker; `farm-fans.js hotYoungPad`); the hot ideal with every branch at level 3 now passes Week 3
+with no heat deaths (it failed at 1.03 %). The farmer's own table (*Set the stages*) holds until the next 06:00; his own fans
+or pad (`vent.fans` / `vent.pad`) take the table off until 18:00 that day (the next 06:00 after 18:00; the review round: it
+was 2 farm hours, and the table took his pad back in the afternoon heat), then it comes back (the panel says when). The glance
+(`ok('stages')`) needs the birds in the table's range too (at most 25 % panting, felt at most 2 °C over its top stage or pad);
+with every stage on, the pad off, dry air and the birds panting, the Equipment row turns amber: *"Fan stages: house 37.9 °C
+with every stage on — Set the pad by hand at the fan panel"*. After a trip *Set the
 stages* is the key that switches them on again (no new key). Jobs: `r-fans-pm: 'whole'` (glance: the controller read or the
 fan panel). Not handed over: `r-vent-night` (moisture's), every problem job (`p-heat3`, `p-panting`, `p-panting-fin`, `p-humid`,
 `p-heatwave`, `p-fan`: their rules unchanged; the stages may keep them from opening), the catch (`f-ready`). Fault:
@@ -587,7 +595,8 @@ checks), `f-order`, `f-lines`, `f-ready`, the feed changes. The four level 3 pay
 - **The farmer's hand wins for a while** (`AUTO.handHold`, kept in `farm.auto.hold` = `{ winch: { [line]: until }, feed:
   { [line]: until }, timer, brooders, stages, stagesTable, lights }`, env days): a line he winches or a rim he sets holds until the
   next 06:00; his thermostat until the next 06:00; his timer until 18:00 that day (the next 06:00 for one sent after 18:00); his
-  fans or pad for 2 farm hours; his own stage table until the next 06:00; his light program until the next change of week. The
+  fans or pad until 18:00 that day (the next 06:00 for one set after 18:00; only once the stage table is the controller's, from
+  day 15 of the flock's age: the review round, so the table never takes his pad back in the afternoon heat); his own stage table until the next 06:00; his light program until the next change of week. The
   panel's line: *"Your setting holds until 18:00, then the controller goes back to the table"*.
 - **No auto play of the ideal is changed:** `farm.auto.quietN` > 0 holds every system and every fault. `farm.start` and
   `farm.restore` **keep** it (in code); level.js wraps `debug.goto(…, { auto: true })` in `farm.autoCtl.quiet(true / false)`;
@@ -621,12 +630,12 @@ keeps its rule, whose manual part still works); `jd.variant = { v, keys, parts }
 ### 5.1 The faults (`config.FAULTS`: `hours` the farm hours a fault may start in; `retryH` the controller's own retry)
 | Fault | System | What happens | How it shows | Fixed by hand | Bound (winnable) |
 | --- | --- | --- | --- | --- | --- |
-| `winch-stall` | winch | one line's motor trips its overload: that line stays at its height while the plate's figure rises (about 1 cm a day) | the controller knows (the motor's lamp red): Equipment row red at once | winch the line by hand to the plate (`water.height`) at its regulator, then *Reset the motor* (`auto.reset { system: 'winch', line }`) | starts 07:00–15:00; a line 3 cm low a day later at most; birds still reach it (access falls a little) |
-| `timer-reset` | timer | a power blip restarts the controller on its first timer setting (1 fan, 8 s in 300 s) | the controller logs the restart: Equipment row red at once; RH and ammonia climb over hours; the night check's timer row | set the timer by hand or *Fill the timer* (`vent.timer`); the controller then steps on from his setting | starts 07:00–15:00; 12 farm hours at most: then the controller's own retry restores the table (and says so) |
-| `stage-trip` | stages | the stage output trips after a blip: the fans stay at the stage they had and no longer follow the heat. **Rainy season:** after each power cut while `stages` is on, the controller comes back on the generator or the mains with its stages off | Equipment row red at once (*"Fan stages off since 08:23"*); the comfort row as the house warms | set the fans by hand at the fan panel or the controller and switch the stages on again (*Set the stages*: `vent.stages`, or `auto.reset { system: 'stages' }`) | planned trips start 07:00–10:00 only; the fans keep turning at their last stage; the controller's high-temperature alarm at the target + 5 °C (`alarmOverC`) raises the alarm banner, and its retry puts the stages back 2 farm hours after the trip (`retryH`; after a rainy cut: 2 h after the power is back) |
-| `sensor-drift` | brooders | the controller's temperature sensor reads high, drifting +0.5 °C a farm hour to +2.5 °C: the brooders hold the sensor at the row, the house runs under it | not self-detected: the Equipment row compares the sensor with the house thermometer (the HUD's House gauge, the dial by the controller) — amber over 1 °C apart (2 h in), red over 2 °C (4 h in); **while the flock is under 7 days the amber row raises the warning** (`warnAmberUnderDays`); the comfort row (cold hours); the night check | *Check the sensor against the thermometer* on the Temperature tab (`auto.calibrate`): **the only fix**. A hand thermostat setting meanwhile holds the drifted sensor at his figure (it can make up the degrees, it does not fix the sensor; the row stays amber or red) | days 0–21 (brooders on), starts 07:00–15:00; +2.5 °C at most; chicks warned within 2 farm hours |
-| `order-lost` | feed | the next automatic order (armed at the planned time, within 24 farm hours) is never confirmed by the mill: no truck | the gauge shows *not confirmed*: Equipment row amber at once, red 6 farm hours later; the silo days fall | order by hand (the office phone, the pocket phone, the silo key: `feed.order`) | only an order at ≥ 1.8 days of feed is lost; ordered before 16:00 the truck comes the next day (the silo plate), so the pans never run short when it is ordered the same day; no armed order within 24 h: dropped |
-| `scale-fouled` | scale | litter on the platform: the scale reads about 6 % light and counts a quarter of the birds | the Equipment row amber (*"Bird scale: 140 weighings today, about 600 before"*); the weight row then reads the hand weighings when there are 10 or more | *Clean the platform* at the bird scale (`scale.clean`); weigh by hand (*Weigh the frame* with Growth 2) | starts 07:00–15:00; the level result never reads a fouled scale's mean: it takes the hand weighing, or the last clean day's figure with a note |
+| `winch-stall` | winch | one line's motor trips its overload: that line stays at its height while the plate's figure rises (about 1 cm a day) | the controller knows (the motor's lamp red): Equipment row red at once | winch the line by hand to the plate (`water.height`) at its regulator, then *Reset the motor* (`auto.reset { system: 'winch', line }`; review round: the motor answers only with the line within 1 cm of the plate, and the fixed line says *winched by hand* only when he did) | starts 07:00–15:00; a line 3 cm low a day later at most; birds still reach it (access falls a little) |
+| `timer-reset` | timer | a power blip restarts the controller on its first timer setting (1 fan, 8 s in 300 s) | the controller logs the restart: Equipment row red at once; RH and ammonia climb over hours; the night check's timer row | set the timer by hand or *Fill the timer* (`vent.timer`; review round: only a setting in the vent sign's band, 90–130 % of the need, fixes it; another stands as his and the row stays red with the share it gives); the controller then steps on from his setting | starts 07:00–15:00; 12 farm hours at most: then the controller's own retry restores the table (and says so) |
+| `stage-trip` | stages | the stage output trips after a blip: the fans stay at the stage they had and no longer follow the heat. **Rainy season:** after each power cut while `stages` is on, the controller comes back on the generator or the mains with its stages off | Equipment row red at once (*"Fan stages off since 08:23"*); the comfort row as the house warms | set the fans by hand at the fan panel or the controller and switch the stages on again (*Set the stages*: `vent.stages`, or `auto.reset { system: 'stages' }`) | planned trips start 07:00–10:00 only (the fans at the morning's low stages); the fans keep turning at their last stage; the controller's high-temperature alarm at the target + 5 °C (`alarmOverC`) raises the alarm banner, and its retry puts the stages back 4 farm hours after that alarm (`retryH`; 8 h after the trip with no alarm, `maxH`; after a rainy cut: 2 h after the power is back, `cutRetryH`). Review round: the earlier 2 h retry always came before the heat, so an ignored trip changed nothing; measured now: met at the alarm 0 heat deaths, left alone on day 30 20 heat deaths (0.57 → 0.91 %), the level still passing. The review proposed 11:00–15:00 starts: measured, a trip then leaves the fans at their afternoon stage and costs nothing, so the morning window stays |
+| `sensor-drift` | brooders | the controller's temperature sensor reads high, drifting +0.5 °C a farm hour to +2.5 °C (+3.5 °C in the brooding week's nights, 18:00–06:00, `nightMaxC`: the review round; left alone from day 2 the day 7 weight falls 5.24 → 4.69 × the chick weight): the brooders hold the sensor at the row, the house runs under it | not self-detected: the Equipment row compares the sensor with the house thermometer (the HUD's House gauge, the dial by the controller) — amber over 1 °C apart (2 h in), red over 2 °C (4 h in); **while the flock is under 7 days the amber row raises the warning** (`warnAmberUnderDays`); the comfort row (cold hours); the night check | *Check the sensor against the thermometer* on the Temperature tab (`auto.calibrate`): **the only fix**. A hand thermostat setting meanwhile holds the drifted sensor at his figure (it can make up the degrees, it does not fix the sensor; the row stays amber or red) | days 0–21 (brooders on), starts 07:00–15:00; +2.5 °C at most; chicks warned within 2 farm hours |
+| `order-lost` | feed | the next automatic order (armed at the planned time, within 24 farm hours) is never confirmed by the mill: no truck | the gauge shows *not confirmed*: Equipment row amber at once, red 6 farm hours later; the silo days fall | order by hand (the office phone, the pocket phone, the silo key: `feed.order`; review round: an order that brings the reachable feed and every order on the way to 2 days or more) | only an order at ≥ 1.8 days of feed is lost; ordered before 16:00 the truck comes the next day (the silo plate), so the pans never run short when it is ordered the same day; no armed order within 24 h: dropped |
+| `scale-fouled` | scale | litter on the platform: the scale reads about 6 % light and counts a quarter of the birds | the Equipment row amber (*"Bird scale: 140 weighings today, about 600 before"*); the weight row then reads the hand weighings when there are 10 or more | *Clean the platform* at the bird scale (`scale.clean`); weigh by hand (*Weigh the frame* with Growth 2) | starts 07:00–15:00; review round: with Growth 3 on and no hand weighing the weigh-in reads the platform's own figure of the weigh-in morning (09:00–12:00, `stats.scaleDay`), about 6 % light while fouled, and the result line names the fouled scale (week 3 left alone 936 g, cleaned 996 g); on a weigh day the fouled scale raises the flock watch's warning (a skip stops) |
 
 Lighting, the helper, the comfort view, the passing check and the phone record have no fault (open question 4).
 
@@ -1255,6 +1264,41 @@ unchanged with `live` false.
   11, p5-gfx 10, p5-saves 24, p5-saves-migrate 4, p5-map 30, p5-boot 7, p5-first-play 26, p5-fixes 14, p5-sound 50,
   p5-sound-scenes 22, p5-design-stubs 20 — every one PASS without console or page errors. p3-cycle's measured play: planning day
   2.63 min, day 8 4.28, day 16 4.71, day 25 4.01, day 37 4.11, day 44 4.14.
+
+### 16.3 The review fix round (after b407f3d)
+Every finding was checked against the code and a node probe or a browser run first; all 24 were real. Fixed (F = the review's number):
+
+| F | What was wrong | What changed |
+| --- | --- | --- |
+| 1 | Hot season, Ventilation 3: no pad for young birds, a 2 h hand hold, `ok('stages')` while every bird panted; Week 3 failed | the hot young-birds line in the suggestion and the table (§3.3); the hand hold to 18:00; ok needs the birds in range; the amber row; test-auto: `hot:ideal` with every branch passes every level, 0 heat deaths |
+| 2 | Equipment cues a few pixels at the default camera | a pill per open fault within 15 m (the edge when off screen); halos 14 px on the screen (a stalled motor's 42 px, blinking); the tubes' ticks 10 px, a column off its mark amber; the tally count in the pick-up prompt |
+| 3 | The job card scrolled past the current job's title | the scroll from rectangles; skills-tree.json checks the title in view |
+| 4 | Unlock captions of 270–430 characters for 14 s over the HUD keys | one short line for 6 s (the notebook and the tree keep the long words); a caption crossing the watch card or the job card narrows to the gap between them |
+| 5 | A fault's words two or three times at once; a tall watch card | the row a short label (`faultWords().short`), its detail dropped while the warning box shows it; the warning box 4 lines with *more*; the skip stop's caption short; the edge pointer to the bottom edge when the side edge is full |
+| 6 | An ignored fault changed nothing | the stage trip's retry 4 h after its alarm (8 h without); the drift to 3.5 °C in the brooding nights; the weigh-in reads the platform scale (light while fouled) without a hand weighing; a fouled scale warns on a weigh day; test-auto measures each dent and the fix in time |
+| 7 | Fixes that were not the manual job | Reset the motor only at the plate; the timer only in the vent sign's band; an order only to 2 days; *winched by hand* only when he did; test-auto refusal cases |
+| 8 | `feedDays` counted feed behind a shut valve; the controller ordered by the calendar | the open valves' reach (a shut silo apart); the controller orders what they draw; the amber valve row; empty pans first in the intake cause; crumbleOn with every branch passes Week 3 |
+| 9 | A fault stopped every part of its controller | the winch's other lines, the feed rims, the brooders' 06:00 step go on; test-auto over 48 h |
+| 10 | Each fault twice on the night card | one source of fault rows; skills-review.json checks one row per fault |
+| 11 | The night card's key always said the controller; blank rows for big birds | the key names the fix's place; no climate rows (nor their source line) past the young weeks |
+| 12 | The row key with a drifting sensor held the true row | the row less the drift, as the ± keys; test-auto case |
+| 13 | *Timer: Timer:* in the controllers box | the model's own label stripped once (`unlabel`); test-auto checks |
+| 14 | The controllers box pushed the tabs to 423 px | the box under the tabs (264 px at 960 × 600) |
+| 15 | Skill lines repeated across the strips of one panel | each once per panel, none in a done strip, one payoff or view line per strip, no Comfort 2 line in strips |
+| 16 | The comfort legend's words ran together; always 117 px | short words; folded to its bar and words after 8 s under Comfort 3 |
+| 17 | The picked branch's detail below the fold | scrolled into view on a pick |
+| 18 | *0 · 0/2* in a 34 px column | *1st 0/2 · 2nd 0/2* in a column that fits |
+| 19 | The pocket phone was the records book's paper | a 390 px dark phone frame, the contacts as rows, the record row at the foot *from 16:00* |
+| 20 | Automation rows looked switched on | dimmed with a lock and *Comes with Moisture 3 · 4 points to go* |
+| 22 | The silo plate said the order rule twice | the duplicate dropped; a line on the slide valves instead |
+| 23 | No test of the automation state through a save | test-auto: a stalled line and a hand hold saved and resumed, equal now and 30 farm hours on |
+| 24 | A 4 Hz status poll nothing read; `afterCutPending` never set | removed |
+
+Not done: **F21** (Growth 2 and Brooding 2 save only seconds): making *Weigh the frame* pen the birds and *Next part* carry the
+frame, or *Next chick* reach the next part of the floor, changes the sample jobs' play and needs its own design and measurement;
+it stays §17 open question 2. **F4's 2-line clamp**: the caption is narrowed to the free gap instead, because a clamp would cut
+the night fix's floor explanation and the skip stops' causes. **F6's 11:00–15:00 stage trip**: measured, a trip then leaves the
+fans at their afternoon stage and costs nothing, so trips stay 07:00–10:00 with the retry after the alarm.
 
 ## 17. Open questions for the farmer
 1. **The pace of level 3:** level 3 now comes once a first flock is finished (13 points over both flocks): a careful player

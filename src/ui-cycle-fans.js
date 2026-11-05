@@ -127,8 +127,10 @@ export function buildFanPanel(api) {
   const keeps = skillBox('autoStages', 'The controller’s stage table', skRow(keepLine.el), keepNote);
   stages.prepend(keeps.el);
   const glance = glanceFor(L, 'fan-panel');
-  shell.main.append(lcd.el, h('div', { class: 'fanbank' }, fans.map((f) => f.el)),
-    h('div', { class: 'cyc-controls' }, hint, allOff, allOn, pad.el), advice.el, shell.timeNote.el, stages, chart);
+  // (review round: Ventilation 2's one-press row first, over the display, so it is above the fold at 960 x 600 even under a
+  // job's strip; its working line carries the house and what the birds feel)
+  shell.main.append(advice.el, lcd.el, h('div', { class: 'fanbank' }, fans.map((f) => f.el)),
+    h('div', { class: 'cyc-controls' }, hint, allOff, allOn, pad.el), shell.timeNote.el, stages, chart);
   function drawSkills() {
     const lvl = L.farm?.mode === 'level';
     if (advice.show(lvl && perkHas(L, 'fanAdvice'))) { const a = fanAdviceFor(env, L.farm); advWork.set(a.text, advSaid); }

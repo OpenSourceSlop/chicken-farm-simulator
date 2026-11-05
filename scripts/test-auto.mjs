@@ -405,6 +405,25 @@ await test('an ignored fault leaves a dent in the records, the same fault met in
   assert(r0 >= r1 + 5, `timer: RH ${r0.toFixed(0)} % ignored, ${r1.toFixed(0)} % met`);
   console.log(`     day 7 ${D0.levels.level1.ratio} × / ${D1.levels.level1.ratio} ×; week 3 ${S0.levels.week3.weightG} / ${S1.levels.week3.weightG} g; heat deaths ${h0} / ${h1}; RH ${r0.toFixed(0)} / ${r1.toFixed(0)} % (ignored / met)`);
 });
+await test('a lost order left alone: the silo days fall under a day and the row turns red; ordered by hand before 16:00 the truck keeps the lines fed (the winch left alone: the line falls behind the plate, see the 48 h case)', () => {
+  const run = (fix) => {
+    const O = at('week3', 17, 8, ['feed']);
+    O.env.skipHours(0.1);
+    O.farm.feed.pending.length = 0;
+    const k0 = feedDays(O.farm, O.env), k = Math.min(1, 1.9 / Math.max(0.1, k0.days));
+    for (const sl of O.farm.feed.silos) { for (const l of sl.layers) l.kg *= k; sl.kg = sl.layers.reduce((x, l) => x + l.kg, 0); }
+    O.farm.feed.siloKg = O.farm.feed.silos.reduce((x, sl) => x + sl.kg, 0);
+    O.farm.debug.fault('order-lost');
+    if (fix) { const fd = feedDays(O.farm, O.env); O.farm.act('feed.order', { kg: Math.ceil((3 * fd.kgPerDay - fd.kg) / 100) * 100, type: 'grower' }); }
+    let min = 9;
+    for (let i = 0; i < 36; i++) { O.env.skipHours(1); const d = feedDays(O.farm, O.env).days; if (d != null) min = Math.min(min, d); }
+    return { min, row: equipmentRow(O.env, O.farm) };
+  };
+  const a = run(false), b = run(true);
+  assert(a.min < 1 && a.row.state === 'red', `left alone: ${a.min.toFixed(2)} days at the lowest, row ${a.row.state}`);
+  assert(b.min >= 0.5 && b.min > a.min + 0.4 && b.row.state !== 'red', `ordered by hand: ${b.min.toFixed(2)} days at the lowest (left alone ${a.min.toFixed(2)}), row ${b.row.state}`);
+  console.log(`     the silo days at the lowest over 36 h: ${a.min.toFixed(2)} left alone, ${b.min.toFixed(2)} ordered by hand at once`);
+});
 await test('the automation state round-trips a save: a stalled line and a hand hold, saved and resumed into a fresh world, the same now and 30 farm hours on', () => {
   const R = at('weeks45', 24, 9, Object.keys(AUTO_SYSTEMS));
   R.env.skipHours(0.2);

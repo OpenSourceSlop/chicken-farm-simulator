@@ -1448,7 +1448,7 @@ set false (a steps file or a node test) the game is the Phase 5 game: test-sim b
 - **Level 3 (the equipment does it)**: seven controllers (winches, timer, fan stages, brooders, feed, lights, bird scale) act
   only through `farm.act` by `'auto'` or the env setters; a handed-over job becomes *any of*: a quick look at the reading in
   band, or the job by hand (the card: *handled by the controller (Water 3) · look at …*); the farmer's own setting holds
-  (06:00, 18:00 or 2 h); the comfort colours on entering, the symptom tags within 2 m and the passing check, the arrival
+  (06:00 or 18:00); the comfort colours on entering, the symptom tags within 2 m and the passing check, the arrival
   day's helper, the daily record on the phone. `r-drinkers` and `r-feeders` are never handed over; no payoff changes a
   sample size or a pass rule.
 - **Faults**: one plan per flock (drawn at the brooding week's start, saved), six faults (winch stall, timer reset, stage
@@ -1525,5 +1525,51 @@ set false (a steps file or a node test) the game is the Phase 5 game: test-sim b
 - skill-time is a model; only day 16 is measured by real input with every branch at 3 (days 8, 25, 37 by the model).
 - The packages' known issues stand: the normal profile's slips differ from §2.4 (measured, SKILLS.md §2.5); Growth earns 11 in
   flock 2 (the hand weighings stop at Growth 3); BIRD_SEEN's once-a-day memory is not saved; the helper shares the single
-  box-tipping animation; the winch lamps and the dial are small at the camera's pitch.
+  box-tipping animation; the winch lamps and the dial are small at the camera's pitch (the review round: the lamps now have
+  fixed-size halos and every open fault a pill over its place; the dial itself stays small).
 
+
+## Skills update — the review fix round (after b407f3d)
+Reviewers reported 24 findings on the integrated update (1 critical, 11 major, 12 minor). Each was confirmed against the code
+and a node probe or a browser run before the fix; SKILLS.md §16.3 lists them one by one with what was done.
+- **The hot season's stage controller (critical)**: `farm-fans.js hotYoungPad` gives the young birds (days 8–20) the hot heat
+  sign's line in the suggestion (`adviseFans`) and the stage table (`stageTableFor`: the pad over +3 °C while the outside air
+  is over about 30 °C, with a 1 °C / 5 % RH differential kept in `farm.auto.mem.youngPadRow`); `padFromDay` is gone. The
+  farmer's own fans or pad hold the table off until 18:00 (`AUTO.handHold.stages.untilHour`; the next 06:00 after 18:00), and
+  only from day 15 of the flock's age. `ok('stages')` needs the birds in the table's range (`farm-auto-ctl.js stagesStrain`:
+  panting ≤ `AUTO.stagesPantMax`, felt ≤ the top stage or pad + `AUTO.stagesOverC`); the Equipment row turns amber with *Set
+  the pad by hand at the fan panel* when every stage is on, the pad off and the air dry. runCycle's ideal keeps its own fan
+  plan while its hand hold lasts. `runCycle('hot:ideal', { perks: 'all', cyclesDone: 1 })` passes every level with no heat
+  death (Week 3 failed at 1.03 % before).
+- **Faults**: a fault stops only its part (`stepControllers` PARTIAL: the winch's other lines, the feed rims, the brooders'
+  06:00 step go on); the hand fix is the manual job (`farm-faults.js HAND_FIX`: *Reset the motor* only with the line within
+  1 cm of the plate; a timer by hand only in the vent sign's 90–130 %; an order by hand only to 2 days of feed with the reach
+  and the orders on the way; the fixed text says *winched by hand* only when he did); an ignored fault leaves a dent (the stage
+  trip's retry 4 h after its high-temperature alarm, 8 h without one; the drift to 3.5 °C in the brooding nights; with Growth 3
+  on and no hand weighing the weigh-in reads the platform's 09:00–12:00 figure, `stats.scaleDay`, about 6 % light while fouled,
+  the result line naming it, and a fouled scale warns on a weigh day). Each fault's short label (`faultWords().short`) is the
+  Equipment row's value; the skip stop says *an equipment fault, <label> (the flock watch card)*.
+- **Feed**: `feedDays` counts only the silos whose slide valve is open (`shut` and `allKg` beside it; `shutAhead` the shut feed
+  for the age or later); the feed controller orders what the open valves draw (`drawnSpans`: a feed whose change was not made by
+  15:36 of the blend day goes on, the next one waits; read at once when seen); the Equipment row is amber when the reach is
+  under a quarter day (or a day with the change late) while a shut silo holds the feed; the flock watch's intake cause reads
+  empty pans first. `runCycle('crumbleOn', { perks: 'all' })` passes Week 3 like the run without skills.
+- **HUD and scene**: a pill per open fault within 15 m (`ui-deadmarks.js` `edge-pointer--fault`, the edge when off screen);
+  lamp halos and sight-tube ticks a fixed size on the screen (`props-auto.js radiusForPx`, the lamps' own unlit material, so no
+  new shader program); the tally count in the pick-up prompt; the job card's scroll from rectangles; unlock captions one short
+  line for 6 s (`job-words.js unlockShort`; the notebook keeps the long words); a caption that would cross the watch card or
+  the job card narrows to the gap between them (`ui.js placeCaption`); an equipment warning clamped to four lines with *more*;
+  the job edge pointer to the bottom edge when the side edge is full; the night card's fault rows from one source, its main key
+  naming the fix's place, no blank climate rows for big birds.
+- **Minor**: the controllers box under the controller's tabs without the doubled labels (`unlabel`); one skill line per strip
+  and none in a done strip (`skillRows`, `c.skillSeen`); the comfort legend's short words and its fold under Comfort 3; the
+  picked branch's detail scrolled into view and the milestone points as *1st n/m · 2nd n/m*; the pocket phone as a phone; the
+  Automation rows under level 3 dimmed with their points to go; the silo plate's duplicate line dropped; the unused 4 Hz status
+  poll and `afterCutPending` removed.
+- **Tests**: test-auto adds the hot season's cases, the partial controllers over 48 h, the refusals, the ignored-against-met
+  dents (drift, scale, stage trip, timer RH, lost order), the row key with a drifting sensor, the controllers box words, the
+  crumbleOn run and the save round trip of the automation state; `scripts/skills-review.json` is the review round's browser
+  check (960 × 600).
+- **Not done** (SKILLS.md §16.3): Growth 2 / Brooding 2's larger time savings (a design change to the weigh and the chick
+  samples; SKILLS.md §17 open question 2); the 2-line caption clamp (it would cut the night fix's floor explanation and the
+  skip stops' causes, so the caption is narrowed instead).

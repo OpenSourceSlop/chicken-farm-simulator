@@ -16,7 +16,7 @@
   {"advance": 0.3},
   {"expect": "__game.ui.openPanelId === 'silo' || ('open: ' + __game.ui.openPanelId) && false", "label": "E opens the silo gauge (real input)"},
   {"advance": 0.5},
-  {"expect": "(() => { const box = __open().querySelector('[data-payoff=\"siloOrder\"]'); const t = (box?.textContent || '').replace(/\\s+/g, ' '); return box && !box.hidden && /About (1\\.9|2\\.0) days of feed at today’s intake/.test(t) && /(1\\.9|2\\.0) days of feed left: an order here/.test(t) && 'the gauge: ' + t.slice(0, 220); })()", "label": "the gauge reads the days of feed (feedDays) and the 2-day line"},
+  {"expect": "(() => { const box = __open().querySelector('[data-payoff=\"siloOrder\"]'); const t = (box?.textContent || '').replace(/\\s+/g, ' '); return box && !box.hidden && /About (1\\.9|2\\.0) days of feed (the open valves reach )?at today’s intake/.test(t) && /(1\\.9|2\\.0) days of feed left: an order here/.test(t) && 'the gauge: ' + t.slice(0, 220); })()", "label": "the gauge reads the days of feed (feedDays) and the 2-day line"},
   {"eval": "(() => { const b = __btn('Order to 3 days'); b?.scrollIntoView({ block: 'center' }); return 'Order to 3 days scrolled into view'; })()"},
   {"advance": 0.2},
   {"expect": "(() => { const key = __btn('Order to 3 days'), line = key?.parentElement.querySelector('.skl-work'); return __inView(key) && __inView(line) && /^3 days × [\\d,]+ kg − [\\d,]+ kg in silo 2 → [\\d,]+ kg grower pellets/.test(line.textContent) && 'before the press: ' + line.textContent; })()", "label": "Order to 3 days with its working (3 days × kg − the silo → kg grower)"},
