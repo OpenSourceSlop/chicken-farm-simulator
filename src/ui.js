@@ -829,33 +829,45 @@ export function createUI(ctx, deps) {
     const el = capEl;
     if (!el || el.hidden) return;
     el.style.left = ''; el.style.maxWidth = ''; el.style.bottom = '';
+    const R0 = root.getBoundingClientRect(), W = root.clientWidth;
+    // a caption that would cross the watch card or the job card narrows to the gap between them (the review round)
+    const narrow = () => {
+      el.style.left = ''; el.style.maxWidth = '';
+      const r = el.getBoundingClientRect();
+      let L = 0, R = W, hit = false;
+      for (const k of [root.querySelector('.fw'), root.querySelector('.ljobs')]) {
+        if (!k || k.hidden || !k.offsetParent) continue;
+        const q = k.getBoundingClientRect();
+        if (!(q.width > 0) || q.bottom < r.top - 4 || q.top > r.bottom + 4 || q.right < r.left - 4 || q.left > r.right + 4) continue;
+        hit = true;
+        if ((q.left + q.right) / 2 < W / 2) L = Math.max(L, q.right + 10); else R = Math.min(R, q.left - 10);
+      }
+      if (!hit || R - L < 200) return;
+      el.style.left = `${Math.round((L + R) / 2)}px`;
+      el.style.maxWidth = `${Math.floor((R - L) / (hudScaleNow || 1))}px`;
+    };
     // the final check: the edge pointers' pills (the job's "42 m", the dead birds', a fault's; not the symptom tags that
     // follow the birds) never cover the caption: it rises above the pills under it, which keep their place (they point at
     // the ground). Strict overlap only, so a pill that already keeps clear of the caption (it avoids it) moves nothing.
-    const c = el.getBoundingClientRect(), R0 = root.getBoundingClientRect();
-    let top = Infinity;
-    for (const q0 of root.querySelectorAll('.edge-pointer:not(.edge-pointer--tag)')) {
-      if (q0.hidden || !q0.offsetParent) continue;
-      const q = q0.getBoundingClientRect();
-      if (!(q.width > 0) || q.right <= c.left || q.left >= c.right || q.bottom <= c.top || q.top >= c.bottom) continue;
-      top = Math.min(top, q.top);
-    }
-    if (top < Infinity) {
-      const bottomNow = parseFloat(getComputedStyle(el).bottom) || 0, lift = c.bottom - top + 8;
-      if (lift > 0 && c.top - lift > R0.top + 60) el.style.bottom = `${Math.round(bottomNow + lift)}px`;
-    }
-    const W = root.clientWidth, r = el.getBoundingClientRect();
-    let L = 0, R = W, hit = false;
-    for (const k of [root.querySelector('.fw'), root.querySelector('.ljobs')]) {
-      if (!k || k.hidden || !k.offsetParent) continue;
-      const q = k.getBoundingClientRect();
-      if (!(q.width > 0) || q.bottom < r.top - 4 || q.top > r.bottom + 4 || q.right < r.left - 4 || q.left > r.right + 4) continue;
-      hit = true;
-      if ((q.left + q.right) / 2 < W / 2) L = Math.max(L, q.right + 10); else R = Math.min(R, q.left - 10);
-    }
-    if (!hit || R - L < 200) return;
-    el.style.left = `${Math.round((L + R) / 2)}px`;
-    el.style.maxWidth = `${Math.floor((R - L) / (hudScaleNow || 1))}px`;
+    const lift = () => {
+      const c = el.getBoundingClientRect();
+      let top = Infinity;
+      for (const q0 of root.querySelectorAll('.edge-pointer:not(.edge-pointer--tag)')) {
+        if (q0.hidden || !q0.offsetParent) continue;
+        const q = q0.getBoundingClientRect();
+        if (!(q.width > 0) || q.right <= c.left || q.left >= c.right || q.bottom <= c.top || q.top >= c.bottom) continue;
+        top = Math.min(top, q.top);
+      }
+      if (top === Infinity) return false;
+      const bottomNow = parseFloat(getComputedStyle(el).bottom) || 0, by = c.bottom - top + 8;
+      if (!(by > 0) || c.top - by <= R0.top + 60) return false;
+      el.style.bottom = `${Math.round(bottomNow + by)}px`;
+      return true;
+    };
+    // this check round: the width first, then the lift from the caption as it will be drawn (a caption narrowed between the
+    // cards may already be clear of the pills under the wide one); a lifted caption may meet or leave the cards, so its width
+    // again (it grows upward from its bottom, away from the pills), at most three rounds
+    for (let i = 0; i < 3; i++) { narrow(); if (!lift()) break; }
   }
   applyHudScale();
   window.addEventListener('resize', applyHudScale);

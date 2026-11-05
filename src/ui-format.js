@@ -117,7 +117,7 @@ export function readingText(kind, v) {
     case 'lux': case 'light.lux': return `${int(r.lux)} lux`;
     case 'air': case 'air.probe': return [r.speedMs != null && `${one(r.speedMs)} m/s`, r.tempC != null && `${one(r.tempC)} °C`, r.rh != null && `${int(r.rh)} %`].filter(Boolean).join(' · ') || '—';
     case 'bird': case 'sample.bird': return `${r.look ?? 'bird'}: ${typeof r.value === 'number' ? num(r.value) : r.value ?? '—'}`;
-    case 'fans': case 'fans.read': return [r.fans != null && `${int(r.fans)} tunnel fans`, r.houseC != null && `house ${one(r.houseC)} °C`, r.rh != null && `${int(r.rh)} %`, r.speedMs != null && `${one(r.speedMs)} m/s`].filter(Boolean).join(' · ') || 'fan panel read';
+    case 'fans': case 'fans.read': return [r.fans != null && `${int(r.fans)} tunnel fans`, r.houseC != null && `house ${one(r.houseC)} °C`, r.rh != null && `${int(r.rh)} %`, r.speedMs != null && `${one(r.speedMs)} m/s`].filter(Boolean).join(' · ') || (r.at === 'controller' ? 'fans read at the controller' : 'fan panel read');
     case 'gas': case 'gas.meter': return [r.kgLeft != null && `${int(r.kgLeft)} kg gas left`, r.kgUsed != null && `${int(r.kgUsed)} kg used`].filter(Boolean).join(' · ') || 'gas gauge read';
     case 'pad': case 'pad.check': return Array.isArray(r.dry) ? `pad: ${r.dry.filter(Boolean).length} of ${r.dry.length} sections dry${r.flowing === false ? ', no flow' : ''}` : 'pad checked';
     case 'ticket': case 'load.ticket': return `truck ${(r.truck ?? 0) + 1}: ${int(r.crates)} crates, ${int(r.birds)} birds, net ${int(r.netKg)} kg`;

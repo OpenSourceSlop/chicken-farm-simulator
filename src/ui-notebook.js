@@ -19,6 +19,8 @@ const KIND_LABEL = {
   auto: 'Controller', fault: 'Equipment', skill: 'Skill',
   pad: 'Pad', 'pad.check': 'Pad', ticket: 'Ticket', 'load.ticket': 'Ticket', swab: 'Swab', 'clean.swab': 'Swab', letter: 'Letter', booking: 'Phone', 'phone.bookCatch': 'Phone', 'phone.bookChicks': 'Phone',
 };
+/** A note's label: a fans reading Ventilation 2 took at the controller's Ventilation tab says so (this check round). */
+export const noteLabel = (n) => (n.kind === 'fans' && n.value?.at === 'controller' ? 'Controller · fans' : KIND_LABEL[n.kind] || n.kind);
 // where a reading was taken, in words (the brooding floor's six parts); a place off it is left out
 const whereText = (w) => { const s = Array.isArray(w) ? placeWords(w[0], w[1]) : ''; return s ? ` · ${s}` : ''; };
 
@@ -40,7 +42,7 @@ export function buildNotebookPanel(L) {
     body.replaceChildren(...days.map((d) => h('section', { class: 'nb-day' },
       h('h3', null, dayLabel(d)),
       h('ul', null, notes.filter((n) => n.day === d).slice().reverse().map((n) => h('li', { class: `nb-line nb-line--${n.kind.replace('.', '-')}` },
-        h('span', { class: 'nb-t' }, hhmm(n.hour)), h('span', { class: 'nb-k' }, KIND_LABEL[n.kind] || n.kind), h('span', { class: 'nb-v' }, readingText(n.kind, n.value), whereText(n.where))))))));
+        h('span', { class: 'nb-t' }, hhmm(n.hour)), h('span', { class: 'nb-k' }, noteLabel(n)), h('span', { class: 'nb-v' }, readingText(n.kind, n.value), whereText(n.where))))))));
   }
   return { el, kind: 'paused', onOpen: render, update(dt, force) { if (force) render(); } };
 }

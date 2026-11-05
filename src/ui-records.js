@@ -156,8 +156,10 @@ export function buildRecordsPanel(L, { pocket = false } = {}) {
       out.push(h('table', { class: 'ledger' }, h('tbody', null, TODAY_LINES.map(([kinds, label]) => {
         const got = notes.filter((n) => kinds.includes(n.kind));
         if (!got.length && (OPTIONAL.has(label) || (d > 42 && label !== 'Look notes'))) return null;
-        const cell = got.length ? h('td', null, h('ul', { class: 'ledger-list' }, got.slice(-12).map((n) => h('li', null, h('span', { class: 'ledger-t' }, hhmm(n.hour)), readingText(n.kind, n.value))))) : h('td', { class: 'not-read' }, '—  not read');
-        return h('tr', null, h('th', { scope: 'row' }, label), cell);
+        // this check round: Ventilation 2 reads the fans at the controller too; such a reading says so and the row is "Fans read"
+        const atCtl = (n) => n.kind === 'fans' && n.value?.at === 'controller';
+        const cell = got.length ? h('td', null, h('ul', { class: 'ledger-list' }, got.slice(-12).map((n) => h('li', null, h('span', { class: 'ledger-t' }, hhmm(n.hour)), readingText(n.kind, n.value), atCtl(n) ? ' · at the controller' : '')))) : h('td', { class: 'not-read' }, '—  not read');
+        return h('tr', null, h('th', { scope: 'row' }, label === 'Fan panel' && got.some(atCtl) ? 'Fans read' : label), cell);
       }))));
     }
     if (row && row.signed) out.push(h('p', { class: 'book-signed' }, `Signed. ${row.skillLines?.length ? row.skillLines.join(' · ') : ''}`));

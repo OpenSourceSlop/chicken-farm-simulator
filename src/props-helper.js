@@ -100,10 +100,14 @@ export function createHelper(ctx, { mats, group, boxes, trucks, chicksPerStack }
   // the final check: a soft contact shadow under his boots and under the hand truck's wheels (the game draws no shadow maps),
   // so he reads as standing on the floor, the apron and the kerb rather than over them
   const contactMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.26, depthWrite: false });
+  // this check round: indoors the litter plane lies at y 0.02 (house-shell.js buildFloor), so a disc at 0.012 sat under it and
+  // never drew; on the litter the discs sit just above it, outside just above the apron
+  const CONTACT_Y = { out: 0.012, litter: 0.028 };
+  const onLitter = (x, z) => Math.abs(x) < HOUSE.length / 2 && Math.abs(z) < HOUSE.width / 2;
   const contactAt = (name, rx, rz, z) => {
     const g = new THREE.CircleGeometry(1, 16); g.rotateX(-Math.PI / 2); g.scale(rx, 1, rz);
     const m = new THREE.Mesh(g, contactMat);
-    m.name = name; m.position.set(0, 0.012, z); m.renderOrder = 1;
+    m.name = name; m.position.set(0, CONTACT_Y.out, z); m.renderOrder = 1;
     root.add(m);
     return m;
   };
@@ -222,6 +226,10 @@ export function createHelper(ctx, { mats, group, boxes, trucks, chicksPerStack }
     void still;
     root.rotation.y = st.yaw;
     contact.visible = true; cartContact.visible = withCart;
+    contact.position.y = onLitter(st.x, st.z) ? CONTACT_Y.litter : CONTACT_Y.out;
+    // the hand truck's disc 1.15 m ahead of him (local -z): its own place decides, so it shows on the litter at the door too
+    const cx = st.x - Math.sin(st.yaw) * 1.15, cz = st.z - Math.cos(st.yaw) * 1.15;
+    cartContact.position.y = onLitter(cx, cz) ? CONTACT_Y.litter : CONTACT_Y.out;
     cartFull.visible = withCart && (st.state === 'carrying' || (st.state === 'loading' && st.t > LOAD_SEC / 2));
     cartEmpty.visible = withCart && !cartFull.visible;
   }
