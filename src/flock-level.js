@@ -19,6 +19,8 @@ import { createCatcher } from './flock-catch.js';
 // Phase 3 (package "scene"): the growing flock over the whole cycle and the catch
 import { cycleOn, zones, heatBand, updateLame, thinkLame, water, breathing, LAME } from './flock-cycle.js';
 import { createCatchFlock } from './flock-harvest.js';
+// Skills update (package "scene", SKILLS.md §3.10): the symptom tags of the birds he walks past (Biosecurity 3)
+import { createTags } from './flock-tags.js';
 
 export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
   const lv = createAccess();
@@ -26,6 +28,8 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
   const dead = createDeadBirds(ctx, S, uniforms, pop);
   const catcher = createCatcher(ctx, S, pop, isLevel);
   const catchFlock = createCatchFlock(S, pop);
+  const tags = createTags(ctx, S, pop);
+  catcher.tags = tags;
   const farmer = () => ctx.player?.position || null;
   S.levelMode = false;
   S.lv = null;
@@ -38,6 +42,7 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
     catcher.clear();
     dead.clear();
     catchFlock.clear();
+    tags.clear();
     cyc = false; heatBand(S, null, null, false);
     if (on) {
       S.lv = lv;
@@ -110,7 +115,7 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
   const heldLame = () => { let k = 0; for (const h of catcher.held.values()) if (h.sick === LAME) k++; return k; };
 
   const lvl = {
-    dead, catcher, lv,
+    dead, catcher, lv, tags,
     /** every frame before the flock moves; returns true in level mode */
     update(dt, env, farmerPos) {
       sync();
@@ -130,6 +135,7 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
       wantSick = updateSick(S, farm, heldSick(), env);
       wantLame = updateLame(S, farm, heldLame());
       dead.update(dt, farm);
+      tags.update(dt, farmerPos);
       return true;
     },
     /** comfort per 6 m strip for the comfort field (Phase 3, day 8 on) or null */
@@ -161,7 +167,7 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
     resetLevel() {
       reseed();
       if (isLevel()) { S.levelMode = false; switchMode(true); return; }
-      catcher.clear(); dead.clear();
+      catcher.clear(); dead.clear(); tags.clear();
     },
     serialize() {
       return { v: 1, ...dead.serialize(), ahead: +pop.aheadOfCount.toFixed(3), batch: pop.batchBirds,

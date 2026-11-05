@@ -331,6 +331,13 @@ export function createFlock(ctx, { house } = {}) {
       uniforms.uComfortOn.value = on ? 1 : 0;
       render.markDirty();
     },
+    // ---- Skills update (package "scene", SKILLS.md §3.5, §3.10, §10) ----
+    /** The catcher (flock-catch.js): catchNearest, releaseBird, and Brooding 2's nextNearest(index, maxDist) — the chick in
+     *  the hand goes back down and the nearest other one within maxDist (AUTO.nextChickM) comes into the hand. */
+    get catcher() { return lvl.catcher; },
+    nextNearest(index, maxDist) { return lvl.catcher.nextNearest(index, maxDist); },
+    /** Biosecurity 3's symptom tags shown now, nearest first: [{ index, look, text, x, z, dist, left }]. */
+    tags() { return lvl.tags.list(); },
     /** Test hooks: counts and spreads for the p2-flock steps files (never shown to the player). */
     debug: lvl.debug,
     // test tools only: true = birds ignore the farmer (to film them up close)
