@@ -109,7 +109,10 @@ function cardsOf(res, def) {
     return bigs(
       // only what was measured: no day 7 weight before the weigh-in age, then the card says what ended the level
       res.ratio != null
-        ? big('Day 7 weight', `${two(res.ratio)} ×`, `chick weight · ${int(res.weightG)} g ${res.weighedByHand ? 'weighed' : 'automatic scale, not weighed by hand'} ÷ ${one(res.chickWeightG)} g (${res.chickSource === 'box' ? 'box weighing' : 'delivery note'})`, h('div', { class: 'band', html: bandSvg(res.ratio) }))
+        // this check round: a fouled platform is named on the brooding week's card too, with the clean figure when it decided
+        ? big('Day 7 weight', `${two(res.ratio)} ×`, res.scaleFouled && !res.weighedByHand
+          ? `chick weight · ${int(res.weightG)} g automatic scale ÷ ${one(res.chickWeightG)} g (${res.chickSource === 'box' ? 'box weighing' : 'delivery note'}) · its platform fouled (about 6 % light)${res.scaleDecided ? `: clean, about ${two(res.scaleCleanRatio)} ×` : ''}; not weighed by hand`
+          : `chick weight · ${int(res.weightG)} g ${res.weighedByHand ? 'weighed' : 'automatic scale, not weighed by hand'} ÷ ${one(res.chickWeightG)} g (${res.chickSource === 'box' ? 'box weighing' : 'delivery note'})`, h('div', { class: 'band', html: bandSvg(res.ratio) }))
         : big(res.early ? 'Ended early' : 'Day 7 weight', res.early ? `Day ${fmt0(res.day)}, ${endHour(res)}` : 'not weighed', res.failText ? `${res.failText.charAt(0).toUpperCase()}${res.failText.slice(1)}. No day 7 weighing.` : 'No day 7 weighing.'),
       big('Deaths and culls', `${two(res.deathsPct)} %`, `${int(res.deaths)} of ${int(res.placed)} chicks ${res.placedReal === false ? 'delivered' : 'placed'}`,
         res.countedDead != null ? h('p', { class: 'big-sub' }, [`${int(res.countedDead)} counted at the bin`, `${int(res.deadOnFloor)} still lying in the house`,

@@ -397,6 +397,13 @@ export function createLevel(ctx, deps = {}) {
     return { n: ok.length, mean, uniformityPct: (within / ok.length) * 100 };
   }
 
+  /** What a clean platform would have read at a weigh-in on a fouled one (the final check): the reading less its fouled
+   *  hours' light share (FAULTS['scale-fouled'].readLowPct); null for a clean platform or no reading. */
+  function cleanPlatformG(plat) {
+    if (!plat?.fouled || plat.meanG == null) return null;
+    return plat.meanG / (1 - (FAULTS['scale-fouled'].readLowPct / 100) * Math.min(1, (plat.fouledH || plat.k || 1) / Math.max(1, plat.k || 1)));
+  }
+
   /** Phase 2's result screen numbers of the brooding week (PHASE2.md §10), unchanged. */
   function computeResultL1(reason) {
     const F = lv().fail || LEVEL1.fail;
@@ -413,6 +420,12 @@ export function createLevel(ctx, deps = {}) {
     const weightG = wr ? wr.mean : plat7?.meanG ?? farm.stats?.scaleAtWeighInG ?? null;
     const ratio = chick && weightG != null ? weightG / chick : null;
     const pass = ratio != null && ratio >= F.weightRatioMin && deathsPct <= F.mortalityMaxPct;
+    // this check round: a fouled platform that decided the brooding week's borderline weigh-in says so, as a week level's does
+    // (weekResult: the reading less its fouled hours' light share is what a clean platform would have read)
+    const clean7 = cleanPlatformG(plat7), cleanRatio = clean7 != null && chick ? clean7 / chick : null;
+    const scaleDecided = !pass && ratio != null && deathsPct <= F.mortalityMaxPct && cleanRatio != null && cleanRatio >= F.weightRatioMin;
+    const scaleWord7 = plat7?.fouled ? ' (the automatic scale, its platform fouled: about 6 % light)' : '';
+    const decided7 = scaleDecided ? `; the fouled platform decided it: clean, it would have read about ${int(clean7)} g, ${two(cleanRatio)} × the chick weight` : '';
     // what the farmer knows of the dead (the bin) and what he has not seen yet (the floor, the boxes)
     const fl = farm.flock, onFloor = fl.deadOnFloor || 0, inBoxes = (fl.boxDead || 0);
     // fix round: one sentence with semicolons, not stacked brackets
@@ -424,11 +437,12 @@ export function createLevel(ctx, deps = {}) {
     const claimWords = unclaimed;
     const failText = deathsPct > F.mortalityMaxPct ? (atClaim ? `deaths and culls reached ${two(deathsPct)} % by 24:00 of day ${failAt.day}, when the hatchery claim closed${claimWords}${notPicked}`
       : `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}${notPicked}${unclaimed}`)
-      : ratio != null ? `day 7 weight ${two(ratio)} × chick weight` : (fl.placed || 0) > 0 ? 'no day 7 weight' : 'no chicks were placed';
+      : ratio != null ? `day 7 weight ${two(ratio)} × chick weight${scaleWord7}${decided7}` : (fl.placed || 0) > 0 ? 'no day 7 weight' : 'no chicks were placed';
     const floor = records?.timeline?.()?.find?.((e) => e.day === 0)?.floorAtArrivalC ?? null;
     const at = splitDay(env.day), day = atClaim ? failAt.day : at.day, hour = atClaim ? 24 : at.hour;
     return { pass, reason, early: reason === 'mortality', endedAt: `day ${day}, ${atClaim ? '24:00' : hhmm(hour)}`, day, hour, ...(atClaim ? { failDay: failAt.day } : {}),
-      ratio, weightG, weighedByHand: !!wr, weighedN: wr?.n ?? 0, ...(plat7?.fouled ? { scaleFouled: true } : {}), chickWeightG: chick, chickSource: measured != null ? 'box' : 'delivery',
+      ratio, weightG, weighedByHand: !!wr, weighedN: wr?.n ?? 0, ...(plat7?.fouled ? { scaleFouled: true } : {}),
+      ...(scaleDecided ? { scaleDecided: true, scaleCleanG: Math.round(clean7), scaleCleanRatio: cleanRatio } : {}), chickWeightG: chick, chickSource: measured != null ? 'box' : 'delivery',
       deaths, placed, placedReal: (fl.placed || 0) > 0, countedDead: fl.countedDead || 0, deadOnFloor: onFloor, deadInBoxes: inBoxes, culls: fl.culls || 0,
       // uniformity only from a hand weighing of 10 birds or more (the scale gives no spread); FCR only
       // once chicks were placed and are eating
@@ -472,7 +486,7 @@ export function createLevel(ctx, deps = {}) {
     const pass = share != null && share >= M.target.minShare && ld.pct <= max && !failAt;
     // the final check: a fouled platform that decided a borderline weigh-in says so (the reading less its fouled hours'
     // light share, FAULTS['scale-fouled'].readLowPct: what a clean platform would have read)
-    const cleanG = plat?.fouled && plat.meanG != null ? plat.meanG / (1 - (FAULTS['scale-fouled'].readLowPct / 100) * Math.min(1, (plat.fouledH || plat.k || 1) / Math.max(1, plat.k || 1))) : null;
+    const cleanG = cleanPlatformG(plat);
     const scaleDecided = !pass && !failAt && ld.pct <= max && cleanG != null && cleanG / targetG >= M.target.minShare;
     const decidedWords = scaleDecided ? `; the fouled platform decided it: clean, it would have read about ${int(cleanG)} g, ${int((100 * cleanG) / targetG)} % of the target` : '';
     const failText = failAt || ld.pct > max ? `deaths and culls in ${LEVEL_WORDS[def.id]} reached ${two(failAt?.pct ?? ld.pct)} % on day ${failAt?.day ?? env.dayNumber}`

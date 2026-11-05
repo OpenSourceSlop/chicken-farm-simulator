@@ -537,5 +537,26 @@ await test('a fouled scale and the weigh-in (final check 6): the warning on the 
   assert(r && !r.pass && r.scaleFouled && r.scaleDecided && /the fouled platform decided it: clean, it would have read about/.test(r.failText), `week 3: ${JSON.stringify(r && { pass: r.pass, failText: r.failText, scaleDecided: r.scaleDecided })}`);
 });
 
+await test('the brooding week\'s day-7 weigh-in on a fouled platform (this check round): the fail text and the result name the fouled platform; a borderline weigh-in it decided says so with the clean figure', () => {
+  for (const borderline of [false, true]) {
+    const R = at('level1', 5, 10, ['scale']);
+    R.env.skipHours(0.1);
+    const f = R.farm.debug.fault('scale-fouled');
+    assert(f && f.id === 'scale-fouled', `fault ${JSON.stringify(f)}`);
+    R.env.skipHours((7 + 13 / 24 - R.env.day) * 24);                // the platform left alone through the day-7 weigh-in morning
+    const D = R.farm.stats.scaleDay?.[7];
+    assert(D && D.fouled && D.k >= 3, `the day-7 platform reading: ${JSON.stringify(D)}`);
+    const chick = R.farm.stats?.chickWeightMeasuredG ?? R.farm.flock.chickWeightG;
+    if (borderline) D.meanG = Math.round(chick * 4 * 0.98);          // under 4.0 x the chick weight fouled, over it once clean
+    R.level.debug.goto(7, 23.9, { auto: true });
+    const r = R.level.result;
+    assert(r && r.scaleFouled && !r.weighedByHand && /\(the automatic scale, its platform fouled: about 6 % light\)/.test(r.failText), `level 1: ${JSON.stringify(r && { pass: r.pass, failText: r.failText })}`);
+    if (!borderline) { assert(r.pass && !r.scaleDecided, `the model's own reading passes, nothing decided: ${JSON.stringify({ pass: r.pass, ratio: r.ratio })}`); continue; }
+    const want = D.meanG / (1 - FAULTS['scale-fouled'].readLowPct / 100);
+    assert(!r.pass && r.scaleDecided && Math.abs(r.scaleCleanG - want) <= 1 && r.scaleCleanRatio >= 4 && r.ratio < 4, `borderline: ${JSON.stringify({ pass: r.pass, ratio: r.ratio, scaleDecided: r.scaleDecided, scaleCleanG: r.scaleCleanG, scaleCleanRatio: r.scaleCleanRatio })}`);
+    assert(/; the fouled platform decided it: clean, it would have read about \d+ g, 4\.\d\d × the chick weight$/.test(r.failText), `the fail text: ${r.failText}`);
+  }
+});
+
 console.log(failed ? `${failed} failed` : 'all passed');
 process.exit(failed ? 1 : 0);
