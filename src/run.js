@@ -498,7 +498,17 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
           const now = Date.now();
           memRun = clone({ version: RUN_SAVE.version, savedAt: now, run: envelope.run, blob: envelope.blob });
           if (!memoryOnly) store.save(envelope.run, envelope.blob, now);
+          // fix round: a slot of the run in play keeps the attempts as replay() does, and a load after a failed result
+          // counts as a replay of that level (the record no longer says a failed level passed in one attempt)
+          const was = back.state, er = envelope.run;
+          const same = !!was && was.seed === er.seed && (was.runCond ?? null) === (er.runCond ?? null) && (was.startedAt ?? null) === (er.startedAt ?? null);
+          const failed = same && level.mode === 'result' && level.result && level.result.pass === false ? was.levelId : null;
           ok = run.continueSave();
+          if (ok && same) {
+            for (const [k, v] of Object.entries(was.levels || {})) if (levels[k]) levels[k].attempts = Math.max(levels[k].attempts || 0, v?.attempts || 0);
+            const into = envelope.blob.level?.levelId;
+            if (failed && into === failed && levels[failed]) levels[failed].attempts = Math.max(levels[failed].attempts || 0, (was.levels?.[failed]?.attempts || 0) + 1);
+          }
         } else {
           // a Phase 2 save (migrate's v1: level.levelId 'level1'): a run at the brooding week, no plan, no condition
           memRun = null;

@@ -39,6 +39,8 @@ export function metaOf({ run = null, blob = null } = {}) {
   const day = Number.isFinite(env.day) ? Math.round(env.day - hour / 24) : null;
   const meta = { condition, conditionLabel: conditionLabel(condition), levelId, levelN: def?.n ?? null, levelShort: def?.short ?? '', levelTitle: def?.title ?? '',
     day, hour, time: hhmm(hour) };
+  // fix round: a slot saved on a result screen says so (it reopens the result, it is not a farm to play on)
+  if (lv.ended || lv.mode === 'result') meta.ended = true;
   meta.name = slotName(meta);
   return meta;
 }
@@ -47,6 +49,7 @@ export function slotName(m) {
   const parts = [m.conditionLabel || 'Normal season'];
   if (m.levelTitle) parts.push(m.levelTitle);
   if (m.day != null) parts.push(`${dayWords(m.day)}, ${m.time ?? hhmm(m.hour ?? 0)}`);
+  if (m.ended) parts.push('level ended');
   return parts.join(' · ');
 }
 
@@ -130,6 +133,7 @@ export function createSlotStore({ storage = null } = {}) {
   // storage that reads and writes, or that reads and holds keys but is full (a full storage refuses even the probe)
   const usable = () => readable() && (probe() || (() => { try { return (st().length || 0) > 0; } catch { return false; } })());
   const valid = (n) => Number.isInteger(n) && n >= 1 && n <= SAVE_SLOTS.count;
+  const rowCache = new Map();   // slot -> { sig, row } (read())
   const raw = (n) => { const s = st(); if (!s) throw new SaveError('blocked'); return s.getItem(keyOf(n)); };
   const store = {
     get available() { return usable(); },
@@ -144,17 +148,29 @@ export function createSlotStore({ storage = null } = {}) {
       if (text == null) return null;
       try { return JSON.parse(text); } catch { throw new SaveError('damaged', 'json'); }
     },
-    /** One row: { slot, empty, meta, savedAt, chars, enc, error? } (error: the SaveError code of a slot that cannot be read). */
+    /** One row: { slot, empty, meta, savedAt, chars, enc, error? } (error: the SaveError code of a slot that cannot be read).
+     *  Fix round: a slot whose meta names a level this build does not know reads 'invalid' (Continue skips it, its row says
+     *  so); and the row is kept while the stored text is the same (its length, head and tail), so a list redraw costs no
+     *  JSON parse, base64 decode or CRC of the whole payload. */
     read(n) {
       const row = { slot: n, empty: true, meta: null, savedAt: null, chars: 0, enc: null };
+      if (!valid(n)) return row;
+      let text;
+      try { text = raw(n); } catch { return { ...row, empty: false, error: 'blocked' }; }
+      if (text == null) { rowCache.delete(n); return row; }
+      const sig = `${text.length}|${text.slice(0, 96)}|${text.slice(-96)}`, c = rowCache.get(n);
+      if (c && c.sig === sig) return { ...c.row };
       let o;
-      try { o = store.load(n); } catch (e) { return { ...row, empty: false, error: e.code || 'damaged' }; }
+      try { o = JSON.parse(text); } catch { o = undefined; }
+      if (o === undefined) { const r = { ...row, empty: false, error: 'damaged' }; rowCache.set(n, { sig, row: r }); return { ...r }; }
       if (!o) return row;
       const err = storedError(o);
-      row.empty = false; row.chars = store.chars(n);
+      row.empty = false; row.chars = text.length;
       if (o && typeof o === 'object') { row.meta = o.meta && typeof o.meta === 'object' ? o.meta : null; row.savedAt = Number.isFinite(o.savedAt) ? o.savedAt : null; row.enc = o.enc ?? null; }
       if (err) row.error = err;
-      return row;
+      else if (row.meta?.levelId && !LEVELS.some((l) => l.id === row.meta.levelId)) row.error = 'invalid';
+      rowCache.set(n, { sig, row });
+      return { ...row };
     },
     list: () => Array.from({ length: SAVE_SLOTS.count }, (_, i) => store.read(i + 1)),
     /** Write a stored form (packEnvelope's) into slot n: { ok, code? } — 'full' over maxSlotChars or on a quota error (the

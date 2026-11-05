@@ -142,7 +142,22 @@ export function createLevel(ctx, deps = {}) {
   function saveProfile() { save?.saveProfile?.({ skills: skills?.serialize?.(), details: [...details], ...(cyc.cyclesDone != null ? { cyclesDone: cyc.cyclesDone } : {}), conditionsDone: { ...cyc.conditionsDone } }); }
 
   // ---------------- autosave (a run's levels save under the run's key, PHASE3.md §11) ----------------
+  // fix round: the scheduled autosaves (2 s after a job, every 2 farm hours, after points) wait for an idle moment (at most
+  // 1 s) instead of stringifying the whole run key inside a frame; the page hiding, a record closing and the level's end
+  // still save at once (saveNow). Under automation (navigator.webdriver) and in node they save at once, so a steps file
+  // reads the store it just wrote.
+  let idleId = null;
+  const idleOK = () => typeof requestIdleCallback === 'function' && !(typeof navigator !== 'undefined' && navigator.webdriver);
+  function cancelIdle() { if (idleId != null) { try { cancelIdleCallback(idleId); } catch { /* gone */ } idleId = null; } }
+  function saveIdle() {
+    if (!idleOK()) return saveNow();
+    if (idleId != null) return true;
+    saveIn = null; lastSaveDay = env.day;
+    idleId = requestIdleCallback(() => { idleId = null; saveNow(); }, { timeout: 1000 });
+    return true;
+  }
   function saveNow() {
+    cancelIdle();
     if (!inLevel() || free) return false;
     lastSaveDay = env.day;
     saveIn = null;
@@ -581,7 +596,7 @@ export function createLevel(ctx, deps = {}) {
   function resetLevelState() {
     fired = new Set(); points = []; weighs = []; signedEnd = false; ended = null; pending = null; failAt = null;
     startAt = null; reached.clear(); stoppedAt = null; bad = { gradedOut: 0, looked: 0, weak: 0, called: null, wait: null }; soonWarned.clear();
-    fast = defaultFast(); userPaused = false; saveIn = null; lastSaveDay = null; tickAcc = 0;
+    fast = defaultFast(); userPaused = false; saveIn = null; lastSaveDay = null; tickAcc = 0; cancelIdle();
   }
   function resetRun() {
     if (free) { env.setMaxDay?.(42); free = null; }
@@ -966,9 +981,9 @@ export function createLevel(ctx, deps = {}) {
       const weighOpen = list.some((i) => i.status === 'open' && i.def.done?.id === 'sample.weigh' && i.def.kind !== 'problem');
       level.sampling = open('d0-vent') ? 'vent' : open('d1-crop') ? 'crop' : weighOpen ? 'weigh'
         : env.dayNumber >= 8 && (open('w2-check') || open('w3-droppings')) ? 'bird' : null;
-      if (saveIn != null && (saveIn -= dt) <= 0) saveNow();
+      if (saveIn != null && (saveIn -= dt) <= 0) saveIdle();
       if (lastSaveDay == null) lastSaveDay = env.day;
-      else if (env.day - lastSaveDay >= 2 * H) saveNow();
+      else if (env.day - lastSaveDay >= 2 * H) saveIdle();
       if (pending && stepClock.now() - pending.at > NEXT_CONFIRM_MS) pending = null;
     },
     nextJob() {

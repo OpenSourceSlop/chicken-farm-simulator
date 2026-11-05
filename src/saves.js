@@ -174,7 +174,11 @@ export function createSaves({ run, level, save, events, settings, ui, storage = 
     continueLatest() {
       const e = latest();
       if (!e || e.slot === 'auto') return api.continueAuto();
-      return loadSlotNow(e.slot, 'load').then((r) => !!r.ok);
+      // fix round: a Continue that does not load says why on the title card (it did nothing at all before)
+      return loadSlotNow(e.slot, 'load').then((r) => {
+        if (!r.ok) { failNote = true; try { title()?.note?.(r.message || SAVE_MESSAGES['load-failed']); } catch { /* optional */ } refresh(); }
+        return !!r.ok;
+      });
     },
     continueAuto() {
       if (autoEntry().error) return false;

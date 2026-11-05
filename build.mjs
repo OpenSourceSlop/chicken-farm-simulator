@@ -3,7 +3,9 @@
 import { build } from 'esbuild';
 import fs from 'node:fs';
 
-const minify = process.argv.includes('--minify');
+// fix round: the published page is minified (about 1.37 MB of JS to parse instead of 2.26 MB on a farmer's laptop), with
+// the function names kept so error cards and the harness still read them; `node build.mjs --dev` builds it unminified
+const minify = !process.argv.includes('--dev');
 const result = await build({
   entryPoints: ['src/main.js'],
   bundle: true,
@@ -11,6 +13,7 @@ const result = await build({
   external: ['three', 'three/addons/*'],
   target: 'es2020',
   minify,
+  keepNames: true,
   write: false,
   legalComments: 'none',
   logLevel: 'warning',
