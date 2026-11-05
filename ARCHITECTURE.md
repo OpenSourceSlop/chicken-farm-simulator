@@ -1260,3 +1260,18 @@ climate controller".
   the hot season's afternoon fan) would be named if the farmer skipped through the night with them: the vent sign's "set it
   back by the table when the afternoon cools". Week 3 with four tunnel fans left on: the check, then the watch's stop naming
   them; the hot season's big birds with no fan: a death-spike stop naming the fans and pads.
+- **Tests and harness**: `scripts/test-night.mjs` (in `npm test` as `--quick`: the normal and hot seasons' ideal; full: every
+  condition, 44 s): the heat balance within 1 °C of the sim in eight night cases; his night reproduced (33.7 °C at 15:00, 26.2 °C
+  at 06:00, the brooders at full, 120–320 cold deaths, the floor 28.5–31.5 °C over 26 °C air); the night check's cause per case
+  (the thermostat never named for a cold night with it at or over the row); the stops before mass deaths and a fixed timer's quiet
+  night; the morning summary; the flock watch's causes; the controller notes; older birds' nights; save → resume mid-night; the
+  ideal of every condition never checked after its last night round nor stopped. `node scripts/night-steps.mjs` →
+  `scripts/req-night.json` by real input (his settings, the HUD gauge and the controller, the check naming the tunnel fan, Fix
+  it, the brief's wide timer, Skip anyway stopping at 00:00 with 0 cold deaths, the fix, the quiet night, the morning line).
+- **Results on fix/night** (960 × 600, seed 1, no console or page errors): `npm test` 440 ok; `test-night.mjs` (full) all passed;
+  `req-night` 17 PASS; `req-watch` 13; `req-clock` 13; `p2-level1` 58 (4.87 ×); `p3-cycle` 140 (brooding 4.87 ×, week 2 492 g,
+  week 3 985 g, weeks 4–5 2,318 g, the harvest 2,882 g live, FCR 1.58, EPEF 426, 2.3 % lost); `p4-hot` 43 (5,864 sold);
+  `p4-rainy` 17 (the cut at 15:10 still stops the skip).
+- **Open**: the night check is for the young-bird weeks; big birds' nights rely on the stops. The skip between levels (Continue
+  from a result to the next level's 06:00) has no night check; its deaths come in the morning summary. A death spike after Skip
+  anyway stops again only when the rate has doubled.
