@@ -4,7 +4,8 @@
 //
 //   nightHoursIn(from, to)             hours of night (18:30-06:00) between two env.day times
 //   nightCheck(env, farm, { toDay })   { show, lines: { temp, air, brooders } -> { state, text }, problems: [{ kind, side,
-//                                      why, check, fix }], fix, cold, warm } (show false: nothing to say)
+//                                      why, check, fix }], fix, cold, warm, to (the night read: the next 07:00 at least),
+//                                      skipTo (toDay) } (show false: nothing to say)
 //   createSkipGuard(env, farm, watch)  null, or { check() -> null | { kind, text, fix } } called at each farm hour of a skip:
 //                                      a new flock watch warning, a death spike, the house falling well under the row with
 //                                      the brooders at full, or holding well over it with the chicks panting (each only when
@@ -86,7 +87,7 @@ export function nightCheck(env, farm, { toDay } = {}) {
     brooders: { state: needShare > 1 ? 'red' : needShare > 0.9 ? 'amber' : 'green',
       text: `Brooders at ${pct(env.heaterLevel)} now${env.brooderOut?.length ? `, ${plural(env.brooderOut.length, 'brooder')} out` : ''}. At ${hhmm(cold.t)}, the coldest hour (outside about ${rowC(Math.round(cold.outC))}), they would need ${pct(needShare)} of their heat to hold ${rowC(row)}${needShare > 1 ? `: the house heads for about ${fmtC(cold.houseC)}` : ''}.` },
   };
-  return { show: problems.length > 0, lines, problems, fix: problems.find((p) => p.fix)?.fix || null, cold, warm: ah.warm, row, to };
+  return { show: problems.length > 0, lines, problems, fix: problems.find((p) => p.fix)?.fix || null, cold, warm: ah.warm, row, to, skipTo: toDay ?? null };
 }
 
 /** The flock's deaths by cause between two snapshots, biggest first: [[cause, n]]. */

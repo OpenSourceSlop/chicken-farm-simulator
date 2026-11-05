@@ -53,6 +53,10 @@ export function nightSteps() {
     exp(`(() => { const p = document.querySelector('${PANEL}.night'), b = p.querySelector('.nc-body'), r = (s) => p.querySelector(s).getBoundingClientRect(), f = r('[data-night=fix]'), k = r('[data-night=skip]');
       return p.scrollHeight <= p.clientHeight + 1 && b.scrollHeight <= b.clientHeight + 1 && f.bottom <= innerHeight && k.bottom <= innerHeight && f.top >= 0 && 'the card ' + p.clientHeight + ' px in a ' + innerWidth + ' x ' + innerHeight + ' window, no scroll; Skip anyway and Fix it at ' + Math.round(k.top) + '-' + Math.round(k.bottom) + ' px'; })()`,
       'check round 2: the card fits the window with both keys in view (no scroll)'),
+    exp(`(() => { const t = document.querySelector('${PANEL}.night .night-head p').textContent, to = __game.level.debug.nextSkip().target, m = Math.round(((to % 1) + 1) % 1 * 1440) % 1440;
+      const hh = String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+      return new RegExp('^The farm clock stands still\\. Next job skips to ' + hh + '(, day 1)?\\. With these settings, the night ahead( to 07:00)?:$').test(t) && 'subtitle: ' + t; })()`,
+      'check round 4: the card names the skip’s own end, apart from the night its rows read'),
     shot('night-04-night-check-tunnel'),
     click('Fix it at the controller'), adv(0.4),
     exp(`${open('controller')} && document.querySelector('${PANEL} .ctrl-tab[aria-selected="true"]')?.textContent === 'Ventilation' && 'Fix it: the controller on its Ventilation tab'`, 'Fix it opens the controller on the Ventilation tab'),
@@ -69,8 +73,12 @@ export function nightSteps() {
     shot('night-05-night-check-timer'),
     // ---- Skip anyway: the skip stops on the cold with its cause ----
     click('Skip anyway'), adv(0.6),
-    exp(`(() => { const s = __game.level.skipStopped, c = document.querySelector('#hud .caption:not([hidden]) .caption-text')?.textContent || ''; const d = ${deadNow}; return s && s.trouble && /^Next job stopped at/.test(c) && /timer runs 2 fans, 120 s/.test(c) && /brooders are at full/.test(c) && __game.env.hour < 23.9 && __game.env.timeScale !== 360 * 4 && 'stopped (' + s.trouble + ')' + ${t()} + ', cold deaths so far ' + (d.cold - (window.__d0.cold || 0)) + '; caption: ' + c; })()`,
-      'item 2: Skip anyway: the skip stops before the night is out, the cause in the caption, the clock back to 1x'),
+    // check round 4: the skip from 17:33 runs to 00:00 (a job closes at midnight); trouble in its last hour reads "Next job
+    // reached 00:00" (the skip at its end, no stop recorded), trouble on the way "Next job stopped at …"
+    exp(`(() => { const s = __game.level.skipStopped, c = document.querySelector('#hud .caption:not([hidden]) .caption-text')?.textContent || ''; const d = ${deadNow};
+      const reached = /^Next job reached 00:00: /.test(c), stopped = /^Next job stopped at \\d\\d:\\d\\d: /.test(c) && s && s.trouble;
+      return (reached ? __game.env.dayNumber === 1 && __game.env.hour < 0.02 && !s : stopped) && /timer runs 2 fans, 120 s/.test(c) && /brooders are at full/.test(c) && __game.env.hour < 23.9 && __game.env.timeScale !== 360 * 4 && (reached ? 'reached its 00:00' : 'stopped (' + s.trouble + ')') + ${t()} + ', cold deaths so far ' + (d.cold - (window.__d0.cold || 0)) + '; caption: ' + c; })()`,
+      'item 2 / check round 4: Skip anyway: the skip ends or stops before the night is out with the cause in the caption (its wording as it happened), the clock back to 1x'),
     exp(`(() => { const d = ${deadNow}.cold - (window.__d0.cold || 0); const w = document.querySelector('#hud .fw-warn'); return d < 20 && w && !w.hidden && /timer/.test(w.textContent) && 'cold deaths ' + d + ' at the stop; the flock watch card: ' + w.textContent.slice(0, 90); })()`, 'item 2: the stop comes before mass deaths; the flock watch shows it'),
     shot('night-06-skip-stopped'),
     // ---- fixing it: back to the vent sign's timer and the row ----

@@ -118,7 +118,8 @@ test('item 2: Skip anyway — the skip stops before mass deaths with the cause, 
   assert(r?.nightCheck, 'the night check first');
   r = R.level.nextJob({ anyway: true });
   const s = R.ui.stops[0];
-  assert(s && /^Next job stopped at \d\d:\d\d: House/.test(s.text) && /timer runs 2 fans, 120 s/.test(s.text) && /brooders are at full/.test(s.text) && R.env.dayNumber === 1 && R.env.hour < 3,
+  // the skip from 17:05 runs to 00:00 (a job closes at midnight): the trouble of its last hour, the skip at its target
+  assert(s && /^Next job reached 00:00: House/.test(s.text) && /timer runs 2 fans, 120 s/.test(s.text) && /brooders are at full/.test(s.text) && R.env.dayNumber === 1 && R.env.hour < 3,
     `stopped at ${R.env.timeLabel}: ${s?.text?.slice(0, 160)}`);
   assert(!R.level.fast && coldSince(R, d0) < 20, `fast ${R.level.fast}, cold deaths ${coldSince(R, d0)}`);
   assert(R.level.watch.status().last?.text === s.text, 'the flock watch card carries the stop');
@@ -210,6 +211,30 @@ test('check round 3: a line raised by watch.raise (the sunset line, a stop) is o
   assert(now.last === w && now.rows.comfort, `the card's next read: ${now.last?.kind} ${now.last?.text?.slice(0, 60)}`);
   const s = F.level.watch.raise({ kind: 'stop', text: 'Next job stopped at 19:00: a test line.' });
   assert(F.level.watch.status().last === s, 'a second raise shows at once too');
+});
+
+test('check round 4: trouble in the last farm hour of a skip that reached its target reads "Next job reached 00:00" (06:00), a stop on the way "stopped at"; the card names the skip’s own end', () => {
+  const F = day0(SET.farmer), seen = { reached: [], stopped: [] };
+  let first = null;
+  const hh = (t) => { const m = Math.round((((t % 1) + 1) % 1) * 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+  for (let i = 0; i < 12 && !(F.env.dayNumber === 1 && F.env.hour >= 5.99); i++) {
+    let r = F.level.nextJob(); if (r?.pointed !== undefined) r = F.level.nextJob();
+    const target = F.level.debug.nextSkip().target, n0 = F.ui.stops.length;
+    if (r?.nightCheck) {
+      first ||= r.nightCheck;
+      assert(r.nightCheck.skipWords === `Next job skips to ${hh(target)}${F.env.dayNumber === 0 ? ', day 1' : ''}` && Math.abs(r.nightCheck.skipTo - target) < 1e-9, `the card: ${r.nightCheck.skipWords} (target ${hh(target)})`);
+      r = F.level.nextJob({ anyway: true });
+    }
+    const s = F.ui.stops[n0];
+    if (!s) continue;
+    const atEnd = Math.abs(F.env.day - target) < 1 / 1440;
+    assert(s.text.startsWith(atEnd ? `Next job reached ${hh(target)}: ` : `Next job stopped at ${F.env.timeLabel}: `) && (atEnd ? !F.level.skipStopped || F.level.skipStopped.at < F.env.day - 1e-9 : F.level.skipStopped?.trouble) && !F.level.fast,
+      `${F.env.timeLabel} (target ${hh(target)}): ${s.text.slice(0, 70)} · skipStopped ${JSON.stringify(F.level.skipStopped)}`);
+    seen[atEnd ? 'reached' : 'stopped'].push(`${F.env.timeLabel}`);
+  }
+  // his night: a stop at 21:00 on the way, the skip to 00:00 reaching it with trouble in its last hour, then 06:00
+  assert(first && seen.stopped.length && seen.reached.includes('00:00') && seen.reached.includes('06:00'), `stopped ${seen.stopped.join(',')} · reached ${seen.reached.join(',')}`);
+  assert(/^Next job skips to (00|06):00, day 1$/.test(first.skipWords) && Math.abs(first.to - (1 + 7 / 24)) < 1e-6, `the first card: ${first.skipWords}, reads to ${first.to}`);
 });
 
 test('check round 5: a second level start on the same farm starts the flock watch clean (no cold hours from the last farm’s comfort before the chicks come)', () => {

@@ -541,9 +541,10 @@ export function createLevel(ctx, deps = {}) {
   }
   /** The night fix: a skip stopped on trouble: the clock back to 1x, the flock watch's line (its own warning, or this
    *  stop's words as the card's last warning), and the caption with the cause and where to look. */
-  function troubleStop(t) {
+  function troubleStop(t, reached = false) {
     fast = false; userPaused = false;
-    const when = splitDay(t.at), text = `Next job stopped at ${hhmm(when.hour)}: ${t.text}`;
+    // the check round: trouble seen in the skip's last farm hour, the skip at its target: it reached it, it did not stop
+    const when = splitDay(t.at), text = `Next job ${reached ? 'reached' : 'stopped at'} ${hhmm(when.hour)}: ${t.text}`;
     if (!t.warned) watch.raise({ kind: 'stop', text, cause: t.kind });
     ui?.skipStopped?.({ ...t, text });
   }
@@ -567,10 +568,11 @@ export function createLevel(ctx, deps = {}) {
       reachStart(s.d);
     }
     if (!stopped && target > env.day + 1e-9) stopped = !advance((target - env.day) * 24, stopOnAlarm);
-    if (stopped) stoppedAt = { at: env.day, alarms, trouble: trouble ? trouble.kind : null };
+    const reached = !!trouble && trouble.at >= target - 0.5 / 1440;
+    if (stopped && !reached) stoppedAt = { at: env.day, alarms, trouble: trouble ? trouble.kind : null };
     engine.tick();
     checks();
-    if (trouble && inLevel()) troubleStop(trouble);
+    if (trouble && inLevel()) troubleStop(trouble, reached);
     if (env.dayNumber !== d0 && env.hour >= 5.9 && env.hour < 12) player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw); // each morning at the gate
     scheduleSave(0.5);
   }
@@ -1040,7 +1042,8 @@ export function createLevel(ctx, deps = {}) {
       if (!anyway && nightHoursIn(env.day, target) >= NIGHT.minH) {
         let nc = null;
         try { nc = nightCheck(env, farm, { toDay: target }); } catch (err) { console.error('night check failed', err); }
-        if (nc?.show) { ui?.nightCheck?.(nc); return { nightCheck: nc }; }
+        // the check round: the card names the skip as it will run ("Next job skips to 00:00"), apart from the night it reads
+        if (nc?.show) { nc.skipWords = skipText(target).replace(/^Skip to /, 'Next job skips to ').replace(/^End /, 'Next job ends '); ui?.nightCheck?.(nc); return { nightCheck: nc }; }
       }
       // a long jump (more than a day: the rest days) shows the busy card while the farm runs it
       const t0 = env.day;

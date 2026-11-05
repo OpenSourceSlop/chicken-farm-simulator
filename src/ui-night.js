@@ -67,7 +67,10 @@ export function registerNightPanel({ register, closePanel }) {
       el, kind: 'paused',
       draw(nc) {
         info = nc;
-        setText(sub, `The farm clock stands still. The skip runs through the night; tonight${nc.to != null ? ` to ${hhmm(nc.to)}` : ''} with these settings:`);
+        // the check round: the skip as it will run, and the night the rows read (the next 07:00 at least: a skip to 00:00
+        // still sees the 03:00 low)
+        const ahead = nc.to != null && !(nc.skipTo != null && nc.skipTo >= nc.to - 1e-6) ? ` to ${hhmm(nc.to)}` : '';
+        setText(sub, `The farm clock stands still. ${nc.skipWords || 'Next job skips through the night'}. With these settings, the night ahead${ahead}:`);
         for (const [id] of ROWS) {
           const r = nc.lines?.[id], R = rows[id];
           R.dot.className = `fw-dot is-${r?.state || 'green'}`; R.dot.setAttribute('aria-label', WORD[r?.state] || ''); R.dot.title = WORD[r?.state] || '';
