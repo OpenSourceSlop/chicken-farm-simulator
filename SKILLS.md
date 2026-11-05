@@ -1300,6 +1300,13 @@ it stays §17 open question 2. **F4's 2-line clamp**: the caption is narrowed to
 the night fix's floor explanation and the skip stops' causes. **F6's 11:00–15:00 stage trip**: measured, a trip then leaves the
 fans at their afternoon stage and costs nothing, so trips stay 07:00–10:00 with the retry after the alarm.
 
+**Results of the round (main, seed 1, 960 × 600):** `npm test` 516 ok, all passed; full runs: test-auto (200 seeds) all passed,
+test-night all passed, test-cond all passed. Every condition with and without every branch at level 3 (a second flock) passes
+every level (`hot:ideal` with the skills: 0 heat deaths; it failed Week 3 at 1.03 %). Steps files, every one without console or
+page errors: skills-review 15 (new), skills-water 14, skills-minvent 9, skills-feed 10, skills-weigh 28, skills-phone 10,
+skills-tree 21, skills-auto 6, skills-fault 9, skills-scene 33, skills-panels-a11y 38, skills-design-stubs 10, skills-play 74,
+req-night 19, req-watch 13, p5-hud 20; phase1-jobs and the Phase 1 tour clean. Screenshots: `shots/skills-review/`.
+
 ## 17. Open questions for the farmer
 1. **The pace of level 3:** level 3 now comes once a first flock is finished (13 points over both flocks): a careful player
    has all eleven from the second flock's planning day. Is that the right moment, or should an excellent first flock reach level

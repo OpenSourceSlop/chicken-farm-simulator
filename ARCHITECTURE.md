@@ -1573,3 +1573,7 @@ and a node probe or a browser run before the fix; SKILLS.md §16.3 lists them on
 - **Not done** (SKILLS.md §16.3): Growth 2 / Brooding 2's larger time savings (a design change to the weigh and the chick
   samples; SKILLS.md §17 open question 2); the 2-line caption clamp (it would cut the night fix's floor explanation and the
   skip stops' causes, so the caption is narrowed instead).
+- **Results**: `npm test` 516 ok; test-auto (200 seeds), test-night and test-cond full runs all passed; the skills steps files
+  (skills-review 15, skills-play 74, skills-scene 33, skills-panels-a11y 38, skills-tree 21 …), req-night 19, req-watch 13,
+  p5-hud 20, phase1-jobs and the Phase 1 tour all PASS without console or page errors (SKILLS.md §16.3). Screenshots in
+  `shots/skills-review/`.
