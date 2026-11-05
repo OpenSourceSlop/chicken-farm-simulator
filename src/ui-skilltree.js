@@ -6,6 +6,18 @@
 // the condition's name ("Hot season"); they are earned only in a run of that condition.
 import { SKILL_LEVEL_POINTS, UNLOCKS, LEVELS, conditionLabel } from './config.js';
 import { ALL_MILESTONES_P4 } from './skills.js';
+// Skills update (SKILLS.md §6.1): the three steps per branch (live only; the Phase 5 tree otherwise)
+import { SKILLS_UPDATE, SKILL_STEP_NAMES, UNLOCK_SHOWS, unlockLevel, skillLevelPoints } from './config.js';
+import { nextLevelLine } from './job-words.js';
+import { fillKeys } from './key-words.js';
+import { injectStyle } from './ui-dom.js';
+const TREE_CSS = `
+.branch-steps > li { display: block; }
+.branch-steps small { display: block; margin-left: 12px; font-size: 11.5px; line-height: 1.3; color: var(--ink-dim); }
+.branch-steps small.step-state { display: inline; margin: 0; color: var(--accent); }
+.branch-steps small.step-also { color: var(--ink-faint); }
+.pip3.is-open { box-shadow: inset 0 0 0 2px var(--accent); background: transparent; }
+`;
 
 /** Every milestone the tree lists: skills.js ALL_MILESTONES_P4 (Phase 2's, the cycle's and the conditions'). */
 const ALL_MILESTONES = ALL_MILESTONES_P4;
@@ -39,6 +51,7 @@ export function branchMilestones(skills, branch) {
 }
 
 export function buildSkillTreePanel(L) {
+  injectStyle('tree-skills-style', TREE_CSS);
   const titleId = uniqueId('tree-title');
   const { el, closeBtn } = dialogShell('tree', titleId, L.close);
   const grid = h('div', { class: 'tree-grid' });
@@ -52,6 +65,7 @@ export function buildSkillTreePanel(L) {
   const unlockOf = (branch, lvl) => Object.values(UNLOCKS).find((x) => x.branch === branch && x.level === lvl);
 
   function render() {
+    if (SKILLS_UPDATE.live) { renderLive(); return; }
     const skills = L.skills;
     const branches = skills.branches();
     if (!picked || !branches.some((b) => b.id === picked)) picked = (branches.find((b) => b.points > 0) || branches.find((b) => b.earnable) || branches[0]).id;
@@ -89,5 +103,62 @@ export function buildSkillTreePanel(L) {
     }));
     miles.replaceChildren(h('section', { class: 'branch-detail' }, h('h3', null, b.name), levels, h('p', { class: 'miles-k' }, 'Milestones · points · the level they come from'), list));
   }
-  return { el, kind: 'paused', onOpen: render, update(dt, force) { if (force) render(); } };
+
+  // ---------------- Skills update (SKILLS.md §6.1): three steps per branch, what each gives and saves ----------------
+  const headLine = el.querySelector('.tree-head p');
+  const HEAD_LIVE = 'Points come from what happens on your farm. Level 1 shows you more, level 2 makes a job faster, level 3 hands a routine job to the farm’s equipment once you have finished a flock. Each milestone counts once in your first flock and once more in a later one.';
+  const HEAD_P5 = headLine?.textContent || '';
+  const perksList = () => { try { return L.perks?.list?.() || []; } catch { return []; } };
+  const cycles = () => L.skills?.profile?.cyclesDone ?? 0;
+  /** The views (config UNLOCKS) a branch level gives, by the level in force (Feed's siloDays and feedGraph swap while live). */
+  const viewsAt = (branch, lvl) => Object.entries(UNLOCKS).filter(([, u]) => u.branch === branch && unlockLevel(u) === lvl).map(([k, u]) => ({ key: k, ...u }));
+  const payoffAt = (list, branch, lvl) => list.find((p) => p.branch === branch && p.level === lvl) || null;
+  function renderLive() {
+    if (headLine && headLine.textContent !== HEAD_LIVE) headLine.textContent = HEAD_LIVE;
+    const skills = L.skills, need = skillLevelPoints(), scale = need[2] * 2, list = perksList(), cd = cycles();
+    const branches = skills.branches();
+    if (!picked || !branches.some((b) => b.id === picked)) picked = (branches.find((b) => b.points > 0) || branches[0]).id;
+    grid.replaceChildren(...branches.map((b) => {
+      // the level 3 pip opens (not filled) with 13 points in a first flock: "comes with your next flock"
+      const waits = b.level < 3 && b.points >= need[2] && cd < 1;
+      const pips = h('span', { class: 'pips3', 'aria-label': `Level ${b.level} of 3${waits ? '; level 3 comes with your next flock' : ''}` },
+        [1, 2, 3].map((i) => h('span', { class: `pip3${b.level >= i ? ' is-on' : ''}${i === 3 && waits ? ' is-open' : ''}` })));
+      const bar = h('div', { class: 'pbar', role: 'img', 'aria-label': `${b.points} points over two flocks; levels at ${need.join(', ')}` },
+        h('span', { class: 'pbar-fill', style: `width:${Math.min(100, (b.points / scale) * 100).toFixed(1)}%` }),
+        need.map((p, i) => h('span', { class: 'pbar-mark', style: `left:${((p / scale) * 100).toFixed(1)}%` }, h('small', null, `L${i + 1}`))));
+      const nextLine = b.level >= 3 ? 'Every level reached' : fillKeys(nextLevelLine(b.id, b.level, b.points, cd));
+      const card = button({ class: `branch branch--earn branch--pick${b.id === picked ? ' is-picked' : ''}`, 'aria-pressed': String(b.id === picked), 'data-branch': b.id },
+        h('div', { class: 'branch-top' }, h('span', { html: badge(b.id, b.level) }), h('div', null, h('h3', null, b.name), pips)),
+        h('div', { class: 'branch-pts' }, h('b', null, String(b.points)), b.points === 1 ? ' point' : ' points'), bar,
+        h('p', { class: 'branch-later branch-next' }, nextLine));
+      card.addEventListener('click', () => { picked = b.id; render(); });
+      return card;
+    }));
+    const b = branches.find((x) => x.id === picked);
+    const levels = h('ol', { class: 'branch-levels branch-steps' }, [1, 2, 3].map((i) => {
+      const p = payoffAt(list, b.id, i), views = viewsAt(b.id, i);
+      const name = i === 1 ? (views[0]?.name || '—') : p ? p.name : '—';
+      const toGo = Math.max(0, need[i - 1] - b.points), reached = b.level >= i;
+      const state = reached ? (i === 3 && p && p.setting === false ? 'off in Settings' : i === 3 ? 'on' : '')
+        : i === 3 && cd < 1 ? (toGo > 0 ? `${toGo} point${toGo === 1 ? '' : 's'} to go, then with your next flock` : 'comes with your next flock') : `${toGo} point${toGo === 1 ? '' : 's'} to go`;
+      const also = (i === 1 ? views.slice(1) : views).map((v) => h('small', { class: 'step-also' }, `also: ${UNLOCK_SHOWS[v.key] || v.name}`));
+      const shows = i === 1 && views[0] ? h('small', { class: 'step-saves' }, UNLOCK_SHOWS[views[0].key] || '') : null;
+      return h('li', { class: `${reached ? 'is-on' : ''}`, 'data-level': String(i) },
+        h('b', null, `Level ${i} · ${SKILL_STEP_NAMES[i - 1]}`), ` · ${need[i - 1]} pts · `, fillKeys(name), state ? h('small', { class: 'step-state' }, ` · ${state}`) : null,
+        shows, p ? h('small', { class: 'step-saves' }, fillKeys(p.saves)) : null, p ? h('small', { class: 'step-where' }, `Where: ${fillKeys(p.where)}`) : null, ...also);
+    }));
+    const ms = branchMilestones(skills, b.id);
+    const two = (m) => (Array.isArray(m.points2) ? m.points2 : [m.points ?? 0, 0]);
+    const listEl = h('ul', { class: 'miles' }, ms.map((m) => {
+      const best = m.tiers[m.tiers.length - 1].points, [p1, p2] = two(m), detail = L.skillDetail(m.id);
+      return h('li', { class: m.tier != null || p1 || p2 ? 'is-earned' : '' },
+        h('span', { class: 'mile-pts', title: 'first flock · another flock' }, `${p1} · ${p2}`, h('small', null, `/${best}`)),
+        h('span', null, m.text, m.condition ? h('small', { class: 'mile-cond' }, ` · ${conditionLabel(m.condition)}`) : null,
+          h('small', { class: 'mile-level' }, ` · ${LEVEL_SHORT[m.level] || m.level}`), (m.tier != null || p1 || p2) && detail ? h('small', { class: 'mile-detail' }, detail) : null));
+    }));
+    miles.replaceChildren(h('section', { class: 'branch-detail' }, h('h3', null, b.name), levels,
+      h('p', { class: 'miles-k' }, 'Milestones · points in your first flock · in another flock · the level they come from'), listEl));
+  }
+  function onOpen() { if (!SKILLS_UPDATE.live && headLine && headLine.textContent !== HEAD_P5) headLine.textContent = HEAD_P5; render(); }
+  return { el, kind: 'paused', onOpen, update(dt, force) { if (force) render(); } };
 }
