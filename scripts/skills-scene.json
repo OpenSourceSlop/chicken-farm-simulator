@@ -141,7 +141,7 @@
   {"eval": "'--- 4. symptom tags and EV.BIRD_SEEN (Biosecurity 3) ---'"},
   {"eval": "__game.skills.debug.force('biosecurity', 3), __game.cycleAt(14, 10), __game.farm.health.lame.push(__game.env.day, __game.env.day, __game.env.day), __game.farm.flock.lameOnFloor = __game.farm.health.lame.length, __seen.length = 0, 'day 14: passCheck ' + __game.perks.has('passCheck') + ', lame on the floor ' + __game.farm.flock.lameOnFloor"},
   {"advance": 1.5},
-  {"eval": "window.__lame = __game.flock.debug.sickBirds().filter((b) => b.phase3Lame), 'drawn lame birds: ' + JSON.stringify(__lame)"},
+  {"eval": "window.__lame = __game.flock.debug.sickBirds().filter((b) => b.phase3Lame).sort((a, b) => Math.abs(a.z) - Math.abs(b.z)), 'drawn lame birds: ' + JSON.stringify(__lame)"},
   {"eval": "(() => { const b = __lame[0]; __game.setState({ farmer: { x: b.x + 1.5, z: b.z, yaw: 1.57 } }); return 'farmer 1.5 m from the lame bird at ' + b.x + ', ' + b.z; })()"},
   {"advance": 0.6},
   {"expect": "(() => { const t = __game.flock.tags(), l = t.find((g) => g.index === __lame[0].index); return l && l.look === 'lame' && l.text === 'limps' && l.dist <= 2.05 && t.length <= 6 && 'tags: ' + JSON.stringify(t.map((g) => g.text + ' ' + g.dist + ' m')); })()", "label": "a tag over a lame bird at 1.5 m (at most 6 tags)"},

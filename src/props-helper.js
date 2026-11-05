@@ -20,7 +20,9 @@ import { reducedMotion } from './world-cond.js';
 
 const SPEED = 2.6, PARTS = 6, TIP_SEC = 2.2, LOAD_SEC = 0.8;
 const WAIT_AT = { x: SPOTS2.boxStacks.x + 2.6, z: SPOTS2.boxStacks.z + 1.3 };   // between the stacks and the truck's tail
-const DOOR_OUT = { x: HOUSE.door.x + 0.35, z: HOUSE.door.z + 1.2 }, DOOR_IN = { x: HOUSE.door.x + 0.35, z: HOUSE.door.z - 1.0 };
+// (the final check: in through the door 2.2 m before he turns, so he never walks along the inside of the south kerb, where
+// the camera showed him standing on it)
+const DOOR_OUT = { x: HOUSE.door.x + 0.35, z: HOUSE.door.z + 1.2 }, DOOR_IN = { x: HOUSE.door.x + 0.35, z: HOUSE.door.z - 2.2 };
 const OFF_TO = { x: SPOTS2.truckStop.x + 2.5, z: SPOTS2.truckStop.z - 1.6 };
 const PART_W = (BROOD_BOUNDS.xMax - BROOD_BOUNDS.xMin) / PARTS;
 /** The brooding floor's part (0 west .. 5 east) of an x. */
@@ -95,6 +97,17 @@ export function createHelper(ctx, { mats, group, boxes, trucks, chicksPerStack }
     return m;
   };
   const cartFull = cart(true), cartEmpty = cart(false);
+  // the final check: a soft contact shadow under his boots and under the hand truck's wheels (the game draws no shadow maps),
+  // so he reads as standing on the floor, the apron and the kerb rather than over them
+  const contactMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.26, depthWrite: false });
+  const contactAt = (name, rx, rz, z) => {
+    const g = new THREE.CircleGeometry(1, 16); g.rotateX(-Math.PI / 2); g.scale(rx, 1, rz);
+    const m = new THREE.Mesh(g, contactMat);
+    m.name = name; m.position.set(0, 0.012, z); m.renderOrder = 1;
+    root.add(m);
+    return m;
+  };
+  const contact = contactAt('props-helper-contact', 0.34, 0.3, 0), cartContact = contactAt('props-helper-cart-contact', 0.4, 0.22, -1.15);
 
   const st = { state: 'off', stack: -1, want: 0, x: WAIT_AT.x, z: WAIT_AT.z, yaw: 0, path: [], t: 0, walkT: 0, tipAt: null, side: 0, tips: 0 };
   const tipped = new Set();       // parts of the brooding floor with chicks tipped on them (any tip)
@@ -208,6 +221,7 @@ export function createHelper(ctx, { mats, group, boxes, trucks, chicksPerStack }
     root.position.set(st.x, 0, st.z);
     void still;
     root.rotation.y = st.yaw;
+    contact.visible = true; cartContact.visible = withCart;
     cartFull.visible = withCart && (st.state === 'carrying' || (st.state === 'loading' && st.t > LOAD_SEC / 2));
     cartEmpty.visible = withCart && !cartFull.visible;
   }
