@@ -207,7 +207,8 @@ function stepFeed(farm, env) {
 
 // ---------------- Lighting 3: the program by age, dawn and dusk dimming ----------------
 export function lightsFor(env) {
-  const d = env.dayNumber, P = LIGHT_PRESETS[lightPresetForDay(d)];
+  // the program changes at 06:00 of its day (days -1, 8, 36: AUTO.lightDays), not at midnight
+  const d = env.hour < AUTO.morningHour ? env.dayNumber - 1 : env.dayNumber, P = LIGHT_PRESETS[lightPresetForDay(d)];
   return { darkStart: P.darkStart, darkHours: P.darkHours, dimmer: P.dimmer, ...(d >= AUTO.rampFromDay ? { rampMin: AUTO.rampMin } : {}), preset: lightPresetForDay(d) };
 }
 export const lightsOk = (env) => { const t = lightsFor(env), p = env.lightProgram || {}; return p.darkHours === t.darkHours && Math.abs((p.dimmer ?? 1) - t.dimmer) < 0.01 && (p.darkStart ?? 0) === t.darkStart; };

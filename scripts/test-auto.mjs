@@ -290,6 +290,21 @@ await test('no fault starts while quietN > 0 (its item is dropped); an item pick
   for (let i = 0; i < 48 && f.phase === 'armed'; i++) F.env.skipHours(1);
   assert(f.phase === 'open' && f.args.kg > 0 && F.faults.some((p) => p.id === 'order-lost' && p.phase === 'start') && F.farm.feed.pending.length === pend, `hit the next order: ${f.phase} ${JSON.stringify(f.args)}`);
 });
+await test('the rainy season: after each power cut the controller comes back with its stages off (outside the plan); its retry 2 h after the power is back', () => {
+  SKILLS_UPDATE.live = true;
+  const R = makeRun();
+  R.run.startRun({ seed: 1, at: 'weeks45', condition: 'rainy' });
+  R.level.debug.goto(26, 9, { auto: true });
+  R.farm.auto.on.stages = true; R.env.skipHours(0.2);
+  assert(R.env.fanStages, 'the stage table runs');
+  const planned = R.farm.auto.faults.filter((f) => !f.afterCut).length;
+  R.farm.debug.power(false); R.env.skipHours(0.3); R.farm.debug.power(true); R.env.skipHours(0.1);
+  const f = R.farm.auto.faults.find((x) => x.afterCut);
+  assert(f && f.id === 'stage-trip' && f.phase === 'open' && !R.env.fanStages && R.faults.some((p) => p.afterCut && p.phase === 'start'), `after the cut: ${JSON.stringify(f)}`);
+  assert(R.farm.auto.faults.filter((x) => !x.afterCut).length === planned, 'outside the plan\'s items');
+  R.env.skipHours(2.1);
+  assert(f.phase === 'fixed' && f.fixedBy === 'retry' && R.env.fanStages, `retry 2 h after the power: ${f.phase} ${f.fixedBy}`);
+});
 
 console.log(failed ? `${failed} failed` : 'all passed');
 process.exit(failed ? 1 : 0);
