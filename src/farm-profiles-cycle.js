@@ -269,7 +269,7 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
       // 50 birds from the five parts of the house (four along it, both sides): 10 a frame (Growth 3: the automatic scale's day
       // average instead, read in the afternoon by the level's part)
       if (on('scale')) return done;
-      const nw = (P.weighN && P.weighN[day]) || 50;
+      const nw = P.weighN && P.weighN[day] != null ? P.weighN[day] : 50;
       for (let i = 0; i < nw; i++) { const k = Math.floor(i / 10), x = -18 + k * 9, z = k % 2 ? 2.6 : -2.6; act('sample.weigh', { x, z, index: i }); }
       return done;
     }
@@ -277,7 +277,7 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
     case 'fans': {
       if (!alive) return done;
       if (env.hour < 10) listen(); // the morning walk goes on
-      if (env.hour > 15 && env.hour < 16 && day >= 15) act('fans.read', { fans: env.fansOn, houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH), speedMs: +env.airSpeed.toFixed(2) });
+      if (env.hour > 15 && env.hour < 16 && day >= 15 && !noFans(P, day)) act('fans.read', { fans: env.fansOn, houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH), speedMs: +env.airSpeed.toFixed(2) });
       answerProblems(farm, env, act, P, day); if (!stagesOn(farm, P, on)) fanPlan(farm, env, act, P, day);
       return done;
     }
@@ -287,7 +287,7 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
     }
     case 'pm': {
       if (!alive) return done;
-      if (day >= 15) act('fans.read', { fans: env.fansOn, houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH), speedMs: +env.airSpeed.toFixed(2) });
+      if (day >= 15 && !noFans(P, day)) act('fans.read', { fans: env.fansOn, houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH), speedMs: +env.airSpeed.toFixed(2) });
       if (day <= 14) act('controller.read', { houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH) });
       act('litter.squeeze', { x: -16, z: 0.6 }); act('litter.squeeze', { x: -8, z: -1.95 }); act('litter.squeeze', { x: day >= 10 ? 10 : -4, z: 3.2 });
       if (day >= 15) act('litter.squeeze', { x: -22.5, z: 0.5 }); // the pad end
@@ -378,6 +378,8 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
   }
 }
 const SPOT_BAIT = [[-25.2, -6.8], [25.2, -6.8], [25.2, 6.8], [-25.2, 6.8]];
+/** A test slip (scripts/test-skills.mjs): no afternoon fans read on the days of P.noFansRead [from, to]. */
+const noFans = (P, day) => !!(P.noFansRead && day >= P.noFansRead[0] && day <= P.noFansRead[1]);
 /** The stage controller runs the fans (Ventilation 3 on, from day 15 to the catch): the ideal's own fan plan stands aside. */
 const stagesOn = (farm, P, on) => on('stages') && farm.age >= 15 - 1e-9 && !(farm.harvest.started || farm.harvest.result || (farm.harvest.catchAt != null && farm.harvest.catchAt - 1 / 24 <= farm.age + PLACEMENT_DAY));
 
