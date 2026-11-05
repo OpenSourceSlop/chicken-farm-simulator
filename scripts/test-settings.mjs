@@ -254,6 +254,51 @@ test('flock detail reduced: the flock meshes\' own triangles at least 40 % fewer
   }
 });
 
+// ---------------- Skills update (SKILLS.md §7, §3.11, package "jobs") ----------------
+test('skills update: Settings → Automation (all + one per branch, true, live-only tab) drives the perks; the phone key R only while live', async () => {
+  const { SKILLS_UPDATE, SKILL_BRANCHES, PAYOFFS } = await import('../src/config.js');
+  const { createPerks } = await import('../src/perks.js');
+  const { createEvents, EV } = await import('../src/events.js');
+  const A = SETTINGS_SCHEMA.automation;
+  assert(A.hidden && A.liveOnly && A.by === 'jobs', 'the group is hidden and live-only');
+  const keys = Object.keys(A.items);
+  assert(keys.length === 12 && keys[0] === 'all' && SKILL_BRANCHES.every((b) => keys.includes(b.id)), `12 switches: ${keys}`);
+  for (const [k, it] of Object.entries(A.items)) {
+    assert(it.type === 'bool' && it.def === true && !VERDICT.test(it.label), `${k}: a bool, on, plain words`);
+    if (k !== 'all') { const p = Object.values(PAYOFFS).find((x) => x.branch === k && x.level === 3); assert(p && it.label.startsWith(`${k === 'planning' ? 'Farm Planning' : ''}`), `${k}: its level 3 payoff`); }
+  }
+  const s = createSettings({ storage: memStorage() }), ev = createEvents();
+  s.attachEvents?.(ev);
+  const skills = { level: () => 3, points: () => 13, unlocked: () => true, profile: { cyclesDone: 1 } };
+  const was = SKILLS_UPDATE.live;
+  SKILLS_UPDATE.live = true;
+  try {
+    const perks = createPerks({ skills, settings: s, events: ev, allowed: true });
+    assert(perks.auto('winch') && perks.has('boxHelper'), 'level 3 with the defaults');
+    let pk = 0; ev.on(EV.PERKS, () => { pk++; });
+    s.set('automation.water', false);
+    assert(!perks.auto('winch') && perks.auto('timer') && perks.has('waterAllLines') && pk >= 1, 'water off: the winch off, the timer on, Water 2 stays; EV.PERKS');
+    s.set('automation.all', false);
+    assert(!perks.auto('timer') && !perks.has('boxHelper') && perks.has('ventFill'), 'all off: every level 3 off, the level 2 keys stay');
+    s.reset('automation');
+    assert(perks.auto('winch') && s.get('automation.all') === true, 'reset: on again');
+    // the phone key: R, in the farm group, rebindable, in the legend and the Keys tab only while live
+    const k = createKeys(s);
+    const ev2 = (code) => ({ code, key: code.slice(3).toLowerCase(), shiftKey: false, ctrlKey: false, metaKey: false, altKey: false });
+    assert(k.label('phone') === 'R' && k.matches(ev2('KeyR'), 'phone') && k.rows('level').some((r) => r.id === 'phone'), 'R is the phone while live');
+    assert(k.rows('level').find((r) => r.id === 'floorView').what === 'Floor temperature view (Brooding 1)', 'the views name their branch level while live');
+    const r = k.rebind('squeeze', 'KeyR');
+    assert(r.ok && r.swapped === 'phone' && k.label('phone') === 'Q', `a rebind onto R swaps with the phone: ${JSON.stringify(r)}`);
+    k.reset();
+  } finally { SKILLS_UPDATE.live = was; }
+  const k0 = createKeys(createSettings({ storage: memStorage() }));
+  assert(!k0.matches(ev2c('KeyR'), 'phone') && !k0.rows('level').some((r) => r.id === 'phone'), 'live false: no phone key');
+  assert(k0.rows('level').find((r) => r.id === 'floorView').what === KEY_ACTIONS.find((a) => a.id === 'floorView').what, 'live false: the Phase 5 words');
+  const r0 = k0.rebind('squeeze', 'KeyR');
+  assert(r0.ok && !r0.swapped, 'live false: R is a free key for a rebind');
+});
+const ev2c = (code) => ({ code, key: code.slice(3).toLowerCase(), shiftKey: false, ctrlKey: false, metaKey: false, altKey: false });
+
 let failed = 0;
 for (const t of tests) {
   try { await t.fn(); console.log(`ok   ${t.name}`); } catch (e) { failed++; console.log(`FAIL ${t.name}: ${e.message}`); }

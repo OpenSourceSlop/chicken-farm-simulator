@@ -9,8 +9,9 @@
 import { makeWorld } from '../src/farm-profiles-run.js';
 import { createLevel, IDEAL_PLAN } from '../src/level.js';
 import { createRun } from '../src/run.js';
-import { LEVELS, LEVEL1, CONDITIONS, CONDITION_IDS, levelById } from '../src/config.js';
+import { LEVELS, LEVEL1, CONDITIONS, CONDITION_IDS, levelById, SKILLS_UPDATE, SKILL_BRANCHES, AUTO_SYSTEMS } from '../src/config.js';
 import { EV } from '../src/events.js';
+import { createPerks } from '../src/perks.js';
 import { planSums } from '../src/farm-plan.js';
 
 let failed = 0, skipped = 0;
@@ -24,8 +25,10 @@ function test(name, fn) {
 const assert = (c, msg) => { if (!c) throw new Error(msg); };
 const H = 1 / 24;
 
-function makeRun() {
+function makeRun({ perks: withPerks = false } = {}) {
   const w = makeWorld();
+  // Skills update: the perks as main.js makes them (allowed: a node world has no navigator.webdriver)
+  if (withPerks) w.perks = createPerks({ skills: w.skills, events: w.events, allowed: true });
   const pos = { x: 0, z: 0 };
   const player = { position: pos, yaw: 0, isInside: false, teleport(x, z, yaw) { pos.x = x; pos.z = z; this.yaw = yaw ?? 0; } };
   const ui = { panelKind: null, shown: null, setMode(m) { this.mode = m; }, closePanel() {}, showResult(r) { this.shown = r; }, jobCard: { refresh() {}, reset() {} }, newRun() {} };
@@ -422,6 +425,40 @@ chain('Phase 4: every condition\'s ideal passes every level through level.js got
     assert(s && s.condition === cond, `${cond}: the summary names it`);
     console.log(`     ${cond}: every level passes, ${s.sold ?? '?'} sold, EPEF ${s.epef ?? '?'}`);
   }
+});
+
+// ---------------- Skills update (SKILLS.md §4.2, §13.1, package "jobs") ----------------
+test('skills update: a standard start to weeks 4-5 with every branch at 3: no controller acts, no fault starts, no unlock caption, the perks re-synced after the restore', () => {
+  const was = SKILLS_UPDATE.live;
+  SKILLS_UPDATE.live = true;
+  try {
+    const R = makeRun({ perks: true });
+    for (const b of SKILL_BRANCHES) R.skills.debug.force(b.id, 3);
+    const seen = { auto: 0, faultStart: 0, unlockWhilePlaying: 0, unlockAfter: 0, stepsLoud: 0, steps: 0, perks: 0 };
+    R.events.on(EV.AUTO, () => { seen.auto++; });
+    R.events.on(EV.FAULT, (p) => { if (p?.phase === 'start') seen.faultStart++; });
+    // ui.js shows an unlock caption only for a key while no standard start plays: count what it would show
+    R.events.on(EV.SKILL_UNLOCK, (p) => { if (p?.key) { if (R.run.standardPlaying) seen.unlockWhilePlaying++; else seen.unlockAfter++; } });
+    R.events.on(EV.PERKS, () => { seen.perks++; });
+    R.env.addStepper(() => { if (R.farm.mode === 'level') { seen.steps++; if (!(R.farm.auto.quietN > 0)) seen.stepsLoud++; } });
+    let playingInside = false;
+    const start0 = R.level.start;
+    R.level.start = (o) => { playingInside = playingInside || R.run.standardPlaying; return start0(o); };
+    assert(!R.run.standardPlaying, 'not playing before');
+    const ok = R.run.startLevel('weeks45', { from: 'standard' });
+    assert(ok && R.level.def.id === 'weeks45' && at(R, 22, 6), `the standard start reached weeks 4-5: ${where(R)} ${R.level.result?.failText ?? ''}`);
+    assert(playingInside && !R.run.standardPlaying, 'run.standardPlaying while the ideal plays, false after');
+    assert(seen.steps > 0 && seen.stepsLoud === 0, `quiet the whole standard start: ${seen.stepsLoud} of ${seen.steps} farm steps were not`);
+    assert(R.farm.auto.quietN === 0, `the quiet released: ${R.farm.auto.quietN}`);
+    assert(seen.auto === 0 && seen.faultStart === 0, `no controller acted (${seen.auto}), no fault started (${seen.faultStart})`);
+    assert(seen.unlockAfter === 0, `no unlock caption outside the standard start (${seen.unlockAfter}; inside it ${seen.unlockWhilePlaying}, none shown)`);
+    // the perks as the player's profile gives them (every branch forced at 3): every system on for the player's level
+    const want = Object.keys(AUTO_SYSTEMS).filter((s) => R.perks.auto(s));
+    assert(want.length === Object.keys(AUTO_SYSTEMS).length && want.every((s) => R.farm.auto.on[s] === true), `farm.auto.on re-synced: ${JSON.stringify(R.farm.auto.on)}`);
+    // the jobs of the player's first day are the payoffs' variants (r-fans-pm handed to the stage controller)
+    const fans = R.level.jobs.list().find((i) => i.id === 'r-fans-pm');
+    assert(fans && fans.def.variant?.parts?.stages === 'whole', `r-fans-pm handed over: ${JSON.stringify(fans?.def?.variant)}`);
+  } finally { SKILLS_UPDATE.live = was; }
 });
 
 console.log(failed ? `${failed} failed` : `all passed${skipped ? ` (${skipped} skipped: run.stub / farm.cycleStub)` : ''}`);
