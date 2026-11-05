@@ -65,6 +65,10 @@ import { createCycleTools } from './props-tools.js';
 import { buildDust } from './props-air.js';
 import { OVERLAYS } from './props-overlay.js';
 import { bucket as bucketModel } from './props-models.js'; // PHASE4.md §15.3: the bucket set down on the floor
+// Skills update (SKILLS.md §3.10, §10; package "scene"): the tally bucket, the equipment of level 3, the arrival-day helper
+import { AUTO, SKILLS_UPDATE } from './config.js';
+import { binShare, birdKgOf, bucketRoom, bucketCopy, putInBucket } from './props-tally.js';
+import { tallyFace } from './player-carry.js';
 
 const CHICKS_PER_STACK = (LEVEL1.boxes / LEVEL1.stacks) * LEVEL1.chicksPerBox;
 const inBrood = (p) => p.x > BROOD_BOUNDS.xMin && p.x < BROOD_BOUNDS.xMax && p.z > BROOD_BOUNDS.zMin && p.z < BROOD_BOUNDS.zMax;
@@ -105,6 +109,7 @@ export function buildProps(ctx, { house } = {}) {
   floorBucket.name = 'props-bucket-down';
   floorBucket.visible = false;
   group.add(floorBucket);
+  { const face = tallyFace.make(); if (face) floorBucket.add(face); }   // Skills update: the tally's counter on its rim
   const fx = createFx(pool);
   const triggers = createTriggers(ctx, fx);
   const tabSpots = new Map([...boards.tabSpots, ...equip.tabSpots, ...yard.tabSpots, ...equip3.tabSpots, ...yard3.tabSpots]);
@@ -162,9 +167,18 @@ export function buildProps(ctx, { house } = {}) {
   }));
   const countIntoBin = () => {
     const o = props.carryOpts || { n: 0, causes: {} };
-    const n = o.n || 0, causes = { ...(o.causes || {}) };
-    ctx.farm?.act('dead.count', { n, causes });
-    emit(EV.DEAD_DROP, { n, causes });
+    if (!SKILLS_UPDATE.live) {
+      const n = o.n || 0, causes = { ...(o.causes || {}) };
+      ctx.farm?.act('dead.count', { n, causes });
+      emit(EV.DEAD_DROP, { n, causes });
+      props.drop();
+      return;
+    }
+    // Skills update (SKILLS.md §3.10): the bin counts only what the tally did not count at pickup (no bird twice); the
+    // bucket is emptied whole (r-dead-am / r-dead-pm's dead-cleared as before)
+    const share = binShare(o), counted = Math.max(0, Math.round(o.counted || 0));
+    if (share.n > 0) ctx.farm?.act('dead.count', { n: share.n, causes: share.causes, at: 'bin' });
+    emit(EV.DEAD_DROP, { n: share.dropped, causes: { ...(o.causes || {}) }, counted });
     props.drop();
   };
   reg({
@@ -340,6 +354,8 @@ export function buildProps(ctx, { house } = {}) {
     const bd = props.bucketDown;
     floorBucket.visible = !!bd;
     if (bd) floorBucket.position.set(bd.x, bd.inside ? 0.02 : 0, bd.z);
+    // Skills update (SKILLS.md §10): the tally's digits on the bucket's rim while Biosecurity 2's tally bucket holds
+    if (SKILLS_UPDATE.live) { const t = props.bucketTally; tallyFace.set(t.n, t.full, t.on); } else tallyFace.set(0, false, false);
     triggers.update(dt, true);
     if (house && house.lineHeights) for (let i = 0; i < 4; i++) lineY[i] = house.lineHeights[i];
     equip.update(dt, f, env, lineY);
@@ -424,36 +440,47 @@ export function buildProps(ctx, { house } = {}) {
       const inside = !!P?.isInside;
       if (inside) { x = Math.max(-23.6, Math.min(23.6, x)); z = Math.max(-5.6, Math.min(5.6, z)); }
       const o = props.carryOpts || { n: 0, causes: {} };
-      props.bucketDown = { x: +x.toFixed(2), z: +z.toFixed(2), n: o.n || 0, causes: { ...(o.causes || {}) }, inside };
+      props.bucketDown = { x: +x.toFixed(2), z: +z.toFixed(2), ...bucketCopy(o), inside };
       dropHands();
       ctx.events?.emit(EV.BUCKET, { down: true, x: props.bucketDown.x, z: props.bucketDown.z, n: props.bucketDown.n, auto: !!auto });
       return true;
     },
-    /** E at the bucket on the floor: carried again with its birds. */
+    /** E at the bucket on the floor: carried again with its birds (and the tally's count of them). */
     pickUpBucket() {
       const b = props.bucketDown;
       if (!b || props.handsBusy('bucket')) return false;
       props.bucketDown = null;
-      props.startCarry('bucket', { n: b.n, causes: b.causes });
+      props.startCarry('bucket', bucketCopy(b));
       ctx.events?.emit(EV.BUCKET, { down: false, x: b.x, z: b.z, n: props.carryOpts?.n ?? b.n });
       return true;
+    },
+    // ---- Skills update (SKILLS.md §3.10): Biosecurity 2's tally bucket (read through the perks: live, allowed) ----
+    /** The tally bucket holds now: E at a dead bird takes every bird within AUTO.deadReachM up to AUTO.bucketMaxKg. */
+    tallyOn() { return !!(SKILLS_UPDATE.live && ctx.perks?.has?.('tallyBucket')); },
+    /** How many more dead birds go into the bucket (carried, or the one set down): { n, kg, maxKg }. */
+    bucketRoom() { return bucketRoom(props.carrying === 'bucket' ? props.carryOpts : props.bucketDown, birdKgOf(ctx.farm)); },
+    /** The tally's digits (SKILLS.md §12.9): { n: counted as they went in, birds: every bird in the bucket, kg, maxKg, full, on }. */
+    get bucketTally() {
+      const o = props.carrying === 'bucket' ? props.carryOpts : props.bucketDown;
+      const room = props.bucketRoom();
+      return { n: Math.round(o?.counted || 0), birds: o?.n || 0, kg: +room.kg.toFixed(2), maxKg: room.maxKg, full: !!o && room.n <= 0, on: props.tallyOn(), where: props.carrying === 'bucket' ? 'hand' : o ? 'floor' : null };
     },
     startCarry(kind, opts = {}) {
       // a two-handed task while carrying the bucket: the bucket goes down at his feet first, never a lock-out
       if (props.carrying === 'bucket' && kind !== 'bucket') props.setBucketDown({ auto: true });
+      // Biosecurity 2: birds the tally counts as they go in (flock-dead pickUp with opts.tally): dead.count at pickup
+      // (props-tally.js putInBucket; without the tally exactly Phase 4)
+      const how = { farm: ctx.farm, tally: kind === 'bucket' && !!opts.tally && props.tallyOn() };
       // a dead bird picked up while the bucket stands on the floor goes into that bucket
       if (kind === 'bucket' && props.carrying !== 'bucket' && props.bucketDown) {
-        const b = props.bucketDown; b.n += opts.n || 0;
-        for (const [k, v] of Object.entries(opts.causes || {})) b.causes[k] = (b.causes[k] || 0) + v;
+        const b = putInBucket(props.bucketDown, opts, how);
         ctx.events?.emit(EV.BUCKET, { into: true, down: true, x: b.x, z: b.z, n: b.n, added: opts.n || 0 });
         return;
       }
-      if (kind === 'bucket' && props.carrying === 'bucket') {
-        const c = props.carryOpts; c.n += opts.n || 0;
-        for (const [k, v] of Object.entries(opts.causes || {})) c.causes[k] = (c.causes[k] || 0) + v;
-      } else {
+      if (kind === 'bucket' && props.carrying === 'bucket') putInBucket(props.carryOpts, opts, how);
+      else {
         props.carrying = kind;
-        props.carryOpts = kind === 'bucket' ? { n: opts.n || 0, causes: { ...(opts.causes || {}) } } : { ...opts };
+        props.carryOpts = kind !== 'bucket' ? { ...opts } : putInBucket(null, opts, how);
       }
       ctx.player?.carry?.(kind);
       showCarry(kind);
@@ -510,13 +537,13 @@ export function buildProps(ctx, { house } = {}) {
         // Phase 4: the cull box's count (a bad batch's grading); absent in older saves
         ...(ctx.condScene?.serialize ? { cond: ctx.condScene.serialize() } : {}),
         // PHASE4.md §15.3: the bucket standing on the floor
-        ...(props.bucketDown ? { bucketDown: { ...props.bucketDown, causes: { ...props.bucketDown.causes } } } : {}),
+        ...(props.bucketDown ? { bucketDown: { x: props.bucketDown.x, z: props.bucketDown.z, ...bucketCopy(props.bucketDown), inside: props.bucketDown.inside } } : {}),
       };
     },
     restore(d) {
       if (!d) return;
       props.carrying = d.carrying ?? null; props.carryOpts = d.carryOpts ?? null;
-      props.bucketDown = d.bucketDown && Number.isFinite(d.bucketDown.x) ? { x: d.bucketDown.x, z: d.bucketDown.z, n: d.bucketDown.n || 0, causes: { ...(d.bucketDown.causes || {}) }, inside: d.bucketDown.inside !== false } : null;
+      props.bucketDown = d.bucketDown && Number.isFinite(d.bucketDown.x) ? { x: d.bucketDown.x, z: d.bucketDown.z, ...bucketCopy(d.bucketDown), inside: d.bucketDown.inside !== false } : null;
       ctx.player?.carry?.(props.carrying);
       showCarry(props.carrying);
       const settle = (s) => (s === 'parked' || s === 'driving-in' ? 'parked' : 'away');

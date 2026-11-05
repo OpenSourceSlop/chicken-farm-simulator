@@ -86,6 +86,48 @@ const PLACE = {
   airMeter: { p: [0, -0.35, -0.04], r: [0, 0, 0] },
 };
 
+// Skills update (SKILLS.md §10, Biosecurity 2; package "scene"): the tally bucket's counter on the rim — a small dark
+// counter with the count in green digits (amber when the bucket is full), on the carried bucket and on the bucket set down
+// (props.js hangs a second face on it). One canvas texture for both (there is one bucket); props.update calls set().
+export const tallyFace = (() => {
+  let canvas = null, tex = null, mat = null, key = '';
+  const faces = [];
+  function ensure() {
+    if (tex) return true;
+    if (typeof document === 'undefined') return false;
+    canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 32;
+    tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace;
+    mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
+    draw(0, false);
+    return true;
+  }
+  function draw(n, full) {
+    const g = canvas.getContext('2d');
+    g.fillStyle = '#2b2f33'; g.fillRect(0, 0, 64, 32);
+    g.fillStyle = '#0e2412'; g.fillRect(4, 4, 56, 24);
+    g.fillStyle = full ? '#f0b43c' : '#b9e27a';
+    g.font = '700 22px "Chakra Petch", monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(Math.max(0, Math.min(999, n | 0))).padStart(2, '0'), 32, 17);
+    tex.needsUpdate = true;
+  }
+  return {
+    /** A counter face for a bucket (local to the bucket: on its rim, tilted up toward the camera); null in node. */
+    make() {
+      if (!ensure()) return null;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.055), mat);
+      m.name = 'bucket-tally'; m.position.set(0, 0.315, 0.155); m.rotation.set(-0.95, 0, 0); m.visible = false;
+      faces.push(m);
+      return m;
+    },
+    /** The count shown and whether the counters show (the tally bucket holds). */
+    set(n, full, on) {
+      if (on && tex) { const k = `${n | 0}|${!!full}`; if (k !== key) { key = k; draw(n, full); } }
+      for (const f of faces) f.visible = !!on;
+    },
+    get faces() { return faces; },
+  };
+})();
+
 export function createCarry(root, material, joints) {
   const meshes = {};
   for (const kind of Object.keys(PLACE)) {
@@ -100,6 +142,9 @@ export function createCarry(root, material, joints) {
     (hand && joints[`elbow${hand}`] ? joints[`elbow${hand}`] : root).add(m);
     meshes[kind] = m;
   }
+  // the tally's counter on the carried bucket's rim (hidden unless Biosecurity 2's tally bucket holds)
+  const face = tallyFace.make();
+  if (face) meshes.bucket.add(face);
   // the frame kind shows the scale too
   const st = { kind: null, w: 0, pose: null, poseT: 0, poseDur: 0, t: 0, flash: null, flashT: 0 };
 
