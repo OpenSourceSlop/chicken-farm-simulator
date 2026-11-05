@@ -70,6 +70,8 @@ import { stripsAt } from './job-strips.js';
 import { STRIPS_CYCLE } from './job-strips-cycle.js';
 import { JOB_HOLD } from './config.js';
 import { createFlockWatch } from './flock-watch.js'; // PHASE4.md §15.1: the flock watch and its early warnings
+// the night fix (after Phase 5): the night check before a skip through the night, the skip's stops, the morning summary
+import { nightCheck, nightHoursIn, createSkipGuard, createNightLog, NIGHT } from './night-check.js';
 
 const H = 1 / 24;
 const CARRY_KINDS = new Set(['boxes', 'barrow', 'sack', 'frame']);
@@ -91,6 +93,9 @@ export function createLevel(ctx, deps = {}) {
   // PHASE4.md §15.1: one sample of the flock per farm hour (skips and goto(auto) included), its warnings on the bus
   const watch = createFlockWatch({ env, farm, events, records });
   env.addStepper?.(watch.step);
+  // the night fix: the night's deaths by cause each morning at 06:00 (records note 'night', EV.NIGHT); quiet with the watch
+  const nightLog = createNightLog({ env, farm, records, events, quiet: () => watch.isQuiet });
+  env.addStepper?.(nightLog.step);
   const C = LEVEL1.clock;
   let def = LEVEL1;                 // the level that runs (config LEVELS)
   let inRun = false;                // part of a run (run.js): checkpoints carry level + run, results the run's buttons
@@ -506,20 +511,42 @@ export function createLevel(ctx, deps = {}) {
    */
   function advance(h, stop) {
     if (!(h > 0)) return true;
-    if (!stop || !canCut()) { env.skipHours(h); flock?.afterSkip?.(h); return true; }
+    // the night fix: a Next job skip over a flock moves a farm hour at a time and stops on trouble (night-check.js
+    // createSkipGuard: a new flock watch warning, a death spike, the young birds' house far under or over the row)
+    const guard = stop && inLevel() && !free ? createSkipGuard(env, farm, watch) : null;
+    if (!stop || (!canCut() && !guard)) { env.skipHours(h); flock?.afterSkip?.(h); return true; }
     const a0 = alarms, p0 = pinStops, t0 = env.day, target = env.day + h / 24;
     while (target - env.day > 0.5 / 1440 && alarms === a0 && pinStops === p0) {
-      const before = env.day;
-      env.skipHours(Math.min(1 / 60, (target - env.day) * 24));
+      const before = env.day, toHour = (Math.floor(env.day * 24 + 1e-6) + 1) / 24 - env.day;
+      env.skipHours(Math.min(canCut() ? 1 / 60 : Math.max(toHour, 1 / 1440) * 24, (target - env.day) * 24));
       if (env.day <= before + 1e-12) break;
+      if (guard) { const t = guard.check(); if (t) { trouble = { ...t, at: env.day }; break; } }
     }
     const done = (env.day - t0) * 24;
     if (done > 0) flock?.afterSkip?.(done); // the drawn flock spread over the skipped time
     if (alarms === a0 && pinStops !== p0) pinStopAt = env.day;
-    return alarms === a0 && pinStops === p0;
+    return alarms === a0 && pinStops === p0 && !trouble;
   }
-  /** The last Next job skip an alarm stopped: { at, alarms } (the ui says why the clock stopped there). */
-  let stoppedAt = null, pinStopAt = null;
+  /** The last Next job skip an alarm, a pinned job or trouble stopped: { at, alarms, trouble } (the ui says why). */
+  let stoppedAt = null, pinStopAt = null, trouble = null;
+  /** The night fix: the running clock (walking on into the night, at 1x or 4x) passes sunset with something off for the
+   *  night: the night check's first line as the flock watch's line and its caption (the skip's card shows it whole). */
+  function duskCheck(from, to) {
+    const dusk = Math.floor(to + 1e-9) + NIGHT.fromH / 24;
+    if (!(from < dusk && to >= dusk && to - from < 0.1) || !inLevel()) return;
+    let nc = null;
+    try { nc = nightCheck(env, farm); } catch (err) { console.error('dusk check failed', err); }
+    const p = nc?.show ? nc.problems[0] : null;
+    if (p) watch.raise({ kind: 'night', text: `Sunset, and the night ahead: ${p.why}. See ${p.signName}; check ${p.check}.`, cause: p.kind });
+  }
+  /** The night fix: a skip stopped on trouble: the clock back to 1x, the flock watch's line (its own warning, or this
+   *  stop's words as the card's last warning), and the caption with the cause and where to look. */
+  function troubleStop(t) {
+    fast = false; userPaused = false;
+    const when = splitDay(t.at), text = `Next job stopped at ${hhmm(when.hour)}: ${t.text}`;
+    if (!t.warned) watch.raise({ kind: 'stop', text, cause: t.kind });
+    ui?.skipStopped?.({ ...t, text });
+  }
   function skip(hours, opts = {}) {
     noHold++;
     try { skipRun(hours, opts); } finally { noHold--; }
@@ -530,6 +557,7 @@ export function createLevel(ctx, deps = {}) {
     const d0 = env.dayNumber, target = env.day + hours / 24;
     ui?.closePanel?.();
     let stopped = false;
+    trouble = null;
     // a saved start inside the level is taken exactly at its 06:00 (PHASE3.md §11)
     for (const s of innerStarts(env.day, target)) {
       if (s.t > env.day + 1e-9 && !advance((s.t - env.day) * 24, stopOnAlarm)) { stopped = true; break; }
@@ -538,9 +566,10 @@ export function createLevel(ctx, deps = {}) {
       reachStart(s.d);
     }
     if (!stopped && target > env.day + 1e-9) stopped = !advance((target - env.day) * 24, stopOnAlarm);
-    if (stopped) stoppedAt = { at: env.day, alarms };
+    if (stopped) stoppedAt = { at: env.day, alarms, trouble: trouble ? trouble.kind : null };
     engine.tick();
     checks();
+    if (trouble && inLevel()) troubleStop(trouble);
     if (env.dayNumber !== d0 && env.hour >= 5.9 && env.hour < 12) player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw); // each morning at the gate
     scheduleSave(0.5);
   }
@@ -819,7 +848,7 @@ export function createLevel(ctx, deps = {}) {
       if (cond && is(d, PLAN_LEVEL)) { const w = conditionLevel(d, cond).weather; if (w && env.weather !== w) { env.setWeather(w); env.houseTemp = env.outsideTemp + 1; } }
       startAt = env.day;
       reached.add(`${d.id}@${d.startDay}`);
-      watch.reset();
+      watch.reset(); nightLog.reset();
       engine.start(d.startDay, d);
       player?.teleport?.(FARM.spawn.x, FARM.spawn.z, FARM.spawn.yaw);
       prevDay = env.day;
@@ -916,6 +945,7 @@ export function createLevel(ctx, deps = {}) {
       enterMode('resume');
       // the flock watch after the mode is 'level' (review round: its rows are evaluated at once, the card shows on Continue)
       watch.restore(lv.watch || null);
+      nightLog.restore(lv.night || null);
       engine.tick();
       // a level saved at its end (a run's level-end save) shows its result again, it does not play on
       if (lv.ended) end(lv.ended);
@@ -972,6 +1002,7 @@ export function createLevel(ctx, deps = {}) {
       clock();
       // a saved start inside the level (weeks 4-5: day 29 06:00) reached by the running clock
       if (prevDay != null && !free) for (const s of innerStarts(prevDay, env.day)) reachStart(s.d, { teleport: false });
+      if (prevDay != null && !free) duskCheck(prevDay, env.day);
       prevDay = env.day;
       tickAcc += dt;
       if (tickAcc >= 0.5) { tickAcc = 0; engine.tick(); checks(); if (inLevel()) soonCues(); }
@@ -986,14 +1017,15 @@ export function createLevel(ctx, deps = {}) {
       else if (env.day - lastSaveDay >= 2 * H) saveIdle();
       if (pending && stepClock.now() - pending.at > NEXT_CONFIRM_MS) pending = null;
     },
-    nextJob() {
+    /** opts.anyway: the night check's "Skip anyway" (the skip it was shown for, no second check or confirm). */
+    nextJob({ anyway = false } = {}) {
       if (!inLevel() || free) return null;
       if (ui?.busy?.open) return { refused: 'busy' }; // a long skip is waiting to run: no second one on its old hours
       const open = engine.open();
       const now = stepClock.now();
       // Phase 4: no skip while the house is dark (PHASE4.md §4.2): the marker stays on the power job
       if (dark()) { pending = null; ui?.jobCard?.refresh?.(); return { refused: 'dark', pointed: engine.current()?.key ?? null }; }
-      if (open.length && !(pending && now - pending.at < NEXT_CONFIRM_MS)) {
+      if (!anyway && open.length && !(pending && now - pending.at < NEXT_CONFIRM_MS)) {
         const c = engine.cycle();
         pending = { at: now, label: skipText(skipTarget(open), open.length) };
         ui?.jobCard?.refresh?.();
@@ -1002,6 +1034,13 @@ export function createLevel(ctx, deps = {}) {
       pending = null;
       const target = skipTarget(open);
       const hrs = (target - env.day) * 24;
+      // the night fix: before a skip with 2 h or more of night in it (the young-bird weeks), the night check: shown only
+      // when something is off (the house heading far under or over the row, too much or too little air); Skip anyway skips
+      if (!anyway && nightHoursIn(env.day, target) >= NIGHT.minH) {
+        let nc = null;
+        try { nc = nightCheck(env, farm, { toDay: target }); } catch (err) { console.error('night check failed', err); }
+        if (nc?.show) { ui?.nightCheck?.(nc); return { nightCheck: nc }; }
+      }
       // a long jump (more than a day: the rest days) shows the busy card while the farm runs it
       const t0 = env.day;
       if (hrs > 24 && ui?.busy?.run) {
@@ -1014,6 +1053,7 @@ export function createLevel(ctx, deps = {}) {
       }
       skip(hrs, { stopOnAlarm: true });
       const went = (env.day - t0) * 24;
+      if (went < hrs - 1 / 60 && stoppedAt?.trouble) return { skipped: went, stopped: 'trouble', kind: stoppedAt.trouble };
       return went < hrs - 1 / 60 && stoppedAt ? { skipped: went, stopped: pinStopAt === env.day ? 'job' : 'alarm' } : { skipped: hrs };
     },
     nextLabel,
@@ -1052,7 +1092,7 @@ export function createLevel(ctx, deps = {}) {
       return { v: 1, mode: level.mode, seed, levelId: def.id, inRun, jobs: engine.serialize(), fired: [...fired], points, weighs,
         signed7: signedEnd, signedEnd, fast, failAt, startAt, reached: [...reached], ended: ended ? ended.reason : null,
         ...(bad.gradedOut || bad.called != null || bad.wait != null ? { bad: { ...bad } } : {}),
-        watch: watch.serialize(),
+        watch: watch.serialize(), night: nightLog.serialize(),
         ...(inRun && runApi ? { run: runApi.serialize() } : {}) };
     },
     saveBlob() {

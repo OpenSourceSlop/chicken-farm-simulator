@@ -51,7 +51,7 @@ export function nightCheck(env, farm, { toDay } = {}) {
     const f = coldFixes(env, farm, { outC: cold.outC, sunCh: cold.sunCh });
     const kinds = f.fixes.map((x) => x.kind);
     if (!kinds.length) kinds.push(env.brooderOut?.length ? 'brooderOut' : 'capacity');
-    for (const k of kinds) { const c = causeWords(k, env, farm, { outC: cold.outC }); problems.push({ kind: k, side: 'cold', why: c.why, check: c.check, fix: c.fix }); }
+    for (const k of kinds) { const c = causeWords(k, env, farm, { outC: cold.outC }); problems.push({ kind: k, side: 'cold', why: c.why, check: c.check, fix: c.fix, signName: c.signName }); }
   }
   // the thermostat over the row: where the house settles tonight with the air the sign gives (today a tunnel fan or a wide
   // timer may hold it down; once that is put right the brooders take the house to the thermostat)
@@ -60,13 +60,13 @@ export function nightCheck(env, farm, { toDay } = {}) {
     const warm = airFix ? hoursAhead(env, { toDay: to, o: { airM3h: AIR.infiltrationM3h + Math.min(a.timerM3h, a.need * DIAG.airOver), tunnelN: 0 } }).warm : ah.warm;
     if (airFix || warm.houseC > row + DIAG.hotC) {
       const c = causeWords('thermostatHot', env, farm);
-      problems.push({ kind: 'thermostatHot', side: 'hot', fix: c.fix, check: c.check, houseC: warm.houseC,
+      problems.push({ kind: 'thermostatHot', side: 'hot', fix: c.fix, check: c.check, signName: c.signName, houseC: warm.houseC,
         why: airFix ? `the thermostat is at ${rowC(sp)}, ${one(sp - row)} °C over the row: once the air is right the house settles near ${fmtC(warm.houseC)} and overheats the ${b}`
           : `${c.why}: tonight the house settles near ${fmtC(warm.houseC)} and the ${b} pant` });
     }
   }
   if (a.need > 0 && a.share < DIAG.airUnder && !problems.some((p) => p.kind === 'air')) {
-    problems.push({ kind: 'airLow', side: 'air', fix: { panel: 'controller', tab: 'vent' }, check: 'the minimum ventilation timer on the climate controller’s Ventilation tab (the vent sign’s setting)',
+    problems.push({ kind: 'airLow', side: 'air', signName: 'the minimum ventilation sign', fix: { panel: 'controller', tab: 'vent' }, check: 'the minimum ventilation timer on the climate controller’s Ventilation tab (the vent sign’s setting)',
       why: `the timer gives ${int(a.timerM3h)} m³/h, ${pct(a.timerShare)} of the ${int(a.need)} m³/h the ${b} need: the damp and the ammonia stay in overnight` });
   }
   const spWords = sp >= row + DIAG.spOverC ? ` (${one(sp - row)} °C over the row)` : sp < row - DIAG.spUnderC ? ` (${one(row - sp)} °C under the row)` : '';
@@ -112,6 +112,11 @@ export function createSkipGuard(env, farm, watch) {
     return { cold: env.houseTemp <= row - NIGHT.coldStopC && held && (C.coldShare ?? 0) >= 0.5, hot: env.houseTemp >= row + NIGHT.hotStopC && (C.pantShare ?? 0) >= 0.5 };
   };
   const s0 = climate(), fl = farm.flock;
+  // the death rate as the skip began (the watch's last two hourly samples): a skip run on after a stop stops again only
+  // when the deaths per hour have doubled since
+  const ss = watch?.samples || [];
+  let rate0 = 0;
+  if (ss.length >= 2) { const a = ss[ss.length - 2], b = ss[ss.length - 1], h = (b.t - a.t) * 24; if (h > 0.5) rate0 = Math.max(0, (b.dead ?? b.lost) - (a.dead ?? a.lost)) / h; }
   let lastT = env.day, lastDead = fl.deadTotal || 0, lastBy = { ...(fl.deadByCause || {}) }, lastHouse = env.houseTemp, spiked = false;
   return {
     check() {
@@ -128,7 +133,7 @@ export function createSkipGuard(env, farm, watch) {
       const s = climate();
       if (s.cold && !s0.cold) return { kind: 'cold', ...coldReport(env, farm, fall) };
       if (s.hot && !s0.hot) return { kind: 'hot', ...hotReport(env, farm) };
-      const spike = rate >= Math.max(NIGHT.spikeMin, (fl.alive || 0) * NIGHT.spikeShare);
+      const spike = rate >= Math.max(NIGHT.spikeMin, (fl.alive || 0) * NIGHT.spikeShare, 2 * rate0);
       if (spike && !spiked) {
         spiked = true;
         const main = by[0]?.[0], b = birdsWord(env, farm);
@@ -142,7 +147,7 @@ export function createSkipGuard(env, farm, watch) {
 }
 
 /** The morning summary: the night's deaths by cause (18:00 to 06:00) with the reason from the house's night. */
-export function createNightLog({ env, farm, records, events } = {}) {
+export function createNightLog({ env, farm, records, events, quiet = () => false } = {}) {
   let night = null, lastHour = null, last = null;
   function compose(n) {
     const fl = farm.flock, by = deltas(n.by, fl.deadByCause), total = by.reduce((s, [, k]) => s + k, 0);
@@ -178,7 +183,7 @@ export function createNightLog({ env, farm, records, events } = {}) {
       if (h === 6) {
         const s = compose(night);
         night = null;
-        if (!s) return;
+        if (!s || quiet()) return;
         last = s;
         records?.note?.('night', s.text);
         events?.emit?.(EV.NIGHT, { ...s });

@@ -408,6 +408,18 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
     status: () => liveStatus(),
     /** quiet(true / false): while > 0 (a standard start's auto play) warnings are kept in memory only. */
     quiet(on) { quiet = Math.max(0, quiet + (on ? 1 : -1)); },
+    get isQuiet() { return quiet > 0; },
+    /** The night fix: a line outside the hourly rows (a skip stopped on trouble, the night check at sunset): the card's last
+     *  warning, a notebook line and EV.WATCH (its caption), as a warning is; nothing while quiet. */
+    raise({ kind = 'stop', text, cause = '', sign = '', place = '' } = {}) {
+      if (quiet > 0 || !text) return null;
+      const day = Math.floor(env.day + 1e-9), hour = Math.round((env.day - day) * 24 * 100) / 100;
+      const w = { kind, state: 'red', text, cause, sign, place, day, hour, t: env.day };
+      warnings.push(w); status.last = w;
+      records?.note?.('watch', text);
+      events?.emit?.(EV.WATCH, { ...w });
+      return w;
+    },
     get warnings() { return warnings; },
     get samples() { return samples; },
     /** A new level (start, enter, replay): the samples and the warning memory start again. */

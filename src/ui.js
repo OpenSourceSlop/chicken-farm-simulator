@@ -59,6 +59,7 @@ import { createMap } from './ui-map.js';
 import { createIntro } from './ui-intro.js';
 import { clock as stepClock } from './clock.js';
 import { createKeys } from './keys.js';
+import { registerNightPanel, NIGHT_PANEL } from './ui-night.js'; // the night fix: the night check card before a skip
 
 const MOVE_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
 const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift']);
@@ -466,6 +467,19 @@ export function createUI(ctx, deps) {
   try { guideUI = registerGuidePanel(p5); } catch (err) { console.error('guide panel failed to register', err); }
   try { registerSavesPanel(p5); } catch (err) { console.error('saves panel failed to register', err); }
   try { map = createMap(ctx, { register: reg, openPanel, closePanel, jobCard }); } catch (err) { console.error('map failed', err); }
+  // the night fix (after Phase 5): the night check card (level.nextJob shows it before a skip through the night when
+  // something is off), the caption of a skip stopped on trouble, the morning summary of a night with deaths
+  const nightUI = registerNightPanel({ register: reg, openPanel, closePanel });
+  function nightCheck(nc) {
+    if (mode !== 'level' || !nc || !openPanel(NIGHT_PANEL)) return false;
+    nightUI.show(nc, {
+      onFix: (fix) => { if (fix?.panel && openPanel(fix.panel)) panels.openPanel?.openTab?.(fix.tab); },
+      onSkip: () => ctx.level?.nextJob({ anyway: true }),
+    });
+    return true;
+  }
+  const skipStopped = (t) => { if (mode === 'level' && t?.text) caption.show(t.text, 16, { now: true }); };
+  events.on(EV.NIGHT, (p) => { if (mode === 'level' && p?.notable && p.text) caption.show(p.text, 12, { soft: true }); });
   // the first-play pointers (PHASE5.md §6.1): their keys through claimKeys; they wait while a panel, the title or the busy card shows
   const intro = createIntro(ctx, { root, claimKeys: (fn) => claimKeys(fn), busy: () => busy.open || title.open || narrow.open, mode: () => mode });
   menu.add({ id: 'resume', label: 'Back to the farm', icon: 'play', hint: 'menu', order: 0, onSelect: () => {} });
@@ -826,6 +840,10 @@ export function createUI(ctx, deps) {
     toggleView,
     replayLevel,
     caption: (msg, s) => caption.show(msg, s),
+    // the night fix: level.js calls these (the night check card; a skip stopped on trouble); nightInfo for the harness
+    nightCheck,
+    skipStopped,
+    get nightInfo() { return nightUI.info; },
     // Phase 5 (PHASE5.md §8.6): the hubs other packages add to, and the screens they open
     menu,
     title,

@@ -210,6 +210,8 @@ export function buildLevelControllerPanel(L) {
       if (tab === 1) keepTimerInView = 0.6;
     },
     onClose() { for (const st of strips) st.onClose(); },
+    /** The night fix: open on a section ('temp' | 'vent' | 'lights'; the night check's Fix it). */
+    openTab(name) { const i = { temp: 0, vent: 1, lights: 2 }[name]; if (i != null) showTab(i); },
     update(dt, force) {
       openFor += dt;
       if (!readThisOpening && openFor >= READ_AFTER) { readThisOpening = true; readNow(); }
