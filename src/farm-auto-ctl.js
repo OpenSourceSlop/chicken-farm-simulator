@@ -170,7 +170,11 @@ export function feedOrderNow(farm, env) {
   const feed = farm.feed, fl = farm.flock, cyc = !!(farm.cyc && farm.cyc.on), now = env.day;
   if (!(fl.placed > 0) || !(fl.alive > 0) || env.dayNumber > AUTO.lastAutoOrderDay || feed.withdrawn) return null;
   const birds = knownAliveOf(fl), perDay = (t) => (birds * feedStdGAt(Math.max(0, t - PLACEMENT_DAY))) / 1000;
-  const use = (type, t0, t1) => { const [a, b] = SPAN[type], x0 = Math.max(t0, a), x1 = Math.min(t1, b); let kg = 0; for (let t = x0; t < x1 - 1e-9; t += 0.125) kg += perDay(t) * Math.min(0.125, x1 - t); return kg; };
+  // the review round: the controller orders for the silos the open valves draw. A feed whose change was not made (the next
+  // feed's silo still shut at the blend's start, its own silo open) goes on being drawn past the calendar (spans); the
+  // next feed is not ordered while nothing draws it
+  const spans = cyc ? drawnSpans(feed, now) : SPAN;
+  const use = (type, t0, t1) => { const [a, b] = spans[type], x0 = Math.max(t0, a), x1 = Math.min(t1, b); let kg = 0; for (let t = x0; t < x1 - 1e-9; t += 0.125) kg += perDay(t) * Math.min(0.125, x1 - t); return kg; };
   // the truck of an order sent now, and of one sent at the next hourly read (after the mill's 16:00: the day after tomorrow):
   // order now if, waiting, the silo would hold under AUTO.orderAtDays of this feed when the truck came
   const arrive = arrivalIf(now), later = arrivalIf(now + H);
@@ -181,19 +185,38 @@ export function feedOrderNow(farm, env) {
   };
   if (!cyc) return feed.order ? null : want('starter', feed.siloKg ?? 0);   // the brooding week: Phase 2's one silo figure
   for (const T of FEED_TYPES) {
-    if (now > SPAN[T.id][1] || pendingOf(feed, T.id) > 0) continue;
+    if (now > spans[T.id][1] || pendingOf(feed, T.id) > 0) continue;
     const o = want(T.id, stockOf(feed, T.id));
     if (o) return o;
   }
   return null;
+}
+const NEXT_FEED = { starter: 'grower', grower: 'finisher' };
+const siloOfType = (type) => (FEED_TYPES.find((t) => t.id === type) || FEED_TYPES[0]).silo;
+/** The feeds' spans as the valves stand: a feed past its change goes on while its silo is the open one and the next feed's
+ *  silo stayed shut LATE_CHANGE days past the blend's start (the change not made: 15:36 of days 14 and 29, before the mill's
+ *  16:00); that next feed then waits ([Infinity, …]). */
+const LATE_CHANGE = 0.05;
+export function drawnSpans(feed, now) {
+  const v = feed.valves || [1, 0], out = { ...SPAN };
+  for (const [type, next] of Object.entries(NEXT_FEED)) {
+    const ts = siloOfType(type), ns = siloOfType(next);
+    if (ts === ns || now < SPAN[next][0] + LATE_CHANGE - 1e-9 || now > SPAN[next][1] + 1e-9) continue;
+    if ((v[ns] ?? 0) > 0 || !((v[ts] ?? 0) > 0)) continue;
+    out[type] = [SPAN[type][0], Infinity];
+    out[next] = [Infinity, SPAN[next][1]];
+  }
+  return out;
 }
 function stepFeed(farm, env) {
   const m = farm.auto.mem, feed = farm.feed;
   const hr = Math.floor(env.day * 24 + 1e-6);
   // a lost order (hit or open): no order goes in until the farmer orders by hand; the rims below go on
   const lostOpen = (farm.auto.faults || []).some((f) => f.id === 'order-lost' && (f.phase === 'hit' || f.phase === 'open'));
-  if (m.feedHr !== hr && !lostOpen) {
-    m.feedHr = hr;
+  // the hourly read, and at once when a change of feed is seen not made (drawnSpans: still before the mill's 16:00)
+  const sk = farm.cyc && farm.cyc.on ? Object.entries(drawnSpans(feed, env.day)).filter(([t, x]) => x[1] === Infinity).map(([t]) => t).join(',') : '';
+  if ((m.feedHr !== hr || (sk && m.feedSpans !== sk)) && !lostOpen) {
+    m.feedHr = hr; m.feedSpans = sk;
     const o = feedOrderNow(farm, env);
     if (o && o.kg > 0) {
       const lost = (farm.auto.faults || []).find((f) => f.id === 'order-lost' && f.phase === 'armed');

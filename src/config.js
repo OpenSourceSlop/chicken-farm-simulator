@@ -1124,9 +1124,14 @@ export const FAULTS = {
   'winch-stall': { system: 'winch', selfKnown: true, spot: 'drinkers.N', plate: 'drinker', fix: ['water.height', 'auto.reset'], hours: [7, 15], what: 'Winch motor stalled' },
   'timer-reset': { system: 'timer', selfKnown: true, spot: 'controller', plate: 'sign-vent', fix: ['vent.timer'], retryH: 12, hours: [7, 15],
     firstSetting: { fans: 1, onSec: 8, cycleSec: 300 }, what: 'Controller restarted on its first timer setting' },
-  'stage-trip': { system: 'stages', selfKnown: true, spot: 'fanPanel', plate: 'fan-panel', fix: ['vent.stages', 'auto.reset'], hours: [7, 10], retryH: 2, alarmOverC: 5,
+  // the review round: a planned trip starts 07:00-10:00 (the fans still at the morning's low stages) and the controller's
+  // own retry comes only retryH farm hours after its high-temperature alarm (maxH after the trip without one; cutRetryH after
+  // the power is back for the rainy season's after-cut trip), so it reaches into the late-morning heat: the farmer's fans by
+  // hand and Set the stages are what end it in time (measured: ignored on day 30, 20 heat deaths; fixed at the alarm, none)
+  'stage-trip': { system: 'stages', selfKnown: true, spot: 'fanPanel', plate: 'fan-panel', fix: ['vent.stages', 'auto.reset'], hours: [7, 10], retryH: 4, maxH: 8, cutRetryH: 2, alarmOverC: 5,
     what: 'Fan stages off' },
-  'sensor-drift': { system: 'brooders', selfKnown: false, spot: 'controller', plate: 'sign-brooder', fix: ['auto.calibrate'], driftPerH: 0.5, driftMaxC: 2.5, amberC: 1, redC: 2,
+  // nightMaxC: the drift keeps rising in the night hours (18:00-06:00) of the brooding week to this (the chicks' cold night)
+  'sensor-drift': { system: 'brooders', selfKnown: false, spot: 'controller', plate: 'sign-brooder', fix: ['auto.calibrate'], driftPerH: 0.5, driftMaxC: 2.5, nightMaxC: 3.5, nightToDay: 7, amberC: 1, redC: 2,
     warnAmberUnderDays: 7, hours: [7, 15], days: [0, 21], what: 'Temperature sensor reading high' },
   'order-lost': { system: 'feed', selfKnown: true, spot: 'silo', plate: 'silo', fix: ['feed.order'], redAfterH: 6, armH: 24, minDays: 1.8, hours: [7, 15],
     what: 'Feed order not confirmed by the mill' },

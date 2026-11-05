@@ -9,7 +9,7 @@ import { createLevel } from '../src/level.js';
 import { createRun } from '../src/run.js';
 import { profileOf } from '../src/farm-profiles.js';
 import { EV } from '../src/events.js';
-import { LEVEL1, feedStdGAt as feedStd, SKILLS_UPDATE, AUTO } from '../src/config.js';
+import { LEVEL1, feedStdGAt as feedStd, SKILLS_UPDATE, AUTO, nippleHeightCmAt } from '../src/config.js';
 import { WATCH, refShare, causeOf } from '../src/flock-watch.js';
 import { cycleProfileOf } from '../src/farm-profiles-cycle.js';
 import { p2ProfileFor } from '../src/farm-profiles-cond.js';
@@ -332,10 +332,12 @@ test('skills update: the Equipment row (steady "N on · reading" while a system 
     assert(g && g.state === 'green' && g.label === 'Equipment' && /^2 on · reading/.test(g.value) && /Winches/.test(g.detail), `steady: ${JSON.stringify(g)}`);
     L.farm.debug.fault('winch-stall', { line: 2 });
     const r = L.level.watch.status().rows.equipment, w = L.warns.find((x) => x.kind === 'equipment');
-    assert(r.state === 'red' && /Line 3 winch motor stalled/.test(r.value), `red at once: ${JSON.stringify(r)}`);
+    // (review round: the row a short label; what / cause / where are the warning's)
+    assert(r.state === 'red' && /^Line 3 winch stalled \d\d:\d\d$/.test(r.value) && /line 3 regulator/.test(r.detail), `red at once: ${JSON.stringify(r)}`);
     assert(w && w.fix && w.fix.spot === 'drinkers.2' && w.fix.panel === 'drinker-2' && /Likely cause/.test(w.text) && /line 3 regulator/.test(w.text) && !VERDICT.test(w.text), `the warning: ${JSON.stringify(w)}`);
     assert(L.records.notebook.some((n) => n.kind === 'watch' && n.value === w.text) && L.records.notebook.some((n) => n.kind === 'fault'), 'the notebook: the warning and the fault line');
-    L.farm.act('water.height', { line: 2, cm: 24 }); L.farm.act('auto.reset', { system: 'winch', line: 2 });
+    // (review round: the motor answers its reset only with the line winched to the plate's height)
+    L.farm.act('water.height', { line: 2, cm: Math.round(nippleHeightCmAt(Math.max(0, L.env.dayNumber))) }); L.farm.act('auto.reset', { system: 'winch', line: 2 });
     assert(L.level.watch.status().rows.equipment.state === 'green', 'steady again after the fix');
   } finally { SKILLS_UPDATE.live = was; }
 });

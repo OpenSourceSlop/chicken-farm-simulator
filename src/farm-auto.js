@@ -241,7 +241,25 @@ export function stepAuto(farm, env, hrs) {
   if (farm.auto.quietN > 0) { dropQuiet(farm, env); return; }
   stepFaults(farm, env, hrs);
   stepControllers(farm, env, hrs);
+  if (farm.auto.on.scale) keepScaleDay(farm, env);
 }
+/** The review round: the platform scale's weigh-in figure (Growth 3 on), the weigh-in's reading when nobody weighs by hand
+ *  — the mean of its hourly figures over the weigh-in morning, 09:00-12:00 (the hand weighing's hours; each about 6 % light
+ *  while the platform is fouled, so a platform cleaned before 09:00 costs nothing and one left fouled reads light).
+ *  stats.scaleDay[d] = { n, meanG, fouled (any fouled hour), fouledH, k, sum, h }. */
+export const SCALE_DAY_HOURS = [9, 12];
+function keepScaleDay(farm, env) {
+  if (env.hour < SCALE_DAY_HOURS[0] - 1e-9 || env.hour >= SCALE_DAY_HOURS[1] - 1e-9) return;
+  const hr = Math.floor(env.day * 24 + 1e-6), S = farm.stats.scaleDay || (farm.stats.scaleDay = {}), o = S[env.dayNumber];
+  if (o && o.h === hr) return;
+  const x = scaleNow(farm, env);
+  if (!(x.n > 0) || x.meanG == null) return;
+  const D = o || (S[env.dayNumber] = { n: 0, meanG: null, fouled: false, fouledH: 0, k: 0, sum: 0, h: null });
+  D.h = hr; D.k++; D.sum += x.meanG; D.n = x.n; D.meanG = Math.round(D.sum / D.k);
+  if (x.fouled) { D.fouled = true; D.fouledH++; }
+}
+/** The weigh-in's platform scale reading of a day (Growth 3 on that day, else null): { n, meanG, fouled }. */
+export const platformWeighIn = (farm, day) => farm?.stats?.scaleDay?.[day] ?? null;
 
 export function installAuto(farm, env, events = null) {
   farm.auto = { on: allOff(), ...fresh(), quietN: 0 };

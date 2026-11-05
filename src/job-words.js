@@ -124,6 +124,18 @@ export function unlockCaption(keys = []) {
   const shows = UNLOCK_SHOWS[v] ? ` (${UNLOCK_SHOWS[v]})` : '';
   return `${levelName(u.branch, lvl)} · ${SKILL_STEP_NAMES[Math.max(0, lvl - 1)]}: ${lower(u.name)}${shows}.${where}`;
 }
+/** The review round: the unlock's caption in one short line (the full words stay in the notebook line and on the tree):
+ *  "Water 2 · Faster unlocked: read all four sight tubes at the water supply (skill tree {key:skills})". */
+export function unlockShort(keys = []) {
+  const ks = keys.map((k) => (typeof k === 'string' ? k : k?.key)).filter(Boolean);
+  if (!ks.length) return '';
+  const pay = ks.find((k) => PAYOFFS[k]), v = ks.find((k) => UNLOCKS[k]);
+  const name = (n) => lower(String(n || '').replace(/[;:,].*$/, '').replace(/\s*\([^)]*\)\s*$/, ''));
+  if (pay) { const p = PAYOFFS[pay]; return `${levelName(p.branch, p.level)} · ${SKILL_STEP_NAMES[p.level - 1]} unlocked: ${name(p.name)} (skill tree {key:skills})`; }
+  if (!v) return '';
+  const u = UNLOCKS[v], lvl = unlockLevel(u);
+  return `${levelName(u.branch, lvl)} · ${SKILL_STEP_NAMES[Math.max(0, lvl - 1)]} unlocked: ${name(u.name)} (skill tree {key:skills})`;
+}
 /** The unlocks of a batch grouped by branch and level, in the tree's branch order: [[keys of one level-up], …]. */
 export function groupUnlocks(list = []) {
   const by = new Map();

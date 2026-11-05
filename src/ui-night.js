@@ -37,6 +37,19 @@ const ROWS = [['temp', 'Temperature'], ['air', 'Ventilation'], ['brooders', 'Bro
 const WORD = { green: 'steady', amber: 'watch', red: 'alert' };
 const TAB = { vent: 'Ventilation tab', temp: 'Temperature tab' };
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+/** The main key's words from the fix's own place (the review round: the controller, the fan panel, a line's regulator, the
+ *  phone), not the controller for every fix. */
+export function fixWords(fix, { phone = true } = {}) {
+  const p = fix?.panel;
+  if (!fix) return 'Fix it at the controller';
+  if (p === 'fan-panel') return 'Fix it at the fan panel';
+  const m = /^drinker-(\d)$/.exec(p || '');
+  if (m) return `Fix it at the line ${+m[1] + 1} regulator`;
+  if (p === 'pocket-phone') return phone ? 'Order on the phone' : 'Order at the office';
+  if (p === 'office') return 'Order at the office';
+  if (p === 'bird-scale') return 'Fix it at the bird scale';
+  return `Fix it at the controller (${TAB[fix.tab] || 'Temperature tab'})`;
+}
 const hhmm = (t) => { const m = Math.round((((t % 1) + 1) % 1) * 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 
 export function registerNightPanel({ register, closePanel }) {
@@ -72,6 +85,8 @@ export function registerNightPanel({ register, closePanel }) {
         // still sees the 03:00 low)
         const ahead = nc.to != null && !(nc.skipTo != null && nc.skipTo >= nc.to - 1e-6) ? ` to ${hhmm(nc.to)}` : '';
         setText(sub, `The farm clock stands still. ${nc.skipWords || 'Next job skips through the night'}. With these settings, the night ahead${ahead}:`);
+        // the review round: no climate rows past the young weeks (nightCheck gives lines {} then): the list hides
+        list.hidden = !Object.keys(nc.lines || {}).length;
         for (const [id] of ROWS) {
           const r = nc.lines?.[id], R = rows[id];
           R.dot.className = `fw-dot is-${r?.state || 'green'}`; R.dot.setAttribute('aria-label', WORD[r?.state] || ''); R.dot.title = WORD[r?.state] || '';
@@ -80,7 +95,8 @@ export function registerNightPanel({ register, closePanel }) {
         // Skills update (SKILLS.md §5.3): every open fault of the equipment is a row too, with its own Fix it (its panel and
         // tab: the controller, the fan panel, a line's regulator, the phone); the model's rows { text, fix } as nc.faults or
         // as problems marked fault
-        const faultRows = [...(nc.faults || []), ...(nc.problems || []).filter((p) => p.fault || p.kind === 'fault')];
+        // (the review round: one source, so a fault in both nc.faults and nc.problems is one row)
+        const faultRows = nc.faults ?? (nc.problems || []).filter((p) => p.fault || p.kind === 'fault');
         const plain = (nc.problems || []).filter((p) => !(p.fault || p.kind === 'fault'));
         off.replaceChildren(...plain.map((p) => h('li', null, `${cap(p.why)}.`, h('span', { class: 'nc-where' }, h('b', null, 'Where: '), `${p.check}.`))),
           ...faultRows.map((p) => {
@@ -90,7 +106,7 @@ export function registerNightPanel({ register, closePanel }) {
             return h('li', { class: 'nc-fault' }, t, p.check ? h('span', { class: 'nc-where' }, h('b', null, 'Where: '), `${p.check}.`) : null, go);
           }));
         fix.hidden = !nc.fix;
-        setText(fix, nc.fix ? `Fix it at the controller (${TAB[nc.fix.tab] || 'Temperature tab'})` : 'Fix it at the controller');
+        setText(fix, fixWords(nc.fix, { phone: handlers.phone !== false }));
       },
       onOpen() { queueMicrotask?.(() => (fix.hidden ? skip : fix).focus({ preventScroll: true })); },
     };

@@ -24,7 +24,7 @@ import { graphsPage } from './ui-summary.js';
 import { createJobStrip } from './ui-jobstrip.js';
 import { needTime } from './ui-farmtime.js';
 // Skills update (SKILLS.md §3.11): the pocket phone (Farm Planning 2) and the record signed on it (Farm Planning 3)
-import { feedDays } from './farm-silos.js';
+import { feedDays, shutWords } from './farm-silos.js';
 import { perkHas, skillBox, workLine, row as skRow, ensureSkillsStyle } from './ui-cycle-skills.js';
 
 // What "Today" lists, in job order: [note kind(s), label]
@@ -187,7 +187,7 @@ export function buildRecordsPanel(L, { pocket = false } = {}) {
   function feedLine() {
     let fd = null;
     try { fd = feedDays(farm, env); } catch { fd = null; }
-    return fd?.days != null ? h('p', { class: 'book-note' }, `About ${one(fd.days)} days of feed in the silos at today’s intake (${int(fd.kg)} kg, ${fd.how === 'meter' ? 'the feed meter’s last 24 hours' : 'the feed sign'}).`) : null;
+    return fd?.days != null ? h('p', { class: 'book-note' }, `About ${one(fd.days)} days of feed the open slide valves reach at today’s intake (${int(fd.kg)} kg, ${fd.how === 'meter' ? 'the feed meter’s last 24 hours' : 'the feed sign'}).${fd.shut?.length ? ` ${shutWords(fd)}.` : ''}`) : null;
   }
   function phonePage() {
     const d = env.dayNumber;

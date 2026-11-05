@@ -47,10 +47,17 @@ export function createMarker(ctx, root, { name = 'job-marker', avoid } = {}) {
     if (!behind && Math.abs(x) < 0.94 && Math.abs(y) < 0.94) { pointer.hidden = true; return; }
     const W = root.clientWidth, H = root.clientHeight;
     const k = Math.max(Math.abs(x) / 0.86, Math.abs(y) / (y > 0 ? 0.66 : 0.7), 1e-6);
-    const px = (x / k * 0.5 + 0.5) * W;
+    let px = (x / k * 0.5 + 0.5) * W;
     let py = (-y / k * 0.5 + 0.5) * H;
     if ((rectAge -= 1) <= 0) { rectAge = 30; rects = avoid ? avoid().map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0) : []; }
-    for (const r of rects) if (px > r.left - 34 && px < r.right + 34 && py > r.top - 22 && py < r.bottom + 22) py = (r.top + r.bottom) / 2 < H / 2 ? r.bottom + 24 : r.top - 24;
+    const hit = (r) => px > r.left - 34 && px < r.right + 34 && py > r.top - 22 && py < r.bottom + 22;
+    for (const r of rects) if (hit(r)) py = (r.top + r.bottom) / 2 < H / 2 ? r.bottom + 24 : r.top - 24;
+    // the review round: the side edge full of cards (the gauges, the flock watch): the pointer goes to the bottom edge, under
+    // its direction, rather than under a card
+    if (rects.some(hit)) {
+      py = H - 70; px = Math.max(60, Math.min(W - 60, px + (x < 0 ? 140 : -140)));
+      for (const r of rects) if (hit(r)) px = x < 0 ? r.right + 40 : r.left - 40;
+    }
     pointer.hidden = false;
     pointer.style.transform = `translate(${px.toFixed(0)}px, ${py.toFixed(0)}px) translate(-50%, -50%)`;
     pointerIcon.style.transform = `rotate(${Math.atan2(-y, x).toFixed(3)}rad)`;

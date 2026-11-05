@@ -22,17 +22,25 @@
 //   installFaultDebug(farm, env) farm.debug.fault(id, { line?, at? }) starts a fault now (the system need not be on);
 //                                farm.debug.faults() lists them
 // EV.FAULT { id, system, phase: 'start'|'found'|'fixed'|'dropped', text, cause, sign, place, spot, line?, day, hour, alarm? }
-import { FAULTS, FAULT_PLAN, AUTO, SKILLS_UPDATE, PLACEMENT_DAY, nippleHeightCmAt } from './config.js';
+import { FAULTS, FAULT_PLAN, AUTO, SKILLS_UPDATE, PLACEMENT_DAY, nippleHeightCmAt, LEVELS, LEVEL1 } from './config.js';
 import { EV } from './events.js';
 import { createRng } from './farm-rng.js';
-import { timerFor, rowFor } from './farm-auto-ctl.js';
+import { timerFor, rowFor, winchTarget } from './farm-auto-ctl.js';
 import { feedDays } from './farm-silos.js';
+import { ventNeed, VENT_BAND } from './job-figures.js';
 
 const H = 1 / 24;
 const int = (v) => Math.round(v).toLocaleString('en-US');
 const one = (v) => (Math.round(v * 10) / 10).toFixed(1);
 const hhmm = (t) => { const m = Math.round((((t % 1) + 1) % 1) * 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 export const openFaults = (farm) => (farm.auto?.faults || []).filter((f) => f.phase === 'open');
+/** The flock's weigh days (every level's weigh-in: day 7, 14, 21, 28, 35, 40): a fouled scale warns on them. */
+export const WEIGH_DAYS = [...new Set(LEVELS.flatMap((l) => (l.id === LEVEL1.id ? [LEVEL1.endDay] : l.weighDays || [])))];
+/** The days of feed a hand order brings the silos to (the open valves' feed and every order on the way, at today's intake). */
+const daysWithOrders = (farm, env) => { const d = feedDays(farm, env), kg = (d.kg || 0) + (farm.feed.pending || []).reduce((a, o) => a + (o.kg || 0), 0); return d.kgPerDay > 0 ? kg / d.kgPerDay : null; };
+/** The review round: a hand fix only counts when it is the manual job (the line at the plate, the timer in the vent sign's
+ *  band, an order to 2 days of feed). The limits: */
+export const HAND_FIX = { winchCm: 1, orderDays: 2 };
 /** A fault that holds the plan's "one at a time" (open, armed or hit; the rainy season's after-cut trips are exempt). */
 const busy = (farm) => (farm.auto?.faults || []).some((f) => (f.phase === 'open' || f.phase === 'armed' || f.phase === 'hit') && !f.afterCut);
 const inHours = (h, [a, b]) => h >= a - 1e-9 && h < b - 1e-9;
@@ -72,32 +80,34 @@ export function faultWords(f, env, farm) {
   switch (f?.id) {
     case 'winch-stall': {
       const L = lineN(f), cm = Math.round(farm.water.lines[L]?.heightCm ?? f.args.cm ?? 0), plate = Math.round(nippleHeightCmAt(Math.max(0, env.dayNumber)));
-      return { what: `Line ${L + 1} winch motor stalled at ${Math.round(f.args.cm ?? cm)} cm (plate ${plate} cm) at ${hhmm(t0)}; the other lines go on rising.`, cause: 'the winch motor tripped its overload', place: `the drinker line ${L + 1} regulator`,
+      return { what: `Line ${L + 1} winch motor stalled at ${Math.round(f.args.cm ?? cm)} cm (plate ${plate} cm) at ${hhmm(t0)}; the other lines go on rising.`, short: `Line ${L + 1} winch stalled ${hhmm(t0)}`, cause: 'the winch motor tripped its overload', place: `the drinker line ${L + 1} regulator`,
         fix: 'winch it by hand to the drinker plate’s height and reset the motor', sign: 'drinker', spot: `drinkers.${L}`, panel: `drinker-${L}`, tab: null, line: L, night: `Line ${L + 1}’s winch motor is stalled at ${cm} cm; the drinker plate says ${plate} cm tonight and ${Math.round(nippleHeightCmAt(Math.max(0, env.dayNumber + 1)))} cm tomorrow.` };
     }
     case 'timer-reset': {
       const t = timerFor(env, farm, 1), s = F.firstSetting || { fans: 1, onSec: 8, cycleSec: 300 };
-      return { what: `The controller restarted on its first timer setting at ${hhmm(t0)}: ${s.fans} fan ${s.onSec} s / ${s.cycleSec} s against the vent sign’s ${t.onSec} s for your birds.`, cause: 'a power blip restarted the controller',
+      const his = Number.isFinite(f.args.handShare) ? ` Your setting at ${hhmm(f.args.handAt)} gives ${Math.round(f.args.handShare * 100)} % of the vent sign’s air (the controller steps on from ${Math.round(VENT_BAND[0] * 100)}–${Math.round(VENT_BAND[1] * 100)} %).` : '';
+      return { what: `The controller restarted on its first timer setting at ${hhmm(t0)}: ${s.fans} fan ${s.onSec} s / ${s.cycleSec} s against the vent sign’s ${t.onSec} s for your birds.${his}`, short: `Timer restarted ${hhmm(t0)}`, cause: 'a power blip restarted the controller',
         place: 'the climate controller’s Ventilation tab', fix: 'set the timer by hand or Fill the timer; the controller then steps on from your setting', sign: 'sign-vent', spot: 'controller', panel: 'controller', tab: 'vent' };
     }
-    case 'stage-trip': return { what: `The fan stages are off since ${hhmm(t0)}; the fans run at ${env.fansManual ?? f.args.fans ?? 0}.`, cause: f.afterCut ? 'the controller came back from the power cut with its stages off' : 'the stage output tripped after a power blip',
+    case 'stage-trip': return { what: `The fan stages are off since ${hhmm(t0)}; the fans run at ${env.fansManual ?? f.args.fans ?? 0}.`, short: `Fan stages off ${hhmm(t0)}`, cause: f.afterCut ? 'the controller came back from the power cut with its stages off' : 'the stage output tripped after a power blip',
       place: 'the fan panel at the east end', fix: 'set the fans by hand and switch the stages on again (Set the stages)', sign: 'fan-panel', spot: 'fanPanel', panel: 'fan-panel', tab: null };
     case 'sensor-drift': {
       const d = farm.auto?.drift || 0;
-      return { what: `The controller’s sensor reads ${one(d)} °C over the house thermometer: the brooders hold the house ${one(d)} °C under the row.`, cause: 'the controller’s temperature sensor reads high',
+      return { what: `The controller’s sensor reads ${one(d)} °C over the house thermometer: the brooders hold the house ${one(d)} °C under the row.`, short: `Sensor ${one(d)} °C high`, cause: 'the controller’s temperature sensor reads high',
         place: 'the thermometer beside the climate controller', fix: 'Check the sensor against the thermometer on the Temperature tab', sign: 'sign-brooder', spot: 'controller', panel: 'controller', tab: 'temp',
         night: `The controller’s sensor reads ${one(d)} °C over the house thermometer: the brooders hold the house ${one(d)} °C under the row tonight.` };
     }
     case 'order-lost': {
       const fd = feedDays(farm, env), at = f.args.at ?? t0, late = env.hour >= 16;
       const due = late ? 'comes the day after tomorrow at 09:00' : 'comes tomorrow at 09:00';
-      return { what: `The feed order of ${hhmm(at)} is not confirmed by the mill: ${fd.days != null ? one(fd.days) : '?'} days of feed in the silos.`, cause: 'the controller’s order never reached the mill: no truck is coming',
+      const his = Number.isFinite(f.args.handDays) ? ` Your order at ${hhmm(f.args.handAt)} brings the silos to ${one(f.args.handDays)} days of feed (the silo plate: order at ${HAND_FIX.orderDays} days).` : '';
+      return { what: `The feed order of ${hhmm(at)} is not confirmed by the mill: ${fd.days != null ? one(fd.days) : '?'} days of feed in the silos.${his}`, short: `Feed order ${hhmm(at)} not confirmed`, cause: 'the controller’s order never reached the mill: no truck is coming',
         place: 'the silo gauge, or the phone', fix: 'order by hand: the office phone, the pocket phone or the silo gauge', sign: 'silo', spot: 'silo', panel: 'pocket-phone', tab: null, orPanel: 'office',
         night: `The feed order of ${hhmm(at)} is not confirmed: ${fd.days != null ? one(fd.days) : '?'} days of feed in the silos. Ordered now${late ? ' (after 16:00)' : ''} the feed ${due}.` };
     }
     case 'scale-fouled': {
       const s = farm.autoCtl?.scale?.() || { n: 0 };
-      return { what: `Bird scale: ${int(s.n)} weighings today, about ${int(AUTO.scalePerDay)} before.`, cause: 'litter on the scale’s platform: it reads light and counts few birds', place: 'the bird scale',
+      return { what: `Bird scale: ${int(s.n)} weighings today, about ${int(AUTO.scalePerDay)} before.${WEIGH_DAYS.includes(env.dayNumber) ? ' Today is a weigh day: the weigh-in reads this scale unless you weigh by hand.' : ''}`, short: 'Bird scale fouled', cause: 'litter on the scale’s platform: it reads light and counts few birds', place: 'the bird scale',
         fix: 'clean the platform and weigh by hand', sign: 'bird-scale', spot: 'birdScale', panel: 'bird-scale', tab: null };
     }
     default: return { what: F.what || 'Equipment fault', cause: '', place: '', fix: '', sign: F.plate || '', spot: F.spot || '' };
@@ -113,7 +123,12 @@ function emitFault(farm, env, f, phase, extra = {}) {
 function fixedText(farm, env, f) {
   const at = hhmm(env.day), by = f.fixedBy === 'retry';
   switch (f.id) {
-    case 'winch-stall': return `Line ${lineN(f) + 1} winched by hand to ${Math.round(farm.water.lines[lineN(f)]?.heightCm ?? 0)} cm; the motor reset ${at}`;
+    case 'winch-stall': {
+      // the review round: "winched by hand" only when he did (water.height on the line while it was stalled)
+      const L = lineN(f), now = Math.round(farm.water.lines[L]?.heightCm ?? 0);
+      return Number.isFinite(f.args.handCm) ? `Line ${L + 1} winched by hand to ${Math.round(f.args.handCm)} cm at ${hhmm(f.args.handAt ?? env.day)}; the motor reset ${at}`
+        : `Line ${L + 1} at ${now} cm (plate ${winchTarget(env)} cm); the motor reset ${at}`;
+    }
     case 'timer-reset': return by ? `The controller’s own retry put the timer back on the table at ${at}` : `Timer set by hand at ${at}; the controller steps on from it`;
     case 'stage-trip': return by ? `The controller’s retry switched the fan stages on again at ${at}` : `Fan stages on again at ${at}`;
     case 'sensor-drift': return `Sensor checked against the thermometer at ${at}: ${one(f.args.offsetC ?? 0)} °C taken off`;
@@ -163,9 +178,21 @@ export function fixFault(farm, env, f, by = 'hand', extra = {}) {
 export function faultHand(farm, env, id, a = {}) {
   for (const f of openFaults(farm)) {
     if (f.id === 'winch-stall' && id === 'water.height' && Math.round(a.line ?? -1) === lineN(f)) { f.args.handCm = a.cm; f.args.handAt = +env.day.toFixed(5); }
-    if (f.id === 'timer-reset' && id === 'vent.timer') fixFault(farm, env, f, 'hand');
+    // the review round: the timer by hand fixes the restart only in the vent sign's band (90-130 % of the need), as the
+    // controller's own table; another setting stands as his (the row stays red with the share it gives)
+    if (f.id === 'timer-reset' && id === 'vent.timer') {
+      const v = ventNeed(env, farm);
+      f.args.handShare = +v.share.toFixed(3); f.args.handAt = +env.day.toFixed(5);
+      if (v.need > 0 && v.share >= VENT_BAND[0] - 1e-9 && v.share <= VENT_BAND[1] + 1e-9) fixFault(farm, env, f, 'hand');
+    }
     if (f.id === 'stage-trip' && id === 'vent.stages' && a.stages) fixFault(farm, env, f, 'hand');
-    if (f.id === 'order-lost' && id === 'feed.order' && (a.kg ?? 0) > 0) fixFault(farm, env, f, 'hand');
+    // an order by hand fixes the lost one when, with the feed the lines reach and every order on the way, the silos hold
+    // at least HAND_FIX.orderDays of feed at today's intake (the silo plate's order point)
+    if (f.id === 'order-lost' && id === 'feed.order' && (a.kg ?? 0) > 0) {
+      const d = daysWithOrders(farm, env);
+      f.args.handDays = d != null ? +d.toFixed(2) : null; f.args.handAt = +env.day.toFixed(5);
+      if (d == null || d >= HAND_FIX.orderDays - 1e-9) fixFault(farm, env, f, 'hand');
+    }
   }
 }
 /** The fix keys that are AUTO_ACTION_IDS (auto.reset, auto.calibrate, scale.clean) and the scale's read (finds a fouling). */
@@ -173,6 +200,12 @@ export function faultAct(farm, env, id, a = {}) {
   const open = openFaults(farm);
   if (id === 'auto.reset') {
     const f = open.find((x) => (x.id === 'winch-stall' && (a.system == null || a.system === 'winch') && (a.line == null || Math.round(a.line) === lineN(x))) || (x.id === 'stage-trip' && (a.system == null || a.system === 'stages')));
+    // the review round: a stalled motor answers its reset only once the line is at the plate's height (winched by hand to
+    // within HAND_FIX.winchCm of it), as the drinker plate's line says
+    if (f && f.id === 'winch-stall') {
+      const cm = farm.water.lines[lineN(f)]?.heightCm ?? 0, want = winchTarget(env);
+      if (Math.abs(cm - want) > HAND_FIX.winchCm + 1e-9) return { fixed: false, refused: 'height', cm: Math.round(cm), want };
+    }
     return { fixed: f ? fixFault(farm, env, f, 'hand') : false };
   }
   if (id === 'auto.calibrate') {
@@ -235,16 +268,19 @@ export function stepFaults(farm, env, hrs) {
     if (f.phase !== 'open') return;
     const F = FAULTS[f.id], since = (env.day - f.startedAt) * 24;
     if (f.id === 'sensor-drift') {
-      const d = Math.min(F.driftMaxC, F.driftPerH * since);
+      const night = env.dayNumber <= (F.nightToDay ?? -1) && (env.hour >= 18 || env.hour < 6), max = night && F.nightMaxC ? F.nightMaxC : F.driftMaxC;
+      const d = Math.min(max, F.driftPerH * since);
       if (Math.abs(d - (A.drift || 0)) > 1e-6) { A.drift = d; if (!env.broodersUp && A.setC != null) env.setHeaterSetpoint(A.setC - d); }
       if (f.foundAt == null && d >= F.amberC - 1e-9) { f.foundAt = +env.day.toFixed(5); emitFault(farm, env, f, 'found'); }
       if (env.broodersUp || env.dayNumber > 21) fixFault(farm, env, f, 'retry');   // the brooders up: nothing left to hold
     }
     if (f.id === 'timer-reset' && since >= F.retryH - 1e-9) fixFault(farm, env, f, 'retry');
     if (f.id === 'stage-trip') {
-      if (!f.alarmed && env.houseTemp >= env.targetTemp + F.alarmOverC) { f.alarmed = true; emitFault(farm, env, f, 'found', { alarm: true, text: `High temperature alarm: house ${one(env.houseTemp)} °C, ${one(env.houseTemp - env.targetTemp)} °C over the target with the fan stages off.` }); }
-      const from = f.afterCut ? (f.powerBackAt ?? f.startedAt) : f.startedAt;
-      if (power && (env.day - from) * 24 >= F.retryH - 1e-9) fixFault(farm, env, f, 'retry');
+      if (!f.alarmed && env.houseTemp >= env.targetTemp + F.alarmOverC) { f.alarmed = true; f.alarmedAt = +env.day.toFixed(5); emitFault(farm, env, f, 'found', { alarm: true, text: `High temperature alarm: house ${one(env.houseTemp)} °C, ${one(env.houseTemp - env.targetTemp)} °C over the target with the fan stages off.` }); }
+      // the controller's own retry: after the rainy season's cut 2 h after the power is back; a planned trip retryH after its
+      // high-temperature alarm (maxH after the trip when no alarm came)
+      const due = f.afterCut ? (f.powerBackAt ?? f.startedAt) + (F.cutRetryH ?? F.retryH) * H : f.alarmedAt != null ? f.alarmedAt + F.retryH * H : f.startedAt + (F.maxH ?? F.retryH) * H;
+      if (power && env.day >= due - 1e-9) fixFault(farm, env, f, 'retry');
       if (!power) f.powerBackAt = null; else if (f.powerBackAt == null) f.powerBackAt = +env.day.toFixed(5);
     }
     // no confirmation from the mill redAfterH after the order: the row turns red (the watch warns at once)

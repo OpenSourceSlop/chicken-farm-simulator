@@ -180,6 +180,7 @@ html.reduce-motion .boot-bar::before { animation: none; width: 100%; opacity: 0.
 .fw-more[hidden] { display: none; }
 .fw-warn-where { font-weight: 600; color: var(--ink); }
 .fw-warn[hidden] { display: none; }
+.fw-warn.is-clamp:not(.is-open) { max-height: 74px; overflow: hidden; }   /* Skills review: an equipment warning's 4 lines */
 /* narrow screens, every row steady: a compact strip of the four dots (it opens on amber or red, and on a click) */
 .fw-mini { display: none; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; padding: 0; border: 0; background: none; color: var(--ink-dim); font: 600 12px/1.2 var(--font-display); letter-spacing: 0.03em; cursor: pointer; }
 .fw-mini-i { display: inline-flex; align-items: center; gap: 4px; }

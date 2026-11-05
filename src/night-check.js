@@ -154,6 +154,8 @@ export function createSkipGuard(env, farm, watch) {
       if (ws.length > w0) {
         const w = ws[ws.length - 1];
         const fix = w.kind === 'cold' || (w.kind === 'deaths' && /cold/.test(w.text)) ? coldCause(env, farm).fix : w.kind === 'hot' ? hotCause(env, farm)?.fix ?? null : null;
+        // the review round: an equipment fault's stop names it in a few words (its what / cause / where are on the watch card)
+        if (w.kind === 'equipment') return { kind: 'watch', equipment: true, fault: w.fault, text: `an equipment fault${w.short ? `, ${w.short}` : ''} (the flock watch card)`, fix: w.fix || null, warned: true };
         return { kind: 'watch', text: w.text, fix, warned: true };
       }
       const dt = (env.day - lastT) * 24;

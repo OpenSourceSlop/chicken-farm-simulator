@@ -338,10 +338,12 @@ function levelResult(world, def, failed, endDay) {
   const deathsPct = +levelDeathsPct(farm).toFixed(3);
   if (def.target.kind === 'weight') {
     const day = def.target.day, w = st.weighed.filter((x) => Math.floor(x.t) === day).map((x) => x.weightG);
-    const mean = w.length >= 10 ? w.reduce((a, b) => a + b, 0) / w.length : (st.scaleAt && st.scaleAt[day]) ?? null;
+    // (review round: the Growth 3 platform scale's day figure when nobody weighed by hand, light while it is fouled)
+    const plat = w.length >= 10 ? null : (st.scaleDay && st.scaleDay[day]) || null;
+    const mean = w.length >= 10 ? w.reduce((a, b) => a + b, 0) / w.length : plat ? plat.meanG : (st.scaleAt && st.scaleAt[day]) ?? null;
     const uni = w.length >= 10 ? (100 * w.filter((x) => Math.abs(x - mean) <= 0.1 * mean).length) / w.length : null;
     const pass = !failed && mean != null && mean >= def.target.minShare * weightAt(day) && deathsPct <= def.fail.mortalityMaxPct + 1e-9;
-    return { pass, endDay, weightG: mean != null ? +mean.toFixed(1) : null, uniformityPct: uni != null ? +uni.toFixed(1) : null, deathsPct, targetG: weightAt(day) };
+    return { pass, endDay, weightG: mean != null ? +mean.toFixed(1) : null, uniformityPct: uni != null ? +uni.toFixed(1) : null, deathsPct, targetG: weightAt(day), ...(plat && plat.fouled ? { scaleFouled: true } : {}) };
   }
   if (def.target.kind === 'harvest') {
     const r = farm.harvest.result;

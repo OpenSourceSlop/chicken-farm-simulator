@@ -13,7 +13,7 @@ import { whenText, machineJob, progressBar, historyOf, knownBirds } from './ui-c
 import { farmTimeNote } from './ui-farmtime.js';
 // Skills update (SKILLS.md §3.6, §5.1, §6.5): siloSkills / feederSkills below
 import { HARVEST, LEVEL1, AUTO, feedTypeForDay } from './config.js';
-import { feedDays } from './farm-silos.js';
+import { feedDays, shutWords, shutAhead } from './farm-silos.js';
 import { knownAliveOf, rimCmNow } from './job-figures.js';
 import { skillBox, workLine, oneKey, row as skRow, note as skNote, perkHas, perkAuto, live, autoStatus, openFault, holdText, faultText, atText, glanceFor, ensureSkillsStyle } from './ui-cycle-skills.js';
 
@@ -265,10 +265,14 @@ export function siloSkills(L) {
       let fd = null;
       try { fd = feedDays(farm, env); } catch { fd = null; }
       const per = fd?.kgPerDay ? `${int(knownAliveOf(farm.flock))} birds × ${int((fd.kgPerDay * 1000) / Math.max(1, knownAliveOf(farm.flock)))} g` : '';
-      daysLine.set(fd?.days != null ? `About ${one(fd.days)} days of feed at today’s intake (${per}, ${fd.how === 'meter' ? 'the feed meter’s last 24 hours' : 'the feed sign'})` : 'Days of feed: no birds to feed yet',
-        (fd?.bySilo || []).length > 1 ? fd.bySilo.map((x, i) => `silo ${i + 1}: ${int(x.kg)} kg, ${x.days != null ? `${one(x.days)} days` : '—'}`).join(' · ') : '');
+      // the review round: the days the open slide valves reach; a shut silo's feed listed apart
+      daysLine.set(fd?.days != null ? `About ${one(fd.days)} days of feed the open valves reach at today’s intake (${per}, ${fd.how === 'meter' ? 'the feed meter’s last 24 hours' : 'the feed sign'})` : 'Days of feed: no birds to feed yet',
+        (fd?.bySilo || []).length > 1 ? fd.bySilo.map((x, i) => (x.open ? `silo ${i + 1}: ${int(x.kg)} kg, ${x.days != null ? `${one(x.days)} days` : '—'}` : `silo ${i + 1}: ${int(x.kg)} kg${x.kg > 0 && x.type ? ` ${x.type}` : ''}, valve shut`)).join(' · ') : '');
       const coming = sumKg(farm.feed.pending) + (farm.feed.order?.kg || 0);
-      setText(warn, fd?.days != null && fd.days <= AUTO.orderAtDays && !coming ? `About ${one(fd.days)} days of feed left: an order here or at the phone.` : '');
+      const ahead = fd ? shutAhead(fd, env.dayNumber) : [];
+      const shutNote = ahead.length && fd.days != null && fd.days < 1 ? ` ${shutWords({ shut: ahead })}: its slide valve at the silos.` : '';
+      setText(warn, shutNote ? `About ${one(fd.days)} days of feed the lines reach: the open silo runs out.${shutNote}`
+        : fd?.days != null && fd.days <= AUTO.orderAtDays && !coming && !ahead.length ? `About ${one(fd.days)} days of feed left: an order here or at the phone.` : '');
       warn.hidden = !warn.textContent;
       const has2 = perkHas(L, 'siloOrder');
       const o3 = orderTo3(env, farm, L.jobs());

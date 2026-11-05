@@ -63,9 +63,9 @@ import { registerNightPanel, NIGHT_PANEL } from './ui-night.js'; // the night fi
 // Skills update (SKILLS.md §6.3, §3.9, §3.11, §3.6): the unlock captions, the gate's one caption, the pocket phone key, Show
 // me, the comfort colours on entering (Comfort 3), the Feed 2 silo warning
 import { SKILLS_UPDATE, AUTO } from './config.js';
-import { unlockCaption, groupUnlocks, gateCaption } from './job-words.js';
+import { unlockCaption, unlockShort, groupUnlocks, gateCaption } from './job-words.js';
 import { fillKeys } from './key-words.js';
-import { feedDays } from './farm-silos.js';
+import { feedDays, shutWords, shutAhead } from './farm-silos.js';
 
 const MOVE_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
 const MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift']);
@@ -510,6 +510,7 @@ export function createUI(ctx, deps) {
         if (fix?.panel && openPanel(fix.panel)) panels.openPanel?.openTab?.(fix.tab);
       },
       onSkip: () => ctx.level?.nextJob({ anyway: true }),
+      phone: !!ctx.perks?.has?.('pocketPhone'),
     });
     return true;
   }
@@ -830,7 +831,9 @@ export function createUI(ctx, deps) {
       if (!groups.length || standard()) return;
       const texts = groups.map((g) => unlockCaption(g)).filter(Boolean);
       for (const t of texts) note(fillKeys(t));
-      if (texts.length) { caption.show(fillKeys(texts[texts.length - 1]), 14, { now: true }); paper(); }
+      // the review round: the caption one short line for 6 s (the saves / where / also words stay in the notebook and the tree)
+      const shorts = groups.map((g) => unlockShort(g)).filter(Boolean);
+      if (shorts.length) { caption.show(fillKeys(shorts[shorts.length - 1]), 6, { now: true }); paper(); }
     }
     events.on(EV.SKILL_UNLOCK, (p) => {
       // no caption for key null (a restore, a force back down) nor while a standard start plays the ideal farmer
@@ -882,7 +885,7 @@ export function createUI(ctx, deps) {
       if (gateArmed && gate.length && !standard()) {
         const t = gateCaption(gate);
         gate = []; gateArmed = false;
-        if (t) { caption.show(t, 14, { now: true }); note(t); paper(); }
+        if (t) { caption.show(t, 8, { now: true }); note(t); paper(); }
       }
       if ((feedAcc -= dt) > 0) return;
       feedAcc = 2;
@@ -890,8 +893,12 @@ export function createUI(ctx, deps) {
       let d = null;
       try { d = feedDays(farm, env); } catch { d = null; }
       const pending = (farm.feed?.pending?.length ?? 0) > 0 || !!farm.feed?.order;
-      if (d && Number.isFinite(d.days) && d.days <= (AUTO.orderAtDays ?? 2) + 1e-9 && !pending) {
-        const t = `Silo: about ${Math.max(0, Math.round(d.days * 10) / 10)} days of feed left (Feed 2): order at the silo gauge.`;
+      // the review round: the days the open valves reach; the feed for the age (or the next) behind a shut valve is named apart
+      // (the slide valves under a day), and no order is asked for while it waits there
+      const ahead = d ? shutAhead(d, env.dayNumber) : [];
+      const valveT = d && Number.isFinite(d.days) && ahead.length && d.days < 1 ? `Silo: about ${Math.max(0, Math.round(d.days * 10) / 10)} days of feed the open valves reach; ${shutWords({ shut: ahead })} (Feed 2): the slide valves at the silos.` : null;
+      if (valveT || (d && Number.isFinite(d.days) && !ahead.length && d.days <= (AUTO.orderAtDays ?? 2) + 1e-9 && !pending)) {
+        const t = valveT || `Silo: about ${Math.max(0, Math.round(d.days * 10) / 10)} days of feed left (Feed 2): order at the silo gauge.`;
         jobCard.setTopLine?.(t);
         if (feedArmed) { feedArmed = false; caption.show(t, 8); }
       } else if (!pending) jobCard.setTopLine?.(null);

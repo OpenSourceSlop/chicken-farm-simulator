@@ -23,9 +23,11 @@ import { pumpGauges } from './farm-cond-water.js';
 import { coldCause, hotCause, youngOf, DIAG, coldFixes, causeWords, fmtC } from './heat-diag.js';
 // Skills update (SKILLS.md §5.3, §3.9): the Equipment row and its warnings, the comfort lead and its fix
 import { AUTO_SYSTEMS, FAULTS, AUTO } from './config.js';
-import { faultWords, faultState } from './farm-faults.js';
+import { faultWords, faultState, WEIGH_DAYS } from './farm-faults.js';
 import { adviseFans } from './farm-fans.js';
-import { stagesStrain } from './farm-auto-ctl.js';
+import { stagesStrain, drawnSpans } from './farm-auto-ctl.js';
+import { feedDays, shutWords, shutAhead } from './farm-silos.js';
+import { panCap } from './farm-feed.js';
 
 /** Model values of the watch (PHASE4.md §15.1; none is a sign fact). */
 export const WATCH = {
@@ -86,7 +88,9 @@ export function watchState(env, farm) {
     tankLow: !!T && farm?.condition === 'water' && ((T.levelPct ?? 100) < 30 || (T.pumpShare ?? 1) < 0.9 || !!T.fixing),
     windChill: env?.windChill ?? 0, airSpeed: env?.airSpeed ?? 0, fans: env?.fansEffective ?? 0, houseRH: env?.houseRH ?? 60,
     // Phase 5 (PHASE5.md §6.8.1, review round): the water condition's iron filter clogged (farm-cond-water.js condX.filterK)
-    ironFilter: farm?.condition === 'water' && !!farm?.condX?.filterK };
+    ironFilter: farm?.condition === 'water' && !!farm?.condX?.filterK,
+    // Skills review round: the feed the open valves reach under a day while a shut silo holds feed
+    valves: (() => { try { return farm && env ? valveStrain(farm, env) : null; } catch { return null; } })() };
 }
 const POWER = { why: 'the power is off: the fans, the pad pump, the lights and the augers stand still', sign: 'sign-power', signName: SIGN.power, place: 'generator', check: 'the generator and its transfer switch at the generator house' };
 const TANK = { why: 'the water tank runs low: the drinker lines and the pads get too little water', sign: 'water-tank', signName: SIGN.tank, place: 'water-tank', check: 'the tank’s gauge and the well pump at the tank tower' };
@@ -134,7 +138,10 @@ export function causeOf(kind, age, st = {}) {
     case 'water':
       if (st.ironFilter) return { why: 'water reaches few birds: iron from the well clogs the water supply’s filter', sign: 'water-supply', signName: SIGN.supply, place: 'water-supply', check: 'the filter gauges at the water supply (the pressure after the filter), then a flow test at the drinker line regulators' };
       return { why: 'water reaches few birds (the flow, the nipple height or the filter)', sign: 'sign-water', signName: SIGN.water, place: 'drinker-0', check: 'a flow test at the drinker line regulators and the water supply’s filter' };
-    case 'feed': return { why: 'feed is out of reach or the pans run empty', sign: 'feeder-box', signName: SIGN.feeder, place: 'feeder-box', check: 'the pans’ height and the feed in them at the feeder box' };
+    case 'feed':
+      // the review round: the open slide valves reach no feed while a shut silo holds it (a change of feed not made)
+      if (st.valves) return { why: `the pans run empty: ${st.valves.value.replace(/^Feed: /, '')}`, sign: 'silo', signName: 'the feed silos plate', place: 'silo', check: 'the two slide valves at the silos (the feed program sign: which silo for the age)' };
+      return { why: 'feed is out of reach or the pans run empty', sign: 'feeder-box', signName: SIGN.feeder, place: 'feeder-box', check: 'the pans’ height and the feed in them at the feeder box' };
     case 'light': return { why: 'the light program cuts their eating time', sign: young ? 'controller-lights' : 'sign-light', signName: young ? SIGN.lightPlate : SIGN.light, place: 'controller', check: 'the lights at the climate controller' };
     case 'air': return { why: 'ammonia in the air: too little fresh air', sign: young ? 'sign-vent' : 'sign-air', signName: young ? SIGN.vent : SIGN.air, place: 'controller', check: 'the minimum ventilation timer at the climate controller' };
     case 'weak':
@@ -173,14 +180,34 @@ export function equipmentRow(env, farm) {
   if (!A || farm.mode !== 'level') return null;
   const on = Object.keys(AUTO_SYSTEMS).filter((s) => A.on[s]), open = (A.faults || []).filter((f) => f.phase === 'open');
   if (!on.length && !open.length) return null;
-  const faults = open.map((f) => { const w = faultWords(f, env, farm); return { id: f.id, system: f.system, state: faultState(farm, env, f), what: w.what, place: w.place, fix: w.fix, spot: w.spot, startedAt: f.startedAt }; });
+  const faults = open.map((f) => { const w = faultWords(f, env, farm); return { id: f.id, system: f.system, state: faultState(farm, env, f), what: w.what, short: w.short || null, place: w.place, fix: w.fix, spot: w.spot, startedAt: f.startedAt }; });
   const names = on.map((s) => AUTO_SYSTEMS[s].label).join(', ');
   const worst = faults.filter((f) => f.state !== 'green').sort((a, b) => RANK[b.state] - RANK[a.state])[0];
   // the review round: the stage table running with every stage on while the birds pant and the pad is off (the pad by hand)
   const strain = !worst && A.on.stages && !open.some((f) => f.system === 'stages') ? stagesStrain(farm, env) : null;
   if (strain && strain.padHelps) return { state: 'amber', label: 'Equipment', value: `Fan stages: house ${one(strain.houseC)} °C with every stage on`, detail: 'Set the pad by hand at the fan panel', strain, faults };
+  // the review round: the feed the open valves reach under a day while a shut silo holds feed (a change of feed not made)
+  const valves = !worst && A.on.feed ? valveStrain(farm, env) : null;
+  if (valves) return { state: 'amber', label: 'Equipment', value: valves.value, detail: 'Open the slide valves at the silos', valves, faults };
   if (!worst) return { state: 'green', label: 'Equipment', value: `${on.length} on · reading`, detail: names, faults };
-  return { state: worst.state, label: 'Equipment', value: worst.what, detail: `Look at ${worst.place}: ${worst.fix}.`, faults };
+  // the review round: the row a short label (what, cause and where are the warning box's); its detail only the place
+  return { state: worst.state, label: 'Equipment', value: worst.short || worst.what, detail: `Look at ${worst.place}`, fault: worst.id, faults };
+}
+/** The feed the open slide valves reach under a day while a shut silo holds feed: { value, days, shut } or null. */
+export function valveStrain(farm, env) {
+  if (!(farm.flock?.alive > 0) || farm.feed?.withdrawn || !farm.cyc?.on) return null;
+  let d = null;
+  try { d = feedDays(farm, env); } catch { d = null; }
+  const ahead = d ? shutAhead(d, env.dayNumber) : [];
+  if (!d || d.days == null || d.days >= 1 || !ahead.length) return null;
+  // under a quarter of a day, or under a day with the change of feed seen not made (the controller's drawnSpans): the
+  // calendar runs the open silo down to the change, so the hours before a change made in time stay steady
+  const late = Object.values(drawnSpans(farm.feed, env.day)).some((x) => x[1] === Infinity);
+  if (d.days >= 0.25 && !late) return null;
+  const pans = (farm.feed.lines || []).filter((l) => l.running);
+  const empty = pans.length && pans.every((l) => (l.kg ?? 0) <= 0.05 * panCap(l));
+  const reach = (d.bySilo || []).map((x, i) => (x.open ? `silo ${i + 1} ${x.kg > 0 ? `${int(x.kg)} kg` : 'empty'}` : null)).filter(Boolean).join(', ');
+  return { value: `Feed: ${empty ? 'pans empty, ' : ''}${reach || 'no silo open'}; ${shutWords({ shut: ahead })}`, days: d.days, shut: ahead, pansEmpty: !!empty };
 }
 const COLD_CONTROL = {
   air: (a) => (a.tunnelN > 0 && !a.stages ? 'the Tunnel fans row to 0 on the controller’s Ventilation tab' : 'the timer back to the vent sign’s setting on the controller’s Ventilation tab'),
@@ -254,7 +281,9 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
       excl: !!(farm.feed?.withdrawn || farm.cyc?.liftOn || farm.power?.on === false || farm.water?.mainClosed), // the withdrawal, the heat-wave lift, a cut, the vaccine's thirst
       f: { fT: f.fT ?? 1, fL: f.fL ?? 1, fF: f.fF ?? 1, fW: f.fW ?? 1, fAir: f.fAir ?? 1 }, tank: tankNow(),
       // Phase 5 (PHASE5.md §6.8.4): the hot season's appetite this hour (farm-cycle-step.js fx.fHot; 1 outside the hot season)
-      hotK: farm.cyc?.fx?.fHot ?? 1 };
+      hotK: farm.cyc?.fx?.fHot ?? 1,
+      // the review round: every running feeder line's pans empty (the intake's cause before the heat)
+      pansEmpty: birds && !farm.feed?.withdrawn && (farm.feed?.lines || []).some((l) => l.running) && (farm.feed?.lines || []).filter((l) => l.running).every((l) => (l.kg ?? 0) <= 0.05 * panCap(l)) };
   }
   /** The water condition's tank and pump now (the tank plate's figures), else null (no tank modelled). */
   function tankNow() {
@@ -384,6 +413,8 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
 
   /** The model's likely cause now: the comfort, then the weakest growth factor, then the last day's deaths. */
   function likely(rows, s) {
+    // the review round: empty pans first (a shut slide valve or an empty silo), before what the birds feel
+    if (s.pansEmpty) return 'feed';
     if (rows.comfort?.cold >= WATCH.comfortAmber) return 'cold';
     if (rows.comfort?.hot >= WATCH.comfortAmber) return 'heat';
     const f = s.f, lows = [['water', f.fW], ['feed', f.fF], [s.e > 0.5 ? 'heat' : 'cold', f.fT], ['light', f.fL], ['air', f.fAir]].filter((x) => x[1] < 0.93).sort((a, b) => a[1] - b[1]);
@@ -467,14 +498,17 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
     let raised = null;
     for (const f of (farm.auto.faults || []).filter((x) => x.phase === 'open')) {
       const state = faultState(farm, env, f), F = FAULTS[f.id] || {};
-      const warn = state === 'red' || (state === 'amber' && f.id === 'sensor-drift' && (farm.age ?? 0) < (F.warnAmberUnderDays ?? 7));
-      const key = `equipment:${f.id}:${f.startedAt}`, m = mem[key] || (mem[key] = { active: false, lastAt: null, clearSince: null });
+      // (review round: a fouled scale warns on a weigh day from 06:00, so a Next job skip stops before the weigh-in reads it)
+      const warn = state === 'red' || (state === 'amber' && f.id === 'sensor-drift' && (farm.age ?? 0) < (F.warnAmberUnderDays ?? 7))
+        || (f.id === 'scale-fouled' && WEIGH_DAYS.includes(env.dayNumber) && env.hour >= 6);
+      const key0 = f.id === 'scale-fouled' ? `:${env.dayNumber}` : '';
+      const key = `equipment:${f.id}:${f.startedAt}${key0}`, m = mem[key] || (mem[key] = { active: false, lastAt: null, clearSince: null });
       if (!warn || m.active) continue;
       m.active = true; m.lastAt = env.day;
       if (quiet > 0) continue;
       const w = faultWords(f, env, farm), day = Math.floor(env.day + 1e-9), hour = Math.round((env.day - day) * 24 * 100) / 100;
       const fix = { text: `Fix: ${w.fix} at ${w.place}`, panel: w.panel ?? null, tab: w.tab ?? null, spot: w.spot ?? F.spot ?? null };
-      const ww = { kind: 'equipment', state: 'red', text: `${w.what} Likely cause: ${w.cause}. Look at ${w.place}: ${w.fix}.`, cause: w.cause, sign: w.sign, place: w.spot, day, hour, t: env.day, fault: f.id, fix };
+      const ww = { kind: 'equipment', state: 'red', text: `${w.what} Likely cause: ${w.cause}. Look at ${w.place}: ${w.fix}.`, short: w.short || null, cause: w.cause, sign: w.sign, place: w.spot, day, hour, t: env.day, fault: f.id, fix };
       warnings.push(ww); status = { ...status, last: ww }; live = { base: null, key: '', st: null };
       records?.note?.('watch', ww.text);
       events?.emit?.(EV.WATCH, { ...ww });

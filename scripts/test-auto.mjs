@@ -12,7 +12,7 @@ import { EV } from '../src/events.js';
 import { SKILLS_UPDATE, LEVEL1, FAULTS, FAULT_PLAN, AUTO, AUTO_SYSTEMS, nippleHeightCmAt, feederRimCmAt, flockAgeAt } from '../src/config.js';
 import { ventNeed } from '../src/job-figures.js';
 import { feedDays } from '../src/farm-silos.js';
-import { lightsOk, rowFor } from '../src/farm-auto-ctl.js';
+import { lightsOk, rowFor, timerFor, winchTarget } from '../src/farm-auto-ctl.js';
 import { nightCheck, createSkipGuard } from '../src/night-check.js';
 import { equipmentRow } from '../src/flock-watch.js';
 import { adviseFans } from '../src/farm-fans.js';
@@ -30,7 +30,7 @@ const H = 1 / 24;
 
 // ---------------- the whole cycle with every system on ----------------
 const ideal = runCycle('ideal');
-const M = { winch: 0, winchAt: '', rim: 0, rimAt: '', vent: [], sp: [], feedMin: 9, feedAt: '', lights: [], scale: [], spChanged: 0, spDays: 0, rate: 0 };
+const M = { winch: 0, winchAt: '', rim: 0, rimAt: '', vent: [], sp: [], feedMin: 9, feedAt: '', reachMin: 9, reachAt: '', lights: [], scale: [], spChanged: 0, spDays: 0, rate: 0 };
 let lastH = null, lastSp = null;
 const auto = runCycle('ideal', { perks: 'all', onWorld: (w) => w.env.addStepper((e) => {
   const { farm } = w, hr = Math.floor(e.day * 24 + 1e-6);
@@ -47,7 +47,13 @@ const auto = runCycle('ideal', { perks: 'all', onWorld: (w) => w.env.addStepper(
   }
   if (h === 7 && d >= -1 && d <= 41 && !catchSoon) M.vent.push(ventNeed(e, farm).share);
   if (h === 6 && d >= 0 && d <= 21) { M.spDays++; if (Math.abs(e.heaterSetpoint - rowFor(e, d)) < 1e-6) M.spChanged++; }
-  if (d >= 1 && d <= 35 && farm.flock.alive > 0) { const f = feedDays(farm, e); if (f.days != null && f.days < M.feedMin) { M.feedMin = f.days; M.feedAt = `day ${d} ${h}:00`; } }
+  // (review round: feedDays counts the open valves only; the controller's calendar runs the open silo down to the change of
+  // feed, so on the change days 14 and 29 until the 15:00 change the silos' whole feed counts, the lines' reach elsewhere)
+  if (d >= 1 && d <= 35 && farm.flock.alive > 0) {
+    const f = feedDays(farm, e);
+    if (f.allDays != null && f.allDays < M.feedMin) { M.feedMin = f.allDays; M.feedAt = `day ${d} ${h}:00`; }
+    if (f.days != null && f.days < M.reachMin) { M.reachMin = f.days; M.reachAt = `day ${d} ${h}:00`; }
+  }
   if (h === 12 && d >= -1 && d <= 41 && !catchSoon && !lightsOk(e)) M.lights.push(d);
   if (h === 14 && d >= 1 && d <= 41 && farm.flock.alive > 0) { const s = farm.autoCtl.scale(); M.scale.push({ d, n: s.n, r: s.meanG / farm.flock.meanWeightG }); }
   void lastSp;
@@ -75,10 +81,12 @@ await test('the timer gives 90-130 % of the vent sign\'s need at every morning; 
 });
 await test('the feed never under a day with the controller ordering (days 1-35); the lights the program of the age; the scale 300 weighings by 14:00 within 1 % of the flock', () => {
   assert(M.feedMin >= 1, `feed ${M.feedMin} days at ${M.feedAt}`);
+  // the open valves' reach never runs out (the calendar runs the open silo down to the change of feed: under a day there)
+  assert(M.reachMin >= 0.1, `the lines' reach ${M.reachMin} days at ${M.reachAt}`);
   assert(!M.lights.length, `lights off the program at noon on days ${M.lights.join(', ')}`);
   const sc = M.scale.filter((x) => x.n < AUTO.scaleMinReads || Math.abs(x.r - 1) > 0.01);
   assert(M.scale.length >= 30 && !sc.length, `scale: ${JSON.stringify(sc.slice(0, 3))}`);
-  console.log(`     feed at least ${M.feedMin} days; scale ${M.scale.length} days at 14:00, every one ≥ ${AUTO.scaleMinReads} weighings within 1 %`);
+  console.log(`     feed at least ${M.feedMin} days (the open valves' reach at least ${M.reachMin}); scale ${M.scale.length} days at 14:00, every one ≥ ${AUTO.scaleMinReads} weighings within 1 %`);
 });
 await test('the stage table keeps the afternoons\' panting (days 15-41, 12:00-17:00) at or under the ideal\'s, heat deaths no more', () => {
   const pant = (r) => r.hourly.filter((x) => x.day >= 15 && x.day <= 41 && x.hour >= 12 && x.hour <= 17).reduce((a, x) => a + x.pantShare, 0);
@@ -212,7 +220,7 @@ const FCASES = [
     fix: (R) => { R.farm.act('water.height', { line: 2, cm: plate(R) }); R.farm.act('auto.reset', { system: 'winch', line: 2 }); } },
   { id: 'timer-reset', lv: 'week2', d: 9, h: 9, sys: ['timer'],
     effect: (R) => { const s = FAULTS['timer-reset'].firstSetting; assert(R.farm.vent.fans === s.fans && R.farm.vent.onSec === s.onSec, `the first setting: ${JSON.stringify(R.farm.vent)}`); },
-    fix: (R) => R.farm.act('vent.timer', { fans: 1, onSec: 40, cycleSec: 300 }) },
+    fix: (R) => { const t = timerFor(R.env, R.farm); R.farm.act('vent.timer', { fans: t.fans, onSec: t.onSec, cycleSec: 300 }); } },
   { id: 'stage-trip', lv: 'weeks45', d: 25, h: 8.5, sys: ['stages'], pre: 0.5,
     effect: (R, f) => { assert(!R.env.fanStages && R.env.fansManual === f.args.fans, `the stages off, the fans stay at ${f.args.fans}`); },
     fix: (R) => R.farm.act('auto.reset', { system: 'stages' }) },
@@ -250,7 +258,7 @@ for (const C of FCASES) {
     void f;
   });
 }
-await test('the controllers\' own retries bound the faults: the timer\'s first setting at most 12 h, the stage trip 2 h, with the high-temperature alarm', () => {
+await test('the controllers\' own retries bound the faults: the timer\'s first setting at most 12 h, the stage trip 4 h after its high-temperature alarm (8 h without one)', () => {
   const R = at('week2', 9, 9, ['timer']);
   R.env.skipHours(0.1); R.farm.debug.fault('timer-reset');
   R.env.skipHours(11.8);
@@ -262,9 +270,11 @@ await test('the controllers\' own retries bound the faults: the timer\'s first s
   S.env.skipHours(0.5); S.farm.debug.fault('stage-trip');
   S.env.setFans(0); S.env.forceHouseTemp?.(S.env.targetTemp + 6); S.env.skipHours(0.1); S.env.forceHouseTemp?.(null);
   assert(S.faults.some((p) => p.id === 'stage-trip' && p.phase === 'found' && p.alarm), 'the high-temperature alarm at the target + 5 °C');
-  S.env.skipHours(2);
   const g = S.farm.auto.faults.find((x) => x.id === 'stage-trip');
-  assert(g.phase === 'fixed' && g.fixedBy === 'retry' && S.env.fanStages, `retry after 2 h: ${g.phase} ${g.fixedBy}`);
+  S.env.skipHours(3.7);
+  assert(g.phase === 'open', `still open 3.7 h after the alarm: ${g.phase} ${g.fixedBy}`);
+  S.env.skipHours(0.5);
+  assert(g.phase === 'fixed' && g.fixedBy === 'retry' && S.env.fanStages, `retry 4 h after the alarm: ${g.phase} ${g.fixedBy}`);
 });
 await test('a fault that starts in a Next job skip stops it within the farm hour (the skip guard sees the equipment warning)', () => {
   const R = at('weeks45', 24, 8, ['winch']);
@@ -283,6 +293,124 @@ await test('a fault met by hand on the farmer\'s rounds: the level passes (runCy
     const f = r.farm.auto.faults.find((x) => x.id === id);
     assert(r.levels[lv].pass && f && f.phase === 'fixed', `${id}: ${lv} ${r.levels[lv].pass ? 'passed' : 'failed'}, fault ${f && f.phase}`);
   }
+});
+
+// ---------------- the review round: a fault stops only its part; the hand fix is the manual job; an ignored fault shows ----------------
+await test('a stalled winch stops only its own line: 48 farm hours later the other three lines are within 0.5 cm of the plate; the feed and brooder controllers go on beside their faults', () => {
+  const R = at('week2', 9, 9.5, ['winch']);
+  R.env.skipHours(0.2);
+  R.farm.debug.fault('winch-stall', { line: 0 });
+  const cm = R.farm.water.lines[0].heightCm;
+  R.env.skipHours(48);
+  const want = winchTarget(R.env);
+  assert(R.farm.water.lines[0].heightCm === cm && want - cm >= 1, `line 1 stays at ${cm} cm (plate ${want})`);
+  for (const i of [1, 2, 3]) assert(Math.abs(R.farm.water.lines[i].heightCm - want) <= 0.5, `line ${i + 1} at ${R.farm.water.lines[i].heightCm} cm, plate ${want} cm`);
+  // a lost order: the rims still follow the feeder plate
+  const F = at('week3', 16, 9, ['feed']);
+  F.env.skipHours(0.2); F.farm.debug.fault('order-lost');
+  F.env.skipHours(30);
+  const rim = Math.floor(feederRimCmAt(Math.max(0, flockAgeAt(F.env.day))));
+  assert(F.farm.feed.lines.every((l) => !l.running || Math.abs(l.heightCm - rim) <= 1), `rims ${F.farm.feed.lines.map((l) => l.heightCm).join('/')} (plate ${rim})`);
+  // a drifting sensor: the 06:00 step goes to the day's row, held at the row less the drift
+  const B = at('level1', 2, 9, ['brooders']);
+  B.env.skipHours(0.2); B.farm.debug.fault('sensor-drift');
+  B.env.skipHours(24 + 6.2 - B.env.hour);
+  const row = rowFor(B.env, B.env.dayNumber), a = B.farm.auto;
+  assert(a.setC === row && Math.abs(B.env.heaterSetpoint - (row - a.drift)) < 1e-6, `day ${B.env.dayNumber} 06:12: set ${a.setC} (row ${row}), thermostat ${B.env.heaterSetpoint} (drift ${a.drift})`);
+});
+await test('the hand fix is the manual job: Reset the motor answers only with the line at the plate; a timer out of the vent sign\'s band and a small order leave the fault open', () => {
+  const R = at('week2', 9, 9.5, ['winch']);
+  R.env.skipHours(0.1);
+  R.farm.debug.fault('winch-stall', { line: 2 });
+  R.env.skipHours(48);
+  const want = winchTarget(R.env);
+  assert(want - R.farm.water.lines[2].heightCm >= 1.5, `the line under the plate: ${R.farm.water.lines[2].heightCm} cm (plate ${want})`);
+  const r1 = R.farm.act('auto.reset', { system: 'winch', line: 2 });
+  assert(!r1.reset && R.farm.auto.faults.some((f) => f.id === 'winch-stall' && f.phase === 'open'), `Reset alone: ${JSON.stringify(r1)}`);
+  R.farm.act('water.height', { line: 2, cm: want });
+  const r2 = R.farm.act('auto.reset', { system: 'winch', line: 2 });
+  const fx = R.faults.find((p) => p.id === 'winch-stall' && p.phase === 'fixed');
+  assert(r2.reset && fx && /winched by hand to \d+ cm/.test(fx.text), `winched, then reset: ${JSON.stringify(r2)} · ${fx && fx.text}`);
+  // the timer: 1 s / 300 s is no fix; Fill the timer's figure is
+  const T = at('week2', 9, 9, ['timer']);
+  T.env.skipHours(0.1); T.farm.debug.fault('timer-reset');
+  T.farm.act('vent.timer', { fans: 1, onSec: 1, cycleSec: 300 });
+  const tf = T.farm.auto.faults.find((f) => f.id === 'timer-reset');
+  assert(tf.phase === 'open' && equipmentRow(T.env, T.farm).state === 'red' && /gives \d+ %/.test(equipmentRow(T.env, T.farm).faults[0].what), `1 s / 300 s: ${tf.phase} · ${equipmentRow(T.env, T.farm).faults[0].what}`);
+  const t = timerFor(T.env, T.farm);
+  T.farm.act('vent.timer', { fans: t.fans, onSec: t.onSec, cycleSec: 300 });
+  assert(tf.phase === 'fixed' && tf.fixedBy === 'hand', `the sign's setting: ${tf.phase}`);
+  // a lost order: 100 kg is no fix; an order to 3 days is
+  const O = at('week3', 17, 9, ['feed']);
+  O.env.skipHours(0.1); O.farm.debug.fault('order-lost');
+  O.farm.feed.pending.length = 0;
+  const k0 = feedDays(O.farm, O.env), k = Math.min(1, 1.5 / Math.max(0.1, k0.days));
+  for (const sl of O.farm.feed.silos) { for (const l of sl.layers) l.kg *= k; sl.kg = sl.layers.reduce((x, l) => x + l.kg, 0); }
+  O.farm.feed.siloKg = O.farm.feed.silos.reduce((x, sl) => x + sl.kg, 0);
+  const of = O.farm.auto.faults.find((f) => f.id === 'order-lost');
+  O.farm.act('feed.order', { kg: 100, type: 'grower' });
+  assert(of.phase === 'open', `100 kg: ${of.phase} (${of.args.handDays} days)`);
+  const fd = feedDays(O.farm, O.env);
+  O.farm.act('feed.order', { kg: Math.ceil(Math.max(200, 3 * fd.kgPerDay - fd.kg) / 100) * 100, type: 'grower' });
+  assert(of.phase === 'fixed', `an order to 3 days: ${of.phase} (${of.args.handDays} days)`);
+});
+await test('a change of feed not made (crumbleOn): with every branch at level 3 Week 3 passes as without the skills; feedDays counts the open valves only, a shut silo apart; the Equipment row amber under a day', () => {
+  const a = runCycle('crumbleOn', { to: 'week3' }), b = runCycle('crumbleOn', { perks: 'all', to: 'week3' });
+  assert(a.levels.week3.pass && b.levels.week3.pass && b.levels.week3.deathsPct <= a.levels.week3.deathsPct + 0.1, `week 3: ${b.levels.week3.pass} ${b.levels.week3.deathsPct} % with the skills (${a.levels.week3.pass} ${a.levels.week3.deathsPct} % without)`);
+  const F = at('week3', 16, 10, ['feed']);
+  F.env.skipHours(0.1);
+  const fe = F.farm.feed;
+  fe.valves = [1, 0];
+  fe.silos[0].layers = []; fe.silos[0].kg = 0;
+  fe.silos[1].layers = [{ type: 'grower', kg: 3000 }]; fe.silos[1].kg = 3000;
+  fe.siloKg = 3000; fe.pending.length = 0;
+  const fd = feedDays(F.farm, F.env);
+  assert(fd.days === 0 && fd.shut.length === 1 && fd.shut[0].silo === 1 && fd.allKg === 3000, `feedDays: ${JSON.stringify(fd)}`);
+  const row = equipmentRow(F.env, F.farm);
+  assert(row.state === 'amber' && /silo 2: 3,000 kg grower, valve shut/.test(row.value) && /slide valves/.test(row.detail), `the row: ${JSON.stringify(row).slice(0, 240)}`);
+  assert(!F.farm.autoCtl.ok('feed', 'w2-order'), 'the feed glance does not complete with nothing in reach');
+});
+await test('Heating 2\'s row key with a drifting sensor: the thermostat shows the row, the brooders hold the row less the drift, the fault stays open', () => {
+  const R = at('level1', 2, 9, ['brooders']);
+  R.env.skipHours(0.2); R.farm.debug.fault('sensor-drift'); R.env.skipHours(6);
+  const a = R.farm.auto, drift = a.drift, row = rowFor(R.env, R.env.dayNumber);
+  assert(drift >= 2, `drift ${drift}`);
+  // the key's code path (ui-cycle-controller.js rowKey): env less the drift, then the bus step
+  R.env.setHeaterSetpoint(row - drift);
+  R.events.emit(EV.ACTION, { id: 'heat.setpoint', value: R.env.heaterSetpoint, c: R.env.heaterSetpoint, by: 'row', result: undefined });
+  assert(Math.abs(R.farm.autoCtl.setpointC() - row) < 1e-6 && Math.abs(R.env.heaterSetpoint - (row - drift)) < 1e-6, `shows ${R.farm.autoCtl.setpointC()} (row ${row}), holds ${R.env.heaterSetpoint}`);
+  assert(a.faults.some((f) => f.id === 'sensor-drift' && f.phase === 'open'), 'the drift stays open (Check the sensor is the fix)');
+});
+/** A fault at (lv, d, h) in runCycle with every system on: met by hand on the rounds, or left (handFix false). */
+const faultRun = (lv, d, h, id, opts, handFix) => { let done = false; return runCycle('ideal', { perks: 'all', from: lv, to: lv, handFix, onWorld: (w) => w.env.addStepper((e) => { if (!done && w.farm.mode === 'level' && e.day >= d + h / 24) { done = true; w.farm.debug.fault(id, opts); } }) }); };
+await test('an ignored fault leaves a dent in the records, the same fault met in time costs nothing: the drift (day 7 weight), the fouled scale (the weigh-in), the stage trip (heat deaths), the timer (RH)', () => {
+  const D1 = faultRun('level1', 2, 9, 'sensor-drift', {}, true), D0 = faultRun('level1', 2, 9, 'sensor-drift', {}, false);
+  assert(D1.levels.level1.pass && D0.levels.level1.ratio <= D1.levels.level1.ratio * 0.95, `drift: day 7 ${D0.levels.level1.ratio} × ignored, ${D1.levels.level1.ratio} × met`);
+  const S1 = faultRun('week3', 20, 9, 'scale-fouled', {}, true), S0 = faultRun('week3', 20, 9, 'scale-fouled', {}, false);
+  assert(S1.levels.week3.pass && !S1.levels.week3.scaleFouled && S0.levels.week3.scaleFouled && S0.levels.week3.weightG <= S1.levels.week3.weightG * 0.96, `scale: ${S0.levels.week3.weightG} g ignored (fouled ${S0.levels.week3.scaleFouled}), ${S1.levels.week3.weightG} g met`);
+  const T1 = faultRun('weeks45', 30, 8.5, 'stage-trip', {}, true), T0 = faultRun('weeks45', 30, 8.5, 'stage-trip', {}, false);
+  const h1 = T1.farm.flock.deadByCause.heat || 0, h0 = T0.farm.flock.deadByCause.heat || 0;
+  assert(T1.levels.weeks45.pass && h0 >= h1 + 10, `stage trip: heat deaths ${h0} ignored, ${h1} met`);
+  const rh = (fix) => { const R = at('week2', 9, 9, ['timer']); R.env.skipHours(0.1); R.farm.debug.fault('timer-reset'); if (fix) { const t = timerFor(R.env, R.farm); R.farm.act('vent.timer', { fans: t.fans, onSec: t.onSec, cycleSec: 300 }); } let s = 0; for (let i = 0; i < 12; i++) { R.env.skipHours(1); s += R.env.houseRH; } return s / 12; };
+  const r0 = rh(false), r1 = rh(true);
+  assert(r0 >= r1 + 5, `timer: RH ${r0.toFixed(0)} % ignored, ${r1.toFixed(0)} % met`);
+  console.log(`     day 7 ${D0.levels.level1.ratio} × / ${D1.levels.level1.ratio} ×; week 3 ${S0.levels.week3.weightG} / ${S1.levels.week3.weightG} g; heat deaths ${h0} / ${h1}; RH ${r0.toFixed(0)} / ${r1.toFixed(0)} % (ignored / met)`);
+});
+await test('the automation state round-trips a save: a stalled line and a hand hold, saved and resumed into a fresh world, the same now and 30 farm hours on', () => {
+  const R = at('weeks45', 24, 9, Object.keys(AUTO_SYSTEMS));
+  R.env.skipHours(0.2);
+  R.farm.debug.fault('winch-stall', { line: 1 });
+  R.farm.act('water.height', { line: 3, cm: 20 });
+  R.env.skipHours(1);
+  const blob = JSON.parse(JSON.stringify(R.level.saveBlob()));
+  const S = makeRun();
+  S.level.resume(blob);
+  for (const s2 of Object.keys(AUTO_SYSTEMS)) S.farm.auto.on[s2] = true;
+  for (const s2 of Object.keys(AUTO_SYSTEMS)) R.farm.auto.on[s2] = true;
+  const key = (X) => JSON.stringify({ auto: X.farm.serialize().auto, st: X.env.fanStages, fans: X.env.fansManual, vent: X.farm.vent, lines: X.farm.water.lines.map((l) => l.heightCm) });
+  assert(key(S) === key(R), `after the resume:\n${key(S).slice(0, 300)}\n${key(R).slice(0, 300)}`);
+  R.env.skipHours(30); S.env.skipHours(30);
+  assert(key(S) === key(R), `30 h on:\n${key(S).slice(0, 300)}\n${key(R).slice(0, 300)}`);
 });
 
 // ---------------- the fault plan (SKILLS.md §5.2) ----------------

@@ -206,8 +206,21 @@ export function feedDays(farm, env) {
     const a = fh.find((x) => x[0] === d - 1), b = fh.find((x) => x[0] === d);
     if (a && b) { const m24 = farm.feed.meterKg - (a[1] + (b[1] - a[1]) * (env.day - d)); if (m24 > 0.5 * kgPerDay) { kgPerDay = m24; how = 'meter'; } }
   }
-  const silos = farm.feed.silos || [{ kg: farm.feed.siloKg ?? 0 }];
-  const kg = silos.reduce((a, s) => a + Math.max(0, s.kg || 0), 0);
+  // the review round: only the silos whose slide valve is open feed the lines; a shut silo's feed is listed apart (shut)
+  const silos = farm.feed.silos || [{ kg: farm.feed.siloKg ?? 0 }], valves = farm.feed.valves;
+  const open = (i) => !valves || !(valves.length > i) || valves[i] > 0;
+  const kg = silos.reduce((a, s, i) => a + (open(i) ? Math.max(0, s.kg || 0) : 0), 0);
+  const allKg = silos.reduce((a, s) => a + Math.max(0, s.kg || 0), 0);
   const per = (k) => (kgPerDay > 0 ? Math.round((k / kgPerDay) * 10) / 10 : null);
-  return { days: per(kg), kg: Math.round(kg), kgPerDay: Math.round(kgPerDay), how, birds, bySilo: silos.map((s) => ({ kg: Math.round(s.kg || 0), days: per(s.kg || 0) })) };
+  const typeOf = (s) => (s.layers && s.layers.length ? s.layers[0].type : s.type) || null;
+  const shut = silos.map((s, i) => ({ silo: i, kg: Math.round(s.kg || 0), type: typeOf(s) })).filter((x) => !open(x.silo) && x.kg > 0);
+  return { days: per(kg), kg: Math.round(kg), kgPerDay: Math.round(kgPerDay), how, birds, allKg: Math.round(allKg), allDays: per(allKg), shut,
+    bySilo: silos.map((s, i) => ({ kg: Math.round(s.kg || 0), days: per(s.kg || 0), open: open(i), type: typeOf(s) })) };
 }
+/** The shut silos holding the feed for the age or a later one (the change of feed waits behind its valve), else []. */
+export function shutAhead(fd, day) {
+  const order = FEED_TYPES.map((t) => t.id), now = order.indexOf(feedTypeForDay(Math.max(0, day)).id);
+  return (fd?.shut || []).filter((x) => order.indexOf(x.type) >= now);
+}
+/** "silo 2: 5,887 kg grower, valve shut" (the gauge, the phone, the Equipment row). */
+export const shutWords = (fd) => (fd?.shut || []).map((x) => `silo ${x.silo + 1}: ${Math.round(x.kg).toLocaleString('en-US')} kg ${x.type || 'feed'}, valve shut`).join(' · ');

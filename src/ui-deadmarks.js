@@ -11,11 +11,25 @@
 //   ctx: THREE, scene, camera, farm, flock (flock.dead.near / count), props (bucketDown), player
 import { h, setText, reducedMotion } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
-import { AUTO } from './config.js';
+import { AUTO, SPOTS, SPOTS2, DRINKER_LINES_Z } from './config.js';
+import { openFaults, faultWords } from './farm-faults.js';
+/** An open fault's place in the house (x, y, z) for its pill: a line's winch motor at the west end, the controller, the fan
+ *  panel, the silos, the bird scale. */
+const WINCH_X = -22.66;
+export function faultSpotXYZ(spot) {
+  const m = /^drinkers\.(\d)$/.exec(spot || '');
+  if (m) return { x: WINCH_X, y: 2.25, z: DRINKER_LINES_Z[+m[1]] ?? 0 };
+  const S = SPOTS[spot] || SPOTS2[spot];
+  return S ? { x: S.x, y: 1.9, z: S.z } : null;
+}
+export const FAULT_PILL_M = 15;
 // Skills update (SKILLS.md §3.10, §10; package "scene"): Biosecurity 3's symptom tags over the birds he walks past
 // (flock.tags(): the nearest AUTO.tagMax within AUTO.tagM, inside) as small chips, kept off the HUD cards like the dead-bird
 // chip; the CSS of the tag chip is added here once (the HUD's style sheet is frozen for this package)
 const TAG_CSS = '.edge-pointer--tag { padding: 3px 9px 3px 7px; gap: 6px; font: 600 12px/1 var(--font-display); background: #f3ecd8; color: #23302a; border-color: #b9ab86; }'
+  // the review round: an open equipment fault's pill over its place (a red dot and the short label)
+  + ' .edge-pointer--fault { gap: 6px; font: 600 12.5px/1 var(--font-display); background: #2b1714; color: #ffe1db; border-color: #d0533f; }'
+  + ' .edge-pointer--fault .tag-dot { width: 9px; height: 9px; border-radius: 50%; background: #ff4a33; box-shadow: 0 0 6px #ff4a33; flex: none; }'
   + ' .edge-pointer--tag .tag-dot { width: 8px; height: 8px; border-radius: 50%; background: #c8604a; flex: none; }'
   + ' .edge-pointer--tag.tag--gasp .tag-dot { background: #e08a2e; } .edge-pointer--tag.tag--sick .tag-dot { background: #8a7a52; }';
 function addTagCss() {
@@ -61,9 +75,16 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
     root.prepend(el);
     return { el, text, last: '', look: '', w: 0, h: 0 };
   });
+  // the review round: one pill per open equipment fault within FAULT_PILL_M (the edge pointer's look; at the edge when off screen)
+  const faultChips = [0, 1].map(() => {
+    const dot = h('span', { class: 'tag-dot' }), icon = h('span', { class: 'edge-arrow', html: ICONS.arrow }), text = h('span');
+    const el = h('div', { class: 'edge-pointer edge-pointer--fault', hidden: true, 'aria-hidden': 'true' }, icon, dot, text);
+    root.prepend(el);
+    return { el, icon, text, last: '', w: 0, h: 0 };
+  });
   const ndc = new THREE.Vector3();
-  let t = 0, acc = 0, near = [], rects = [], rectAge = 0;
-  const shown = { dead: null, bucket: null, marks: 0, tags: [] };
+  let t = 0, acc = 0, near = [], rects = [], rectAge = 0, faultAcc = 0, faultList = [];
+  const shown = { dead: null, bucket: null, marks: 0, tags: [], faults: [] };
 
   // review round: the tag sits over the bird's marker (not on it), keeps off the farmer's own figure and moves one way
   // past the HUD cards; once moved its arrow turns toward the bird
@@ -146,6 +167,7 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
     shown.tags = list.slice(0, tagChips.length).map((g) => ({ index: g.index, look: g.look, text: g.text }));
   }
   const hideTags = () => { for (const c of tagChips) c.el.hidden = true; shown.tags = []; };
+  const hideFaults = () => { for (const c of faultChips) c.el.hidden = true; shown.faults = []; };
   /** The farmer's own figure on the screen (his feet to his head, about ±40 px): no tag sits on him. */
   const fp = new THREE.Vector3();
   function farmerRect(p) {
@@ -183,7 +205,20 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
       const b = ctx.props?.bucketDown;
       bucketMark.visible = !!b;
       if (b) { bucketMark.position.set(b.x, 0.95 + (still ? 0 : Math.sin(t * 2) * 0.05), b.z); bucketMark.rotation.y = still ? 0 : t * 0.9; }
-      if (panelOpen) { deadChip.el.hidden = true; bucketChip.el.hidden = true; shown.dead = shown.bucket = null; hideTags(); return; }
+      if (panelOpen) { deadChip.el.hidden = true; bucketChip.el.hidden = true; shown.dead = shown.bucket = null; hideTags(); hideFaults(); return; }
+      // the open equipment faults within 15 m: a pill over each place ("Line 3 winch stalled 08:56")
+      if ((faultAcc -= dt) <= 0) {
+        faultAcc = 0.5;
+        let list = [];
+        try { list = farm?.mode === 'level' && farm.auto ? openFaults(farm).map((f) => { const w = faultWords(f, ctx.env, farm), at = faultSpotXYZ(w.spot); return at ? { id: f.id, text: w.short || w.what, ...at } : null; }).filter(Boolean) : []; } catch { list = []; }
+        faultList = list.filter((f) => Math.hypot(f.x - p.x, f.z - p.z) <= FAULT_PILL_M).slice(0, faultChips.length);
+      }
+      faultChips.forEach((c, k) => {
+        const f = faultList[k];
+        if (!f) { c.el.hidden = true; return; }
+        placeChip(c, f.x, f.y, f.z, f.text, [...rectOf(jobPointer?.()), ...farmerRect(p), ...faultChips.slice(0, k).filter((x) => !x.el.hidden).map((x) => x.el.getBoundingClientRect())]);
+      });
+      shown.faults = faultList.map((f) => ({ id: f.id, text: f.text }));
       // Biosecurity 3: the symptom tags of the birds he passes (none unless the perks hold passCheck: flock-tags.js)
       const tl = ctx.flock?.tags?.() || [];
       if (tl.length) placeTags(tl); else if (shown.tags?.length || tagChips.some((c) => !c.el.hidden)) hideTags();
@@ -204,12 +239,12 @@ export function createDeadMarks(ctx, root, { avoid, jobPointer } = {}) {
       } else { bucketChip.el.hidden = true; shown.bucket = null; }
     },
     /** What is shown now (harness checks): { dead: { text, metres, count, x, z, onScreen } | null, bucket, marks }. */
-    state() { return { dead: shown.dead ? { ...shown.dead } : null, bucket: shown.bucket ? { ...shown.bucket } : null, marks: shown.marks, tags: (shown.tags || []).map((g) => ({ ...g })) }; },
+    state() { return { dead: shown.dead ? { ...shown.dead } : null, bucket: shown.bucket ? { ...shown.bucket } : null, marks: shown.marks, tags: (shown.tags || []).map((g) => ({ ...g })), faults: (shown.faults || []).map((g) => ({ ...g })) }; },
     hide() {
       marks.count = 0; marks.visible = false; bucketMark.visible = false;
       deadChip.el.hidden = true; bucketChip.el.hidden = true;
       shown.dead = shown.bucket = null; shown.marks = 0;
-      hideTags();
+      hideTags(); hideFaults();
     },
   };
 }

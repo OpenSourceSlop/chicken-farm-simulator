@@ -75,6 +75,7 @@ import { nightCheck, nightHoursIn, createSkipGuard, createNightLog, NIGHT } from
 // Skills update (SKILLS.md §4.2, §15.2): the jobs as the payoffs make them, the controllers on from the perks, quiet ideal play
 import { jobVariant, baseDoneId } from './job-variants.js';
 import { AUTO, AUTO_SYSTEMS, FAULTS } from './config.js';
+import { platformWeighIn } from './farm-auto.js';   // review round: the weigh-in's platform scale reading
 
 const H = 1 / 24;
 const CARRY_KINDS = new Set(['boxes', 'barrow', 'sack', 'frame']);
@@ -400,7 +401,8 @@ export function createLevel(ctx, deps = {}) {
     const wr = weighResult(LEVEL1.endDay);
     // not weighed by hand: the automatic bird scale at the weigh-in age (08:00 day 7, about 2 % high);
     // a level that ended before the weigh-in age has no day 7 weight (null: the screen says what ended it)
-    const weightG = wr ? wr.mean : farm.stats?.scaleAtWeighInG ?? null;
+    const plat7 = wr ? null : platformWeighIn(farm, LEVEL1.endDay);
+    const weightG = wr ? wr.mean : plat7?.meanG ?? farm.stats?.scaleAtWeighInG ?? null;
     const ratio = chick && weightG != null ? weightG / chick : null;
     const pass = ratio != null && ratio >= F.weightRatioMin && deathsPct <= F.mortalityMaxPct;
     // what the farmer knows of the dead (the bin) and what he has not seen yet (the floor, the boxes)
@@ -418,7 +420,7 @@ export function createLevel(ctx, deps = {}) {
     const floor = records?.timeline?.()?.find?.((e) => e.day === 0)?.floorAtArrivalC ?? null;
     const at = splitDay(env.day), day = atClaim ? failAt.day : at.day, hour = atClaim ? 24 : at.hour;
     return { pass, reason, early: reason === 'mortality', endedAt: `day ${day}, ${atClaim ? '24:00' : hhmm(hour)}`, day, hour, ...(atClaim ? { failDay: failAt.day } : {}),
-      ratio, weightG, weighedByHand: !!wr, chickWeightG: chick, chickSource: measured != null ? 'box' : 'delivery',
+      ratio, weightG, weighedByHand: !!wr, ...(plat7?.fouled ? { scaleFouled: true } : {}), chickWeightG: chick, chickSource: measured != null ? 'box' : 'delivery',
       deaths, placed, placedReal: (fl.placed || 0) > 0, countedDead: fl.countedDead || 0, deadOnFloor: onFloor, deadInBoxes: inBoxes, culls: fl.culls || 0,
       // uniformity only from a hand weighing of 10 birds or more (the scale gives no spread); FCR only
       // once chicks were placed and are eating
@@ -452,14 +454,18 @@ export function createLevel(ctx, deps = {}) {
     const M = lv(), day = M.target.day, targetG = weightAt(day);
     const wr = weighResult(day);
     const scale = farm.stats.scaleAt?.[day] ?? null;
-    const weightG = wr && wr.n >= 10 ? wr.mean : scale;
+    // Skills update (review round): with the Growth 3 platform scale on that day and no hand weighing, the weigh-in reads the
+    // platform's day figure (about 6 % light while it is fouled: the result line names it)
+    const plat = wr && wr.n >= 10 ? null : platformWeighIn(farm, day);
+    const weightG = wr && wr.n >= 10 ? wr.mean : plat?.meanG ?? scale;
+    const scaleWord = plat ? (plat.fouled ? ' (the automatic scale, its platform fouled: about 6 % light)' : ' (the automatic scale)') : ' (automatic scale)';
     const share = weightG != null ? weightG / targetG : null;
     const max = M.fail.mortalityMaxPct;
     const pass = share != null && share >= M.target.minShare && ld.pct <= max && !failAt;
     const failText = failAt || ld.pct > max ? `deaths and culls in ${LEVEL_WORDS[def.id]} reached ${two(failAt?.pct ?? ld.pct)} % on day ${failAt?.day ?? env.dayNumber}`
-      : share != null ? `day ${day} weight ${int(weightG)} g${wr && wr.n >= 10 ? '' : ' (automatic scale)'}, ${int(share * 100)} % of the ${int(targetG)} g target` : `no day ${day} weight`;
+      : share != null ? `day ${day} weight ${int(weightG)} g${wr && wr.n >= 10 ? '' : scaleWord}, ${int(share * 100)} % of the ${int(targetG)} g target` : `no day ${day} weight`;
     const weighs2 = (def.weighDays || []).filter((d) => d !== day).map((d) => { const w = weighResult(d); return w && w.n >= 10 ? { day: d, weightG: w.mean, targetG: weightAt(d), uniformityPct: w.uniformityPct } : null; }).filter(Boolean);
-    return { pass, failText, weightG, targetG, targetDay: day, share, minShare: M.target.minShare, weighedByHand: !!(wr && wr.n >= 10), weighedN: wr?.n ?? 0,
+    return { pass, failText, weightG, targetG, targetDay: day, share, minShare: M.target.minShare, weighedByHand: !!(wr && wr.n >= 10), weighedN: wr?.n ?? 0, ...(plat?.fouled ? { scaleFouled: true } : {}),
       uniformityPct: wr && wr.n >= 10 ? wr.uniformityPct : null, otherWeighs: weighs2, mortalityMaxPct: max };
   }
 

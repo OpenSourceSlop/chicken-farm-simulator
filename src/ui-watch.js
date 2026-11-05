@@ -17,6 +17,8 @@ import { SKILLS_UPDATE } from './config.js';
 // the final check: a fifth row, the water supply (the tank, its pump and the meter), only where the farm has the water
 // condition's tank (the row and its compact dot are hidden while status() gives none)
 const ROWS = ['weight', 'deaths', 'comfort', 'intake', 'supply', 'equipment'];
+/** An equipment warning's four lines (12 px at 1.32, the box's padding): the clamp of index.template.html's .fw-warn.is-clamp. */
+const CLAMP_PX = 74;
 const LABEL = { weight: 'Weight', deaths: 'Deaths', comfort: 'Comfort', intake: 'Intake', supply: 'Supply', equipment: 'Equipment' };
 const SKILL_CSS = `
 .fw-showme { float: right; margin: 0 0 3px 8px; padding: 0 6px; min-height: 0; height: 20px; font: 600 11px/18px var(--font-display); letter-spacing: 0.03em; }
@@ -70,8 +72,21 @@ export function createWatchCard(root, ctx) {
   const warnWhere = h('b', { class: 'fw-warn-where' }), warnWhat = h('span');
   const warn = h('p', { class: 'fw-warn', hidden: true, tabindex: '-1' }, showMe, h('span', { class: 'fw-warn-in' }, warnWhere, ' ', warnWhat));
   const more = button({ class: 'fw-more', hidden: true, 'aria-label': 'Show more of the warning' }, 'more below ▾');
-  more.addEventListener('click', () => warn.scrollBy({ top: Math.max(24, warn.clientHeight * 0.7), behavior: 'smooth' }));
-  const syncMore = () => { const m = warn.scrollHeight - warn.clientHeight > 1 && warn.scrollTop + warn.clientHeight < warn.scrollHeight - 1; if (more.hidden === m) more.hidden = !m; warn.classList.toggle('is-more', m); };
+  // the review round: an equipment warning is clamped to four lines (is-clamp); its more key opens the rest and closes it
+  // again; any other warning scrolls inside its room as before
+  const clamped = () => warn.classList.contains('is-clamp') && !warn.classList.contains('is-open');
+  more.addEventListener('click', () => {
+    if (warn.classList.contains('is-clamp')) { warn.classList.toggle('is-open'); acc = 0; tightKey = ''; syncMore(); return; }
+    warn.scrollBy({ top: Math.max(24, warn.clientHeight * 0.7), behavior: 'smooth' });
+  });
+  const syncMore = () => {
+    const over = warn.scrollHeight - warn.clientHeight > 1, open = warn.classList.contains('is-clamp') && warn.classList.contains('is-open');
+    const m = open || (over && (clamped() || warn.scrollTop + warn.clientHeight < warn.scrollHeight - 1));
+    if (more.hidden === m) more.hidden = !m;
+    const label = open ? 'less ▴' : clamped() ? 'more ▾' : 'more below ▾';
+    if (more.textContent !== label) more.textContent = label;
+    warn.classList.toggle('is-more', m && !open);
+  };
   warn.addEventListener('scroll', syncMore);
   const card = h('section', { class: 'card fw', hidden: true, 'aria-label': 'Flock watch' },
     h('header', { class: 'fw-head' }, title, sub, fold), list, mini, warn, more);
@@ -98,8 +113,9 @@ export function createWatchCard(root, ctx) {
     // their detail lines while this warning shows, so the warning keeps its room (the card never reaches the time bar)
     const key = `${lastWarn.length}|${Math.round(limitY)}|${Math.round(r.width)}`;
     if (key !== tightKey) { tightKey = key; if (card.classList.contains('is-tight')) { card.classList.remove('is-tight'); fit(limitY); return; } }
-    if (!card.classList.contains('is-tight') && warn.scrollHeight * s > room + 0.5 && room - 18 * s < 58 * s) { card.classList.add('is-tight'); fit(limitY); return; }
-    const want = warn.scrollHeight * s <= room + 0.5 ? '' : `${Math.max(36, Math.floor((room - 18 * s) / s))}px`;
+    if (!card.classList.contains('is-tight') && (clamped() ? Math.min(warn.scrollHeight, CLAMP_PX) : warn.scrollHeight) * s > room + 0.5 && room - 18 * s < 58 * s) { card.classList.add('is-tight'); fit(limitY); return; }
+    const full = clamped() ? Math.min(warn.scrollHeight, CLAMP_PX) : warn.scrollHeight;
+    const want = full * s <= room + 0.5 ? '' : `${Math.max(36, Math.floor((room - 18 * s) / s))}px`;
     if (warn.style.maxHeight !== want) warn.style.maxHeight = want;
     syncMore();
   }
@@ -128,7 +144,9 @@ export function createWatchCard(root, ctx) {
         const mw = r && r.state !== 'green' ? ` · ${word}` : '';
         if (miniWords[i].textContent !== mw) { miniWords[i].textContent = mw; miniWords[i].hidden = !mw; }
         if (miniItems[i].hidden !== !r) miniItems[i].hidden = !r;
-        const sig = r ? `${r.state}|${r.value}|${r.detail}` : '';
+        // the review round: the Equipment row drops its detail while the warning box shows that fault's warning
+        const wl = st.last, dropDetail = id === 'equipment' && r && wl && wl.kind === 'equipment' && wl.fault === r.fault && ctx.env && ctx.env.day - wl.t < 0.5;
+        const sig = r ? `${r.state}|${r.value}|${dropDetail ? '' : r.detail}` : '';
         if (sig === R.sig) return;
         R.sig = sig;
         R.li.hidden = !r;
@@ -136,7 +154,7 @@ export function createWatchCard(root, ctx) {
         R.dot.className = `fw-dot is-${r.state}`;
         R.dot.setAttribute('aria-label', WATCH_STATES[r.state]); R.dot.title = WATCH_STATES[r.state];
         R.li.dataset.state = r.state;
-        setText(R.value, r.value); setText(R.detail, r.detail || '');
+        setText(R.value, r.value); setText(R.detail, dropDetail ? '' : r.detail || '');
       });
       // the last warning while it is less than 12 farm hours old: where to look first, then what happened
       const w = st.last, env = ctx.env;
@@ -151,7 +169,10 @@ export function createWatchCard(root, ctx) {
         if (stand.textContent !== s) setText(stand, s);
         stand.hidden = !s;
       } else if (!showMe.hidden || !stand.hidden) { showMe.hidden = true; stand.hidden = true; fixNow = null; }
-      if (text !== lastWarn) { lastWarn = text; const p = splitWarning(text); setText(warnWhere, p.where); setText(warnWhat, p.what); warn.hidden = !text; warn.scrollTop = 0; warn.removeAttribute('title'); }
+      if (text !== lastWarn) {
+        lastWarn = text; const p = splitWarning(text); setText(warnWhere, p.where); setText(warnWhat, p.what); warn.hidden = !text; warn.scrollTop = 0; warn.removeAttribute('title');
+        warn.classList.toggle('is-clamp', !!(text && w.kind === 'equipment')); warn.classList.remove('is-open');
+      }
       lastCalm = calm && !text;
       // folded (the settings): the dots only until he opens it; narrow screens: the dots while every row is steady
       const compact = mode === 'folded' ? !opened : narrowNow() && !opened && lastCalm;

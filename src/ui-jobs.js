@@ -410,8 +410,13 @@ export function createJobCard(parent, ctx, L, { root, avoid, onNext, onNotebook,
     // Skills update: the current job's lines (handled, would be easier, where) in view when it changes (live only)
     if (SKILLS_UPDATE.live && cur && cur.key !== shownCur) {
       shownCur = cur.key;
+      // (review round: from the rectangles, not li.offsetTop, whose offsetParent is the card's wrap: the job's title stays in
+      // view at the list's top)
       const li = list.querySelector('.job.is-current');
-      if (li && li.offsetTop + li.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = Math.max(0, li.offsetTop - 4);
+      if (li) {
+        const d = li.getBoundingClientRect().top - list.getBoundingClientRect().top;
+        if (d < 0 || d + li.offsetHeight > list.clientHeight) list.scrollTop = Math.max(0, list.scrollTop + d - 4);
+      }
     }
     ctx.props?.highlight?.(cur ? cur.def.signs : []);
   }
