@@ -15,6 +15,7 @@ import { feedDays } from '../src/farm-silos.js';
 import { lightsOk, rowFor } from '../src/farm-auto-ctl.js';
 import { nightCheck, createSkipGuard } from '../src/night-check.js';
 import { equipmentRow } from '../src/flock-watch.js';
+import { adviseFans } from '../src/farm-fans.js';
 
 let failed = 0;
 const QUICK = process.argv.includes('--quick');
@@ -112,7 +113,7 @@ function at(lv, d, h, systems = []) {
   return R;
 }
 
-await test('the farmer\'s hand holds: his timer until 18:00 then the table; his winching of a line until 06:00; his fans take the stage table off for 2 h', () => {
+await test('the farmer\'s hand holds: his timer until 18:00 then the table; his winching of a line until 06:00; his fans take the stage table off until 18:00', () => {
   const R = at('week2', 10, 9, ['timer', 'winch']);
   R.env.skipHours(0.2);
   R.farm.act('vent.timer', { fans: 2, onSec: 150, cycleSec: 300 });
@@ -131,10 +132,53 @@ await test('the farmer\'s hand holds: his timer until 18:00 then the table; his 
   assert(S.env.fanStages, 'the stage table runs');
   S.env.setFans(1); S.farm.act('vent.fans', { n: 1 });
   assert(!S.env.fanStages && S.env.fansManual === 1, 'his fans take the table off');
-  S.env.skipHours(1.9);
-  assert(!S.env.fanStages, 'held for 2 farm hours');
+  S.env.skipHours(17.9 - S.env.hour);
+  assert(!S.env.fanStages && S.env.fansManual === 1, 'held to 17:54 (the review round: not 2 farm hours)');
   S.env.skipHours(0.3);
-  assert(S.env.fanStages, 'the table again after 2 h');
+  assert(S.env.fanStages, 'the table again after 18:00');
+  // a setting after 18:00 holds to the next 06:00
+  S.env.setFans(2); S.farm.act('vent.fans', { n: 2 });
+  S.env.skipHours(6 + 24 - S.env.hour - 0.2);
+  assert(!S.env.fanStages && S.env.fansManual === 2, 'an evening setting held to 05:48');
+  S.env.skipHours(0.4);
+  assert(S.env.fanStages, 'the table again after 06:00');
+});
+await test('the hot season (review round): the young birds\' stage table runs the pad (the hot heat sign\'s young-birds line); the farmer\'s pad holds to 18:00; ok(stages) only with the birds in the table\'s range', () => {
+  SKILLS_UPDATE.live = true;
+  const R = makeRun();
+  R.run.startRun({ seed: 1, at: 'week3', condition: 'hot' });
+  R.level.debug.goto(15, 10, { auto: true });
+  R.farm.auto.on.stages = true; R.farm.auto.hold = { winch: {}, feed: {} };
+  R.env.skipHours(4.5);
+  const t = R.env.fanStages;
+  assert(t && t.padOverC != null && R.env.padOn && R.env.fansManual >= 1 && R.env.fansManual <= 3, `14:30 the table with its pad row: ${JSON.stringify(t)} fans ${R.env.fansManual} pad ${R.env.padOn}`);
+  assert((R.farm.comfort.pantShare ?? 0) <= 0.25 && R.farm.autoCtl.ok('stages'), `14:30 pant ${R.farm.comfort.pantShare}, ok ${R.farm.autoCtl.ok('stages')}`);
+  // the heat sign's suggestion (Ventilation 2) gives the same line
+  const a = adviseFans(R.env, R.farm);
+  assert(a.pad && a.fans >= 1 && a.fans <= 3 && /young birds/.test(a.row.line), `the suggestion: ${a.why}`);
+  // his own pad holds the table off to 18:00
+  R.env.setPad(true); R.farm.act('vent.pad', { on: true }); R.env.setFans(2); R.farm.act('vent.fans', { n: 2 });
+  R.env.skipHours(17.8 - R.env.hour);
+  assert(!R.env.fanStages && R.env.padOn, 'his pad and fans to 17:48');
+  R.env.skipHours(0.4);
+  assert(R.env.fanStages, 'the table after 18:00');
+  // the table running while the birds pant with every stage on and the pad off: not ok, the Equipment row amber
+  const S = makeRun();
+  S.run.startRun({ seed: 1, at: 'week3', condition: 'hot' });
+  S.level.debug.goto(15, 13, { auto: true });
+  S.farm.auto.on.stages = true; S.farm.auto.hold = { winch: {}, feed: {} };
+  S.env.skipHours(0.1);
+  S.env.setFanStages({ stages: [{ overC: 1, fans: 1 }, { overC: 2, fans: 2 }, { overC: 3, fans: 3 }], padOverC: null });
+  S.farm.auto.mem.stagesKey = 'x';
+  S.farm.comfort.pantShare = 0.9;
+  assert(!S.farm.autoCtl.ok('stages'), 'panting 90 %: the glance does not complete');
+});
+await test('the hot season with every branch at level 3 (a second flock): every level passes, no more heat deaths than without the skills', () => {
+  const a = runCycle('hot:ideal'), b = runCycle('hot:ideal', { perks: 'all', cyclesDone: 1 });
+  for (const [k, v] of Object.entries(a.levels)) assert(b.levels[k] && b.levels[k].pass === v.pass && v.pass, `${k}: ${b.levels[k]?.pass} (no skills ${v.pass}, ${b.levels[k]?.deathsPct} %)`);
+  const ha = a.farm.flock.deadByCause.heat || 0, hb = b.farm.flock.deadByCause.heat || 0;
+  assert(hb <= ha, `heat deaths ${hb} with the skills (${ha} without)`);
+  console.log(`     week 3 ${b.levels.week3.weightG} g ${b.levels.week3.deathsPct} % (no skills ${a.levels.week3.weightG} g ${a.levels.week3.deathsPct} %); heat deaths ${hb} (${ha})`);
 });
 
 await test('no problem moved by equipment: the lights do not fix sudden deaths (no sds-w2), the stages do not mark warm-afternoon3 acted, the timer does not mark the rainy spell acted', () => {

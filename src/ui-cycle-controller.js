@@ -202,9 +202,12 @@ export function controllerSkills(L, { draft, lp, refresh, waits }) {
   const rowWork = workLine(), preheat = workLine();
   const rowKey = oneKey('Set to the sign’s row', () => {
     const r = rowFor(env, farm, L.jobs());
-    env.setHeaterSetpoint(r.c);
+    // while the sensor drifts the brooders hold the sensor at the figure: env.heaterSetpoint is his figure less the drift,
+    // as the ± keys step it (the model adds the drift back for a bus step), so the thermostat shows the row
+    const drift = farm.auto?.drift || 0;
+    env.setHeaterSetpoint(r.c - drift);
     L.uiAct('heat.setpoint', { value: env.heaterSetpoint, c: env.heaterSetpoint, by: 'row' });
-    said.row = `Thermostat set to ${one(env.heaterSetpoint)} °C at ${env.timeLabel}`;
+    said.row = `Thermostat set to ${one(r.c)} °C at ${env.timeLabel}`;
     waits(); refresh();
   });
   const row2 = skillBox('brooderRow', 'Brooder thermostat to the sign', skRow(rowKey, rowWork.el), preheat.el);

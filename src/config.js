@@ -1088,16 +1088,20 @@ export const AUTO = {
   morningHour: 6,                     // the daily steps (timer, brooders) and the end of the farmer's own winch / thermostat setting
   winchCmPerH: 2, rimCmPerH: 2, rimFromDay: 4,
   ventShare: 1.1, ventRecountPct: 2,  // the timer at 110 % of the vent sign's need; again when his count changes 2 %
-  stagesFromDay: 15, padFromDay: 21,
+  stagesFromDay: 15,                  // (the pad: the stage table's own rows, farm-fans.js stageTableFor)
   orderAtDays: 2, orderToDays: 3, lastAutoOrderDay: 35,
   lightDays: [-1, 8, 36], rampMin: 20, rampFromDay: 8,
   scalePerDay: 600, scaleMinReads: 300, scaleNoisePct: 0.5,
   // the farmer's own setting holds (SKILLS.md §4.2; farm.auto.hold keeps the times, per line for the winch and the rims):
   //   winch, feed rims: that line until the next 06:00 · brooders: until the next 06:00 · timer: until 18:00 that day (or the
-  //   next 06:00 for a setting sent after 18:00) · stages: his own fans / pad for 2 farm hours, his own stage table
-  //   (vent.stages) until the next 06:00 · lights: his own program until the next change of week (days 8, 36)
+  //   next 06:00 for a setting sent after 18:00) · stages: his own fans / pad until 18:00 that day (the next 06:00 for one
+  //   sent after 18:00: the review round, not 2 farm hours, so the table never takes his pad back in the afternoon heat), his
+  //   own stage table (vent.stages) until the next 06:00 · lights: his own program until the next change of week (days 8, 36)
   handHold: { winch: { untilHour: 6, perLine: true }, feed: { untilHour: 6, perLine: true }, brooders: { untilHour: 6 },
-    timer: { untilHour: 18, lateUntilHour: 6 }, stages: { hours: 2, tableUntilHour: 6 }, lights: { untilChange: true } },
+    timer: { untilHour: 18, lateUntilHour: 6 }, stages: { untilHour: 18, lateUntilHour: 6, tableUntilHour: 6 }, lights: { untilChange: true } },
+  // Ventilation 3's reading in band (autoOk 'stages', the Equipment row): the house at most stagesOverC over the table's last
+  // stage and at most stagesPantMax of the flock panting
+  stagesOverC: 2, stagesPantMax: 0.25,
   // the level 2 / 3 hands-on payoffs (scene, panels)
   deadReachM: 2.5,                    // Biosecurity 2: E at a dead bird picks up every drawn dead bird this near
   bucketMaxKg: 15,                    // Biosecurity 2: the bucket holds this weight of dead birds (about 6 birds of 2.4 kg,

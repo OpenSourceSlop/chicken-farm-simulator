@@ -58,6 +58,10 @@ export const FAN_ADVICE = {
   // the stage table over the house's range (°C over the target): big birds one fan per 1.2 °C from +1 °C (the heat sign's
   // stages); young birds few and high (the young birds' line); the pad over +9 °C with every fan (big birds only)
   bigStages: [1, 2.2, 3.4, 4.6, 5.8, 7], youngStages: [1, 2, 3], padOverC: 9,
+  // the hot season's young birds (the hot heat sign's young-birds line, days 8-20): the pad with one to three tunnel fans
+  // while the outside air is over about 30 °C (HEAT_P4.padEveningAboveC) and the air not over the pad plate's humidity; the
+  // stage table's pad over youngPadOverC °C
+  hotYoungFrom: 7.7, youngPadOverC: 3,
   // the controller's hysteresis (a real stage controller's differential): a stage that is on stays on until the house is
   // hystC under its step; the pad, once on, until padHystC under its step
   hystC: 0.8, padHystC: 3,
@@ -65,6 +69,15 @@ export const FAN_ADVICE = {
 const one = (v) => (Math.round(v * 10) / 10).toFixed(1);
 const ageOf = (env, farm) => (farm && Number.isFinite(farm.age) ? farm.age : flockAgeAt(env.day));
 const fansAvailable = (env) => FAN_COUNT - ((env.fansBroken && env.fansBroken.length) || 0);
+/** The hot season's young birds with the pad (tuning-refs.mjs youngPadFans): one tunnel fan to day 11, two to 17, three to 20. */
+export const youngPadFans = (age) => (age < 11.7 ? 1 : age < 17.7 ? 2 : 3);
+/** The hot heat sign's young-birds line holds now: the hot season, days 8-20, the outside air over about 30 °C, not humid. */
+export function hotYoungPad(env, farm, age = ageOf(env, farm)) {
+  if (!farm || farm.condition !== 'hot' || age < FAN_ADVICE.hotYoungFrom - 1e-9 || age >= FAN_ADVICE.bigFrom - 0.3 - 1e-9) return false;
+  // the controller's own differential: a table written with the pad row keeps it until the air is a degree under the line
+  const held = !!(farm.auto && farm.auto.mem && farm.auto.mem.youngPadRow), over = HEAT_P4.padEveningAboveC - (held ? 1 : 0);
+  return env.outsideTemp >= over - 1e-9 && env.outsideRH < 75 && env.houseRH <= HEAT.padOffAboveRH - (held ? 0 : 5);
+}
 /** The evening line now (big birds, 18:00 to 21:00, from day 28). */
 export const eveningLineOn = (env, age) => age >= HEAT_P4.padEveningFromAge && env.hour >= 18 && env.hour < HEAT_P4.eveningUntil;
 
@@ -83,9 +96,23 @@ export function adviseFans(env, farm) {
     fans = idealFans(env, age);
     pad = idealPad({ outsideTemp: env.outsideTemp, targetTemp: env.targetTemp, outsideRH: env.outsideRH, houseRH: env.houseRH, padOn: !!env.padOn }, fans);
     if (eveningLineOn(env, age)) { line = 'the evening line'; fans = 6; pad = eveningPad(env); }
+  } else if (hotYoungPad(env, farm, age)) {
+    // the hot season's young birds (the hot heat sign): the pad with one tunnel fan in week 2, two or three in week 3, while
+    // they feel over the target + 1 °C without it (the fewest fans with the pad that hold them there; none when even one
+    // fan with the pad would chill them)
+    line = 'young birds, hot season';
+    if (feelWith(env, 0, age) > 1) {
+      const k = padFansForFeel(env, age);
+      if (k == null) fans = fansForFeel(env, age, 1, A.youngMax);
+      else { fans = Math.min(youngPadFans(age), k); pad = true; }
+    }
   } else if (age >= A.youngFrom) {
     line = 'young birds';
     fans = Math.min(A.youngMax, Math.max(Math.min(A.youngMax, idealFans(env, age)), fansForFeel(env, age, 1, A.youngMax)));
+  } else if (farm && farm.condition === 'hot' && age >= A.hotYoungFrom - 1e-9) {
+    // the hot season's week 2 out of the pad's hours: tunnel fans by what they feel (at most three)
+    line = 'young birds, hot season';
+    fans = fansForFeel(env, age, 1, A.youngMax);
   }
   fans = Math.max(0, Math.min(fansAvailable(env), fans));
   if (env.houseRH > HEAT.padOffAboveRH) pad = false;
@@ -101,7 +128,11 @@ export function adviseFans(env, farm) {
 export function stageTableFor(env, farm) {
   const age = ageOf(env, farm), A = FAN_ADVICE, n = fansAvailable(env);
   if (age < A.youngFrom + 1) return null;
-  if (age < A.bigFrom) return { stages: A.youngStages.map((overC, i) => ({ overC, fans: Math.min(n, i + 1) })), padOverC: null, key: 'young' };
+  if (age < A.bigFrom) {
+    // the young birds' line: one to three fans; in the hot season the pad over +3 °C while the outside is over about 30 °C
+    const pad = hotYoungPad(env, farm, age);
+    return { stages: A.youngStages.map((overC, i) => ({ overC, fans: Math.min(n, i + 1) })), padOverC: pad ? A.youngPadOverC : null, key: pad ? 'young+pad' : 'young' };
+  }
   const humid = env.houseRH > HEAT.padOffAboveRH || env.outsideRH >= 75;
   if (eveningLineOn(env, age)) {
     const p = eveningPad(env);

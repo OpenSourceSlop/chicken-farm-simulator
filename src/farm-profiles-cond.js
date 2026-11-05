@@ -16,7 +16,7 @@ import { CONDITIONS, HEAT_P4, HEAT, targetTempAt, WATER_TANK, PLACEMENT_DAY, AIR
 import { absHumSat, wetBulbOf, SLAB } from './sim.js';
 import { windChillP4 } from './farm-tuning.js';
 import { humidityTerm } from './farm-heat.js';
-import { feelWith, fansForFeel, padFansForFeel } from './farm-fans.js';
+import { feelWith, fansForFeel, padFansForFeel, youngPadFans } from './farm-fans.js';
 export { feelWith, fansForFeel, padFansForFeel };
 
 /** Profile names per condition (keys of scripts/test-cond.mjs COND_TARGETS). */
@@ -58,7 +58,8 @@ export function condProfile(name, condition) {
 
 const at = (d, h) => d + h / 24;
 // the hot season's young birds (tuning-refs.mjs youngPadFans): the pad with one tunnel fan to day 11, two to 17, three to 20
-export const youngPadFans = (age) => (age < 11.7 ? 1 : age < 17.7 ? 2 : 3);
+// (farm-fans.js youngPadFans: one rule for the ideal and the controller's advice)
+export { youngPadFans };
 const storms = (condition) => (condition === 'rainy' ? Object.values(CONDITIONS.rainy.levels).flatMap((l) => l.problems || []).filter((p) => p.storm === true) : []);
 const CUT = CONDITIONS.rainy.levels.weeks45.problems.find((p) => p.id === 'power-cut');
 

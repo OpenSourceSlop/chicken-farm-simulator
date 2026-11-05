@@ -381,7 +381,8 @@ const SPOT_BAIT = [[-25.2, -6.8], [25.2, -6.8], [25.2, 6.8], [-25.2, 6.8]];
 /** A test slip (scripts/test-skills.mjs): no afternoon fans read on the days of P.noFansRead [from, to]. */
 const noFans = (P, day) => !!(P.noFansRead && day >= P.noFansRead[0] && day <= P.noFansRead[1]);
 /** The stage controller runs the fans (Ventilation 3 on, from day 15 to the catch): the ideal's own fan plan stands aside. */
-const stagesOn = (farm, P, on) => on('stages') && farm.age >= 15 - 1e-9 && !(farm.harvest.started || farm.harvest.result || (farm.harvest.catchAt != null && farm.harvest.catchAt - 1 / 24 <= farm.age + PLACEMENT_DAY));
+// (the review round: his own fans or pad hold the table off until 18:00, so while that hold lasts the ideal keeps its fan plan)
+const stagesOn = (farm, P, on) => on('stages') && farm.age >= 15 - 1e-9 && !(farm.auto && farm.auto.hold && farm.auto.hold.stages > farm.age + PLACEMENT_DAY + 1e-9) && !(farm.harvest.started || farm.harvest.result || (farm.harvest.catchAt != null && farm.harvest.catchAt - 1 / 24 <= farm.age + PLACEMENT_DAY));
 
 /** Problems the ideal answers on the round after their symptom (PHASE3.md §6.14). */
 function answerProblems(farm, env, act, P, day) {

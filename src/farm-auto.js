@@ -36,10 +36,11 @@ import { AUTO, AUTO_SYSTEMS, FAULTS, LEVEL1, LIGHT_PRESETS, flowTargetAt, SKILL_
 import { EV } from './events.js';
 import { WATER, lineFlow } from './farm-water.js';
 import { planFaults, stepFaults, openFaults, installFaultDebug, faultHand, faultAct, faultWords, dropQuiet } from './farm-faults.js';
-import { stepControllers, isOpen, winchTarget, timerFor, stagesRunning, rowFor, lightsOk, lightsFor, feedOrderNow, hhmm } from './farm-auto-ctl.js';
+import { stepControllers, isOpen, winchTarget, timerFor, stagesRunning, stagesStrain, rowFor, lightsOk, lightsFor, feedOrderNow, hhmm } from './farm-auto-ctl.js';
 import { ventNeed, VENT_BAND, nippleInBand, rimInBand } from './job-figures.js';
 import { feedDays } from './farm-silos.js';
 export { adviseFans, stageTableFor } from './farm-fans.js';
+export { stagesStrain } from './farm-auto-ctl.js';
 
 export const AUTO_ACTION_IDS = new Set(['auto.reset', 'auto.calibrate', 'scale.read', 'scale.clean', 'water.columns']);
 /** The ui-only setting ids a controller sends (applied to env here, by 'auto' only). */
@@ -109,6 +110,8 @@ export function autoAct(farm, env, id, a = {}) {
 
 /** The next change of week of the light program (days -1, 8, 36 at 06:00) after now. */
 const nextLightChange = (env) => { for (const d of AUTO.lightDays) { const t = d + AUTO.morningHour * H; if (t > env.day + 1e-9) return t; } return Infinity; };
+/** Until 18:00 that day, or the next 06:00 for a setting sent after 18:00 (AUTO.handHold timer, stages). */
+const untilEvening = (env, R) => (env.hour < R.untilHour ? Math.floor(env.day + 1e-9) + R.untilHour * H : nextAt(env.day, R.lateUntilHour));
 /** The farmer's own setting (SKILLS.md §4.2): his hand holds the system's part for a while; the fault module sees fixes. */
 function hand(farm, env, id, a = {}, viaBus = false) {
   // the ideal's own play while quiet (a standard start, goto(auto)) is not the farmer's hand: no hold, no fix
@@ -128,10 +131,11 @@ function hand(farm, env, id, a = {}, viaBus = false) {
       if (on.brooders) h.brooders = nextAt(env.day, AUTO.handHold.brooders.untilHour);
       break;
     }
-    case 'vent.timer': if (on.timer) h.timer = env.hour < AUTO.handHold.timer.untilHour ? Math.floor(env.day + 1e-9) + AUTO.handHold.timer.untilHour * H : nextAt(env.day, AUTO.handHold.timer.lateUntilHour); break;
+    case 'vent.timer': if (on.timer) h.timer = untilEvening(env, AUTO.handHold.timer); break;
     case 'vent.fans': case 'vent.pad':
-      if (on.stages) {
-        h.stages = env.day + AUTO.handHold.stages.hours * H;
+      // only while the stage table is the controller's to run (from day 15 of the flock's age): his fans before then hold nothing
+      if (on.stages && (farm.flock.age ?? farm.age ?? 0) >= AUTO.stagesFromDay - 1e-9) {
+        h.stages = untilEvening(env, AUTO.handHold.stages);
         // his fans or pad take the controller's table off (it comes back when the hold ends)
         if (env.fanStages && A.mem.stagesKey) { env.setFanStages(null); A.mem.stagesKey = null; }
       }
@@ -154,7 +158,7 @@ export function autoOk(farm, env, system, inst, part) {
   switch (system) {
     case 'winch': return farm.water.lines.every((l) => nippleInBand(l.heightCm, env));
     case 'timer': { const v = ventNeed(env, farm); return v.need > 0 && v.share >= VENT_BAND[0] - 1e-9 && v.share <= VENT_BAND[1] + 1e-9; }
-    case 'stages': return stagesRunning(farm, env);
+    case 'stages': return stagesRunning(farm, env) && !stagesStrain(farm, env);   // the table running AND the birds in its range
     case 'brooders': { const c = A.setC ?? env.heaterSetpoint, d = Math.max(0, env.dayNumber); return !env.broodersUp && Math.abs(c - rowFor(env, d)) <= 1 + 1e-9 && (farm.flock.placed > 0 || !!env.heatersOn || env.heaterLevel > 0.02); }
     case 'feed': {
       if (part === 'pans-raised') return farm.feed.lines.every((l) => rimInBand(l.heightCm, env));
@@ -177,7 +181,11 @@ function systemText(farm, env, s) {
   switch (s) {
     case 'winch': { const want = winchTarget(env), h = farm.water.lines.map((l) => Math.round(l.heightCm)); const same = h.every((x) => x === h[0]); return `Winches: ${same ? `lines 1–4 at ${h[0]} cm` : `${h.map((x, i) => `${i + 1}: ${x}`).join(', ')} cm`} (plate ${want} cm)`; }
     case 'timer': { const v = farm.vent, t = timerFor(env, farm); return `Timer: ${v && v.fans > 0 ? `${v.fans} fan${v.fans === 1 ? '' : 's'} ${v.onSec} s / ${v.cycleSec} s` : 'off'} (the table for ${int(t.birds)} birds of ${int(t.weightG)} g: ${t.fans} fan ${t.onSec} s at 110 %)`; }
-    case 'stages': return env.fanStages ? `Fan stages: the table for day ${env.dayNumber} · ${env.fansManual ?? 0} fans now${env.padOn ? ', pad on' : ''}` : `Fan stages: off · ${env.fansManual ?? 0} fans by hand`;
+    case 'stages': {
+      if (!env.fanStages) return `Fan stages: off · ${env.fansManual ?? 0} fans by hand`;
+      const x = stagesStrain(farm, env);
+      return `Fan stages: the table for day ${env.dayNumber} · ${env.fansManual ?? 0} fans now${env.padOn ? ', pad on' : ''}${x ? ` · house ${one(x.houseC)} °C, ${Math.round(x.pant * 100)} % of the birds panting` : ''}`;
+    }
     case 'brooders': { const c = A.setC ?? env.heaterSetpoint, d = Math.max(0, env.dayNumber); return env.broodersUp ? 'Brooders: up for the big birds' : `Brooders: thermostat ${one(c)} °C (brooder sign, day ${d}: ${one(rowFor(env, d))} °C)`; }
     case 'feed': { const d = feedDays(farm, env), p = (farm.feed.pending || [])[0]; return `Feed: ${d.days != null ? `about ${one(d.days)} days in the silos` : `${int(d.kg)} kg in the silos`}${p ? `; ${int(p.kg)} kg ${p.type} confirmed by the mill, due day ${p.arriveDay} ${String(p.arriveHour).padStart(2, '0')}:00` : ''}`; }
     case 'lights': { const t = lightsFor(env); return `Lights: the ${(LIGHT_LABEL[t.preset] || t.preset).toLowerCase()} program${lightsOk(env) ? '' : ' (not set yet)'}`; }

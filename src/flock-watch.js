@@ -25,6 +25,7 @@ import { coldCause, hotCause, youngOf, DIAG, coldFixes, causeWords, fmtC } from 
 import { AUTO_SYSTEMS, FAULTS, AUTO } from './config.js';
 import { faultWords, faultState } from './farm-faults.js';
 import { adviseFans } from './farm-fans.js';
+import { stagesStrain } from './farm-auto-ctl.js';
 
 /** Model values of the watch (PHASE4.md §15.1; none is a sign fact). */
 export const WATCH = {
@@ -175,6 +176,9 @@ export function equipmentRow(env, farm) {
   const faults = open.map((f) => { const w = faultWords(f, env, farm); return { id: f.id, system: f.system, state: faultState(farm, env, f), what: w.what, place: w.place, fix: w.fix, spot: w.spot, startedAt: f.startedAt }; });
   const names = on.map((s) => AUTO_SYSTEMS[s].label).join(', ');
   const worst = faults.filter((f) => f.state !== 'green').sort((a, b) => RANK[b.state] - RANK[a.state])[0];
+  // the review round: the stage table running with every stage on while the birds pant and the pad is off (the pad by hand)
+  const strain = !worst && A.on.stages && !open.some((f) => f.system === 'stages') ? stagesStrain(farm, env) : null;
+  if (strain && strain.padHelps) return { state: 'amber', label: 'Equipment', value: `Fan stages: house ${one(strain.houseC)} °C with every stage on`, detail: 'Set the pad by hand at the fan panel', strain, faults };
   if (!worst) return { state: 'green', label: 'Equipment', value: `${on.length} on · reading`, detail: names, faults };
   return { state: worst.state, label: 'Equipment', value: worst.what, detail: `Look at ${worst.place}: ${worst.fix}.`, faults };
 }

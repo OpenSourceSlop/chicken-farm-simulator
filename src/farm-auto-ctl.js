@@ -2,7 +2,7 @@
 // by: 'auto', quiet: true }) (farm.js skips the problem hooks for it; farm-auto.js applies the ui-only settings to env) —
 // never while farm.auto.quietN > 0 (farm-auto.js stepAuto). Pure logic, package "model". Each change is one EV.AUTO
 // { system, did, text, args, day, hour } (records: a notebook line of kind 'auto').
-import { AUTO, LIGHT_PRESETS, FEED_TYPES, PLACEMENT_DAY, nippleHeightCmAt, feederRimCmAt, feedStdGAt, flockAgeAt, lightPresetForDay, feedTypeForDay } from './config.js';
+import { AUTO, HEAT, LIGHT_PRESETS, FEED_TYPES, PLACEMENT_DAY, nippleHeightCmAt, feederRimCmAt, feedStdGAt, flockAgeAt, lightPresetForDay, feedTypeForDay } from './config.js';
 import { EV } from './events.js';
 import { ventNeed, onSecFor, brooderRowC, knownAliveOf } from './job-figures.js';
 import { stageTableFor, withDifferential } from './farm-fans.js';
@@ -109,12 +109,28 @@ function stepStages(farm, env) {
     return;
   }
   m.stagesKey = k; m.stagesWKey = kw;
+  m.youngPadRow = t.key === 'young+pad';
   const first = t.stages[0];
   autoDo(farm, env, 'stages', 'table', `Fan stages: the table for day ${env.dayNumber} (${first.overC < -10 ? `the evening line: every fan${t.padOverC != null ? ' and the pad' : ''}` : `${t.stages.length} stages from +${first.overC} °C${t.padOverC != null ? `, the pad over +${t.padOverC} °C` : ''}`})`,
     'vent.stages', { stages: w.stages, padOverC: w.padOverC });
 }
 /** The stage table of the age is running (the controller's own, as it set it). */
 export const stagesRunning = (farm, env) => { const t = stageTableFor(env, farm); return !!(t && env.fanStages && farm.auto.mem.stagesKey === tableKey(t)); };
+/**
+ * The stage table runs but the birds are over its range (the review round: a table running is not the house in band):
+ * more than AUTO.stagesPantMax of the flock panting, or what they feel more than AUTO.stagesOverC over the table's top
+ * stage (or its pad). -> { houseC, pant, felt, allOn, padHelps } or null. padHelps: every stage on, the pad off and the air
+ * dry enough for it (the pad plate) — the farmer's pad by hand at the fan panel is the fix.
+ */
+export function stagesStrain(farm, env) {
+  const t = env.fanStages;
+  if (!t || !t.stages || !t.stages.length || !(farm.flock.alive > 0) || !(farm.flock.placed > 0)) return null;
+  const C = farm.comfort || {}, pant = C.pantShare ?? 0, felt = Number.isFinite(C.meanOver) ? C.meanOver : env.houseTemp - env.targetTemp;
+  const top = t.stages[t.stages.length - 1], lim = Math.max(top.overC, t.padOverC ?? -Infinity, 0) + AUTO.stagesOverC;
+  if (pant <= AUTO.stagesPantMax + 1e-9 && felt <= lim + 1e-9) return null;
+  const allOn = (env.fansManual ?? 0) >= top.fans, humid = env.houseRH > HEAT.padOffAboveRH || env.outsideRH >= 75;
+  return { houseC: +env.houseTemp.toFixed(1), pant: +pant.toFixed(2), felt: +felt.toFixed(1), allOn, padHelps: allOn && !env.padOn && !humid };
+}
 
 // ---------------- Heating 3: the brooders' thermostat by the brooder sign's row ----------------
 /** The brooder sign's row of a day for this flock (a bad batch's warmer row on its first days). */
@@ -174,7 +190,9 @@ export function feedOrderNow(farm, env) {
 function stepFeed(farm, env) {
   const m = farm.auto.mem, feed = farm.feed;
   const hr = Math.floor(env.day * 24 + 1e-6);
-  if (m.feedHr !== hr) {
+  // a lost order (hit or open): no order goes in until the farmer orders by hand; the rims below go on
+  const lostOpen = (farm.auto.faults || []).some((f) => f.id === 'order-lost' && (f.phase === 'hit' || f.phase === 'open'));
+  if (m.feedHr !== hr && !lostOpen) {
     m.feedHr = hr;
     const o = feedOrderNow(farm, env);
     if (o && o.kg > 0) {
@@ -222,8 +240,12 @@ function stepLights(farm, env) {
 // ---------------- Growth 3: the automatic bird scale (read on demand: farm-auto.js scaleNow) ----------------
 
 const STEP = { winch: stepWinch, timer: stepTimer, stages: stepStages, brooders: stepBrooders, feed: stepFeed, lights: stepLights };
-/** Every controller on (farm.auto.on) without an open fault of its own takes its step. */
+/** The controllers whose fault stops only the part that failed (the review round): the winch skips its stalled line, the feed
+ *  controller its ordering while an order is lost (the rims go on), the brooders go on stepping the row (the drifted sensor
+ *  held at it). The timer's and the stages' faults are their whole output. */
+const PARTIAL = new Set(['winch', 'feed', 'brooders']);
+/** Every controller on (farm.auto.on) takes its step: whole while no fault of its own is open, else only its sound parts. */
 export function stepControllers(farm, env) {
-  for (const [s, fn] of Object.entries(STEP)) if (farm.auto.on[s] && !isOpen(farm, s) && env.powerOn !== false) fn(farm, env);
+  for (const [s, fn] of Object.entries(STEP)) if (farm.auto.on[s] && (PARTIAL.has(s) || !isOpen(farm, s)) && env.powerOn !== false) fn(farm, env);
 }
 export { hhmm };
