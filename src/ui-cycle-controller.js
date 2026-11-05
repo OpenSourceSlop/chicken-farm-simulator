@@ -240,6 +240,9 @@ export function controllerSkills(L, { draft, lp, refresh, waits }) {
     waits(); refresh();
   }, { label: 'Set the tunnel fans and the pad as suggested' });
   const fans = skillBox('fanAdvice', 'Fans and pad for now', skRow(fanKey, fanWork.el));
+  // the final check: with Ventilation 2 the fans and the pad are read here too (the Ventilation tab's suggestion box in view
+  // for 2 s sends fans.read { at: 'controller' } once per opening), so r-fans-pm needs no walk to the fan panel
+  let fansSeen = 0, fansRead = false;
   // ---- Lighting 2 ----
   const lightWork = workLine();
   const lightKey = oneKey('Program for days 8–35', () => {
@@ -312,9 +315,15 @@ export function controllerSkills(L, { draft, lp, refresh, waits }) {
   }
   return {
     top: top.el, temp: [row2.el, sensor.el], fill: fill.el, fans: fans.el, lights: lights.el,
-    onOpen() { glance.onOpen(); since = lastReadAt; preAt = -Infinity; for (const k of Object.keys(said)) said[k] = ''; sync(); },
+    onOpen() { glance.onOpen(); since = lastReadAt; preAt = -Infinity; fansSeen = 0; fansRead = false; for (const k of Object.keys(said)) said[k] = ''; sync(); },
     /** the controller was read (open 2 s): the next opening shows what the controllers did after now */
     onRead() { lastReadAt = env.day; },
-    update(dt, force) { glance.update(dt); acc -= dt || 0; if (force || acc <= 0) { acc = 0.25; sync(); } },
+    update(dt, force) {
+      glance.update(dt); acc -= dt || 0; if (force || acc <= 0) { acc = 0.25; sync(); }
+      if (!fansRead && farm.mode === 'level' && perkHas(L, 'fanAdvice') && !fans.el.hidden && fans.el.offsetParent) {
+        fansSeen += dt || 0;
+        if (fansSeen >= 2) { fansRead = true; L.uiAct('fans.read', { fans: env.fansOn, houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH), speedMs: +(env.airSpeed ?? 0).toFixed(2), pad: !!env.padOn, at: 'controller' }); }
+      }
+    },
   };
 }

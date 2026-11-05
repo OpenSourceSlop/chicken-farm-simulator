@@ -1020,7 +1020,7 @@ export const PAYOFFS = {
   autoTimer: { branch: 'moisture', level: 3, step: 'auto', system: 'timer', fault: 'timer-reset', name: 'The minimum ventilation timer steps up with the flock',
     saves: 'Saves stepping the timer up by the table every other morning', where: 'the climate controller: it shows what the timer did since your last read', jobs: ['prep-vent', 'r-minvent'], by: 'model' },
   // Heat & Ventilation
-  fanAdvice: { branch: 'ventilation', level: 2, step: 'faster', name: 'The fan panel and the controller suggest the fans and the pad for now', saves: 'Saves working the fans and the pad out of the heat sign, and the walk to the fan panel to set them',
+  fanAdvice: { branch: 'ventilation', level: 2, step: 'faster', name: 'The fan panel and the controller suggest the fans and the pad for now', saves: 'Saves working the fans and the pad out of the heat sign, and the walk to the fan panel to read and set them',
     where: 'the fan panel and the controller\'s Tunnel fans row: Set as suggested', jobs: ['r-fans-pm', 'r-vent-night', 'p-heat3', 'p-panting', 'p-panting-fin', 'p-humid'], by: 'panels' },
   autoStages: { branch: 'ventilation', level: 3, step: 'auto', system: 'stages', fault: 'stage-trip', name: 'The controller keeps the fan stage table for the birds\' age',
     saves: 'Saves the walk to the fan panel every afternoon and stepping the fans through the heat', where: 'the fan stages: look at them when you read the controller', jobs: ['r-fans-pm'], by: 'model' },

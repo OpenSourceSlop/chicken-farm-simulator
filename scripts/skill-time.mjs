@@ -40,7 +40,8 @@ const P3_MIN = { 8: 4.4, 16: 4.7, 25: 4.1, 37: 4.2 };
 // 75 %, day 25 95 / 81 %, day 37 91 / 78 % at level 2 / 3; the no-skill days 4.73 / 5.33 / 4.25 / 4.38 min, +8 / +13 / +4 /
 // +4 % on p3-cycle's) as each measured figure + 5 points; the integrator writes them in SKILLS.md §14.2
 // days 0, 1, 14 (the farmer's choice after the skills review, seed 1: 84 / 82 %, 81 / 79 %, 79 / 58 %) the same way
-const BANDS = { l2: { 0: 89, 1: 86, 8: 90, 14: 84, 16: 92, 25: 100, 37: 96 }, l3: { 0: 87, 1: 84, 8: 77, 14: 63, 16: 80, 25: 86, 37: 83 } };
+// and day 16 / 25 / 37 at level 2 again once Ventilation 2 reads the fans at the controller (82 / 89 / 86 %)
+const BANDS = { l2: { 0: 89, 1: 86, 8: 90, 14: 84, 16: 87, 25: 94, 37: 91 }, l3: { 0: 87, 1: 84, 8: 77, 14: 63, 16: 80, 25: 86, 37: 83 } };
 /** The sample jobs alone (seconds of play: no skills, level 2, level 3), printed under the table. */
 const SAMPLE_JOBS = { 0: 'd0-vent', 1: 'd1-crop', 14: 'w2-weigh' };
 
@@ -110,7 +111,8 @@ export const JOB_MODEL = {
   'w2-lux': () => [visit(floor(-20, -2.5), 1), visit(floor(-15, 2.5), 1), visit(floor(-10, -2.5), 1)],
   // five birds from three parts of the house (the rule's 3 parts): two, two and one, each caught, looked at, let go
   'w3-droppings': () => [panel(floor(-18, -2.8), 1), panel(floor(-17, -1.8), 1), panel(floor(-6, 2.8), 1), panel(floor(-5, 1.8), 1), panel(floor(6, -2.8), 1)],
-  'r-fans-pm': (h, c) => (c.handed('stages') ? [glance(c.nearest(['controller', 'fanPanel']))] : [panel('fanPanel', 0, 2)]),
+  // Ventilation 2 (the final check): the fans read at the controller's Ventilation tab too, the nearer of the two
+  'r-fans-pm': (h, c) => (c.handed('stages') ? [glance(c.nearest(['controller', 'fanPanel']))] : h('fanAdvice') ? [panel(c.nearest(['controller', 'fanPanel']), 0, 2)] : [panel('fanPanel', 0, 2)]),
   // the night's fans and timer: by the heat sign by hand (about 4 presses), Set as suggested with Ventilation 2
   'r-vent-night': (h) => [panel('controller', h('fanAdvice') ? 1 : 2, 2, h('fanAdvice') ? 0 : 2)],
   'f-book': (h) => (h('pocketPhone') ? [phone(2)] : [panel('officeDesk', 3)]),

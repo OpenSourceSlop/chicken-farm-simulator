@@ -239,10 +239,11 @@ export const JOB_WHERE_PAYOFF = {
     'd1-crop': 'Among the chicks: pick up six from three parts of the floor and feel the crop (Brooding 2; Next chick takes the next one near you); the marker shows a part not sampled yet.',
     'b-crop48': 'Any chicks on the floor: feel six crops from three parts of the floor (Brooding 2).' },
   tallyBucket: each(['r-dead-am', 'r-dead-pm'], 'Dead birds on the floor: {key:use} picks up every one near you into the tally bucket, counted as they go in (Biosecurity 2); then empty it at the bin outside the south wall.'),
+  fanAdvice: { 'r-fans-pm': 'Climate controller, Ventilation tab: the fans and the pad for now (Ventilation 2), or the fan panel at the east end; keep it open a moment to read it.' },
   passCheck: { 'w2-check': 'Among the birds: walk slowly; each bird you see walk counts (Biosecurity 3), and {key:use} picks one up to watch it in the hand. Ten birds from three parts of the floor.' },
 };
 /** The order the where line takes a payoff in (the phone before the silo gauge: anywhere is nearest). */
-const WHERE_ORDER = ['pocketPhone', 'phoneRecord', 'waterAllLines', 'passCheck', 'frameWeigh', 'quickSamples', 'tallyBucket', 'siloOrder'];
+const WHERE_ORDER = ['pocketPhone', 'phoneRecord', 'waterAllLines', 'passCheck', 'frameWeigh', 'quickSamples', 'tallyBucket', 'siloOrder', 'fanAdvice'];
 /** The card's where line as the payoffs give it now: has(key) -> the payoff holds for this job (the instance's variant or
  *  the perks); the job's own line otherwise. */
 export function jobWhereNow(id, has = () => false) {

@@ -250,6 +250,7 @@ export function payoffPanels(inst, perks) {
   if (['p-order-feed', 'w2-order', 'w45-order', 'f-order'].includes(inst.id) && placeKey(inst, c, 'siloOrder')) out.add('silo');
   if (['p-order-feed', 'w2-order', 'w45-order', 'f-order', 'f-book', 'p-report', 'p-blood', 'p-hunched', 'c-book', 'p-weak-batch'].includes(inst.id) && placeKey(inst, c, 'pocketPhone')) out.add('pocket-phone');
   if ((inst.id === 'r-record' || inst.id === 'prep-record') && placeKey(inst, c, 'phoneRecord')) out.add('pocket-phone');
+  if (inst.id === 'r-fans-pm' && placeKey(inst, c, 'fanAdvice')) out.add('controller');
   return [...out];
 }
 /** The payoffs' rows at the top of a job's strip (live only): what holds now, the handed-over parts, the level 1 view. */

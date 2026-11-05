@@ -43,8 +43,9 @@ import { AUTO_SYSTEMS, PAYOFFS, SKILLS_UPDATE, SAMPLE_STANDARD } from './config.
 export const VARIANT_V = 1;
 /** The payoffs that change a job's rule, title or places (the rest only add strip rows and keys at the panels). */
 export const RULE_KEYS = ['waterAllLines', 'passCheck', 'siloOrder', 'pocketPhone', 'phoneRecord', 'tallyBucket', 'frameWeigh', 'quickSamples'];
-/** Of those, the ones that only move the places (allowed on a problem job too: its rule never changes). */
-export const PLACE_KEYS = new Set(['siloOrder', 'pocketPhone', 'phoneRecord']);
+/** Of those, the ones that only move the places (allowed on a problem job too: its rule never changes); fanAdvice (the final
+ *  check) is no rule key: it only adds the controller's Ventilation tab as r-fans-pm's place (the fans read there too). */
+export const PLACE_KEYS = new Set(['siloOrder', 'pocketPhone', 'phoneRecord', 'fanAdvice']);
 /** The words of a handed-over part (the job card's "drinker lines: handled by …"); 'whole' has none. */
 export const PART_WORDS = { 'drinkers-raised': 'drinker lines', 'pans-raised': 'feeder lines', whole: '' };
 /** Where each system's reading is looked at, in words (AUTO_SYSTEMS[s].glanceAt as the farmer finds them). */

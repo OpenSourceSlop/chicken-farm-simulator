@@ -173,6 +173,22 @@ test('the farmer\'s choice: Growth 2 weighs 25 birds from 3 parts, Brooding 2 ta
   assert(/25 birds \(Growth 2\)/.test(plain(jobWhereNow('w2-weigh', (k) => k === 'frameWeigh'))) && /Three chicks/.test(plain(jobWhereNow('d0-vent', (k) => k === 'quickSamples'))), 'the where lines');
 }));
 
+test('Ventilation 2 reads the fans at the controller too (final check 5): r-fans-pm\'s places, strip panel and where line; a fans.read sent there finishes it', () => live(() => {
+  const W = world(WEEK2, { day: 15, hour: 12.9, levels: { ventilation: 2 } });
+  W.at(15, 13.2);
+  const key = 'r-fans-pm@15', inst = W.jobs.byKey(key);
+  assert(inst && inst.status === 'open', `r-fans-pm open: ${inst && inst.status}`);
+  const ids = (jobPlaces(inst, W.c()) || []).map((p) => p.id);
+  assert(ids[0] === 'controller' && ids.includes('fanPanel'), `places: ${JSON.stringify(ids)}`);
+  assert(stripsAt(W.jobs, 'controller', 'vent', STRIPS_CYCLE, W.perks).some((x) => x.inst === inst), 'its strip at the controller');
+  assert(/Ventilation tab/.test(plain(jobWhereNow('r-fans-pm', (k) => k === 'fanAdvice'))), 'the where line names the controller\'s Ventilation tab');
+  W.act('fans.read', { fans: 2, at: 'controller' });
+  assert(W.st(key) === 'done', `the fans read at the controller: ${W.st(key)}`);
+  const N = world(WEEK2, { day: 15, hour: 12.9, levels: { ventilation: 1 } });
+  N.at(15, 13.2);
+  assert((jobPlaces(N.jobs.byKey(key), N.c()) || []).every((p) => p.id !== 'controller'), 'Ventilation 1: the fan panel only');
+}));
+
 test('r-raise with Water 3: the drinker part by the glance, the feeder part by hand; with Water 3 + Feed 3 both by glances', () => live(() => {
   const W = world(WEEK2, { day: 11, hour: 13.1, levels: { water: 3 } });
   W.at(11, 13.2);
