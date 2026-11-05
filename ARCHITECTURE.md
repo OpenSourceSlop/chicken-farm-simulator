@@ -1186,3 +1186,68 @@ it); the Phase 1 sandbox, Phase 2's lone brooding week, Phase 3's cycle and Phas
 - The open questions for the farmer are PHASE5.md §12 (Esc for the menu, the map on O, three slots, backups in parts, the
   hot season's weight, the sounds, captions by default, the HUD size, the first-play cards, the Time settings, reduced
   flock detail, coming back to the menu).
+
+## Phase 5 — the review fix round (after aab536e)
+
+What the 27 review findings changed, by area. Every rule of the approved design still holds (no verdict words, facts on
+signs with their sources, results in the records).
+
+- **The player's pause** (`level.js`, `player.js`, `ui-map.js`): P or the time bar's pause freezes the farmer as well as
+  the clock — no walk, ground click, map walk (the map's tag says he walks when the clock runs), E on the farm or farm
+  tool; the view still turns and the paused panels work; the time bar reads *Paused · P to go on*. In the dark house P
+  does not stop the clock (like Next job) and the alarm line says so.
+- **A long skip's busy card** (`ui-run.js`, `ui.js`, `level.js`): the card takes every key while it is open, a second
+  `run()` is refused, `nextJob()` answers `{ refused: 'busy' }`, and the hours are worked out when the skip runs (a second
+  J or Enter on the last rest days no longer runs past the end of the run).
+- **Keys in the words** (`key-words.js`, the job, strip, sign and intro texts): every farm key is a `{key:<action id>}`
+  token filled with the live bindings wherever the texts are drawn; `test-contracts` holds that no job, strip, Next:
+  line, sign fact or intro card names a bare letter.
+- **The flock watch's states** (`ui-watch.js`, template): steady a round dot, watch a triangle, alert a square with *!*;
+  the folded strip's dots carry the state as `aria-label` and `title`, and a non-steady item says its word
+  (*Supply · alert*).
+- **The first-play cards** (`ui-intro.js`, `props-boards.js boardFrame`): a sign's anchor is its whole board (the four
+  corners projected); a sign card tries above and below first, a HUD card left and right; each side slides the card
+  along it with its arrow still on the anchor, and the first place that covers no HUD card (clock, gauges, watch, job
+  card, time bar, legend), prompt, caption, edge pointer or the job marker wins (else the one that covers least). The
+  kicker follows the day (*Where things are · n of 3* and *The flock watch* after the chick day), the jobs card waits
+  until a job is open, the cards and the title card are solid and the HUD caption hides while a card shows.
+  `intro.state()` also gives `avoidBoxes`, `markerBox` and `kicker`.
+- **Shadows off** (`gfx-quality.js`, `main.js`): 'off' keeps the house's own shadow (its roof and walls shade the floor
+  and the birds; the used litter read like fresh husk without it): the house alone into a 512 map
+  (`GFX.shadowOff`), drawn again only when the sun turns more than 5° or the shadow box (it follows the farmer) moves
+  6 m — `quality.sync()` before each render. The warm-up runs inside `quality.warm(fn)` with the soft shadow and every
+  caster on whatever quality is stored, so a Low boot never links the shadow programs in play.
+- **The farm map's marks** (`map-marks-plan.js`, pure, used by `ui-map*.js` and `test-map.mjs`): jobs at one place share
+  one marker (*4 · 7*), each laid out by a side search off the labels, sign posts, machine marks, the map's own words,
+  the farmer and the buildings' middles, with a short leader to its place; the always-shown labels keep off the posts
+  and the farmer; signs read **S1, S2 …** on a small board on a leg (never a bare number like a job); the *Jobs now* list
+  has one row a job in the job card's order (*· 4 places (the nearest first)*); dead birds are muted-red crosses with a
+  light halo, never more than the farm's count and none on the resting house; the farmer's arrow has a halo; one resize
+  listener for the map's life. `ui.map.state()` adds `posts`, `words` and `jobRows`; a marker carries `keys`, `ns`,
+  `text`, `w`, `h`, `leader`.
+- **Sampling the litter** (`content-jobs.js`): r-litter's places are the floor in use (`sectorsOf: 'used'`: the whole
+  house after the curtain lifts, not the old brooding floor).
+- **Smaller fixes**: a restored or standard-start flock draws no more dead birds than the farm's count at once
+  (`flock-dead.trimTo`); the job card's fade ends clear above its *more* pill; the backup box shows a whole run's 25
+  part keys; *Small* HUD is compact (tighter cards, smaller display numbers, `#hud.is-small`) instead of scaled under
+  the text floors, and the settings say when *Larger* is shown as Large under 1100 px; the world snaps its rain and wet
+  ground when the farm's time jumps more than an hour (a load, a replay, a start, a long skip); the bad-batch fail line
+  and the intake detail are one sentence with semicolons; the guide names *the day-7 weight against the chick weight*;
+  the hot season's note and heat sign line say *whenever the house air is over about 28 °C* (general practice), and the
+  note is left off while the comfort row warns; a slot naming a level this build does not know reads *invalid* and a
+  failed Continue says why on the title card; slot rows are cached on their stored text (no parse, decode or CRC per
+  redraw); a slot saved on a result reads *· level ended*; a load into the run in play keeps each level's attempts and
+  counts a load after a failed result as a replay; the scheduled autosaves wait for an idle moment (at most 1 s; the
+  page hiding, a record closing and the level's end still save at once; under automation at once).
+- **Build**: `node build.mjs` publishes the page minified with names kept (about 1.48 MB, was 2.26 MB);
+  `node build.mjs --dev` builds it unminified for debugging.
+- **Not done in this round** (minor, with reasons in the round's report): the flock's per-frame allocations in
+  `steerAll` (needs a V8 optimisation trace on a real machine; no frame drop measured here), and playing a standard
+  start in chunks or caching it (the ideal farmer's trace writes every level's saved start on the way; the busy card
+  covers it). The hot season's intake expectation still follows the house air every hour (the ideal's own days 34–35
+  read amber with any cut keyed on comfort), so the note and sign line now say so in words.
+- **Tests and steps**: `scripts/p5-fixes.json` (the pause, the dark house's P, the rebind, the busy card, the watch's
+  shapes and words); `p5-first-play` checks that no card covers its board, the marker or another HUD card, the solid card
+  and the hidden caption, and the kicker on day 33; `p5-gfx` checks the floor's luminance with shadows off against high
+  (within 10 %, also after the sun moves) and that a Low boot then High links nothing; `p5-map` and `test-map` check zero
+  overlaps between markers, labels, posts and words (the planning and prep days, both views, 960 × 600 and 1280 × 800).

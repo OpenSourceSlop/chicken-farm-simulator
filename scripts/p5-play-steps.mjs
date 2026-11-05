@@ -106,7 +106,7 @@ function broodingResult() {
     clickOn('#hud [data-result-key="saves"]'), adv(0.2),
     exp(`${panel()} === 'saves' && __game.ui.parentPanels.includes('result') && 'the saves panel over the result'`, 'the result\'s Save or load key'),
     clickOn('#hud [data-slot="2"] [data-save-key="save"]'), wait(500), adv(0.1),
-    exp(`(() => { const r = __game.saves.list()[2]; return r.meta && /Level 2 – The brooding week · Day 7, \\d\\d:\\d\\d$/.test(r.meta.name) && 'slot 2: ' + r.meta.name; })()`, 'Save here in slot 2 from the result'),
+    exp(`(() => { const r = __game.saves.list()[2]; return r.meta && /Level 2 – The brooding week · Day 7, \\d\\d:\\d\\d · level ended$/.test(r.meta.name) && 'slot 2: ' + r.meta.name; })()`, 'Save here in slot 2 from the result'),
     press('Escape'), adv(0.2),
     exp(`${panel()} === 'result' && [...document.querySelectorAll('.result-btns .btn')].some((b) => /Week 2/.test(b.textContent)) && 'the result again, with its keys'`, 'closing the saves panel shows the result again'),
   ];

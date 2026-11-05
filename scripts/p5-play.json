@@ -193,7 +193,7 @@
   {"clickOn":"#hud [data-slot=\"2\"] [data-save-key=\"save\"]"},
   {"wait":500},
   {"advance":0.1},
-  {"expect":"(() => { const r = __game.saves.list()[2]; return r.meta && /Level 2 – The brooding week · Day 7, \\d\\d:\\d\\d$/.test(r.meta.name) && 'slot 2: ' + r.meta.name; })()","label":"Save here in slot 2 from the result"},
+  {"expect":"(() => { const r = __game.saves.list()[2]; return r.meta && /Level 2 – The brooding week · Day 7, \\d\\d:\\d\\d · level ended$/.test(r.meta.name) && 'slot 2: ' + r.meta.name; })()","label":"Save here in slot 2 from the result"},
   {"press":"Escape"},
   {"advance":0.2},
   {"expect":"__game.ui.openPanelId === 'result' && [...document.querySelectorAll('.result-btns .btn')].some((b) => /Week 2/.test(b.textContent)) && 'the result again, with its keys'","label":"closing the saves panel shows the result again"},

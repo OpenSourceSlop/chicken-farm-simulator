@@ -17,7 +17,7 @@
   {"eval": "__game.farm.debug.power(true), __game.advance(2), 'power on; rotor speeds ' + Array.from(__game.house.debug.fans.speed).map((v) => v.toFixed(1)).join(' ')"},
   {"expect": "Array.from(__game.house.debug.fans.speed).every((v) => v > 2) && __game.house.debug.fittings.lamp > 0.1 && !__game.house.debug.fittings.alarm.visible && 'rotors turning again, lamps ' + __game.house.debug.fittings.lamp.toFixed(2) + ', alarm off'", "label": "power on: rotors turning, the lights back"},
 
-  {"eval": "__game.setState({ farmer: { x: -32, z: 9.2, yaw: 0 }, cameraYaw: 0, zoom: 14 }), __game.advance(0.4), window.__t.panels.length = 0, 'a normal run: the farmer at the generator shed'"},
+  {"eval": "window.__t.pause(false), __game.setState({ farmer: { x: -32, z: 9.2, yaw: 0 }, cameraYaw: 0, zoom: 14 }), __game.advance(0.4), window.__t.panels.length = 0, 'a normal run: the farmer at the generator shed (the pause lifted: Phase 5 fix round, a paused farmer does not use the farm)'"},
   {"press": "e"},
   {"eval": "__game.advance(0.2), 'panels opened: ' + JSON.stringify(window.__t.panels)"},
   {"expect": "!window.__t.panels.includes('generator') && 'E at SPOTS4.generator in a normal run opens nothing (' + JSON.stringify(window.__t.panels) + ')'", "label": "E at the generator: nothing in a normal run"},
@@ -25,6 +25,7 @@
   {"press": "e"},
   {"eval": "__game.advance(0.2), 'panels opened: ' + JSON.stringify(window.__t.panels)"},
   {"expect": "window.__t.panels.includes('generator') && 'E at SPOTS4.generator in the rainy season opens: ' + window.__t.panels.join(', ')", "label": "E at the generator in a rainy run opens the generator panel"},
+  {"eval": "window.__t.pause(true), 'paused again for the scene checks'"},
   {"eval": "__game.ui.closePanel(), __game.advance(0.2), 'closed'"},
 
   {"eval": "__game.farm.act('gen.start', {}), __game.farm.act('gen.switch', { to: 'generator' }), __game.advance(3), (() => { const g = __game.props.debug.cond.debug.gen; return 'generator running ' + g.st.running + ', puffs ' + g.st.puffs + ', shaking ' + g.shaking; })()"},

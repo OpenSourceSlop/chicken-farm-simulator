@@ -255,8 +255,8 @@ export function createLevel(ctx, deps = {}) {
   // ---------------- clock speed (PHASE2.md §2): paused > sign > panel > carry > fast > work ----------------
   function clock() {
     const kind = ui?.panelKind;
-    if (userPaused && dark()) userPaused = false; // the dark house: every farm minute counts, P does not stop the clock
-    if (userPaused || kind === 'paused') { env.paused = true; return; }
+    // the dark house: every farm minute counts, a pause does not stop the clock (it holds again once the lights are back)
+    if ((userPaused && !dark()) || kind === 'paused') { env.paused = true; return; }
     env.paused = false;
     const placing = is(def, LEVEL1) && engine.anchors.truck != null && !fired.has('placed') && env.dayNumber === LEVEL1.arrivalDay;
     const catching = !!farm.harvest?.started && !farm.harvest?.result; // the crew works on its own (PHASE3.md §2.3)
@@ -733,7 +733,7 @@ export function createLevel(ctx, deps = {}) {
         return true;
       },
       /** Fix round: the time bar's words while the player paused the clock ('Paused · P to go on'); '' otherwise. */
-      pausedText() { return userPaused && level.mode === 'level' ? `Paused · ${ctx.keys?.label?.('pause') ?? 'P'} to go on` : ''; },
+      pausedText() { return userPaused && level.mode === 'level' && !dark() ? `Paused · ${ctx.keys?.label?.('pause') ?? 'P'} to go on` : ''; },
       setFast(on) { fast = !!on; userPaused = false; },
       /** A panel action that waits on farm time (a flow test, pans filling, a flush): a clock the farmer paused runs
        *  again at normal speed (the open panel's own speed while it stays open). True if it was paused. */
@@ -959,7 +959,7 @@ export function createLevel(ctx, deps = {}) {
     keepWalking() { if (!ended || inRun) return; level.mode = 'level'; ui?.closePanel?.(); ui?.setMode?.('level'); },
     update(dt) {
       // fix round: the player's pause freezes the farmer too (no walk, no click or map walk; the view still turns)
-      { const freeze = level.mode === 'level' && userPaused; if (player && 'frozen' in player && player.frozen !== freeze) player.frozen = freeze; }
+      { const freeze = level.mode === 'level' && userPaused && !dark(); if (player && 'frozen' in player && player.frozen !== freeze) player.frozen = freeze; }
       if (level.mode === 'title' || level.mode === 'result') { env.paused = true; return; }
       if (level.mode !== 'level') return;
       if (ended) { // keep walking on the last day: the clock runs to 23:59, then stands; the level is over

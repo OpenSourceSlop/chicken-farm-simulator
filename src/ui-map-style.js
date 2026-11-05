@@ -20,6 +20,10 @@ export const MAP_CSS = `
 .map-postn { font: 700 11px var(--font-display); fill: #14231b; pointer-events: none; letter-spacing: 0.02em; }
 .map-mach { fill: #aeb6bd; stroke: #14231b; stroke-width: 1.2; }
 .map-pl.is-faint { opacity: 0.45; }
+/* fix round: a sign not on the farm now is a pale dashed board, its S number at full contrast (it is text to read) */
+.map-pl--sign.is-faint { opacity: 1; }
+.map-pl--sign.is-faint .map-post { fill: #cfc8b4; stroke-dasharray: 2 1.5; }
+.map-pl--sign.is-faint .map-postleg { opacity: 0.5; }
 .map-pl:hover .map-post, .map-pl:hover .map-mach, .map-pl.is-focus .map-post, .map-pl.is-focus .map-mach { stroke: var(--focus); stroke-width: 2.5; }
 .map-pl.is-focus .map-hit, .map-pl:hover .map-hit { stroke: var(--focus); stroke-width: 2.5; stroke-dasharray: 4 3; }
 .map-househit { fill: transparent; cursor: zoom-in; }

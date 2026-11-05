@@ -1367,3 +1367,15 @@ integrated** section (the modules, the contracts as merged, the tests and their 
 13. **Coming back to the menu.** What the game menu opens (Settings, Save or load, the map, How to play) now goes back to the
     menu when you close it, and a second Esc returns to the farm. Do you like that, or should closing go straight back to
     the farm?
+
+## 13. The review fix round (after integration)
+
+The review's 27 findings and what was done about each are in ARCHITECTURE.md, *Phase 5 — the review fix round*. Two
+changes touch questions above: (6) the HUD size's *Small* is now a compact HUD (tighter cards, smaller display numbers)
+and no longer shrinks the running text, and the settings say when *Larger* is shown as Large on a narrow window; (5) the
+hot season's appetite stays as measured (about 3.4 % of weight), and its note and the heat sign's line now say the birds
+eat less *whenever the house air is over about 28 °C* (general practice), with no season note while the comfort row warns.
+On the map, signs are numbered **S1, S2 …** so a sign is never read as a job number. One more question for the farmer:
+
+14. **Jobs at one place on the map** now share one orange marker (*4 · 5 · 7* at the office desk) with a short line to the
+    place, and the list beside the map has one row a job. Is that easier to read than a round for each job?

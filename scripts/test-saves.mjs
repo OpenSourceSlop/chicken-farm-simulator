@@ -249,6 +249,31 @@ test('the autosave older than slot 2: continueLatest() loads slot 2; a slot of g
   assert(D.saves.continueAuto() === false && await D.saves.continueLatest() === true && D.level.def.id === 'week2', 'the autosave itself does not continue; the newest slot does');
 });
 
+test('fix round: a slot naming a level this build does not know reads invalid (Continue skips it, a load says why); a row is kept while its text is the same; a slot saved on a result reads level ended', async () => {
+  const S = useStorage(memStorage());
+  const G = makeGame();
+  G.run.startRun({ seed: 1, at: 'level1' });
+  G.level.debug.goto(2, 9, { auto: true });
+  assert((await G.saves.saveSlot(1)).ok && (await G.saves.saveSlot(2)).ok, 'slots 1 and 2');
+  // slot 1 from a later build that adds a level: its stored form passes every check, its meta names level99
+  const st = JSON.parse(S.getItem(`${SAVE_SLOTS.keyPrefix}1`)); st.meta = { ...st.meta, levelId: 'level99', levelShort: 'A new level' }; st.savedAt += 1e6;
+  S.setItem(`${SAVE_SLOTS.keyPrefix}1`, JSON.stringify(st));
+  const C = makeGame();
+  const rows = C.saves.list();
+  assert(rows[1].error === 'invalid' && rows[1].message === SAVE_MESSAGES.invalid && !rows[2].error, `rows: ${rows.map((x) => x.error || 'ok').join(' ')}`);
+  assert(C.saves.latest()?.slot !== 1, `Continue skips the unknown level: ${C.saves.latest()?.slot}`);
+  const t0 = Date.now(); for (let i = 0; i < 50; i++) C.saves.list(); const ms = (Date.now() - t0) / 50;
+  console.log(`     a list redraw with the rows kept: ${ms.toFixed(2)} ms`);
+  // a slot saved on a failed result
+  G.level.debug.goto(7, 21, { auto: true, profile: 'cold' });
+  if (!G.level.result) G.level.debug.goto(8, 6.05);
+  G.level.update(1);
+  if (G.level.mode === 'result') {
+    const r3 = await G.saves.saveSlot(3);
+    assert(r3.ok && /· level ended$/.test(r3.meta.name), `a slot on a result: ${r3.meta?.name}`);
+  }
+});
+
 test('raw JSON pastes: a v3 run key and a v1 Phase 2 save (a run at the brooding week); a v1 envelope through migrate; a Phase 3 blob (no farm.cond, env.powerOn, env.targetShift) loads and plays a day', async () => {
   const S = useStorage(memStorage());
   const G = makeGame();
