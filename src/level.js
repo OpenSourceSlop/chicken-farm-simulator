@@ -61,7 +61,7 @@ import { broodStopsCond, p2ProfileFor } from './farm-profiles-cond.js';
 // the cycle profiles (package "sim"): applyCycleRound at the rounds cycleStops lists (goto auto, free runs)
 import * as cycleProfiles from './farm-profiles-cycle.js';
 import { planSums } from './farm-plan.js';
-import { ALL_MILESTONES_P4 as ALL_MILESTONES } from './skills.js'; // Phase 2 + cycle + the condition milestones
+import { milestoneTable } from './skills.js'; // Phase 2 + cycle + the condition milestones (+ the Skills update's while live)
 import { hhmm, splitDay, two, int } from './ui-format.js';
 import { dayLabel } from './content.js';
 import { clock as stepClock } from './clock.js';
@@ -211,7 +211,7 @@ export function createLevel(ctx, deps = {}) {
     events.on(EV.JOB_DONE, () => { if (inLevel()) scheduleSave(2); });
     events.on(EV.SKILL_POINTS, (p) => {
       if (p.detail) details.set(p.milestone, p.detail);
-      if (level.mode === 'level' || level.mode === 'result') points.push({ branch: p.branch, milestone: p.milestone, points: p.points, detail: p.detail || '', text: ALL_MILESTONES.find((m) => m.id === p.milestone)?.text || p.milestone });
+      if (level.mode === 'level' || level.mode === 'result') points.push({ branch: p.branch, milestone: p.milestone, points: p.points, detail: p.detail || '', text: milestoneTable().find((m) => m.id === p.milestone)?.text || p.milestone });
       saveProfile();
       // the run save follows the profile soon, so a reload never resumes from before points the profile holds
       if (inLevel() && !free) scheduleSave(0.5);

@@ -8,6 +8,7 @@ import { JOBS, STATE_TEST_IDS } from '../src/content-jobs.js';
 import { BOARDS, BOARD_IDS, sourceLabel } from '../src/content-signs.js';
 import { MILESTONES } from '../src/skills.js';
 import { SPOTS, SPOTS2, FARM, GUIDES } from '../src/config.js';
+import { SKILL_BOARD_ITEMS as SKILL_SIGN_ITEMS } from '../src/content-signs-skills.js';
 // Phase 3 contracts (PHASE3.md §13)
 import { ACTION_IDS } from '../src/events.js';
 import { JOBS_CYCLE, STATE_TEST_IDS_CYCLE, JOB_WHERE_CYCLE } from '../src/content-jobs-cycle.js';
@@ -177,7 +178,10 @@ test('cycle signs: known sources, no page numbers, no verdicts; extra lines on r
     for (const it of list) { assert(Number.isFinite(it.fromDay) && it.fromDay >= 8, `${id}: fromDay`); for (const k of [].concat(it.source)) assert(k === 'week1-4' || k in GUIDES, `${id}: source ${k}`); }
   }
   const day3 = boardsForDay(3), day20 = boardsForDay(20);
-  assert(day3['sign-vent'].items.length === BOARDS['sign-vent'].items.length, 'the brooding week reads Phase 2\'s boards');
+  // the Skills update's general lines (content-signs-skills.js, merged while config SKILLS_UPDATE.live) are not Phase 2's
+  const skillText = new Set(Object.values(SKILL_SIGN_ITEMS).flat().map((it) => it.text));
+  const own = (b) => b.items.filter((it) => !skillText.has(it.text)).length;
+  assert(own(day3['sign-vent']) === BOARDS['sign-vent'].items.length, 'the brooding week reads Phase 2\'s boards');
   assert(day20['sign-vent'].items.length > BOARDS['sign-vent'].items.length, 'extra lines from their day');
   const signSpots = { signPlan: 'sign-plan', signLight: 'sign-light', signCurtain: 'sign-curtain', signLegs: 'sign-legs', signAir: 'sign-air',
     signDroppings: 'sign-droppings', signHeat: 'sign-heat', signFeed: 'sign-feed', signClean: 'sign-clean', signCatch: 'sign-catch' };
@@ -717,7 +721,8 @@ test('skills update: the new milestones, the two-flock thresholds, the sign line
       }
     }
   } finally { C.SKILLS_UPDATE.live = was; }
-  const off = JSON.stringify(boardsForDay(20, null));
+  let off = '';
+  try { C.SKILLS_UPDATE.live = false; off = JSON.stringify(boardsForDay(20, null)); } finally { C.SKILLS_UPDATE.live = was; }
   assert(!Object.values(SKILL_BOARD_ITEMS).flat().some((it) => off.includes(it.text)), 'no skills line on the boards while live is false');
 });
 
@@ -734,6 +739,7 @@ test('skills update: perks follow the switch, the levels, allow() and the Automa
   const was = C.SKILLS_UPDATE.live;
   try {
     skills.debug.force('water', 3);
+    C.SKILLS_UPDATE.live = false; perks.refresh(); seen.length = 0;
     assert(!perks.has('waterAllLines') && !perks.auto('winch'), 'nothing while live is false');
     C.SKILLS_UPDATE.live = true; perks.refresh();
     assert(perks.has('waterAllLines') && perks.auto('winch') && seen.length === 1, 'Water 3 while live');
@@ -784,7 +790,8 @@ test('skills update: the farm carries farm.auto (plain data, saved) and its API;
   const f = farm.debug.fault('winch-stall', { line: 2 });
   assert(f && f.phase === 'open' && farm.autoCtl.status().faults.length === 1, 'debug.fault');
   const blob = JSON.parse(JSON.stringify(farm.serialize()));
-  assert(blob.auto && blob.auto.faults.length === 1, 'farm.serialize carries auto');
+  // (while live the brooding week's start draws the flock's fault plan too: its items are 'planned', not open)
+  assert(blob.auto && blob.auto.faults.filter((x) => x.phase === 'open').length === 1, 'farm.serialize carries auto');
   const env2 = createSim(), farm2 = createFarm(env2, { events: createEvents() });
   farm2.restore(blob);
   assert(JSON.stringify(farm2.serialize().auto) === JSON.stringify(blob.auto), 'auto round trip');

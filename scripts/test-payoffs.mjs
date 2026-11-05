@@ -63,6 +63,8 @@ function world(def, { day = def.startDay, hour = 6, levels = {}, perks: P = null
   return W;
 }
 const live = (fn) => { const was = SKILLS_UPDATE.live; SKILLS_UPDATE.live = true; try { return fn(); } finally { SKILLS_UPDATE.live = was; } };
+/** The switch off for a case that checks the Phase 5 game (the integrated main runs with it on). */
+const off = (fn) => { const was = SKILLS_UPDATE.live; SKILLS_UPDATE.live = false; try { return fn(); } finally { SKILLS_UPDATE.live = was; } };
 /** Lines in band for today (nipples at the plate, rims at the plate). */
 function linesAtPlate(W) { const n = nippleCmToday(W.env), r = rimCmNow(W.env); for (const l of W.farm.water.lines) l.heightCm = n; for (const l of W.farm.feed.lines) l.heightCm = r; }
 /** A house sector's centre for count / seen samples (the house's eight parts). */
@@ -71,7 +73,7 @@ const HOUSE_PTS = [[-18, -2.8], [-18, 2.8], [-6, -2.8], [-6, 2.8], [6, -2.8], [6
 test('perks off -> every job exactly as on main (live false, not allowed, the setting off)', () => {
   const S = perksWorld({ water: 3, feed: 3, growth: 3, planning: 3, biosecurity: 3, moisture: 3 });
   const ids = ['r-raise', 'r-drinkers', 'prep-vent', 'w2-weigh', 'w2-order', 'r-record', 'r-dead-am', 'w2-check', 'p-order-feed'];
-  for (const id of ids) assert(jobVariant(jobById(id), S.perks) === jobById(id), `live false: ${id} changed`);
+  off(() => { S.perks.refresh?.(); for (const id of ids) assert(jobVariant(jobById(id), S.perks) === jobById(id), `live false: ${id} changed`); });
   live(() => {
     S.perks.allow(false);
     for (const id of ids) assert(jobVariant(jobById(id), S.perks) === jobById(id), `not allowed: ${id} changed`);
@@ -328,12 +330,12 @@ test('every new text: plain words, no verdict, every {key:id} token filled', () 
   for (const k of RULE_KEYS) assert(PAYOFFS[k], `rule key ${k} is a payoff`);
 }));
 
-test('live false: the phone key is not in the legend nor matched; the guide reads as in Phase 5', () => {
+test('live false: the phone key is not in the legend nor matched; the guide reads as in Phase 5', () => off(() => {
   assert(!SKILLS_UPDATE.live, 'live is false here');
   const k = createKeys(null);
   assert(!k.rows('level').some((r) => r.id === 'phone') && !k.matches({ code: 'KeyR', key: 'r' }, 'phone'), 'no phone without live');
   assert(GUIDE.sections.find((s) => s.id === 'skills').text.length === 2, 'the Phase 5 skills section');
-});
+}));
 
 let failed = 0;
 for (const t of tests) {

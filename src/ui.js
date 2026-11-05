@@ -356,6 +356,8 @@ export function createUI(ctx, deps) {
   events.on(EV.LISTEN, (p) => { if (mode === 'level') caption.show(lookCaption(farm.observe(p.x, p.z), env.dayNumber >= 8 ? 'birds' : 'chicks'), 6, { soft: true }); });
   events.on(EV.POWER, (p) => { if (mode === 'level' && p && p.on === false) raiseAlarm(p.mains === false && p.source == null ? ALARM['power-cut'] : 'The power is off in house 1.'); });
   events.on(EV.FARM_PROBLEM, (p) => { if (mode === 'level' && p && p.phase === 'symptom' && p.alarm) raiseAlarm(ALARM[p.id] || 'The controller’s alarm sounds.'); });
+  // Skills update (SKILLS.md §5.1): the fan stages tripped and the house over the target: the controller's high temperature alarm
+  events.on(EV.FAULT, (p) => { if (mode === 'level' && p && p.phase === 'found' && p.alarm) raiseAlarm(p.text || 'The controller’s high temperature alarm sounds.'); });
   events.on(EV.FARM_DELIVERY, (p) => { if (mode === 'level' && p.kind === 'feed' && p.phase === 'arrive') caption.show('The feed truck is filling the silos.'); });
   events.on(EV.SKILL_POINTS, (p) => { if (p.detail) details.set(p.milestone, p.detail); });
   // PHASE4.md §15.3: the bucket set down (by G or by a two-handed task), picked up, a dead bird into the bucket on the floor

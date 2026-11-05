@@ -5,7 +5,7 @@
 // Phase 4 (PHASE4.md §7): the condition milestones (skills-cond.js MILESTONES_COND) under their branches, marked with
 // the condition's name ("Hot season"); they are earned only in a run of that condition.
 import { SKILL_LEVEL_POINTS, UNLOCKS, LEVELS, conditionLabel } from './config.js';
-import { ALL_MILESTONES_P4 } from './skills.js';
+import { milestoneTable } from './skills.js';
 // Skills update (SKILLS.md §6.1): the three steps per branch (live only; the Phase 5 tree otherwise)
 import { SKILLS_UPDATE, SKILL_STEP_NAMES, UNLOCK_SHOWS, unlockLevel, skillLevelPoints } from './config.js';
 import { nextLevelLine } from './job-words.js';
@@ -19,8 +19,8 @@ const TREE_CSS = `
 .pip3.is-open { box-shadow: inset 0 0 0 2px var(--accent); background: transparent; }
 `;
 
-/** Every milestone the tree lists: skills.js ALL_MILESTONES_P4 (Phase 2's, the cycle's and the conditions'). */
-const ALL_MILESTONES = ALL_MILESTONES_P4;
+/** Every milestone the tree lists: skills.js milestoneTable() (Phase 2's, the cycle's and the conditions'; the Skills
+ *  update's seven while config SKILLS_UPDATE.live). */
 import { h, button, uniqueId } from './ui-dom.js';
 import { ICONS } from './ui-icons.js';
 import { dialogShell } from './ui-panels.js';
@@ -47,7 +47,7 @@ function badge(id, level) {
  *  the earned tiers it knows; the rest of ALL_MILESTONES shows unearned. */
 export function branchMilestones(skills, branch) {
   const known = new Map((skills.milestones?.(branch) || []).map((m) => [m.id, m]));
-  return ALL_MILESTONES.filter((m) => m.branch === branch).map((m) => known.get(m.id) ? { ...m, ...known.get(m.id), level: m.level } : { ...m, tier: null, points: 0 });
+  return milestoneTable().filter((m) => m.branch === branch).map((m) => known.get(m.id) ? { ...m, ...known.get(m.id), level: m.level } : { ...m, tier: null, points: 0 });
 }
 
 export function buildSkillTreePanel(L) {

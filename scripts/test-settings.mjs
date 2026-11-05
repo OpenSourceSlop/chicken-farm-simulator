@@ -291,11 +291,14 @@ test('skills update: Settings → Automation (all + one per branch, true, live-o
     assert(r.ok && r.swapped === 'phone' && k.label('phone') === 'Q', `a rebind onto R swaps with the phone: ${JSON.stringify(r)}`);
     k.reset();
   } finally { SKILLS_UPDATE.live = was; }
-  const k0 = createKeys(createSettings({ storage: memStorage() }));
-  assert(!k0.matches(ev2c('KeyR'), 'phone') && !k0.rows('level').some((r) => r.id === 'phone'), 'live false: no phone key');
-  assert(k0.rows('level').find((r) => r.id === 'floorView').what === KEY_ACTIONS.find((a) => a.id === 'floorView').what, 'live false: the Phase 5 words');
-  const r0 = k0.rebind('squeeze', 'KeyR');
-  assert(r0.ok && !r0.swapped, 'live false: R is a free key for a rebind');
+  SKILLS_UPDATE.live = false;   // the Phase 5 keys with the switch off (the integrated main runs with it on)
+  try {
+    const k0 = createKeys(createSettings({ storage: memStorage() }));
+    assert(!k0.matches(ev2c('KeyR'), 'phone') && !k0.rows('level').some((r) => r.id === 'phone'), 'live false: no phone key');
+    assert(k0.rows('level').find((r) => r.id === 'floorView').what === KEY_ACTIONS.find((a) => a.id === 'floorView').what, 'live false: the Phase 5 words');
+    const r0 = k0.rebind('squeeze', 'KeyR');
+    assert(r0.ok && !r0.swapped, 'live false: R is a free key for a rebind');
+  } finally { SKILLS_UPDATE.live = was; }
 });
 const ev2c = (code) => ({ code, key: code.slice(3).toLowerCase(), shiftKey: false, ctrlKey: false, metaKey: false, altKey: false });
 

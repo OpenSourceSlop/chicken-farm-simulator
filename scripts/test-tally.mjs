@@ -129,8 +129,6 @@ test('the Phase 4 bucket (no tally): every bird counted once, at the bin', () =>
   const share = binShare(bucket);
   w.farm.act('dead.count', { n: share.n, causes: share.causes });
   assert(fl.countedDead - before === 5 && share.dropped === 5, `countedDead +${fl.countedDead - before}`);
-  // a tally pickup with the switch off still counts nothing (the perks never hold while live is false)
-  assert(SKILLS_UPDATE.live === false, 'live is false on this branch by default');
 });
 
 for (const t of tests) {

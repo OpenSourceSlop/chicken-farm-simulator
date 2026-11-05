@@ -19,7 +19,7 @@
   {"shot": "skills-auto-1-controller-read"},
   {"press": "Escape"},
   {"advance": 0.5},
-  {"eval": "(() => { const g = __game, j = g.level.jobs.list().find((x) => x.key === 'r-fans-pm@25'); return 'r-fans-pm@25: ' + (j ? j.status : 'no instance') + '; variant ' + JSON.stringify(j && (j.variant || j.jd?.variant || null)); })()"},
-  {"expect": "(() => { const g = __game, j = g.level.jobs.list().find((x) => x.key === 'r-fans-pm@25'); const variant = !!(j && (j.variant || j.jd?.variant)); return j && (variant ? j.status === 'done' : true) && (variant ? 'r-fans-pm done by the glance at the controller (one E, the panel open 2 s)' : 'r-fans-pm instance ' + j.status + ': the glance variant comes with the jobs package (job-variants.js is a stub on this branch)'); })()", "label": "r-fans-pm by the glance at the controller (with the jobs package's variant)"},
+  {"eval": "(() => { const g = __game, j = g.level.jobs.list().find((x) => x.key === 'r-fans-pm@25'); return 'r-fans-pm@25: ' + (j ? j.status : 'no instance') + '; variant ' + JSON.stringify(j && (j.def?.variant || null)); })()"},
+  {"expect": "(() => { const g = __game, j = g.level.jobs.list().find((x) => x.key === 'r-fans-pm@25'); const variant = j && j.def?.variant; return j && variant && variant.parts?.stages === 'whole' && j.status === 'done' && 'r-fans-pm done by the glance at the controller (one E, the panel open 2 s; variant ' + JSON.stringify(variant.parts) + ')'; })()", "label": "r-fans-pm by the glance at the controller (the job's variant: handled by the stages)"},
   {"expect": "(() => { const g = __game, a = g.auto(); return a.faults.length === 0 && window.__faults.length === 0 && g.level.watch.warnings.filter((w) => w.kind === 'equipment').length === 0 && 'no fault and no equipment warning in the 22 farm hours'; })()", "label": "no fault started (none planned for this flock)"}
 ]

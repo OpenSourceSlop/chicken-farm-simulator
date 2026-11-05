@@ -197,11 +197,14 @@ export function buildLevelControllerPanel(L) {
       <path d="${line('house')}" fill="none" stroke="var(--lcd-ink)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
   }
 
+  // Skills update (SKILLS.md §5.1, the model's contract note 3): while the sensor drifts high the brooders run at the figure
+  // set less the drift; the thermostat shows the figure the farmer set (farm.autoCtl.setpointC), the LCD the sensor
+  const shownSp = () => { let c = null; try { c = farm.autoCtl?.setpointC?.(); } catch { c = null; } return Number.isFinite(c) ? c : env.heaterSetpoint; };
   function refresh() {
     let sensorC = null;
     try { sensorC = perkAuto(L, 'brooders') ? farm.autoCtl?.sensorC?.() ?? null : null; } catch { sensorC = null; }
     setText(house.value, fmt1(Number.isFinite(sensorC) ? sensorC : env.houseTemp)); setText(outside.value, fmt1(env.outsideTemp));
-    setText(rhIn.value, fmt0(env.houseRH)); setText(sp.value, fmt1(env.heaterSetpoint));
+    setText(rhIn.value, fmt0(env.houseRH)); setText(sp.value, fmt1(shownSp()));
     const mm = L.minmax();
     setText(min.value, mm.min == null ? '--' : fmt1(mm.min)); setText(max.value, mm.max == null ? '--' : fmt1(mm.max));
     setText(clock, `DAY ${fmt0(env.dayNumber)}  ${env.timeLabel}`);
@@ -215,7 +218,7 @@ export function buildLevelControllerPanel(L) {
     const p = env.lightProgram || {};
     setText(flags.light, `DARK ${hhmm(p.darkStart ?? 2)} ${fmt1(p.darkHours ?? 1)}h ${Math.round((p.dimmer ?? 1) * 100)}%`); flags.light.classList.toggle('is-on', env.lightsOn);
     flags.pad.classList.toggle('is-on', env.padOn);
-    setText(spOut, `${fmt1(env.heaterSetpoint)} °C`);
+    setText(spOut, `${fmt1(shownSp())} °C`);
     setText(heatState, env.heatersOn ? 'Brooders burning' : 'Brooders off');
     setText(fanOut, `${env.fansManual ?? env.fansOn} / ${FAN_COUNT}`);
     // review round: lit, the key shows the pump's state; what a press does stays in its aria-label and title
