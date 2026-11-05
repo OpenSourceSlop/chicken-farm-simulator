@@ -89,7 +89,23 @@ export function settleAt(env, o = {}) {
   for (let i = 0; i < 48; i++) { const m = (lo + hi) / 2; if (net(m) > 0) lo = m; else hi = m; }
   const T = (lo + hi) / 2;
   return { houseC: T, output: full > 0 ? clamp((sp + HEAT.offAbove - T) / HEAT.band, 0, 1) : 0, full: full / HEAT.rate, tin, k,
-    needFor: (h) => (k * (h - tin) + s * (h - slabC) - birdsCh - sunCh) / HEAT.rate };
+    needFor: (h) => (k * (h - tin) + s * (h - slabC) - birdsCh - sunCh) / HEAT.rate, rateAt: net };
+}
+
+/**
+ * Where the house heads with the settings as they are now (a setting changed a moment ago included: the last step's
+ * env.heatTerms still carry the old ones): { rate (°C/h at the house air now, the brooders at the thermostat's demand),
+ * toC (where it settles at the outside air and the sun now), output (the brooders' share there) }.
+ */
+export function headingNow(env) {
+  const s = settleAt(env, { sunCh: env.sunHeatPerH || 0 });
+  return { rate: s.rateAt(env.houseTemp), toC: s.houseC, output: s.output };
+}
+/** "House 30.6 °C and rising about 5 °C an hour toward 34 °C with the settings now" (or "House holding at 33.8 °C"). */
+export function headingWords(env, hd = headingNow(env)) {
+  const house = env.houseTemp, r = Math.abs(hd.rate);
+  if (r < 0.15 || Math.abs(hd.toC - house) < 0.5) return `House holding at ${fmtC(house)}`;
+  return `House ${fmtC(house)} and ${hd.rate > 0 ? 'rising' : 'falling'} ${r >= 1.95 ? `about ${Math.round(r)}` : one(r)} °C an hour toward ${rowC(Math.round(hd.toC))} with the settings now`;
 }
 
 /** °C the moving air takes off what the birds feel with `tunnelN` tunnel fans (sim.js derive: the same formulas). */
@@ -249,24 +265,33 @@ export function controllerNotes(env, farm) {
   const out = { vent: [] };
   if (!farm || farm.mode !== 'level' || !env.levelClimate) return out;
   const row = rowOf(env), sp = env.heaterSetpoint, young = youngOf(env, farm), b = birdsWord(env, farm), placed = farm.flock?.placed > 0 && farm.flock?.alive > 0;
-  const a = airOf(env, farm), lvl = env.heaterLevel || 0, full = lvl >= DIAG.fullAt, house = env.houseTemp, d = Math.max(0, env.dayNumber);
-  const t = env.heatBudget ? env.heatBudget() : null, trend = t ? t.wallsCh + t.airCh + t.brooderCh + t.birdsCh + t.sunCh + t.slabCh : 0;
+  const a = airOf(env, farm), lvl = env.heaterLevel || 0, house = env.houseTemp, d = Math.max(0, env.dayNumber);
   const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+  // the check round: the notes follow the settings as they are now — where the house heads with them, not the last
+  // step's trend nor the house alone (a tunnel fan switched off at 21:00 leaves the house 30.6 °C and rising 5 °C an hour)
+  const hd = headingNow(env), to = hd.toC, how = headingWords(env, hd), rising = hd.rate >= 0.15, falling = hd.rate <= -0.15;
   if (!env.broodersUp && young && env.dayNumber >= -1) {
     const over = sp - row;
     out.sp = { state: over >= DIAG.spOverC ? 'red' : over <= -DIAG.spUnderC ? 'amber' : 'green',
       text: `Brooder sign: ${rowC(row)} for day ${d} · yours ${rowC(sp)}${over >= DIAG.spOverC ? `: ${one(over)} °C over the sign’s row; once the air is right the house will overheat the ${b}`
         : over <= -DIAG.spUnderC ? `: ${one(-over)} °C under the sign’s row` : ''}` };
   }
-  const cold = placed && full && house < Math.min(sp, row) - 1 ? coldCause(env, farm) : null;
-  const how = trend < -0.15 ? `falling ${one(-trend)} °C an hour at ${fmtC(house)}` : `holding at ${fmtC(house)}`;
+  // losing: with the settings now the house settles over 1 °C under the row (or the thermostat) with the brooders at full
+  let cold = placed && hd.output >= DIAG.fullAt && to < Math.min(sp, row) - 1 ? coldCause(env, farm) : null;
+  if (cold?.kind === 'floor') cold = causeWords('capacity', env, farm);
+  const under = house < Math.min(sp, row) - 1, hotTo = young && placed && sp >= row + DIAG.spOverC && to > row + 2 && (rising || house > row + 2);
   if (!env.broodersUp) {
     const n = env.brooderOut?.length || 0, head = `Brooders at ${int(lvl * 100)} %${n ? ` (${plural(n, 'brooder')} out)` : ''}`;
+    const T = (state, text) => { out.temp = { state, text: `${head}. ${text}` }; };
     if (env.powerOn === false) out.temp = { state: 'red', text: 'No power: the brooders cannot light.' };
-    else if (cold) out.temp = { state: 'red', text: `${head} and the house ${how}, ${one(row - house)} °C under the row: more heat goes out than they put back. ${cap(cold.why)}. Where: ${cold.check}.` };
-    else if (young && placed && house > row + 2 && sp >= row + DIAG.spOverC) out.temp = { state: 'red', text: `${head}: the house is at ${fmtC(house)}, ${one(house - row)} °C over the row; the thermostat at ${rowC(sp)} keeps them heating up to it.` };
-    else if (young && placed && house > row + 2 && lvl < 0.05) { const w = causeWords('warmAir', env, farm); out.temp = { state: 'amber', text: `${head}: ${w.why}. Where: ${w.check}.` }; }
-    else out.temp = { state: 'green', text: `${head} · they hold the house at ${fmtC(house)}${young ? ` (the brooder sign’s row ${rowC(row)})` : ''}.` };
+    else if (cold) T('red', `${how}, ${one(row - to)} °C under the row: more heat goes out than they put back. ${cap(cold.why)}. Where: ${cold.check}.`);
+    else if (hotTo) T('red', under ? `${how}: warming back to the brooder sign’s row (${rowC(row)}), then on over it: the thermostat at ${rowC(sp)} keeps them heating up to it.`
+      : `${how}, ${one(to - row)} °C over the row: the thermostat at ${rowC(sp)} keeps them heating up to it.`);
+    else if (placed && under && rising) T('amber', `${how}: warming back to the brooder sign’s row (${rowC(row)}); they put back more heat than goes out.`);
+    else if (young && placed && house > row + 2 && falling && to <= row + 2) T('amber', `${how}: cooling back to the brooder sign’s row (${rowC(row)}).`);
+    else if (young && placed && house > row + 2 && lvl < 0.05) { const w = causeWords('warmAir', env, farm); T('amber', `${cap(w.why)}. Where: ${w.check}.`); }
+    else if (how.startsWith('House holding')) out.temp = { state: 'green', text: `${head} · they hold the house at ${fmtC(house)}${young ? ` (the brooder sign’s row ${rowC(row)})` : ''}.` };
+    else T('green', `${how}${young ? ` (the brooder sign’s row ${rowC(row)})` : ''}.`);
   }
   if (placed && young && a.tunnelN > 0 && !a.stages) {
     const line = `${plural(a.tunnelN, 'tunnel fan')} running all the time: ${int(a.tunnelM3h)} m³/h along the floor, ${times(a.total / Math.max(1, a.need))} the ${int(a.need)} m³/h that ${int(a.birds)} ${b} need now`;
@@ -274,7 +299,7 @@ export function controllerNotes(env, farm) {
     else if (house <= row + 0.5) out.vent.push({ state: 'red', text: `${line}, with the house at or under the row: they take out heat the brooders must put back (the heat sign: as few tunnel fans as the heat allows for young birds).` });
     else out.vent.push({ state: 'amber', text: `${line}. Young birds: as few tunnel fans as the heat allows (the heat sign); off again once the house is back at the row.` });
   }
-  if (cold && !out.vent.length) out.vent.push({ state: 'red', text: `The brooders are at full and the house is ${how}, ${one(row - house)} °C under the row: more air goes out than they can heat. ${cap(cold.why)}.` });
+  if (cold && !out.vent.length) out.vent.push({ state: 'red', text: `With the settings now the house heads for ${rowC(Math.round(to))}, ${one(row - to)} °C under the row, the brooders at full: more air goes out than they can heat. ${cap(cold.why)}.` });
   if (placed && a.need > 0 && a.timerShare > DIAG.airOver && !cold && house <= row + 0.5) out.vent.push({ state: 'amber', text: `The timer gives ${int(a.timerM3h)} m³/h, ${times(a.timerShare)} the ${int(a.need)} m³/h the ${b} need now: more than the vent sign’s 90–130 % takes out heat the brooders must put back.` });
   out.floor = { state: 'green', text: 'The floor (the litter) follows the house air above it and the concrete under it: the concrete warms slowly over the pre-heat and holds that warmth for a day or more. The brooder sign wants the floor at 28–30 °C before the chicks come. A floor that cools in the day comes from cold air (the air going out: the Ventilation tab) or a short pre-heat (the thermostat, this tab).' };
   return out;

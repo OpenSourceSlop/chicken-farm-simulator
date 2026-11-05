@@ -169,11 +169,33 @@ test('items 3 / 8 / 9: the controller’s notes — the thermostat beside the ro
   F.env.skipHours(6);
   const n = controllerNotes(F.env, F.farm);
   assert(n.sp.state === 'red' && /34 °C for day 0 · yours 40 °C: 6\.0 °C over the sign’s row; once the air is right the house will overheat the chicks/.test(n.sp.text), n.sp.text);
-  assert(n.temp.state === 'red' && /Brooders at 100 % and the house (falling|holding)/.test(n.temp.text) && /more heat goes out than they put back/.test(n.temp.text) && /1 tunnel fan/.test(n.temp.text), n.temp.text);
+  assert(n.temp.state === 'red' && /^Brooders at 100 %\. House 2\d\.\d °C and (falling [\d.]+ °C an hour toward 2\d °C with the settings now|holding)/.test(n.temp.text) && /more heat goes out than they put back/.test(n.temp.text) && /1 tunnel fan/.test(n.temp.text), n.temp.text);
   assert(n.vent.some((x) => x.state === 'red' && /keeps the tunnel fans off for young chicks/.test(x.text)), JSON.stringify(n.vent));
   assert(/follows the house air above it and the concrete under it/.test(n.floor.text) && /28–30 °C/.test(n.floor.text), n.floor.text);
   const I = day0(SET.sign), m = controllerNotes(I.env, I.farm);
   assert(m.sp.state === 'green' && m.temp.state === 'green' && !m.vent.length, `the sign's settings: ${m.sp.text} · ${m.temp.text}`);
+});
+
+test('check round 1: the controller’s notes follow the settings now — the tunnel fan off at 21:00 (house 30.6 °C): warming back at once, never the old cause or the losing state', () => {
+  for (const sp of [34, 40]) {
+    const F = day0(SET.farmer);
+    F.env.skipHours(21 - F.env.hour);
+    const before = controllerNotes(F.env, F.farm).temp;
+    assert(before.state === 'red' && /more heat goes out/.test(before.text) && /1 tunnel fan/.test(before.text), `before: ${before.text}`);
+    F.env.setFans(0); F.env.setHeaterSetpoint(sp);   // the moment after the press: the last step's heat terms still the old ones
+    for (let m = 0; m <= 45; m += 5) {
+      const t = controllerNotes(F.env, F.farm).temp, h = F.env.houseTemp;
+      assert(!/more heat goes out|tunnel fan|falling|holding/.test(t.text), `thermostat ${sp}, ${F.env.timeLabel}: ${t.text}`);
+      if (h < 33) assert(/^Brooders at \d+ %\. House \d\d\.\d °C and rising (about \d|\d\.\d) °C an hour toward \d\d °C with the settings now: warming back to the brooder sign’s row \(34 °C\)/.test(t.text), `${F.env.timeLabel} ${h.toFixed(1)}: ${t.text}`);
+      if (m === 0) {
+        assert(Math.abs(h - 30.6) < 0.4 && /rising about [45] °C an hour/.test(t.text), `21:00: ${h.toFixed(2)} · ${t.text}`);
+        // the thermostat at the row: amber, toward the row; at 40: red, the thermostat named (where it heads: 38-39 °C)
+        assert(sp === 34 ? t.state === 'amber' && /toward 34 °C with the settings now/.test(t.text) : t.state === 'red' && /toward 39 °C/.test(t.text) && /then on over it: the thermostat at 40 °C/.test(t.text), `${sp}: ${t.state} ${t.text}`);
+      }
+      F.env.skipHours(5 / 60);
+    }
+    if (sp === 34) { F.env.skipHours(1); const t = controllerNotes(F.env, F.farm).temp; assert(t.state === 'green', `settled: ${t.text}`); }
+  }
 });
 
 test('item 5: older birds’ nights — four tunnel fans on day 16 (the check, then the watch stop names them); the hot season’s day 30 with no fan (a stop names the fans and pads)', () => {

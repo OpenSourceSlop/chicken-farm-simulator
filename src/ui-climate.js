@@ -216,7 +216,8 @@ export function buildLevelControllerPanel(L) {
     setText(tAir, ventLine(env, farm, draft));
     const vt = env.ventTimer;
     setText(tNow, `Timer now: ${vt && vt.fans > 0 && vt.onSec > 0 ? `${vt.fans} fan${vt.fans === 1 ? '' : 's'}, ${vt.onSec} s on in every ${vt.cycleSec} s = ${int(timerAirM3h(vt))} m³/h` : 'off'}`);
-    // the night fix: the notes from the heat balance (cheap: a few steady-state solves only while the house is cold)
+    // the night fix: the notes from the heat balance (cheap: one steady-state solve for where the house heads with the
+    // settings now, a few more only while it heads under the row)
     let n = null;
     try { n = controllerNotes(env, farm); } catch (err) { n = null; }
     spNote.set(n?.sp); tempNote.set(n?.temp); floorNote.set(n?.floor);
