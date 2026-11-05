@@ -12,7 +12,9 @@ import { key, lcdCell } from './ui-controller.js';
 import { buildPlate } from './ui-boards.js';
 import { hhmm, int } from './ui-format.js';
 // Phase 3 (package "panels"): brooders up, heat loss, min vent calculator, humidity chart, light presets, dimming
-import { cycleControllerParts } from './ui-cycle-controller.js';
+import { cycleControllerParts, controllerSkills } from './ui-cycle-controller.js';
+// Skills update (SKILLS.md §3.4): with Heating 3 the LCD's House cell is the controller's sensor (the thermometer beside it)
+import { perkAuto } from './ui-cycle-skills.js';
 // the clarity round: the open job done here, its steps, the sign's target beside the live value
 import { createJobStrip } from './ui-jobstrip.js';
 import { timerAirM3h, luxOfDimmer, ventNeed, inletAirM3h, flapsWords } from './job-figures.js';
@@ -100,6 +102,8 @@ export function buildLevelControllerPanel(L) {
   const ventNotes = h('div', { class: 'ctrl-notes ctrl-notes--vent' });
   secs[0].append(row('Brooder thermostat', heatState, key('Lower the brooder thermostat by 0.5 °C', ICONS.minus, () => setpoint(-0.5)), spOut, key('Raise the brooder thermostat by 0.5 °C', ICONS.plus, () => setpoint(0.5))),
     spNote.el, tempNote.el, chart, floorNote.el);
+  const tempSkills = h('div', { style: 'display: contents' });
+  secs[0].insertBefore(tempSkills, spNote.el);
 
   // Ventilation. In a level env.fansOn also counts the timer fans while they run: step the fans
   // switched on by hand (env.fansManual).
@@ -142,9 +146,14 @@ export function buildLevelControllerPanel(L) {
   luxBtn.addEventListener('click', () => { const p = L.player.position; const r = L.act('light.lux', { x: p.x, z: p.z }); setText(lux, `${int(r?.lux)} lux at chick level here`); });
   let lightsPlate = buildPlate('controller-lights');
   const cyc = cycleControllerParts(L, { draft, lp, refresh: () => refresh() });
+  // Skills update (SKILLS.md §3.2–§3.4, §3.7, §6.5): the one-press keys with their working, the controllers since the read
+  const skc = controllerSkills(L, { draft, lp, refresh: () => refresh(), waits });
   secs[0].insertBefore(h('div', { style: 'display: contents' }, cyc.temp), chart);
   secs[1].append(...cyc.vent);
-  secs[2].append(h('div', { class: 'ctrl-lights' }, h('div', null, ...cyc.lights,
+  tempSkills.append(...skc.temp);
+  tNow.after(skc.fill);
+  timerBox.before(skc.fans);
+  secs[2].append(h('div', { class: 'ctrl-lights' }, h('div', null, skc.lights, ...cyc.lights,
     row('Dark period starts', null, key('One hour earlier', ICONS.minus, lstep('darkStart', -1, 0, 23, true)), lStart, key('One hour later', ICONS.plus, lstep('darkStart', 1, 0, 23, true))),
     row('Dark hours', lightDay, key('Half an hour less', ICONS.minus, lstep('darkHours', -0.5, 0, 12)), lHours, key('Half an hour more', ICONS.plus, lstep('darkHours', 0.5, 0, 12))),
     row('Dimmer', dimLux, key('Dimmer down 10 %', ICONS.minus, lstep('dimmer', -0.1, 0.1, 1)), lDim, key('Dimmer up 10 %', ICONS.plus, lstep('dimmer', 0.1, 0.1, 1))),
@@ -160,7 +169,7 @@ export function buildLevelControllerPanel(L) {
   const strips = [createJobStrip(L, 'controller', { section: 'top', ctx: sctx, label: SECTION }),
     ...['temp', 'vent', 'lights'].map((sec) => createJobStrip(L, 'controller', { section: sec, ctx: sctx }))];
   secs.forEach((sec, i) => sec.prepend(strips[i + 1].el));
-  el.append(h('div', { class: 'ctrl-case' }, screws, brand, h('div', { class: 'ctrl-plate' }, lcd, strips[0].el, timeNote.el,
+  el.append(h('div', { class: 'ctrl-case' }, screws, brand, h('div', { class: 'ctrl-plate' }, lcd, strips[0].el, skc.top, timeNote.el,
     h('div', { class: 'ctrl-tabs', role: 'tablist' }, tabBtns), secs)), closeBtn);
   showTab(0);
 
@@ -171,6 +180,7 @@ export function buildLevelControllerPanel(L) {
       setpoint: env.heaterSetpoint, timer: env.ventTimer ? { ...env.ventTimer } : null, light: env.lightProgram ? { ...env.lightProgram } : null });
     lastRead = env.timeLabel;
     L.resetMinMax();
+    skc.onRead();
   }
   function drawChart() {
     if (!skills?.unlocked?.('brooderChart')) { chart.hidden = true; return; }
@@ -188,7 +198,9 @@ export function buildLevelControllerPanel(L) {
   }
 
   function refresh() {
-    setText(house.value, fmt1(env.houseTemp)); setText(outside.value, fmt1(env.outsideTemp));
+    let sensorC = null;
+    try { sensorC = perkAuto(L, 'brooders') ? farm.autoCtl?.sensorC?.() ?? null : null; } catch { sensorC = null; }
+    setText(house.value, fmt1(Number.isFinite(sensorC) ? sensorC : env.houseTemp)); setText(outside.value, fmt1(env.outsideTemp));
     setText(rhIn.value, fmt0(env.houseRH)); setText(sp.value, fmt1(env.heaterSetpoint));
     const mm = L.minmax();
     setText(min.value, mm.min == null ? '--' : fmt1(mm.min)); setText(max.value, mm.max == null ? '--' : fmt1(mm.max));
@@ -237,6 +249,7 @@ export function buildLevelControllerPanel(L) {
       const fresh = buildPlate('controller-lights', { open: lightsPlate.open });
       if (fresh.el.querySelectorAll('.plate-items > li').length !== lightsPlate.el.querySelectorAll('.plate-items > li').length) { lightsPlate.el.replaceWith(fresh.el); lightsPlate = fresh; }
       cyc.onOpen();
+      skc.onOpen();
       for (const st of strips) st.onOpen();
       if (tab === 1) keepTimerInView = 0.6;
     },
@@ -252,6 +265,7 @@ export function buildLevelControllerPanel(L) {
       if (keepTimerInView > 0 && tab === 1 && timerBox) { keepTimerInView -= dt; scrollIntoPanel(timerBox); }
       if (force || chartAcc <= 0) { chartAcc = 1; drawChart(); }
       cyc.update(dt, force);
+      skc.update(dt, force);
     },
   };
 }
