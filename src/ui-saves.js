@@ -34,7 +34,7 @@ const SAVES_CSS = `
 .saves-keys .btn, .saves-ask .btn, .saves-box .btn { min-height: 30px; padding: 4px 10px; font-size: 12px; }
 .saves-ask { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .saves-ask p { margin: 0; flex: 1 1 280px; font-size: 13px; line-height: 1.4; color: var(--ink); }
-.saves-box { grid-column: 1 / -1; display: grid; gap: 8px; padding: 10px 12px; border-radius: 6px; background: rgba(8, 15, 11, 0.38); border: 1px dashed var(--panel-edge); max-height: min(200px, 34vh); overflow: auto; overscroll-behavior: contain; }
+.saves-box { grid-column: 1 / -1; display: grid; gap: 8px; padding: 10px 12px; border-radius: 6px; background: rgba(8, 15, 11, 0.38); border: 1px dashed var(--panel-edge); max-height: min(440px, 58vh); overflow: auto; overscroll-behavior: contain; }  /* fix round: a whole run's 25 part keys fit (it cut at part 13) */
 .saves-box p { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-dim); }
 .saves-box .saves-status { color: var(--ink); font-size: 13px; }
 .saves-box-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

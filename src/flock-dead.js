@@ -289,6 +289,12 @@ export function createDeadBirds(ctx, S, uniforms, pop) {
       writeInstances();
     },
     clear() { list.length = 0; queue.length = 0; dirty = true; mismatchT = 0; writeInstances(); },
+    /** Fix round: no more drawn than the farm's count, at once (a restore or a standard start: the 1 s mirror showed an
+     *  emptied house full of dead birds for a moment). */
+    trimTo(want) {
+      const w = Math.max(0, Math.round(+want || 0)), have = list.length + queue.length;
+      if (Number.isFinite(w) && have > w) { removeOldest(have - w); mismatchT = 0; writeInstances(); }
+    },
     serialize() {
       const flat = [];
       for (const d of list) {

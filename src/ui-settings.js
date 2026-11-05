@@ -50,8 +50,12 @@ export function settingControl(path, it, value, onChange) {
   if (it.type === 'choice') {
     const sel = h('select', { id }, it.options.map(([v, l]) => h('option', { value: v }, l)));
     sel.value = String(value);
-    sel.addEventListener('change', () => onChange(sel.value));
-    return { el: h('div', { class: 'set-row set-row--choice', 'data-setting': path }, h('label', { for: id }, it.label), sel), sync(v) { sel.value = String(v); } };
+    // fix round: the HUD size says when the window holds it back ('Larger' is shown as Large under 1100 px wide)
+    const note = path === 'interface.hudScale' ? h('span', { class: 'set-note', hidden: true }, '(shown as Large at this window size)') : null;
+    const noteSync = (v) => { if (note) note.hidden = !(parseFloat(v) > 1.15 && typeof window !== 'undefined' && window.innerWidth < 1100 && window.innerWidth >= 700); };
+    noteSync(value);
+    sel.addEventListener('change', () => { onChange(sel.value); noteSync(sel.value); });
+    return { el: h('div', { class: 'set-row set-row--choice', 'data-setting': path }, h('label', { for: id }, it.label), sel, note), sync(v) { sel.value = String(v); noteSync(v); } };
   }
   return { el: h('div', { class: 'set-row' }), sync() {} };
 }

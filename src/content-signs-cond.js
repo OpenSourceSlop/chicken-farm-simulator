@@ -46,7 +46,7 @@ export const BOARD_COND_ITEMS = {
     'sign-heat': [it('Hot season: every afternoon is hot. Young birds (days 8–20): the pad from about 11:00 into the evening, with one tunnel fan in week 2 and two or three in week 3. Big birds: the pads with every fan from about 11:00; in the hot season keep the pads on while the outside air stays over about 30 °C, often all night.'),
       // Phase 5 (PHASE5.md §6.8.4, package saves): the hot season's appetite, general practice; its figure is the model's
       // (scripts/test-cond.mjs measures the hot ideal against the normal ideal of the same seed: 3.4 % lighter at the catch)
-      it('In April–May heat the birds eat less in the hottest hours, even with the pads and fans running: a hot-season flock often finishes a little lighter, about 2–5 %.')],
+      it('In April–May heat the birds eat less whenever the house air is over about 28 °C, even with the pads and fans running: a hot-season flock often finishes a little lighter, about 2–5 %.')],
     drinker: [it('Hot season: the water in the lines warms under the roof; over about 30 °C the birds drink less. The water supply shows each line’s water temperature: flush the warm water out in the early afternoon.')],
     'pad-pump': [it('Hot season: check the water on the pad every day; a dry stripe on a 40 °C afternoon lets the heat straight in.')],
     'sign-catch': [it('Hot season: catch in the coolest hours, after midnight, and keep every fan running for the birds still inside.')],

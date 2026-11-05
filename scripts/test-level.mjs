@@ -197,7 +197,7 @@ test('a bad batch: the level counts the claimed chicks apart (2.5 % limit); uncl
   M.level.debug.goto(1, 21, { auto: true });
   M.records.sign(1);
   const f = M.level.result;
-  assert(f && !f.pass && /graded out on day 0 count as culls: the hatchery was not told on day 0/.test(f.failText), `fails on deaths and names the call: ${f?.failText}`);
+  assert(f && !f.pass && /graded out on day 0 count as culls, because the hatchery was not told on day 0/.test(f.failText), `fails on deaths and names the call: ${f?.failText}`);
   // the normal season: Phase 2's limit and no claim
   const N = makeLevel();
   N.level.start({ seed: 1 });

@@ -132,7 +132,7 @@ test('2: a bad batch without the call by 24:00 fails at 24:00 of day 0 on its cu
   assert(r && !r.pass && r.reason === 'mortality', `failed: ${r?.reason} ${r?.pass}`);
   // Phase 5 (PHASE5.md §6.8.2): the result names the claim's close, day 0 at 24:00 (the stepper ran just after midnight)
   assert(r.day === 0 && r.hour === 24 && r.endedAt === 'day 0, 24:00', `at 24:00 of day 0: ${r.endedAt}`);
-  assert(/graded out on day 0 count as culls: the hatchery was not told on day 0/.test(r.failText), r.failText);
+  assert(/graded out on day 0 count as culls, because the hatchery was not told on day 0/.test(r.failText), r.failText);
   // the job closed with the claim and was not held (hardClose): a call after 24:00 does not count
   const Y = badBatchNoCall();
   Y.ui.openPanelId = 'office-desk'; Y.ui.panelKind = 'panel';
@@ -225,7 +225,7 @@ test('5: a bad batch failed at the claim\'s close: "by 24:00 of day 0", ended da
   assert(r && !r.pass && r.reason === 'mortality', `failed at the claim's close: ${r?.reason}`);
   console.log(`     "${r.failText}" · ended ${r.endedAt} · failDay ${r.failDay}`);
   assert(/day 0/.test(r.failText) && /24:00/.test(r.failText) && !/day 1\b/.test(r.failText), `the fail line: ${r.failText}`);
-  assert(/when the hatchery claim closed/.test(r.failText) && /graded out on day 0 count as culls: the hatchery was not told on day 0/.test(r.failText), r.failText);
+  assert(/when the hatchery claim closed/.test(r.failText) && /graded out on day 0 count as culls, because the hatchery was not told on day 0/.test(r.failText), r.failText);
   assert(r.endedAt === 'day 0, 24:00' && !/day 1\b/.test(r.endedAt), `ended: ${r.endedAt}`);
   assert(r.failDay === 0, `failDay ${r.failDay}`);
   assert(!VERDICT.test(r.failText), `neutral words: ${r.failText}`);

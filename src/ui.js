@@ -746,9 +746,13 @@ export function createUI(ctx, deps) {
   // 1100 px wide at most 1.15. The default (1) adds no transform at all: the Phase 4 HUD exactly
   function applyHudScale() {
     const want = parseFloat(setting('interface.hudScale', '1')) || 1;
-    const s = window.innerWidth < 700 ? 1 : window.innerWidth < 1100 ? Math.min(1.15, want) : want;
+    // fix round: 'Small' is a compact HUD (tighter cards, smaller display numbers), not a scale, so its running text keeps
+    // the 12 px and 11 px floors; Large and Larger scale as before
+    const small = want < 1 && window.innerWidth >= 700;
+    const s = window.innerWidth < 700 || want < 1 ? 1 : window.innerWidth < 1100 ? Math.min(1.15, want) : want;
     root.style.setProperty('--hud-scale', String(s));
     root.classList.toggle('is-scaled', s !== 1);
+    root.classList.toggle('is-small', small);
     hudScaleNow = s;
   }
   let hudScaleNow = 1;

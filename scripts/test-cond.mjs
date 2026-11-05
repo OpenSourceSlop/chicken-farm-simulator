@@ -167,9 +167,9 @@ test('Phase 5: the hot season\'s appetite: the term (1 outside the hot season, b
   assert(A.fromAge === 21 && A.aboveC === 28 && A.perC === 0.025 && A.floor === 0.85, `the constants ${JSON.stringify(A)}`);
   assert(appetiteHot(null, 34, 30) === 1 && appetiteHot('rainy', 34, 30) === 1 && appetiteHot('hot', 34, 20.9) === 1 && appetiteHot('hot', 28, 30) === 1, 'no term outside the hot season, before day 21, at 28 °C');
   assert(Math.abs(appetiteHot('hot', 32, 30) - 0.9) < 1e-12 && appetiteHot('hot', 40, 30) === 0.85, 'x 0.9 at 32 °C, the floor 0.85');
-  const line = boardsForDay(30, 'hot')['sign-heat'].items.find((x) => /eat less in the hottest hours/.test(x.text));
+  const line = boardsForDay(30, 'hot')['sign-heat'].items.find((x) => /eat less whenever the house air is over about 28/.test(x.text));
   assert(line && line.source === 'general', `the line on the heat sign, general practice: ${JSON.stringify(line)}`);
-  assert(!boardsForDay(30, null)['sign-heat'].items.some((x) => /eat less in the hottest hours/.test(x.text)), 'not on the normal season\'s heat sign');
+  assert(!boardsForDay(30, null)['sign-heat'].items.some((x) => /eat less whenever the house air is over about 28/.test(x.text)), 'not on the normal season\'s heat sign');
   const m = /about (\d+)–(\d+) %/.exec(line.text), lo = +m[1], hi = +m[2];
   const h = runOf('hot:ideal'), n = normalRun(), pct = (100 * (n.levels.finish.liveG - h.levels.finish.liveG)) / n.levels.finish.liveG;
   assert(pct >= lo && pct <= hi, `the sign says ${lo}–${hi} %; the model ${pct.toFixed(2)} %`);

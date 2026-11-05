@@ -15,6 +15,8 @@ export const SETTINGS_CSS = `
 .set-row label { min-width: 0; }
 .set-row--range { grid-template-columns: minmax(0, 1fr) 200px 52px; }
 .set-row--bool { grid-template-columns: auto minmax(0, 1fr); }
+.set-row .set-note { grid-column: 1 / -1; margin-top: -4px; color: var(--ink-dim); font-size: 12px; line-height: 1.35; }
+.set-row .set-note[hidden] { display: none; }
 .set-row--bool label { cursor: pointer; }
 .set-row select { max-width: 360px; min-height: 30px; padding: 4px 8px; border-radius: 5px; border: 1px solid var(--panel-edge); background: var(--panel-raised);
   color: var(--ink); font: 14px/1.2 var(--font-body); }
@@ -46,6 +48,8 @@ export const SETTINGS_CSS = `
   .set-tab { flex: 1 1 30%; border-radius: 6px; min-height: 44px; }
   .set-row, .set-row--range { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px 10px; }
   .set-row--bool { grid-template-columns: auto minmax(0, 1fr); }
+.set-row .set-note { grid-column: 1 / -1; margin-top: -4px; color: var(--ink-dim); font-size: 12px; line-height: 1.35; }
+.set-row .set-note[hidden] { display: none; }
   .set-row select { max-width: 100%; min-height: 44px; }
   .set-keys-row { grid-template-columns: minmax(0, 1fr) auto; }
   .set-keys-row > :last-child { grid-column: 1 / -1; justify-self: end; }

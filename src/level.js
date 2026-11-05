@@ -362,12 +362,13 @@ export function createLevel(ctx, deps = {}) {
     const pass = ratio != null && ratio >= F.weightRatioMin && deathsPct <= F.mortalityMaxPct;
     // what the farmer knows of the dead (the bin) and what he has not seen yet (the floor, the boxes)
     const fl = farm.flock, onFloor = fl.deadOnFloor || 0, inBoxes = (fl.boxDead || 0);
-    const notPicked = onFloor > 0 ? ` (${onFloor.toLocaleString('en')} dead bird${onFloor === 1 ? '' : 's'} not picked up)` : '';
+    // fix round: one sentence with semicolons, not stacked brackets
+    const notPicked = onFloor > 0 ? `; ${onFloor.toLocaleString('en')} dead bird${onFloor === 1 ? ' was' : 's were'} not picked up` : '';
     // a bad batch: the chicks graded out on day 0 count as culls of the level unless the hatchery was told that day
-    const unclaimed = F.claimedApart && bad.gradedOut > 0 && !(claimed > 0) ? `; the ${int(bad.gradedOut)} chicks graded out on day 0 count as culls: the hatchery was not told on day 0` : '';
+    const unclaimed = F.claimedApart && bad.gradedOut > 0 && !(claimed > 0) ? `; the ${int(bad.gradedOut)} chicks graded out on day 0 count as culls, because the hatchery was not told on day 0` : '';
     // Phase 5 (PHASE5.md §6.8.2): a bad batch that failed when the hatchery claim closed at 24:00 of day 0 says so
     const atClaim = !!failAt?.claim && failAt.hour === 24;
-    const claimWords = unclaimed ? ` (the ${int(bad.gradedOut)} chicks graded out on day 0 count as culls: the hatchery was not told on day 0)` : '';
+    const claimWords = unclaimed;
     const failText = deathsPct > F.mortalityMaxPct ? (atClaim ? `deaths and culls reached ${two(deathsPct)} % by 24:00 of day ${failAt.day}, when the hatchery claim closed${claimWords}${notPicked}`
       : `deaths and culls reached ${two(deathsPct)} % on day ${env.dayNumber}${notPicked}${unclaimed}`)
       : ratio != null ? `day 7 weight ${two(ratio)} × chick weight` : (fl.placed || 0) > 0 ? 'no day 7 weight' : 'no chicks were placed';

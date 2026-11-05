@@ -161,6 +161,10 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
       pop.batchBirds = d.batch | 0;
       pop.lastTip = Array.isArray(d.tip) ? { x: d.tip[0] / 100, z: d.tip[1] / 100 } : null;
       dead.restore(d);
+      // fix round: the drawn dead birds no more than the farm's count right away (a standard start's snapshot carried
+      // the last flock's dead onto the emptied house for a second)
+      const want = ctx.farm?.flock?.deadOnFloor;
+      if (typeof want === 'number') dead.trimTo?.(ctx.farm?.house?.closed ? 0 : want);
       if (S.levelMode) pop.reconcile(ctx.farm, 0, farmer());
     },
     sounds() {

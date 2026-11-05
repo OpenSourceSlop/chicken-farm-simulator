@@ -45,7 +45,7 @@ export const GUIDE = {
     { id: 'records', head: 'Records',
       text: ['The **records book** on the office desk keeps a row for every day: body weight against the target, feed and water, deaths by cause, the litter and the house.',
         'Sign the day’s record in the evening.',
-        'Each level ends on its key measurement: the chick weight at the end of the brooding week, a week’s weight, the harvest, the swabs after the clean-out.'] },
+        'Each level ends on its key measurement: the day-7 weight against the chick weight, a week’s weight, the harvest, the swabs after the clean-out.'] },
     { id: 'levels', head: 'Levels',
       text: ['Seven levels follow one flock: plan the farm, the brooding week, week 2, week 3, weeks 4 and 5, finishing and harvest, clean-out and rest.',
         'Each level has a key target. When the target is missed, you play the level again from its start, or from the level before when that is where the trouble began.',

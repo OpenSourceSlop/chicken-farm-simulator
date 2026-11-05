@@ -288,15 +288,17 @@ test('Phase 5 §6.8.4: the hot ideal\'s intake row expects the hot season\'s app
   const L = makeLevel();
   L.run.startRun({ seed: 1, at: 'level1', condition: 'hot' });
   L.run.startLevel('week3', { from: 'standard', condition: 'hot' });
-  let hotRows = 0, noted = 0, raw = 0;
+  let hotRows = 0, noted = 0, raw = 0, quiet = 0;
   const out = [];
   L.env.addStepper(() => {
     const s = L.level.watch.samples, last = s[s.length - 1];
     if (!last || L.farm.mode !== 'level' || last.age + 0 < 0 || L.env.day < 21 || L.env.day >= 42 || last.counted) return;
     last.counted = true;
-    const r = L.level.watch.status().rows.intake;
+    const st = L.level.watch.status(), r = st.rows.intake;
     if (!r) return;
-    if (r.hot) { hotRows++; if (/hot season: the birds eat a little less/.test(r.detail)) noted++; }
+    // fix round: the season's note only while the comfort row is steady (a hot house is the heat, not the season)
+    if (r.hot && st.rows.comfort?.state === 'green') { hotRows++; if (/hot season: the birds eat a little less whenever the house air is over about 28 °C/.test(r.detail)) noted++; }
+    if (r.hot && st.rows.comfort && st.rows.comfort.state !== 'green' && /hot season/.test(r.detail)) quiet++;
     // the same window without the expectation (the standard alone): how often fHot alone would have read amber
     let eat = 0, want = 0, n = 0;
     for (let i = s.length - 1; i > 0 && n < WATCH.litH; i--) {
@@ -310,6 +312,7 @@ test('Phase 5 §6.8.4: the hot ideal\'s intake row expects the hot season\'s app
   for (let i = 0; i < 3; i++) { const r = playLevel(L); assert(r && r.pass, `${L.level.def.id}: ${r?.failText}`); if (L.level.def.id === 'finish' || !L.run.next()) break; }
   console.log(`     hours with the hot-season expectation ${hotRows} (noted ${noted}); without it the feed would read under ${WATCH.intakeGreen * 100} % in ${raw} hours; out of steady: ${out.join(', ') || 'none'}`);
   assert(hotRows > 50 && noted === hotRows, `the row carries the hot-season note: ${noted} / ${hotRows}`);
+  console.log(`     the season's note while the live comfort row warns (the hourly row was steady): ${quiet} hours`);
   assert(!out.length, `the intake row out of steady from fHot alone: ${out.join(', ')}`);
   assert(!L.warns.some((w) => w.kind === 'intake' && w.day >= 21), `no intake warning: ${show(L.warns)}`);
 });

@@ -67,7 +67,7 @@ export function buildWorld(ctx) {
   const season = createSeason({ ...ground.userData, ground: ground.userData.groundMat, rice: fields.riceMesh });
   const metalBase = mats.metalFade.color.clone();
   const wx = { rain: 0, flash: 0, hot: 0 };
-  let powerK = 1, wetK = -1, lastCond;
+  let powerK = 1, wetK = -1, lastCond, lastDay = null;
   const genRoof = root.getObjectByName('generator-roof');
 
   return {
@@ -89,7 +89,11 @@ export function buildWorld(ctx) {
       season.set(cond);
       // a new run in another season (or the sandbox) starts with its own weather: no rain or wet ground carried over from
       // the last storm of the run before (Phase 5 integration: a rainy day's streaks and puddles showed in a new normal run)
-      if (cond !== lastCond) { lastCond = cond; const r0 = rainOf(farm); rain.st.rain = r0; rain.st.wet = r0 > 0 ? 1 : 0; }
+      // fix round: also when the farm's time jumps more than an hour between frames (a slot loaded, a replay, a level start
+      // or a long skip in the same season: a storm's streaks and wet ground stayed on a dry hour)
+      const day = Number.isFinite(env?.day) ? env.day : null, jump = day != null && lastDay != null && Math.abs(day - lastDay) > 1 / 24;
+      lastDay = day;
+      if (cond !== lastCond || jump) { lastCond = cond; const r0 = rainOf(farm); rain.st.rain = r0; rain.st.wet = r0 > 0 ? 1 : 0; }
       const r = rain.update(dt, rainOf(farm), stormOf(farm), view, sky.horizon);
       wx.rain = r.rain; wx.flash = r.flash; wx.hot = cond === 'hot' ? 1 : 0;
       sky.update(dt, env, view, wx);

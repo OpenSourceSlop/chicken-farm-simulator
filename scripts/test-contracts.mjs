@@ -593,9 +593,9 @@ test('phase 5 merged words: sound captions, intro cards, map places, menu, setti
   const { SAVE_MESSAGES } = await import('../src/save-codec.js');
   for (const code of ['auto-failed', 'needs-gzip', 'empty', 'no-game', 'auto-unreadable']) assert(typeof SAVE_MESSAGES[code] === 'string' && !VERDICT.test(SAVE_MESSAGES[code]), `save message ${code}`);
   // the one new sign line of Phase 5 (§6.8.4): the hot season's appetite on the heat sign, general practice, the 2–5 % band
-  const line = BOARD_COND_ITEMS.hot['sign-heat'].find((it) => /eat less in the hottest hours/.test(it.text));
+  const line = BOARD_COND_ITEMS.hot['sign-heat'].find((it) => /eat less whenever the house air is over about 28/.test(it.text));
   assert(line && line.source === 'general' && /2–5 %/.test(line.text) && !VERDICT.test(line.text) && !/p\.\s*\d/.test(line.text), 'the hot season\'s appetite line: general practice, 2–5 %');
-  assert(!Object.values(BOARD_COND_ITEMS).some((byBoard) => Object.entries(byBoard).some(([b, items]) => b !== 'sign-heat' && items.some((it) => /eat less in the hottest hours/.test(it.text)))), 'the appetite line only on the heat sign');
+  assert(!Object.values(BOARD_COND_ITEMS).some((byBoard) => Object.entries(byBoard).some(([b, items]) => b !== 'sign-heat' && items.some((it) => /eat less whenever the house air is over about 28/.test(it.text)))), 'the appetite line only on the heat sign');
 });
 
 test('fix round: no job, strip, Next: line, sign fact or intro card names a farm key as a bare letter (the {key:id} tokens follow a rebind)', async () => {

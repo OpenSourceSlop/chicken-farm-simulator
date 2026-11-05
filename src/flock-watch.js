@@ -237,6 +237,8 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
     const tip = farm.stats?.firstTipAt;
     if (tip != null && (s.t - tip) * 24 >= WATCH.intakeFromH) {
       let eat = 0, want = 0, drink = 0, hrs = 0, hot = false;
+      // fix round: the season's note only while the comfort row is steady (a hot house is the heat, not the season)
+      const comfortOK = rows.comfort?.state === 'green';
       for (let i = samples.length - 1; i > 0 && hrs < WATCH.litH; i--) {
         const a = samples[i - 1], b = samples[i];
         if (!a.lit || !b.lit || a.excl || b.excl || b.t - a.t > 1.5 * H) continue;
@@ -252,7 +254,7 @@ export function createFlockWatch({ env, farm, events, records } = {}) {
         const fs = eat / want, ws = drink / (want * WATCH.waterPerKg), m = Math.min(fs, ws);
         const state = m >= WATCH.intakeGreen ? 'green' : m >= WATCH.intakeRed ? 'amber' : 'red';
         rows.intake = { state, label: 'Intake', value: `feed ${int(fs * 100)} % · water ${int(ws * 100)} %`,
-          detail: `of what ${who.toLowerCase()} this age take (the last ${hrs} lit hours)${hot ? ' (hot season: the birds eat a little less in the hottest hours)' : ''}`, feed: fs, water: ws, hours: hrs, hot };
+          detail: `of what ${who.toLowerCase()} this age take in the last ${hrs} lit hours${hot && comfortOK ? '; hot season: the birds eat a little less whenever the house air is over about 28 °C' : ''}`, feed: fs, water: ws, hours: hrs, hot };
         // Phase 5 (PHASE5.md §6.8.1, review round): a row out of steady names its likely cause and where to look (the water
         // condition's clogged iron filter reaches the watch only through this row: the water supply's filter, its plate)
         if (state !== 'green') {
