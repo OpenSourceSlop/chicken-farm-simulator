@@ -1251,3 +1251,15 @@ signs with their sources, results in the records).
   and the hidden caption, and the kicker on day 33; `p5-gfx` checks the floor's luminance with shadows off against high
   (within 10 %, also after the sun moves) and that a Low boot then High links nothing; `p5-map` and `test-map` check zero
   overlaps between markers, labels, posts and words (the planning and prep days, both views, 960 × 600 and 1280 × 800).
+- **Earlier steps files adapted to the pause rule**: `hotfix-steps` walks to the regulator with the clock running and
+  pauses at the panel (through the HUD hook: the panel covers the time bar at 960 × 600); `p3-scene-events` and
+  `p4-scene-events` lift their own pause before E; `p5-hud` checks the compact *Small*; `p5-play` reads the
+  *· level ended* slot name; `p5-settings`' Low check expects the house's own shadow.
+- **Results of the round** (960 × 600 unless noted, every run without console or page errors): `npm test` all 15
+  files pass; Phase 5 — `p5-fixes` 14, `p5-first-play` 26 (26 at 1280 × 800), `p5-gfx` 10, `p5-map` 30 (30), `p5-a11y` 62
+  (62), `p5-hud` 20 (20), `p5-look` 35 (35), `p5-cross` 61 (61), `p5-play` 70, `p5-settings` 28, `p5-saves` 24,
+  `p5-saves-migrate` 4, `p5-sound` 50, `p5-sound-scenes` 22, `p5-design-stubs` 20, `p5-boot` 7, `p5-guide` 11; Phase 1 — the
+  `tour` clean, `phase1-jobs` 4 of 4; Phase 2 — `p2-level1` 58, `p2-level1-find` 18, `hotfix-steps` 21, `p2-flock-events`
+  21, `p2-review2` 8, `p2-review2-ui` 13; Phase 3 — `p3-cycle` 140, `p3-replay` 16, `p3-scene-events` 14, `p3-scene-look` 9,
+  `p3-scene-perf` clean; Phase 4 — `p4-hot` 43, `p4-rainy` 17, `p4-water` 15, `p4-bad` 17, `p4-clarity` 14,
+  `p4-run-conditions` 11, `p4-scene-events` 30, `p4-scene-look` 2; requests — `req-watch` 13, `req-deadmark` 6, `rv-hud` 16.
