@@ -282,8 +282,9 @@ export function siloSkills(L) {
     const lost = openFault(L, 'order-lost');
     if (auto.show(lvl && (perkAuto(L, 'feed') || !!lost))) {
       const st = autoStatus(L, 'feed'), last = farm.auto?.last?.feed;
-      const pend = (farm.feed.pending || []).map((o) => `${int(o.kg)} kg ${typeLabel(o.type)}, due day ${o.arriveDay} ${String(o.arriveHour ?? 9).padStart(2, '0')}:00`);
-      autoLine.set(lost ? faultText(L, lost) : pend.length ? `On the way: ${pend.join(' · ')} · confirmed by the mill` : 'No order on the way',
+      // an order the model marks lost or unconfirmed (o.lost / o.confirmed === false) reads so; else the mill confirmed it
+      const pend = (farm.feed.pending || []).map((o) => `${int(o.kg)} kg ${typeLabel(o.type)}${o.by === 'auto' ? ' (the controller)' : ''}, due day ${o.arriveDay} ${String(o.arriveHour ?? 9).padStart(2, '0')}:00, ${o.lost || o.confirmed === false ? 'not confirmed by the mill' : 'confirmed by the mill'}`);
+      autoLine.set(lost ? faultText(L, lost) : pend.length ? `On the way: ${pend.join(' · ')}` : 'No order on the way',
         lost ? 'Order by hand: Order to 3 days here, or the phone.' : last?.text || st.text || 'The controller orders to 3 days at 2 days of feed, to day 35.');
       autoLine.el.classList.toggle('skl-note--fault', !!lost);
       setText(autoNote, env.dayNumber > AUTO.lastAutoOrderDay ? 'From day 36 the last order is yours: only you know the catch.' : '');

@@ -37,7 +37,7 @@ const CSS = `
 .skl-state .led { width: 8px; height: 8px; }
 .skl-tubes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .skl-tube { display: grid; justify-items: center; gap: 3px; padding: 4px 2px; border-radius: 4px; background: rgba(255, 255, 255, 0.04); font: 600 12px/1.25 var(--font-display); text-align: center; }
-.skl-tube small { font: 500 11.5px/1.25 var(--font-body); color: var(--key-sub); }
+.skl-tube small { font: 500 12px/1.25 var(--font-body); color: var(--key-sub); }
 .skl-tube.is-off { box-shadow: inset 0 0 0 1px var(--sign-yellow); }
 .book-paper .skl { background: rgba(231, 182, 70, 0.14); color: var(--ledger-ink, #2b2a24); box-shadow: inset 3px 0 0 rgba(160, 112, 20, 0.8); }
 .book-paper .skl-work { background: rgba(43, 42, 36, 0.08); color: var(--ledger-ink, #2b2a24); }

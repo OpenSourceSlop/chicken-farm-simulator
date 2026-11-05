@@ -249,7 +249,7 @@ export function controllerSkills(L, { draft, lp, refresh, waits }) {
   const SYS = Object.keys(AUTO_SYSTEMS).filter((s) => AUTO_SYSTEMS[s].glanceAt.includes('controller'));
   const sysList = h('div', { class: 'skl-rows' }), sinceEl = skNote();
   const top = skillBox('autoTimer', 'The controllers', sysList, sinceEl);
-  let lastReadAt = null, since = null, acc = 0;
+  let lastReadAt = null, since = null, acc = 0, preAt = -Infinity, preCache = null;
 
   function sysWords(s) {
     const st = autoStatus(L, s), f = st.faults[0];
@@ -264,7 +264,7 @@ export function controllerSkills(L, { draft, lp, refresh, waits }) {
       const r = rowFor(env, farm, L.jobs());
       rowWork.set(r.text, said.row);
       let p = null;
-      try { p = preheatHours(env, farm); } catch { p = null; }
+      if (env.day - preAt > 10 / 1440 || env.day < preAt) { preAt = env.day; try { preCache = preheatHours(env, farm); } catch { preCache = null; } } p = preCache;   // the heat balance: once per 10 farm minutes
       preheat.set(p && Number.isFinite(p.hours) ? `Pre-heat: about ${Math.round(p.hours)} hours to bring the floor to ${one(p.targetC)} °C with the brooders at full in this weather${Number.isFinite(p.startBy) ? ` — start by ${atText(env, p.startBy)}` : ''}` : '', p?.why || '');
     }
     // Heating 3: the sensor and the thermometer
@@ -306,7 +306,7 @@ export function controllerSkills(L, { draft, lp, refresh, waits }) {
   }
   return {
     top: top.el, temp: [row2.el, sensor.el], fill: fill.el, fans: fans.el, lights: lights.el,
-    onOpen() { glance.onOpen(); since = lastReadAt; for (const k of Object.keys(said)) said[k] = ''; sync(); },
+    onOpen() { glance.onOpen(); since = lastReadAt; preAt = -Infinity; for (const k of Object.keys(said)) said[k] = ''; sync(); },
     /** the controller was read (open 2 s): the next opening shows what the controllers did after now */
     onRead() { lastReadAt = env.day; },
     update(dt, force) { glance.update(dt); acc -= dt || 0; if (force || acc <= 0) { acc = 0.25; sync(); } },
