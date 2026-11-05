@@ -14,7 +14,8 @@
 //                                       (storage: a Storage-like object or a function returning one; every access in try/catch)
 //   await packEnvelope(env, { gzip? }) -> the stored form { format, v, build, savedAt, meta, enc, crc, data, chars }
 //   await unpackStored(stored)       -> the envelope (migrated, checked) or throws SaveError
-//   mergeProfiles(a, b)              -> the skill profile with the larger of each (a backup's skill points brought in)
+//   mergeProfiles(a, b)              -> the skill profile with the larger of each (a backup's skill points brought in;
+//                                       Skills update: the higher tier per flock slot, SKILLS.md §11)
 import { SAVE_SLOTS, BUILD, LEVELS, levelById, conditionLabel, CONDITIONS } from './config.js';
 import { SaveError, encodePayload, decodePayload, crc32, hex8 } from './save-codec.js';
 
@@ -199,9 +200,21 @@ export function mergeProfiles(a, b) {
   if (!b) return a;
   const ea = new Map(a.skills?.earned || []), eb = b.skills?.earned || [];
   for (const [k, v] of eb) { const o = ea.get(k); ea.set(k, o == null ? v : (typeof v === 'number' && typeof o === 'number' ? Math.max(o, v) : o)); }
+  // Skills update (SKILLS.md §11): the higher tier per flock slot (a v1 profile's tiers are its slot 1)
+  const slots = (sk) => {
+    const m = new Map();
+    if (sk?.v === 2 && Array.isArray(sk.flocks)) for (const [k, x, y] of sk.flocks) m.set(k, [Number.isFinite(x) ? x : null, Number.isFinite(y) ? y : null]);
+    for (const [k, v] of sk?.earned || []) if (!m.has(k) && Number.isFinite(v)) m.set(k, [v, null]);
+    return m;
+  };
+  const two = (a.skills?.v === 2) || (b.skills?.v === 2);
+  const fa = slots(a.skills), fb = slots(b.skills), hi = (x, y) => (x == null ? y : y == null ? x : Math.max(x, y));
+  for (const [k, [x, y]] of fb) { const o = fa.get(k) || [null, null]; fa.set(k, [hi(o[0], x), hi(o[1], y)]); }
   const cd = { ...(a.conditionsDone || {}) };
   for (const [k, n] of Object.entries(b.conditionsDone || {})) cd[k] = Math.max(cd[k] || 0, n || 0);
   const details = new Map(a.details || []);
   for (const [k, v] of b.details || []) if (!details.has(k)) details.set(k, v);
-  return { ...a, skills: { ...(a.skills || {}), earned: [...ea] }, details: [...details], cyclesDone: Math.max(a.cyclesDone || 0, b.cyclesDone || 0), conditionsDone: cd };
+  const skills = { ...(a.skills || {}), earned: [...ea] };
+  if (two) Object.assign(skills, { v: 2, flocks: [...fa].map(([k, x]) => [k, x[0], x[1]]) });
+  return { ...a, skills, details: [...details], cyclesDone: Math.max(a.cyclesDone || 0, b.cyclesDone || 0), conditionsDone: cd };
 }

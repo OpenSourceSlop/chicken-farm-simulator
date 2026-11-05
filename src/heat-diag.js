@@ -228,6 +228,10 @@ export function causeWords(kind, env, farm, at = {}) {
     case 'floor': return { kind, sign: 'sign-litter', signName: 'the litter sign', place: 'litter', fix: null,
       why: `the house holds near the row (${fmtC(env.houseTemp)}, ${rowWords(env)}) with the brooders not at full, yet the ${b} feel colder: wet or thin litter under them, or a brooder out`,
       check: 'the litter under the chicks (squeeze a handful) and that each brooder burns' };
+    // Skills update (SKILLS.md §5.1): the controller's sensor reads high, the brooders hold the house under the row
+    case 'drift': { const d = farm?.auto?.drift || 0; return { kind, sign: 'sign-brooder', signName: 'the brooder sign (its sensor line)', place: 'controller', fix: { panel: 'controller', tab: 'temp' },
+      why: `the controller’s sensor reads ${one(d)} °C over the house thermometer: the brooders hold the house ${one(d)} °C under the row (${rowWords(env)})`,
+      check: `the sensor against the thermometer beside ${CTRL} (Check the sensor on its Temperature tab)` }; }
     case 'power': return { kind, sign: 'sign-power', signName: 'the power cut sign by the generator', place: 'generator', fix: null,
       why: 'the power is off: no brooder lights and no fan runs', check: 'the generator and its transfer switch at the generator house' };
     default: return { kind: 'capacity', sign: 'sign-brooder', signName: 'the brooder sign', place: 'controller', fix: { panel: 'controller', tab: 'temp' },
@@ -239,6 +243,8 @@ export function causeWords(kind, env, farm, at = {}) {
 /** The main cold cause now (or at `at`): the biggest fix, else the power, else the night beyond the brooders. */
 export function coldCause(env, farm, at = {}) {
   if (env.powerOn === false) return causeWords('power', env, farm);
+  // a drifted sensor (an open sensor-drift fault, 1 °C or more): the thermostat holds the house under the row
+  if ((farm?.auto?.drift || 0) >= 1 && !env.broodersUp && (farm.auto.faults || []).some((f) => f.phase === 'open' && f.id === 'sensor-drift')) return causeWords('drift', env, farm, at);
   const f = coldFixes(env, farm, at);
   // a brooder out chills the chicks around it more than the house mean shows (sim.js outAirDev, no radiant there)
   if (f.fixes.length) return causeWords(f.fixes[0].kind, env, farm, at);
@@ -305,11 +311,33 @@ export function controllerNotes(env, farm) {
   return out;
 }
 
+/** Model values of the pre-heat time (SKILLS.md §3.4; none is a sign fact: the sign says about a day for the concrete). */
+export const PREHEAT = { floorC: 28, margin: 1.25, plusH: 2, beforeTruckH: 6, maxH: 72, litterCm: 8 };
 /**
- * Skills update (SKILLS.md §3.4; package "model" writes it): the pre-heat Heating 2's heat-loss readout gives —
- * { hours, startBy, floorC, targetC: 28, why } with the brooders at full from now in this weather (the slab's rate, the
- * outside forecast), or null when there is nothing to pre-heat (chicks on the floor, brooders up). The one home of the
- * figure: the controller's Temperature tab, the job strip of prep-preheat and the brooders controller read it here.
- * STUB: null.
+ * Skills update (SKILLS.md §3.4; package "model"): the pre-heat Heating 2's heat-loss readout gives — { hours, startBy,
+ * floorC (the floor now, the brooding floor's coolest part without the brooders' radiant), targetC: 28, why } with the
+ * brooders at full from now in this weather (the slab's own rate, sim.js SLAB.tauH; the outside air hour by hour), or null
+ * when there is nothing to pre-heat (chicks on the floor, brooders up, the truck come). The one home of the figure: the
+ * controller's Temperature tab, the job strip of prep-preheat and the brooders controller (Heating 3) read it here.
+ * hours = the hours the concrete takes to reach 28 °C x 1.25 + 2 (the house air first); startBy = the truck less the hours
+ * and 6 hours (the floor read before the chicks come, from 06:00).
  */
-export function preheatHours(env, farm) { void env; void farm; return null; }
+export function preheatHours(env, farm) {
+  if (!farm || farm.mode !== 'level' || !env.levelClimate || env.broodersUp || farm.flock?.placed > 0 || env.powerOn === false) return null;
+  const lv = farm.level || {}, arrH = Number.isFinite(farm.delivery?.arrivalHour) ? farm.delivery.arrivalHour : lv.arrivalHour ?? 8;
+  const truck = (lv.arrivalDay ?? 0) + arrH / 24;
+  if (!(env.day < truck)) return null;
+  const P = PREHEAT, sp = Math.max(env.heaterSetpoint, Math.round((env.targetTemp ?? 34) * 2) / 2, 30), lit = HEATERS.length - (env.brooderOut?.length || 0);
+  const depth = env.litterDepthCm > 1 ? env.litterDepthCm : P.litterCm, k = SLAB.kBare + SLAB.kPerCm * depth;
+  let S = env.slabTemp, t = env.day, h = 0;
+  while (S < P.floorC && h < P.maxH) {
+    const outC = env.outsideAt ? env.outsideAt(t) : env.outsideTemp, x = settleAt(env, { sp, outC, sunCh: sunAt(env, t), slabC: S, lit, tunnelN: 0 });
+    S += (x.houseC + SLAB.brooderC * x.output - S) / SLAB.tauH;
+    t += 1 / 24; h++;
+  }
+  const hours = Math.min(P.maxH, Math.ceil((h * P.margin + P.plusH) * 2) / 2), startBy = truck - (hours + P.beforeTruckH) / 24;
+  const floorC = env.slabTemp + k * (env.houseTemp - env.slabTemp), sd = Math.floor(startBy + 1e-9), sm = Math.round((startBy - sd) * 1440) % 1440;
+  const at = startBy <= env.day + 1e-9 ? 'start now' : `start by ${String(Math.floor(sm / 60)).padStart(2, '0')}:${String(sm % 60).padStart(2, '0')} on day ${sd}`;
+  return { hours, startBy: +startBy.toFixed(5), floorC: +floorC.toFixed(1), targetC: P.floorC,
+    why: `Pre-heat: about ${hours} hours to bring the floor to ${P.floorC} °C with the brooders at full in this weather — ${at}` };
+}

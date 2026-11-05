@@ -23,6 +23,9 @@ import { MILESTONES_CYCLE, needsProblemOf } from './skills-cycle.js';
 // Phase 4: the conditions' milestones (contract data) and their rules (PHASE4.md §7, §9.4)
 import { MILESTONES_COND } from './skills-cond.js';
 import { RULES_COND } from './skills-rules-cond.js';
+// Skills update (SKILLS.md §2.3): the seven milestones the update adds (contract data) and their rules, merged while live
+import { MILESTONES_PAYOFF } from './skills-payoff.js';
+import { RULES_PAYOFF } from './skills-rules-payoff.js';
 
 /**
  * @typedef {{ id: string, branch: string, checkpoint: string, text: string,
@@ -82,7 +85,12 @@ export const ALL_MILESTONES = [...MILESTONES.map((m) => ({ ...m, level: 'level1'
 export const ALL_MILESTONES_P4 = [...ALL_MILESTONES, ...MILESTONES_COND];
 const P2_IDS = new Set(MILESTONES.map((m) => m.id));
 const COND_IDS = new Set(MILESTONES_COND.map((m) => m.id));
-const byId = new Map(ALL_MILESTONES_P4.map((m) => [m.id, m]));
+const PAY_IDS = new Set(MILESTONES_PAYOFF.map((m) => m.id));
+/** Skills update: every milestone with the update's seven (SKILLS.md §2.3); evaluated and shown only while live. */
+export const ALL_MILESTONES_SKILLS = [...ALL_MILESTONES_P4, ...MILESTONES_PAYOFF];
+/** The milestone table in force: Phase 5's, plus the update's seven while SKILLS_UPDATE.live. */
+export const milestoneTable = () => (SKILLS_UPDATE.live ? ALL_MILESTONES_SKILLS : ALL_MILESTONES_P4);
+const byId = new Map(ALL_MILESTONES_SKILLS.map((m) => [m.id, m]));
 // the problem ids of a level as a condition plays it (needsProblem: a milestone of a dropped problem is not evaluated)
 const PROBS = new Map();
 const levelProblems = (level, condition) => {
@@ -98,17 +106,28 @@ export function milestoneInPlay(m, condition) {
 }
 
 export function createSkills({ events, records, farm } = {}) {
-  /** milestone id -> best tier index earned (profile, kept across replays) */
+  /** milestone id -> best tier index earned in either flock slot (the profile's; Phase 5's `earned`, kept across replays) */
   const earned = new Map();
+  /** Skills update (SKILLS.md §2.2): milestone id -> [slot 1 tier | null, slot 2 tier | null] (slot 1: the first flock,
+   *  profile.cyclesDone 0; slot 2: every later flock). While SKILLS_UPDATE.live is false only `earned` counts (Phase 5). */
+  const flocks = new Map();
   let currentLevel = 'level1';      // the level of the bus checkpoints ('problem', 'day') and of checkpoints without one
   // Phase 4 (PHASE4.md §3.1, §7): the profile's cycles finished (any run) and the condition cycles played under one condition
   const profile = { cyclesDone: 0, conditionsDone: {} };
+  const live = () => !!SKILLS_UPDATE.live;
+  const tierPts = (m, t) => (t == null ? 0 : m.tiers[t].points);
+  /** The flock slot an award goes to now: 1 once a cycle is finished (while live), else 0. */
+  const slotNow = () => (live() && profile.cyclesDone >= 1 ? 1 : 0);
+  const slotsOf = (id) => flocks.get(id) || [null, null];
 
-  const pointsOf = (branch) => {
+  /** A branch's points: both slots while live (or one: slot 0 | 1), else the best tier of each milestone (Phase 5). */
+  const pointsOf = (branch, { slot } = {}) => {
     let p = 0;
-    for (const m of ALL_MILESTONES_P4) {
-      if (m.branch !== branch || !earned.has(m.id)) continue;
-      p += m.tiers[earned.get(m.id)].points;
+    for (const m of milestoneTable()) {
+      if (m.branch !== branch) continue;
+      if (!live()) { if (earned.has(m.id) && (slot == null || slot === 0)) p += tierPts(m, earned.get(m.id)); continue; }
+      const s = slotsOf(m.id);
+      if (slot == null) p += tierPts(m, s[0]) + tierPts(m, s[1]); else p += tierPts(m, s[slot]);
     }
     return p;
   };
@@ -129,15 +148,22 @@ export function createSkills({ events, records, farm } = {}) {
     },
     /** The points for levels 1, 2, 3 in force (SKILLS.md §2.2). */
     levelPoints: () => skillLevelPoints(),
-    points: pointsOf,
+    /** points(branch) both flock slots while live; points(branch, { slot: 0 | 1 }) one slot (SKILLS.md §2.2). */
+    points: (branch, opts) => pointsOf(branch, opts),
     level: levelOf,
-    /** Milestones of a branch with what was earned: [{ ...milestone, tier: index|null, points }] */
+    /** Milestones of a branch with what was earned: [{ ...milestone, tier: best index|null, points, tiers2: [slot 1, slot 2],
+     *  points2: [p1, p2] }] (points: both slots while live; the best tier's otherwise, as Phase 5) */
     milestones(branch) {
-      return ALL_MILESTONES_P4.filter((m) => m.branch === branch).map((m) => {
-        const t = earned.has(m.id) ? earned.get(m.id) : null;
-        return { ...m, tier: t, points: t == null ? 0 : m.tiers[t].points };
+      return milestoneTable().filter((m) => m.branch === branch).map((m) => {
+        const t = earned.has(m.id) ? earned.get(m.id) : null, s = live() ? slotsOf(m.id) : [t, null];
+        const points2 = [tierPts(m, s[0]), tierPts(m, s[1])];
+        return { ...m, tier: t, points: live() ? points2[0] + points2[1] : tierPts(m, t), tiers2: [s[0], s[1]], points2 };
       });
     },
+    /** Every milestone the tree shows and evaluate() weighs now (the update's seven while live). */
+    allMilestones: () => milestoneTable(),
+    /** The flock slot an award goes to now (0: the first flock, 1: a later one). */
+    slotNow,
     /** @param {keyof typeof UNLOCKS} key */
     unlocked(key) {
       const u = UNLOCKS[key];
@@ -158,7 +184,7 @@ export function createSkills({ events, records, farm } = {}) {
       const level = ctx.level ?? currentLevel;
       // Phase 4: the run's condition (the farm's: the only holder; checkpoints carry it as ctx.condition)
       const condition = ctx.condition !== undefined ? ctx.condition : farm.condition ?? null;
-      for (const m of ALL_MILESTONES_P4) {
+      for (const m of milestoneTable()) {
         if (m.level !== level) continue;
         if (checkpoint !== 'level-end' && m.checkpoint !== checkpoint) continue;
         if (!milestoneInPlay(m, condition)) continue;
@@ -167,11 +193,11 @@ export function createSkills({ events, records, farm } = {}) {
         // (a bad batch's are measured at their own checkpoints: placed, weighin, level-end)
         if (!p2 && !cond && level === 'level1' && !(ctx.run && checkpoint === 'level-end')) continue;
         if (cond && level === 'level1' && !ctx.run && !condition) continue;
-        const rule = p2 ? RULES[m.id] : cond ? RULES_COND[m.id] : RULES_CYCLE[m.id];
+        const rule = p2 ? RULES[m.id] : cond ? RULES_COND[m.id] : PAY_IDS.has(m.id) ? RULES_PAYOFF[m.id] : RULES_CYCLE[m.id];
         let r = null;
-        try { r = rule ? (p2 ? rule(farm, records) : rule(farm, records, { ...ctx, checkpoint })) : null; } catch (err) { console.error(`milestone ${m.id} rule failed`, err); }
+        try { r = rule ? (p2 ? rule(farm, records) : rule(farm, records, { ...ctx, checkpoint, skills })) : null; } catch (err) { console.error(`milestone ${m.id} rule failed`, err); }
         if (!r || r.tier == null) continue;
-        const before = earned.has(m.id) ? m.tiers[earned.get(m.id)].points : 0;
+        const before = live() ? tierPts(m, slotsOf(m.id)[slotNow()]) : earned.has(m.id) ? m.tiers[earned.get(m.id)].points : 0;
         if (skills.award(m.id, r.tier, r.detail || '')) out.push({ id: m.id, tier: r.tier, delta: m.tiers[r.tier].points - before });
       }
       return out;
@@ -179,16 +205,23 @@ export function createSkills({ events, records, farm } = {}) {
     /** Award directly (used by evaluate and tests). Returns true when it raised the tier. */
     award(id, tier = 0, detail = '') {
       const m = byId.get(id);
-      if (!m || (earned.has(id) && earned.get(id) >= tier)) return false;
+      if (!m || !m.tiers[tier]) return false;
+      // Skills update (SKILLS.md §2.2): while live the tier is kept per flock slot (a replay raises its slot only, a third
+      // flock slot 2 only); else per profile (Phase 5: a later flock adds nothing)
+      const slot = slotNow(), s = slotsOf(id);
+      if (live() ? s[slot] != null && s[slot] >= tier : earned.has(id) && earned.get(id) >= tier) return false;
       const before = levelOf(m.branch);
-      const had = earned.has(id) ? m.tiers[earned.get(id)].points : 0;
-      earned.set(id, tier);
+      const had = live() ? tierPts(m, s[slot]) : earned.has(id) ? m.tiers[earned.get(id)].points : 0;
+      const ns = [s[0], s[1]];
+      ns[slot] = Math.max(ns[slot] ?? -1, tier);
+      flocks.set(id, ns);
+      earned.set(id, Math.max(earned.has(id) ? earned.get(id) : -1, tier));
       const total = pointsOf(m.branch), level = levelOf(m.branch);
-      events && events.emit(EV.SKILL_POINTS, { branch: m.branch, milestone: id, tier, points: m.tiers[tier].points - had, total, level, detail });
+      events && events.emit(EV.SKILL_POINTS, { branch: m.branch, milestone: id, tier, points: m.tiers[tier].points - had, total, level, detail, slot });
       if (level > before) for (const k of keysAt(m.branch, before, level)) events && events.emit(EV.SKILL_UNLOCK, k);
       return true;
     },
-    reset() { earned.clear(); },
+    reset() { earned.clear(); flocks.clear(); },
     /** Harness and node tests only (SKILLS.md §13.2): force a branch's level (null clears it); never saved. Emits
      *  EV.SKILL_UNLOCK for the keys it passes and EV.SKILL_POINTS-free: the perks listen to EV.SKILL_UNLOCK. */
     debug: {
@@ -221,9 +254,22 @@ export function createSkills({ events, records, farm } = {}) {
       if (Number.isFinite(p.cyclesDone)) profile.cyclesDone = Math.max(0, Math.floor(p.cyclesDone));
       if (p.conditionsDone && typeof p.conditionsDone === 'object') profile.conditionsDone = Object.fromEntries(Object.entries(p.conditionsDone).filter(([, n]) => Number.isFinite(n)));
     },
-    serialize() { return { v: 1, earned: [...earned], ...(profile.cyclesDone || Object.keys(profile.conditionsDone).length ? { cyclesDone: profile.cyclesDone, conditionsDone: { ...profile.conditionsDone } } : {}) }; },
+    // Skills update (SKILLS.md §11): v2 { earned (the best of either slot, for a Phase 5 reader), flocks: [[id, slot 1, slot 2]],
+    // cyclesDone, conditionsDone } while live, or once a slot-2 tier exists; v1 exactly as Phase 5 otherwise
+    serialize() {
+      const prof = profile.cyclesDone || Object.keys(profile.conditionsDone).length ? { cyclesDone: profile.cyclesDone, conditionsDone: { ...profile.conditionsDone } } : {};
+      const two = [...flocks.values()].some((x) => x[1] != null);
+      if (!live() && !two) return { v: 1, earned: [...earned], ...prof };
+      return { v: 2, earned: [...earned], flocks: [...flocks].map(([k, x]) => [k, x[0] ?? null, x[1] ?? null]), cyclesDone: profile.cyclesDone, conditionsDone: { ...profile.conditionsDone } };
+    },
     restore(d) {
-      earned.clear(); for (const [k, v] of (d && d.earned) || []) earned.set(k, v);
+      earned.clear(); flocks.clear();
+      for (const [k, v] of (d && d.earned) || []) earned.set(k, v);
+      // v2: the slots as saved; v1 (a Phase 2-5 profile): every tier into slot 1
+      if (d && d.v === 2 && Array.isArray(d.flocks)) {
+        for (const [k, a, b] of d.flocks) flocks.set(k, [Number.isFinite(a) ? a : null, Number.isFinite(b) ? b : null]);
+        for (const [k, v] of earned) if (!flocks.has(k)) flocks.set(k, [v, null]);
+      } else for (const [k, v] of earned) flocks.set(k, [v, null]);
       profile.cyclesDone = (d && Number.isFinite(d.cyclesDone)) ? d.cyclesDone : 0; profile.conditionsDone = d && d.conditionsDone ? { ...d.conditionsDone } : {};
       // Skills update (SKILLS.md §4.2, review issue 4): a restored profile (level.profile.restore after a standard start, a
       // loaded save) may change what the skills give: the perks refresh on this and level.js re-syncs farm.auto.on on the

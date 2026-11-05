@@ -15,6 +15,8 @@
 import { AIR } from './config.js';
 import { EV } from './events.js';
 import { causeOf, watchState } from './flock-watch.js';
+// Skills update (SKILLS.md §5.3): every open fault is a row of What is off, with its Fix it place
+import { openFaults, faultWords } from './farm-faults.js';
 const DEATH_KIND = { cold: 'cold', heat: 'heat', dehydration: 'water', weak: 'weak', starveout: 'weak', box: 'weak', sds: 'sds', legs: 'legs', disease: 'disease', respiratory: 'air' };
 import { DIAG, airOf, hoursAhead, coldFixes, causeWords, coldCause, hotCause, rowOf, rowWords, rowC, fmtC, youngOf, birdsWord,
   timerWords, nextAt, comfortAt } from './heat-diag.js';
@@ -43,9 +45,29 @@ export function nightHoursIn(from, to) {
   return h;
 }
 
-/** The night ahead of a skip to `toDay` (the young-bird weeks): what is off, and where to set it. */
+/**
+ * The open faults of the farm's equipment as night check rows (SKILLS.md §5.3): [{ kind: 'fault', side: 'equipment', id,
+ * text, why, check, fix: { panel, tab, orPanel? }, signName, line? }] — the timer's first setting, the stages off, the sensor
+ * reading high, a feed order not confirmed (the silo days and the mill's 16:00 rule), a stalled winch (the plate tonight and
+ * tomorrow), a fouled scale.
+ */
+export function faultRows(env, farm) {
+  if (!farm || farm.mode !== 'level') return [];
+  return openFaults(farm).map((f) => {
+    const w = faultWords(f, env, farm), text = w.night || w.what;
+    return { kind: 'fault', side: 'equipment', id: f.id, text, why: text.replace(/\.$/, ''), check: `${w.place}: ${w.fix}`, signName: w.sign,
+      fix: { panel: w.panel ?? null, tab: w.tab ?? null, ...(w.orPanel ? { orPanel: w.orPanel } : {}) }, ...(Number.isFinite(f.args?.line) ? { line: f.args.line } : {}) };
+  });
+}
+/** The night ahead of a skip to `toDay` (the young-bird weeks; every open fault of the equipment at any age): what is off,
+ *  and where to set it. */
 export function nightCheck(env, farm, { toDay } = {}) {
-  if (!farm || farm.mode !== 'level' || !(farm.flock?.alive > 0) || !youngOf(env, farm) || env.powerOn === false) return { show: false };
+  const faults = faultRows(env, farm);
+  if (!farm || farm.mode !== 'level' || !(farm.flock?.alive > 0) || !youngOf(env, farm) || env.powerOn === false) {
+    if (!faults.length || !farm || farm.mode !== 'level') return { show: false };
+    const to = Math.max(toDay ?? 0, nextAt(env.day, 7));
+    return { show: true, lines: {}, problems: faults, faults, fix: faults[0].fix, to, skipTo: toDay ?? null };
+  }
   const row = rowOf(env), sp = env.heaterSetpoint, a = airOf(env, farm), b = birdsWord(env, farm);
   const to = Math.max(toDay ?? 0, nextAt(env.day, 7));
   const ah = hoursAhead(env, { toDay: to }), cold = ah.cold, lit = (8 - (env.brooderOut?.length || 0)) / 8;
@@ -87,7 +109,8 @@ export function nightCheck(env, farm, { toDay } = {}) {
     brooders: { state: needShare > 1 ? 'red' : needShare > 0.9 ? 'amber' : 'green',
       text: `Brooders at ${pct(env.heaterLevel)} now${env.brooderOut?.length ? `, ${plural(env.brooderOut.length, 'brooder')} out` : ''}. At ${hhmm(cold.t)}, the coldest hour (outside about ${rowC(Math.round(cold.outC))}), they would need ${pct(needShare)} of their heat to hold ${rowC(row)}${needShare > 1 ? `: the house heads for about ${fmtC(cold.houseC)}` : ''}.` },
   };
-  return { show: problems.length > 0, lines, problems, fix: problems.find((p) => p.fix)?.fix || null, cold, warm: ah.warm, row, to, skipTo: toDay ?? null };
+  problems.push(...faults);
+  return { show: problems.length > 0, lines, problems, faults, fix: problems.find((p) => p.fix)?.fix || null, cold, warm: ah.warm, row, to, skipTo: toDay ?? null };
 }
 
 /** The flock's deaths by cause between two snapshots, biggest first: [[cause, n]]. */

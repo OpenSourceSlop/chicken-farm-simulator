@@ -16,6 +16,8 @@ import { CONDITIONS, HEAT_P4, HEAT, targetTempAt, WATER_TANK, PLACEMENT_DAY, AIR
 import { absHumSat, wetBulbOf, SLAB } from './sim.js';
 import { windChillP4 } from './farm-tuning.js';
 import { humidityTerm } from './farm-heat.js';
+import { feelWith, fansForFeel, padFansForFeel } from './farm-fans.js';
+export { feelWith, fansForFeel, padFansForFeel };
 
 /** Profile names per condition (keys of scripts/test-cond.mjs COND_TARGETS). */
 export const COND_PROFILES = {
@@ -159,33 +161,7 @@ export function condAnswer(farm, env, act, P) {
   if (found('rain-in')) { act('inlets.storm', { closed: true }); for (const x of [-8, 0, 8]) act('litter.patch', { x, z: 5 }); }
   if (found('damp-spell')) { if (env.fansManual < 2) { env.setFans(2); act('vent.fans', { n: 2 }); } }
 }
-/**
- * What the birds would feel (°C over the target) with `n` tunnel fans (and the pad) once the house settles: the env's
- * balance (the inlet through the wet pad on the tunnel air's share, the sun, the flock's and the brooders' heat, the
- * slab) and its water (the pad's, the breath), less the wind chill. The ideal reads the fan panel's Birds feel.
- */
-export function feelWith(env, n, age, pad = false) {
-  const timer = Math.max(0, (env.fanMean || 0) - (env.fansEffective || 0)), share = n > 0 ? n / (n + timer) : 0;
-  const drop = pad ? PAD_EFF * Math.max(0, env.outsideTemp - wetBulbOf(env.outsideTemp, env.outsideRH)) * Math.min(1, env.padWorking ?? 1) * share : 0;
-  const air = AIR.infiltrationM3h + (n + timer) * EQUIP.fanM3h, ex = AIR.wallLossPerH + air / AIR.thermalM3;
-  const heat = (env.sunHeatPerH || 0) + (env.flockHeatPerH || 0) + (env.heatTerms ? env.heatTerms.brooderCh || 0 : 0);
-  const house = (heat + ex * (env.outsideTemp - drop) + SLAB.sinkPerH * env.slabTemp) / (ex + SLAB.sinkPerH);
-  const x = (absHumSat(env.outsideTemp) * env.outsideRH) / 100 + 0.49 * drop + (env.vapourGh || 0) / air;
-  const rh = Math.min(100, (100 * x) / absHumSat(house));
-  return house + humidityTerm(rh, house) - windChillP4(((n + 0.1 * timer) * 2.5) / 6, age, house) - env.targetTemp;
-}
-/** The fewest tunnel fans (no pad) that keep the birds at or under `aim` °C felt over the target (at most `max`). */
-export function fansForFeel(env, age, aim = 1, max = 6) {
-  for (let n = 0; n <= max; n++) if (feelWith(env, n, age, false) <= aim) return n;
-  return max;
-}
-/** The pad with the fewest tunnel fans that keeps the birds at or under +1 °C felt over the target; null when even one
- *  fan with the pad would chill them (under -1.5 °C: then no pad). */
-export function padFansForFeel(env, age) {
-  if (feelWith(env, 1, age, true) < -1.5) return null;
-  for (let n = 1; n <= 6; n++) if (feelWith(env, n, age, true) <= 1) return n;
-  return 6;
-}
+// feelWith / fansForFeel / padFansForFeel: moved to farm-fans.js (Skills update: one module for the ideal and the controllers)
 /** The condition's fans and pad at a fan stop of Phase 3's plan. */
 export function condFanPlan(farm, env, P, day, age, n, pad) {
   if (!P || !P.condition) return { n, pad };

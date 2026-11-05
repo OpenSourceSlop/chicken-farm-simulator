@@ -9,7 +9,7 @@ import { createLevel } from '../src/level.js';
 import { createRun } from '../src/run.js';
 import { profileOf } from '../src/farm-profiles.js';
 import { EV } from '../src/events.js';
-import { LEVEL1, feedStdGAt as feedStd } from '../src/config.js';
+import { LEVEL1, feedStdGAt as feedStd, SKILLS_UPDATE, AUTO } from '../src/config.js';
 import { WATCH, refShare, causeOf } from '../src/flock-watch.js';
 import { cycleProfileOf } from '../src/farm-profiles-cycle.js';
 import { p2ProfileFor } from '../src/farm-profiles-cond.js';
@@ -315,6 +315,42 @@ test('Phase 5 §6.8.4: the hot ideal\'s intake row expects the hot season\'s app
   console.log(`     the season's note while the live comfort row warns (the hourly row was steady): ${quiet} hours`);
   assert(!out.length, `the intake row out of steady from fHot alone: ${out.join(', ')}`);
   assert(!L.warns.some((w) => w.kind === 'intake' && w.day >= 21), `no intake warning: ${show(L.warns)}`);
+});
+
+// ---------------- Skills update (SKILLS.md §5.3, §3.9; package "model") ----------------
+test('skills update: the Equipment row (steady "N on · reading" while a system is on, red with a fault) and its warning kind equipment with what, cause, place and fix', () => {
+  const was = SKILLS_UPDATE.live;
+  try {
+    SKILLS_UPDATE.live = true;
+    const L = makeLevel();
+    L.run.startRun({ seed: 1, at: 'weeks45' });
+    L.level.debug.goto(24, 9, { auto: true });
+    assert(!L.level.watch.status().rows.equipment, 'no system on: no Equipment row');
+    L.farm.auto.on.winch = true; L.farm.auto.on.timer = true;
+    L.env.skipHours(0.1);
+    const g = L.level.watch.status().rows.equipment;
+    assert(g && g.state === 'green' && g.label === 'Equipment' && /^2 on · reading/.test(g.value) && /Winches/.test(g.detail), `steady: ${JSON.stringify(g)}`);
+    L.farm.debug.fault('winch-stall', { line: 2 });
+    const r = L.level.watch.status().rows.equipment, w = L.warns.find((x) => x.kind === 'equipment');
+    assert(r.state === 'red' && /Line 3 winch motor stalled/.test(r.value), `red at once: ${JSON.stringify(r)}`);
+    assert(w && w.fix && w.fix.spot === 'drinkers.2' && w.fix.panel === 'drinker-2' && /Likely cause/.test(w.text) && /line 3 regulator/.test(w.text) && !VERDICT.test(w.text), `the warning: ${JSON.stringify(w)}`);
+    assert(L.records.notebook.some((n) => n.kind === 'watch' && n.value === w.text) && L.records.notebook.some((n) => n.kind === 'fault'), 'the notebook: the warning and the fault line');
+    L.farm.act('water.height', { line: 2, cm: 24 }); L.farm.act('auto.reset', { system: 'winch', line: 2 });
+    assert(L.level.watch.status().rows.equipment.state === 'green', 'steady again after the fix');
+  } finally { SKILLS_UPDATE.live = was; }
+});
+test('skills update: setLead (Comfort 2) warns at 2 cold hours instead of 4 and the warning names its fix { text, panel, tab, spot }', () => {
+  const play = (lead) => {
+    const L = makeLevel();
+    L.level.start({ seed: 1 });
+    if (lead) L.level.watch.setLead({ comfortH: AUTO.earlyComfortH, fix: true });
+    playUntil(L, COLD, () => L.warns.some((w) => w.kind === 'cold'));
+    return { L, w: L.warns.find((x) => x.kind === 'cold') };
+  };
+  const a = play(false), b = play(true);
+  assert(a.w && b.w && b.w.t < a.w.t - 1 / 24 + 1e-6, `the lead warns earlier: ${b.w?.t} vs ${a.w?.t}`);
+  assert(!a.w.fix && b.w.fix && b.w.fix.text.startsWith('Fix:') && b.w.fix.panel === 'controller' && b.w.fix.tab && b.w.fix.spot && b.w.text.endsWith(`${b.w.fix.text}.`) && !VERDICT.test(b.w.fix.text), `the fix: ${JSON.stringify(b.w.fix)}`);
+  console.log(`     cold warning at d${a.w.day} ${a.w.hour.toFixed(2)} without the lead, d${b.w.day} ${b.w.hour.toFixed(2)} with it; "${b.w.fix.text}"`);
 });
 
 if (failed) { console.log(`${failed} failed`); process.exit(1); } else console.log('all passed');

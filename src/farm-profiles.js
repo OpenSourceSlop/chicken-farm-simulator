@@ -87,19 +87,21 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
   // crop48 false leave them out (the named mistakes). No delivery: Phase 2's ideal exactly.
   const D = farm.delivery, shift = D && P.followShift !== false && env.targetShiftC && day >= 0 && day <= env.targetShiftToDay ? env.targetShiftC : 0;
   // the brooder sign table: target by HUD day, to 0.5 °C (BROODER_ROWS_L1)
-  const setpoint = () => { if (preheatOn) env.setHeaterSetpoint(Math.round(targetTempAt(day) * 2) / 2 + P.setpointOffset + shift); };
+  // Skills update (SKILLS.md §13.1): with a system on (runCycle's perks option) the ideal leaves its part to the equipment
+  const on = (s) => !!(P.autoOn && P.autoOn()[s]);
+  const setpoint = () => { if (preheatOn && !on('brooders')) env.setHeaterSetpoint(Math.round(targetTempAt(day) * 2) / 2 + P.setpointOffset + shift); };
   const lines = [0, 1, 2, 3];
 
   if (round === 'prep') {
     setpoint();
     act('litter.depth', { cm: P.litterCm });
     for (let z = -4.8; z <= 4.81; z += 2.4) for (let x = -23.5; x <= 23.5; x += 0.5) act('litter.spread', { x, z, r: 1.2, quiet: true });
-    for (const line of lines) { act('water.height', { line, cm: 11 }); act('water.pressure', { line, cm: pressureFor(P, 0) }); }
+    for (const line of lines) { if (!on('winch')) act('water.height', { line, cm: 11 }); act('water.pressure', { line, cm: pressureFor(P, 0) }); }
     for (const line of lines) act('water.flowtest', { line });
     for (const line of [0, 1, 2]) act('feed.line', { line, running: true, flood: P.flood, heightCm: P.pansCm ?? Math.round(feederRimCmAt(0)) });
     act('feed.silo');
-    act('light.program', P.light);
-    if (P.timer === 'sign') act('vent.timer', signTimer(farm));
+    if (!on('lights')) act('light.program', P.light);
+    if (P.timer === 'sign' && !on('timer')) act('vent.timer', signTimer(farm));
     if (D && P.trays !== false) act('brood.trays', { on: true });
     return done;
   }
@@ -122,18 +124,18 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
     for (const line of lines) {
       act('water.pressure', { line, cm: pressureFor(P, day) });
       const h = heightFor(P, day, farm.water.lines[line].heightCm);
-      if (h != null) act('water.height', { line, cm: h });
+      if (h != null && !on('winch')) act('water.height', { line, cm: h });
     }
-    for (const line of lines) act('water.flowtest', { line });
+    if (!(P.flowSkipDays || []).includes(day)) for (const line of lines) act('water.flowtest', { line });   // the normal profile's missed tests (SKILLS.md §2.4)
     if (day === 4 && P.filter === 'am4') { act('water.filter'); act('water.clearFilter'); for (const line of lines) act('water.flowtest', { line }); }
     act('feed.meter');
     act('feed.silo');
     if (P.feedOrder && farm.problems.find((p) => p.id === 'low-silo' && p.phase === 'found')) act('feed.order', { kg: 2000 });
-    feeders(act, P, day, farm.age);
-    timer(act, P, day, farm);
+    feeders(act, P, day, farm.age, on('feed'));
+    if (!on('timer')) timer(act, P, day, farm);
     if (day === 0 && farm.flock.inBoxes > 0 && env.day >= t(0, LEVEL1.arrivalHour)) done.push(...applyRound(farm, env, day, 'truck', P));
     if (day === 1 && farm.stats.firstTipAt != null && env.day >= farm.stats.firstTipAt + 22 / 24 && env.day <= farm.stats.firstTipAt + 28 / 24) done.push(...applyRound(farm, env, day, 'crop', P));
-    if (day === 7 && env.hour >= 8 && farm.stats.weighed.length < 50) done.push(...applyRound(farm, env, day, 'weigh', P));
+    if (day === 7 && env.hour >= 8 && farm.stats.weighed.length < 50 && !on('scale')) done.push(...applyRound(farm, env, day, 'weigh', P));
     if (D && day === 2 && P.crop48 !== false && env.hour >= 8 && env.hour < 12) for (let i = 0; i < 10; i++) act('sample.crop', { ...near(i * 2, 1.2, 0.8), index: 10 + i });
     return done;
   }
@@ -156,9 +158,9 @@ export function applyRound(farm, env, day, round, profile = 'ideal') {
   }
   if (round === 'vent') { for (let i = 0; i < 5; i++) act('sample.vent', { ...near(i, 1.2, 0.8), index: i }); return done; }
   if (round === 'crop') { for (let i = 0; i < 10; i++) act('sample.crop', { ...near(i, 1.2, 0.8), index: i }); return done; }
-  if (round === 'weigh') { for (let i = 0; i < 50; i++) act('sample.weigh', { ...near(Math.floor(i / 10), 0.5, 0.5), index: i }); return done; }
+  if (round === 'weigh') { if (on('scale')) return done; for (let i = 0; i < 50; i++) act('sample.weigh', { ...near(Math.floor(i / 10), 0.5, 0.5), index: i }); return done; }
   if (round === 'noon') { if (day === 6) warmAfternoon(act, env, P, true); return done; }
-  if (round === 'late') { if (day === 6) { warmAfternoon(act, env, P, false); if (P.warm === 'timer') timer(act, P, day, farm); } return done; }
+  if (round === 'late') { if (day === 6) { warmAfternoon(act, env, P, false); if (P.warm === 'timer' && !on('timer')) timer(act, P, day, farm); } return done; }
   if (round === 'leak24') { if (P.leak === '24h') fixLeak(act, farm); return done; }
   // Phase 4: a condition's own rounds of the brooding week (farm-profiles-cond.js broodStopsCond)
   if (farm.condition && !['pm', 'am', 'prep', 'eve', 'preheat'].includes(round)) { applyCondRound(farm, env, day, round, { ...condProfile(`${farm.condition}:ideal`, farm.condition), ...(P.cond || {}) }, act); return done; }
@@ -188,7 +190,8 @@ function fixLeak(act, farm) {
 }
 function pressureFor(P, day) {
   if (typeof P.pressure === 'number') return P.pressure;
-  return Math.round(((flowTargetAt(Math.max(0, day)) - 4) / 2) * 2) / 2; // f = 2 x cm + 4 = day + 20
+  // Skills update (the normal profile, SKILLS.md §2.4): the regulators a little off the sign's setting (pressureOffset cm)
+  return Math.round(((flowTargetAt(Math.max(0, day)) - 4) / 2) * 2) / 2 + (P.pressureOffset || 0); // f = 2 x cm + 4 = day + 20
 }
 function heightFor(P, day, current) {
   if (P.heights === 'sign') return Math.round(nippleHeightCmAt(Math.max(0, day)));
@@ -196,10 +199,10 @@ function heightFor(P, day, current) {
   if (P.heights === 'never') return day <= 0 ? 11 : null;
   return current;
 }
-function feeders(act, P, day, age) {
+function feeders(act, P, day, age, auto = false) {
   for (const line of [0, 1, 2]) {
     if (day <= 3) act('feed.line', { line, running: true, flood: P.flood, heightCm: P.pansCm ?? Math.round(feederRimCmAt(0)) });
-    else act('feed.line', { line, running: true, flood: false, heightCm: P.pansCm ?? Math.floor(feederRimCmAt(Math.max(0, age))) });
+    else act('feed.line', { line, running: true, flood: false, ...(auto && P.pansCm == null ? {} : { heightCm: P.pansCm ?? Math.floor(feederRimCmAt(Math.max(0, age))) }) });
   }
 }
 function timer(act, P, day, farm) {

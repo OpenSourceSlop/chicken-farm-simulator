@@ -38,6 +38,9 @@ export function doAct(farm, env, id, a) {
     }
     case 'light.program': {
       const p = { darkStart: a.darkStart ?? farm.light.darkStart, darkHours: Math.max(0, Math.min(12, a.darkHours ?? farm.light.darkHours)), dimmer: Math.max(0, Math.min(1, a.dimmer ?? farm.light.dimmer)) };
+      // Skills update (SKILLS.md §3.7): dawn and dusk dimming minutes ride along when given (the Lighting 3 controller, the
+      // dimming view's key); a program without them is Phase 2's exactly
+      if (Number.isFinite(a.rampMin)) p.rampMin = Math.max(0, Math.min(60, Math.round(a.rampMin)));
       Object.assign(farm.light, p, { luxAtBirds: EQUIP.luxMax * p.dimmer });
       env.setLightProgram(p);
       return true;
@@ -128,7 +131,7 @@ export function doAct(farm, env, id, a) {
       const arriveDay = env.dayNumber + (env.hour < 16 ? 1 : 2), arriveHour = 9;
       feed.order = { kg, arriveDay, arriveHour, orderedAt: env.day };
       feed.orders.push({ ...feed.order, arrivedAt: null });
-      fixProblem(farm, env, 'low-silo', 'order');
+      if (a.by !== 'auto') fixProblem(farm, env, 'low-silo', 'order');   // Skills update: no problem fixed by equipment
       return { arriveDay, arriveHour };
     }
     // ---- chicks and birds ----

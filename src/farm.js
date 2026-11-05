@@ -196,7 +196,7 @@ export function createFarm(env, { events } = {}) {
   farm.flock.weightQuantile = makeQuantile(farm.flock);
   installCycle(farm, env);
   installConditions(farm, env);
-  installAuto(farm, env);
+  installAuto(farm, env, events);
   farm.onLabLetter = () => onLabLetter(farm, env);
 
   if (events) {

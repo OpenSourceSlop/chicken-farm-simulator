@@ -5,6 +5,7 @@
 import { makeWorld } from '../src/farm-profiles-run.js';
 import { createLevel } from '../src/level.js';
 import { createRun } from '../src/run.js';
+import { SKILLS_UPDATE } from '../src/config.js';
 import { CONDITION_IDS } from '../src/config.js';
 import { EV } from '../src/events.js';
 import { hoursAhead, settleAt, coldCause, controllerNotes, rowOf } from '../src/heat-diag.js';
@@ -304,6 +305,35 @@ test(`the ideal is never stopped: no night check on a skip after its last round 
   }
 });
 
+// ---------------- Skills update (SKILLS.md §5.3; package "model") ----------------
+test('skills update: before a skip through the night every open fault is a row of What is off with its Fix it place (order-lost and winch-stall included), at any age', () => {
+  const was = SKILLS_UPDATE.live;
+  try {
+    SKILLS_UPDATE.live = true;
+    const R = makeRun();
+    R.run.startRun({ seed: 1, at: 'weeks45' });
+    R.level.debug.goto(24, 17, { auto: true });
+    for (const s of ['winch', 'feed', 'timer', 'stages']) R.farm.auto.on[s] = true;
+    R.env.skipHours(0.1);
+    assert(!nightCheck(R.env, R.farm).show, 'big birds and nothing off: no check');
+    for (const [id, o] of [['winch-stall', { line: 2 }], ['order-lost', {}]]) R.farm.debug.fault(id, o);
+    const nc = nightCheck(R.env, R.farm), by = Object.fromEntries((nc.faults || []).map((f) => [f.id, f]));
+    assert(nc.show && by['winch-stall'] && by['order-lost'], `rows: ${JSON.stringify(nc.faults)}`);
+    assert(/Line 3’s winch motor is stalled at \d+ cm; the drinker plate says \d+ cm tonight and \d+ cm tomorrow/.test(by['winch-stall'].text) && by['winch-stall'].fix.panel === 'drinker-2', `winch: ${by['winch-stall'].text}`);
+    assert(/not confirmed: [\d.]+ days of feed in the silos\. Ordered now \(after 16:00\) the feed comes the day after tomorrow at 09:00/.test(by['order-lost'].text) && by['order-lost'].fix.panel === 'pocket-phone', `order: ${by['order-lost'].text}`);
+    for (const f of nc.faults) assert(!VERDICT.test(f.text) && f.check, `${f.id}: plain words and where`);
+    for (const [id, o] of [['timer-reset', {}]]) R.farm.debug.fault(id, o);
+    const t = nightCheck(R.env, R.farm).faults.find((f) => f.id === 'timer-reset');
+    assert(t && /restarted on its first timer setting at \d\d:\d\d: 1 fan 8 s \/ 300 s against the vent sign’s \d+ s/.test(t.text) && t.fix.tab === 'vent', `timer: ${t && t.text}`);
+    const Y = makeRun();
+    Y.level.start({ seed: 1 });
+    Y.level.debug.goto(2, 17, { auto: true });
+    Y.farm.auto.on.brooders = true; Y.env.skipHours(0.1);
+    Y.farm.debug.fault('sensor-drift'); Y.env.skipHours(3);
+    const d = nightCheck(Y.env, Y.farm).faults.find((f) => f.id === 'sensor-drift');
+    assert(d && /reads [\d.]+ °C over the house thermometer: the brooders hold the house [\d.]+ °C under the row tonight/.test(d.text) && d.fix.tab === 'temp', `drift: ${d && d.text}`);
+  } finally { SKILLS_UPDATE.live = was; }
+});
 
 console.log(failed ? `${failed} failed` : 'all passed');
 process.exit(failed ? 1 : 0);

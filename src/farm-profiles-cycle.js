@@ -16,13 +16,15 @@
 // browser cannot import a script) at its stops, base controls only (no vent.stages).
 import { EQUIP, LIGHT_PRESETS, HARVEST, CLEAN, WEATHER, LEVEL1, PLAN_LEVEL, levelOfDay, feedStdGAt, flowTargetAt, nippleHeightCmAt, feederRimCmAt, targetTempAt, PLACEMENT_DAY, feedTypeForDay, HEAT, HEAT_P4 } from './config.js';
 import { signTimer } from './farm-profiles.js';
-import { condProfile, condStops, applyCondRound, condAm, condAnswer, condFanPlan, fansForFeel } from './farm-profiles-cond.js';
+import { condProfile, condStops, applyCondRound, condAm, condAnswer, condFanPlan } from './farm-profiles-cond.js';
+import { idealFans, idealPad, eveningPad, fansForFeel } from './farm-fans.js';
+export { idealFans, idealPad, eveningPad };
 import { feedLeftKg } from './farm-silos.js';
 
 /** Profile names (keys of CYCLE_TARGETS in scripts/test-cycle.mjs). */
 export const CYCLE_PROFILES = ['ideal', 'noDark', 'lateLift', 'noStep', 'poorVaccine', 'poorVaccineCocci', 'cocciUntreated', 'minVentW3',
   'crumbleOn', 'abruptChange', 'overfullSilo', 'dustOn', 'noTunnel', 'fansNoPad', 'padInHumid', 'fanUnfixed', 'noWithdrawal',
-  'longWithdrawal', 'brightCatch', 'wetDisinfect', 'litterLeft', 'shortRest', 'noCare', 'padWeek3', 'eveningFans3', 'padYoung1', 'determinism'];
+  'longWithdrawal', 'brightCatch', 'wetDisinfect', 'litterLeft', 'shortRest', 'noCare', 'padWeek3', 'eveningFans3', 'padYoung1', 'normal', 'determinism'];
 
 const IDEAL = {
   light: 'growing', curtain: { day: 10, hour: 8 }, vaccine: { thirstH: 1.5, stabiliser: true, walk: true }, timer: 'table',
@@ -60,6 +62,18 @@ const MODS = {
   // round; the night round turns the pads off), and the warm afternoon of day 16 met with the pad and one fan
   eveningFans3: { eveningFans3: true },
   padYoung1: { padYoung1: true },
+  // Skills update (SKILLS.md §2.4): a careful farmer in his first flock — the ideal's management with the slips players make,
+  // none failing a level. The brooding week: the lines lowered on day 3 and the filter found in the afternoon of day 4
+  // (Phase 2's smallMistakes) and no morning flow test on days 1-3 in place of its regulators at 6 cm and thermostat 1 °C
+  // under the row (measured over the whole cycle those two cost Heating's cold-night and 20-30 g at every weigh-in to day 21,
+  // more than §2.4 meant); vent temperatures 4 h after placing, no light reading on day 8, droppings of a few birds in week 3,
+  // no pad check before the heat wave (it also finds the clogged pad a day late), a dip missed on day 26 and a dead-bird round
+  // on day 30, no morning flow tests on five days of weeks 4-5, the crew booked on day 39, the catch at 30 % dimmer, the
+  // feeders left down in the heat wave, 1.3 t more on the last order, 30 birds weighed on day 40 (the day 23 air speed slip
+  // is left out: with the pad check's it kept Heat & Ventilation from level 2 until day 35)
+  normal: { p2: 'smallMistakes', p2Mods: { pressure: 'sign', setpointOffset: 0, heights: 'sign', flowSkipDays: [1, 2, 3] }, ventLate: true, luxSkip8: true, droppingsN: { 16: 5, 19: 4 }, noPadCheckWave: true,
+    flowSkipDays: [23, 24, 25, 26, 27], bookDay: 39, catchDimmer: 0.3, heatFeeders: false, lastOrderExtraKg: 1300, weighN: { 40: 30 },
+    levelSlips: { lapse: [26], deadMissed: [[30, 'pm']] } },
 };
 /** A profile by name (Phase 4: with a condition — a condition profile name such as 'hot:ideal', or the farm's condition
  *  for a plain name — the condition's ideal additions and its mistake's fields, farm-profiles-cond.js). */
@@ -70,20 +84,9 @@ export function cycleProfileOf(name, { condition = null } = {}) {
   return { ...base, ...c, ...(c.catch ? { catch: c.catch } : {}), ...(name === 'hotNoPad' ? { pads: 'never' } : {}) };
 }
 
-// ---- the fan plan (scripts/cycle-refs.mjs idealFans / idealPad, the contract's ideal) ----
+// ---- the fan plan: idealFans / idealPad / eveningPad live in farm-fans.js (Skills update: one module for the ideal and the
+// controllers' advice) ----
 export const IDEAL_STOPS = [6.25, 9, 11, 13.25, 15.5, 18.5, 21];
-export function idealFans(env, age) {
-  const over = env.outsideTemp - env.targetTemp;
-  if (age >= 21) return Math.max(0, Math.min(6, Math.ceil((over - 1) / 1.2)));
-  if (age >= 14) return Math.max(0, Math.min(4, Math.round(over / 1.5)));
-  return 0;
-}
-export function idealPad(env, fans) {
-  const want = fans >= 6 && env.outsideTemp - env.targetTemp >= 10;
-  if (env.padOn && (env.houseRH > 90 || !want)) return false;
-  if (!env.padOn && want && env.outsideRH < 75) return true;
-  return env.padOn;
-}
 
 /** The rounds of each calendar day from fromDay to toDay (inclusive), in time order. */
 export function cycleStops(fromDay, toDay, condition = null) {
@@ -189,8 +192,6 @@ function fanPlan(farm, env, act, P, day) {
 /** The evening line (config HEAT_P4): big birds, 18:00 to 21:00. */
 const eveningOn = (env, age, P) => !P.noTunnel && age >= HEAT_P4.padEveningFromAge && env.hour >= 18 && env.hour < HEAT_P4.eveningUntil;
 const eveningFans = (farm, env) => 6;
-/** The pads on the evening line: while the outside air is at or over about 30 °C and the house RH at or under the pad plate's limit. */
-export const eveningPad = (env, P = {}) => P.pads !== 'never' && env.outsideTemp >= HEAT_P4.padEveningAboveC - 1e-9 && env.houseRH <= HEAT.padOffAboveRH;
 /** Tomorrow's 05:00 outside temperature (the weather's low and the level's weather events). */
 function nightLow(env) {
   const w = WEATHER[env.weather] || WEATHER.normal, t = env.dayNumber + 1 + 5 / 24;
@@ -203,6 +204,8 @@ const envView = (env) => ({ outsideTemp: env.outsideTemp, targetTemp: env.target
 export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
   const P = cycleProfileOf(profile, { condition: farm.condition }), done = [];
   const act = (id, args = {}) => { const result = farm.act(id, args); done.push({ id, args, result }); return result; };
+  // Skills update (SKILLS.md §13.1): with a system on (runCycle's perks option) the ideal leaves its part to the equipment
+  const on = (s) => !!(P.autoOn && P.autoOn()[s]);
   if (farm.mode !== 'level') return done;
   if (P.noCare) return done;
   // the level of the day (a no-op inside a run, which enters each level at its 06:00 start; level.debug.freeRun
@@ -221,40 +224,41 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
       if (!alive) return done;
       act('controller.read', { houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH) });
       act('water.meter');
-      if (!farm.house.broodersUp) env.setHeaterSetpoint(Math.round(targetTempAt(day) * 2) / 2);
+      if (!farm.house.broodersUp && !on('brooders')) env.setHeaterSetpoint(Math.round(targetTempAt(day) * 2) / 2);
       for (const line of lines) {
         act('water.pressure', { line, cm: Math.min(40, Math.round(((flowTargetAt(day) - 4) / 2) * 2) / 2) });
-        act('water.height', { line, cm: Math.round(nippleHeightCmAt(day)) });
+        if (!on('winch')) act('water.height', { line, cm: Math.round(nippleHeightCmAt(day)) });
       }
       if (!(P.flowSkipDays || []).includes(day)) for (const line of lines) act('water.flowtest', { line });
       act('feed.meter'); act('feed.silo');
-      if (!farm.feed.withdrawn) for (const line of [0, 1, 2]) act('feed.line', { line, running: true, flood: false, heightCm: Math.floor(feederRimCmAt(Math.max(0, age))) });
-      if (day === 8 && P.light === 'growing') { act('light.program', LIGHT_PRESETS.growing); for (const [x, z] of SPOTS.slice(0, 3)) act('light.lux', { x, z }); }
+      if (!farm.feed.withdrawn) for (const line of [0, 1, 2]) act('feed.line', { line, running: true, flood: false, ...(on('feed') ? {} : { heightCm: Math.floor(feederRimCmAt(Math.max(0, age))) }) });
+      if (day === 8 && P.light === 'growing') { if (!on('lights')) act('light.program', LIGHT_PRESETS.growing); if (!P.luxSkip8) for (const [x, z] of SPOTS.slice(0, 3)) act('light.lux', { x, z }); }
       if (day === 8 && P.light === 'none') for (const [x, z] of SPOTS.slice(0, 3)) act('light.lux', { x, z });
-      if (day === 36 && P.light === 'growing') act('light.program', LIGHT_PRESETS.finishing);
+      if (day === 36 && P.light === 'growing' && !on('lights')) act('light.program', LIGHT_PRESETS.finishing);
       const timerDay = P.timer === 'day8' && day <= 21 ? 8 : day;
-      if (day % 2 === 0 || isState(farm, 'rainy-spell', 'found')) {
+      if ((day % 2 === 0 && !on('timer')) || isState(farm, 'rainy-spell', 'found')) {
         if (!(P.timer === 'day8' && day > 8 && day <= 21)) { const t = signTimer(farm); if (isState(farm, 'rainy-spell', 'found') && P.fixes && P.timer !== 'day8') t.onSec = Math.round(t.onSec * 1.5); act('vent.timer', t); }
       }
       void timerDay;
       if (day === 12 && P.starterOrder12) act('feed.order', { kg: P.starterOrder12, type: 'starter' });
-      if (day === 13 && P.grower) act('feed.order', { kg: 6000, type: 'grower' });
-      if (day === 27) act('feed.order', { kg: 6000, type: 'finisher' });
+      if (day === 13 && P.grower && !on('feed')) act('feed.order', { kg: 6000, type: 'grower' });
+      if (day === 27 && !on('feed')) act('feed.order', { kg: 6000, type: 'finisher' });
       if (day === 36 && P.lastOrder) lastOrder(farm, env, act, P);
-      else if (day < 36) keepFed(farm, env, act, day);
+      else if (day < 36 && !on('feed')) keepFed(farm, env, act, day);
       if (day >= P.bookDay && day <= 39 && farm.harvest.bookedAt == null) act('phone.bookCatch', { day: P.catch.day, hour: P.catch.hour });
       if (age >= 21) act('sample.bird', { x: 0, z: 0, index: 0, look: 'breathing' });
       if (fl.lameOnFloor > 0 && day >= 10) act('sample.bird', { x: -4, z: 4, index: 99, look: 'gait', lame: true }); // a bird sitting apart, picked up
       listen();
       answerProblems(farm, env, act, P, day);
-      fanPlan(farm, env, act, P, day);
+      if (!stagesOn(farm, P, on)) fanPlan(farm, env, act, P, day);
       if (P.condition) condAm(farm, env, act, P, day, signTimer, isState(farm, 'rainy-spell', 'found') || isState(farm, 'damp-spell', 'found'));
       return done;
     }
     case 'check': {
       if (!alive) return done;
       const look = day === 16 || day === 19 ? 'droppings' : 'gait';
-      for (let i = 0; i < 10; i++) { const [x, z] = SPOTS[i % 6]; act('sample.bird', { x, z, index: i, look }); }
+      const nb = look === 'droppings' && P.droppingsN && P.droppingsN[day] != null ? P.droppingsN[day] : 10;
+      for (let i = 0; i < nb; i++) { const [x, z] = SPOTS[i % 6]; act('sample.bird', { x, z, index: i, look }); }
       if (look === 'gait') for (let i = 0; i < 4; i++) { const [x, z] = SPOTS[i]; act('sample.bird', { x, z, index: i, look: 'feathers' }); act('sample.bird', { x, z, index: i, look: 'feet' }); }
       if (fl.lameOnFloor > 0) act('sample.bird', { x: -4, z: 4, index: 99, look: 'gait', lame: true });
       answerProblems(farm, env, act, P, day);
@@ -262,25 +266,28 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
     }
     case 'weigh': {
       if (!alive) return done;
-      // 50 birds from the five parts of the house (four along it, both sides): 10 a frame
-      for (let i = 0; i < 50; i++) { const k = Math.floor(i / 10), x = -18 + k * 9, z = k % 2 ? 2.6 : -2.6; act('sample.weigh', { x, z, index: i }); }
+      // 50 birds from the five parts of the house (four along it, both sides): 10 a frame (Growth 3: the automatic scale's day
+      // average instead, read in the afternoon by the level's part)
+      if (on('scale')) return done;
+      const nw = P.weighN && P.weighN[day] != null ? P.weighN[day] : 50;
+      for (let i = 0; i < nw; i++) { const k = Math.floor(i / 10), x = -18 + k * 9, z = k % 2 ? 2.6 : -2.6; act('sample.weigh', { x, z, index: i }); }
       return done;
     }
-    case 'probe': { for (const [x, z] of [[-18, 0], [0, 0], [18, 0]]) act('air.probe', { x, z }); act('pad.check'); return done; }
+    case 'probe': { if (!(P.airSkip23 && day === 23)) for (const [x, z] of [[-18, 0], [0, 0], [18, 0]]) act('air.probe', { x, z }); act('pad.check'); return done; }
     case 'fans': {
       if (!alive) return done;
       if (env.hour < 10) listen(); // the morning walk goes on
-      if (env.hour > 15 && env.hour < 16 && day >= 15) act('fans.read', { fans: env.fansOn, houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH), speedMs: +env.airSpeed.toFixed(2) });
-      answerProblems(farm, env, act, P, day); fanPlan(farm, env, act, P, day);
+      if (env.hour > 15 && env.hour < 16 && day >= 15 && !noFans(P, day)) act('fans.read', { fans: env.fansOn, houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH), speedMs: +env.airSpeed.toFixed(2) });
+      answerProblems(farm, env, act, P, day); if (!stagesOn(farm, P, on)) fanPlan(farm, env, act, P, day);
       return done;
     }
     case 'padcheck': {
-      if (alive && env.padOn && env.houseRH > HEAT.padOffAboveRH - 1 && !(P.padInHumid && day === 33)) fansTo(act, env, env.fansManual, false);
+      if (alive && !stagesOn(farm, P, on) && env.padOn && env.houseRH > HEAT.padOffAboveRH - 1 && !(P.padInHumid && day === 33)) fansTo(act, env, env.fansManual, false);
       return done;
     }
     case 'pm': {
       if (!alive) return done;
-      if (day >= 15) act('fans.read', { fans: env.fansOn, houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH), speedMs: +env.airSpeed.toFixed(2) });
+      if (day >= 15 && !noFans(P, day)) act('fans.read', { fans: env.fansOn, houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH), speedMs: +env.airSpeed.toFixed(2) });
       if (day <= 14) act('controller.read', { houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH) });
       act('litter.squeeze', { x: -16, z: 0.6 }); act('litter.squeeze', { x: -8, z: -1.95 }); act('litter.squeeze', { x: day >= 10 ? 10 : -4, z: 3.2 });
       if (day >= 15) act('litter.squeeze', { x: -22.5, z: 0.5 }); // the pad end
@@ -288,7 +295,7 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
       if (day === 24) act('pad.check');
       listen();
       answerProblems(farm, env, act, P, day);
-      fanPlan(farm, env, act, P, day);
+      if (!stagesOn(farm, P, on)) fanPlan(farm, env, act, P, day);
       return done;
     }
     case 'night': {
@@ -296,6 +303,7 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
       act('radio.listen', { day });
       if (day >= 15) act('fans.read', { fans: env.fansOn, houseC: +env.houseTemp.toFixed(1), rh: Math.round(env.houseRH), speedMs: +env.airSpeed.toFixed(2) });
       answerProblems(farm, env, act, P, day);
+      if (stagesOn(farm, P, on)) return done;
       fanPlan(farm, env, act, P, day);
       // the night: the pads off as the air cools, unless it is still 12 °C or more over the target (the fans carry on),
       // or the evening line holds them (Phase 4: from day 28 while the outside is warm, until 21:00)
@@ -304,7 +312,7 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
       return done;
     }
     case 'evening': case 'hotYoung': case 'hotYoungOff': case 'hotNight': {
-      if (!alive) return done;
+      if (!alive || stagesOn(farm, P, on)) return done;
       fanPlan(farm, env, act, P, day);
       return done;
     }
@@ -370,6 +378,10 @@ export function applyCycleRound(farm, env, day, round, profile = 'ideal') {
   }
 }
 const SPOT_BAIT = [[-25.2, -6.8], [25.2, -6.8], [25.2, 6.8], [-25.2, 6.8]];
+/** A test slip (scripts/test-skills.mjs): no afternoon fans read on the days of P.noFansRead [from, to]. */
+const noFans = (P, day) => !!(P.noFansRead && day >= P.noFansRead[0] && day <= P.noFansRead[1]);
+/** The stage controller runs the fans (Ventilation 3 on, from day 15 to the catch): the ideal's own fan plan stands aside. */
+const stagesOn = (farm, P, on) => on('stages') && farm.age >= 15 - 1e-9 && !(farm.harvest.started || farm.harvest.result || (farm.harvest.catchAt != null && farm.harvest.catchAt - 1 / 24 <= farm.age + PLACEMENT_DAY));
 
 /** Problems the ideal answers on the round after their symptom (PHASE3.md §6.14). */
 function answerProblems(farm, env, act, P, day) {
@@ -382,7 +394,7 @@ function answerProblems(farm, env, act, P, day) {
   if (found('gumboro')) act('phone.vet', { reason: 'hunched birds, white droppings' });
   if (found('fan-belt') && P.fanFix) act('fan.fix', { index: 3 });
   if (found('pad-clog')) act('pad.flush');
-  if (found('heat-wave')) { act('fans.read', { fans: env.fansOn }); act('pad.check'); act('water.flowtest', { line: 0 }); }
+  if (found('heat-wave')) { act('fans.read', { fans: env.fansOn }); if (!P.noPadCheckWave) act('pad.check'); act('water.flowtest', { line: 0 }); }
   if (found('humid-heat') && !noTunnelOn(P, day)) { if (env.padOn) fansTo(act, env, Math.max(6, env.fansManual), false); else { env.setFans(6); act('vent.fans', { n: 6 }); } }
   // a heat problem found: every fan on, the pad by its plate (the switches pressed even when they were on)
   for (const id of ['warm-afternoon3', 'hot-afternoon', 'hot-finish']) if (found(id) && !noTunnelOn(P, day)) {
@@ -420,7 +432,7 @@ function lastOrder(farm, env, act, P) {
   let need = 0;
   for (let t = env.day; t < end; t += 0.25) need += (fl.alive * feedStdGAt(t - PLACEMENT_DAY)) / 1000 * 0.25;
   const stock = feedLeftKg(feed) + feed.pending.reduce((a, o) => a + o.kg, 0);
-  const kg = Math.max(0, Math.round((need * 0.99 - stock + 300) / 100) * 100);
+  const kg = Math.max(0, Math.round((need * 0.99 - stock + 300 + (P.lastOrderExtraKg || 0)) / 100) * 100);
   act('feed.order', { kg, type: 'finisher' });
 }
 
