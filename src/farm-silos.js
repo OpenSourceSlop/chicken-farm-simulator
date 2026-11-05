@@ -190,15 +190,22 @@ export function serializeSilos(feed) {
 
 /**
  * Skills update (SKILLS.md §3.6; package "model" owns it): the days of feed in the silos — { days, kg, kgPerDay, how,
- * bySilo: [{ kg, days }] } at today's intake by the feed sign (the known birds x feedStdGAt(age)), the figure the silo gauge
- * shows (Feed 2), its 2-day warning, the pocket phone's order line, the feed controller and its fault read (one figure
- * for all). STUB: the siloDays view's sign figure (ui-cycle-equip.js), without the feed meter's 24-hour rate.
+ * birds, bySilo: [{ kg, days }] } at today's intake: the feed meter's last 24 hours when the farm knows them (how 'meter',
+ * from Week 2: the augers' daily readings), else the feed sign's figure for the birds he knows (how 'sign': the known birds
+ * x feedStdGAt(age)). The figure the silo gauge shows (Feed 2), its 2-day warning, the pocket phone's order line, the feed
+ * controller and its fault read (one figure for all).
  */
 export function feedDays(farm, env) {
   const fl = farm.flock, birds = Math.max(0, fl.placed - fl.countedDead - (fl.culls - (fl.cullsInBoxes || 0)));
-  const kgPerDay = (birds * feedStdGAt(flockAgeAt(env.day))) / 1000;
+  let kgPerDay = (birds * feedStdGAt(flockAgeAt(env.day))) / 1000, how = 'sign';
+  // the meter's 24 hours: the augers' reading now less the same hour yesterday (between yesterday's and today's first readings)
+  const fh = farm.cyc && farm.cyc.on ? farm.cyc.feedHist : null, d = env.dayNumber;
+  if (fh && fh.length >= 2 && !farm.feed.withdrawn) {
+    const a = fh.find((x) => x[0] === d - 1), b = fh.find((x) => x[0] === d);
+    if (a && b) { const m24 = farm.feed.meterKg - (a[1] + (b[1] - a[1]) * (env.day - d)); if (m24 > 0.5 * kgPerDay) { kgPerDay = m24; how = 'meter'; } }
+  }
   const silos = farm.feed.silos || [{ kg: farm.feed.siloKg ?? 0 }];
   const kg = silos.reduce((a, s) => a + Math.max(0, s.kg || 0), 0);
   const per = (k) => (kgPerDay > 0 ? Math.round((k / kgPerDay) * 10) / 10 : null);
-  return { days: per(kg), kg: Math.round(kg), kgPerDay: Math.round(kgPerDay), how: 'sign', bySilo: silos.map((s) => ({ kg: Math.round(s.kg || 0), days: per(s.kg || 0) })) };
+  return { days: per(kg), kg: Math.round(kg), kgPerDay: Math.round(kgPerDay), how, birds, bySilo: silos.map((s) => ({ kg: Math.round(s.kg || 0), days: per(s.kg || 0) })) };
 }

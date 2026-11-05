@@ -58,6 +58,9 @@ export const CYCLE_TARGETS = {
   // review: the plant deducts the gut fill (3 % of the weighed kg), so skipping the withdrawal pays less than
   // an 8-12 h withdrawal and its FCR is worse (it was better on every number before)
   noWithdrawal: { snaps: { gutFull: true, fcrOverIdeal: [0, Infinity], paidKgUnderIdeal: [1, Infinity], epefUnderIdeal: [1, Infinity] } },
+  // Skills update (SKILLS.md §2.4): the careful farmer's first flock (the ideal with the slips players make) passes every level
+  normal: { plan: { pass: true }, level1: { pass: true }, week2: { pass: true }, week3: { pass: true }, weeks45: { pass: true },
+    finish: { pass: true, liveG: [2780, 3000], fcr: [1.55, 1.72] }, cleanout: { pass: true } },
   longWithdrawal: { snaps: { liveUnderIdealPct: [3.5, 6], doaVsIdeal: [2, Infinity] } },
   brightCatch: { snaps: { doaVsIdeal: [1.4, Infinity] } },
   wetDisinfect: { cleanout: { pass: false, positive: [3, 7] } },

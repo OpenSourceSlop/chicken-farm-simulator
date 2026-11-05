@@ -7,7 +7,8 @@
 // A profile starts from the ideal's state at its first level (`from`, a standard start: the ideal of the same seed
 // up to there, kept in memory exactly as it was, with the ideal's trace before it) and runs to `to`. A failed
 // level ends the run (the player would replay it).
-import { LEVELS, LEVEL1, PLAN_LEVEL, levelById, weightAt, PLACEMENT_DAY, CYCLE, HARVEST, SKILL_BRANCHES } from './config.js';
+import { LEVELS, LEVEL1, PLAN_LEVEL, levelById, weightAt, PLACEMENT_DAY, CYCLE, HARVEST, SKILL_BRANCHES, SKILLS_UPDATE, AUTO_SYSTEMS } from './config.js';
+import { createPerks } from './perks.js';
 import { EV } from './events.js';
 import { makeWorld, schedule } from './farm-profiles-run.js';
 import { applyRound, profileOf } from './farm-profiles.js';
@@ -108,8 +109,19 @@ function hourRow(world) {
   };
 }
 
-/** Run a profile from a standard start of `from` through `to`. */
-export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = false, keepStarts = false, condition = undefined, onWorld = null } = {}) {
+/**
+ * Run a profile from a standard start of `from` through `to`. Skills update (SKILLS.md §13.1): `skillsFrom` (a
+ * skills.serialize() blob, or a trace with .skills) is the farmer's profile at the start (a second flock's), `cyclesDone` its
+ * finished flocks (1: the awards go to flock slot 2), `perks` 'all' (every branch at level 3) or 'earned' (the run's own
+ * skills) turns SKILLS_UPDATE.live on for the run (restored after it) with an allowed perks object: farm.auto.on is set
+ * from it at every level start and on EV.PERKS, and the ideal leaves the rounds the systems take over (P.autoOn).
+ */
+export function runCycle(name = 'ideal', opts = {}) {
+  const usePerks = opts.perks === 'all' || opts.perks === 'earned', was = SKILLS_UPDATE.live;
+  if (usePerks) SKILLS_UPDATE.live = true;
+  try { return runCycleBody(name, opts, usePerks); } finally { SKILLS_UPDATE.live = was; }
+}
+function runCycleBody(name, { seed = 1, from, to, stopAtStart = false, keepStarts = false, condition = undefined, onWorld = null, skillsFrom = null, cyclesDone = null, perks = null } = {}, usePerks = false) {
   condition = condition !== undefined ? condition : COND_OF[name] ?? null;
   const P = cycleProfileOf(name === 'determinism' ? 'ideal' : name, { condition });
   const [f0, t0] = RANGE[name] || COND_RANGE[name] || ['plan', 'cleanout'];
@@ -126,6 +138,18 @@ export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = fal
     if (!snap) throw new Error(`no standard start for ${from}`);
     restoreSnap(world, snap, trace);
   } else farm.seed = seed;
+  // the farmer's profile (a later flock): his skills and finished flocks; the perks the run plays with
+  if (skillsFrom) skills.restore(skillsFrom.skills && skillsFrom.skills.earned ? skillsFrom.skills : skillsFrom.serialize ? skillsFrom.serialize() : skillsFrom);
+  if (cyclesDone != null) skills.setProfile({ cyclesDone });
+  if (usePerks) {
+    const pk = createPerks({ skills, events, allowed: true });
+    if (perks === 'all') for (const b of SKILL_BRANCHES) skills.debug.force(b.id, 3);
+    pk.refresh();
+    const sync = () => { if (farm.auto) for (const sys of Object.keys(AUTO_SYSTEMS)) farm.auto.on[sys] = pk.auto(sys); };
+    events.on(EV.PERKS, sync);
+    trace.perks = pk; trace.syncAuto = sync;
+    P.autoOn = () => farm.auto.on;
+  }
   let lastHr = null;
   env.addStepper((e) => {
     const hr = e.day * 24, k = Math.round(hr);
@@ -135,6 +159,7 @@ export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = fal
   for (let i = Math.max(0, i0); i <= i1; i++) {
     const def = LEVELS[i];
     prepare(world, def, seed, i === i0 && i0 > 1, trace, keep, condition, ck);
+    if (trace.syncAuto) trace.syncAuto();
     if (keepStarts) (trace.starts ||= {})[def.id] = saveBlob(world);
     if (stopAtStart && i === i1) break;
     const res = def.id === PLAN_LEVEL.id ? playPlan(world, P) : def.id === LEVEL1.id ? playBrooding(world, P) : playCycleLevel(world, def, P, trace);
@@ -151,7 +176,7 @@ export function runCycle(name = 'ideal', { seed = 1, from, to, stopAtStart = fal
 function prepare(world, def, seed, restored, trace, keep, condition = null, ck = (id) => `${seed}::${id}`) {
   const { env, farm, events, records } = world;
   if (def.id === PLAN_LEVEL.id) { farm.start(PLAN_LEVEL, { seed, condition }); }
-  else if (def.id === LEVEL1.id) { farm.start(LEVEL1, { seed, condition }); }
+  else if (def.id === LEVEL1.id) { farm.start(LEVEL1, { seed, condition, flockNo: world.skills.profile.cyclesDone }); }
   else if (!restored) {
     const t = def.startDay + def.startHour * H;
     if (t > env.day + 1e-9) env.skipHours((t - env.day) * 24);
@@ -171,6 +196,11 @@ function pickDead(world) {
   farm.act('dead.count', { n, causes });
 }
 const skipTo = (env, t) => { if (t > env.day + 1e-9) env.skipHours((t - env.day) * 24); };
+/** Growth 3 (SKILLS.md §3.8): on a weigh day the farmer reads the automatic scale's day average in the afternoon. */
+function scaleRead(world) {
+  const { farm, env } = world;
+  if (farm.auto && farm.auto.on.scale) farm.act('scale.read', { day: env.dayNumber });
+}
 
 // ---------------- Level 1: the planning day ----------------
 function playPlan(world, P) {
@@ -203,12 +233,13 @@ function playPlan(world, P) {
 // chicks graded out on day 0 counted apart once the hatchery was told: farm.flock.claimed)
 function playBrooding(world, P) {
   const { env, farm, records } = world, def = LEVEL1;
-  const P2 = { ...profileOf('ideal'), ...p2ProfileFor(P.condition ? P : null) };
+  const P2 = { ...profileOf(P.p2 || 'ideal'), ...p2ProfileFor(P.condition ? P : null), ...(P.autoOn ? { autoOn: P.autoOn } : {}) };
   const fail = farm.levelFor ? farm.levelFor(LEVEL1).fail : LEVEL1.fail;
   let failedAt = null;
   const B = farm.condition ? broodStopsCond(farm.condition, farm.delivery) : { stops: [], truckHour: 8 }, dh = (B.truckHour - 8) / 24;
   const moved = new Set(['truck', 'cp:placed', 'vent', 'cp:vent', 'crop', 'cp:crop']);
   const sched = schedule({ preheat: { day: -1, hour: 7 } }).map((ev) => (dh && moved.has(ev.what) ? { ...ev, t: ev.t + dh } : ev))
+    .map((ev) => (P.ventLate && ev.what === 'vent' ? { ...ev, t: ev.t + 1.25 * H, h: ev.h + 1.25 } : ev))
     .concat(B.stops.map((s, i) => ({ t: s.d + s.h * H, d: s.d, h: s.h, what: s.r, i: 1000 + i }))).sort((a, b) => a.t - b.t || a.i - b.i);
   for (const ev of sched) {
     skipTo(env, ev.t);
@@ -218,6 +249,7 @@ function playBrooding(world, P) {
     if (kind === 'sign') { records.sign(ev.d); if (ev.d >= 0 && pctL1(farm) > fail.mortalityMaxPct && failedAt == null) failedAt = ev.d; continue; }
     applyRound(farm, env, ev.d, kind, P2);
     if (kind === 'am' || kind === 'pm') pickDead(world);
+    if (kind === 'pm' && ev.d === 7) scaleRead(world);
   }
   const w = farm.stats.weighed.map((x) => x.weightG), mean = w.reduce((a, b) => a + b, 0) / Math.max(1, w.length);
   const chick = farm.stats.chickWeightMeasuredG ?? farm.flock.chickWeightG, ratio = (w.length ? mean : farm.flock.meanWeightG) / chick;
@@ -252,7 +284,13 @@ function playCycleLevel(world, def, P, trace) {
       continue;
     }
     applyCycleRound(farm, env, s.d, s.r, P);
-    if (!P.noCare) pickDead(world);
+    // the normal profile's slips that are the level's part (SKILLS.md §2.4): a house entry without the dip, a dead-bird round missed
+    const L = P.levelSlips || {};
+    if (s.r === 'am' && (L.lapse || []).includes(s.d)) world.events.emit(EV.HOUSE_ENTER, { dipped: false });
+    const miss = (L.deadMissed || []).some(([d, r]) => d === s.d && r === s.r);
+    if (miss) world.events.emit(EV.JOB_MISSED, { key: `r-dead-${s.r}@${s.d}`, id: `r-dead-${s.r}` });
+    if (!P.noCare && !miss) pickDead(world);
+    if (s.r === 'pm' && [14, 21, 28, 35, 40].includes(s.d)) scaleRead(world);
     if (farm.house.curtainOpen) once('curtain');
     if (farm.health.vaccine.state === 'drunk') once('vaccine');
     if (s.r === 'weigh') { cp(world, def, 'weighin'); }
