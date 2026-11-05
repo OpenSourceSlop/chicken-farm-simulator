@@ -35,9 +35,18 @@
 // must hold at completion, action `check`s such as an order that is enough); the panel shows the target
 // beside the live value (job-strips.js), never a verdict. The result is what was measured or set, written
 // to records.logJob(key, day, result). parts(inst) names each part for the card and the strip.
+// Skills update (SKILLS.md §4.3, §12.6): createJobEngine({ variant }) — variant(jd) -> jd' (job-variants.js jobVariant with
+// the perks) when an instance is made; the instance keeps def.variant and the save keeps it, so restore() makes the same
+// rule (rebuildVariant). New state tests auto-ok { system, part } (farm.autoCtl.ok), drinkers-raised and pans-raised (r-raise's
+// two parts); flows-in-band and an each part with `tubes` take a line's in-band sight tube read since the job opened
+// (water.lines[i].lastColumn; water.columns); rule type 'seen' { look, n, sectors, sectorsOf, action? } counts the birds of
+// EV.BIRD_SEEN with that look (and the action's in-hand checks) as a count rule counts its samples. A composite part with
+// a live part inside (the glance) is read again with it, so the reading must hold when the job is done.
 import { BROOD_BOUNDS, CLEANOUT, CYCLE, DRINKER_LINES_Z, EQUIP, FAN_COUNT, FLOOR_GRID, HARVEST, HEAT, HEAT_P4, LEVEL1, ROUNDS, JOB_HOLD, broodSector, houseSector, levelById, flockAgeAt, feedStdGAt, conditionLevel } from './config.js';
 import { EV, matchPayload } from './events.js';
 import { ALL_JOBS } from './content-jobs.js';
+// Skills update (SKILLS.md §4.3, §12.6): a job as the payoffs make it (the variant) and its saved form
+import { rebuildVariant } from './job-variants.js';
 import { feltNearTarget } from './farm-problems.js';
 import { heatHandled, YOUNG_PAD_MAX_FANS } from './farm-cycle-problems.js';
 import { CHICKS_P4 } from './farm-cond-chicks.js';
@@ -116,7 +125,7 @@ export function coverageOf(rule, st, env) {
 function initState(rule) {
   switch (rule.type) {
     case 'each': return { seen: {} };
-    case 'count': return { list: [] };
+    case 'count': case 'seen': return { list: [] };
     case 'coverage': return { cells: [], listened: false };
     case 'state': return { met: false, since: null, value: null };
     case 'all': case 'any': return { parts: rule.of.map(initState), met: rule.of.map(() => false) };
@@ -141,7 +150,7 @@ function countProgress(rule, st) {
 function ruleMet(rule, st, ctx) {
   switch (rule.type) {
     case 'each': return rule.values.every((v) => String(v) in st.seen);
-    case 'count': return countMet(rule, st);
+    case 'count': case 'seen': return countMet(rule, st);
     case 'coverage': { const c = coverageOf(rule, st, ctx.env); return c.seen >= c.need - EPS && (!rule.listen || st.listened); }
     case 'all': return st.met.every(Boolean);
     case 'any': return st.met.some(Boolean);
@@ -153,7 +162,7 @@ function ruleMet(rule, st, ctx) {
 function ruleProgress(rule, st, ctx) {
   switch (rule.type) {
     case 'each': return rule.values.filter((v) => String(v) in st.seen).length / rule.values.length;
-    case 'count': return countProgress(rule, st);
+    case 'count': case 'seen': return countProgress(rule, st);
     case 'coverage': {
       const cv = coverageOf(rule, st, ctx.env), c = Math.min(1, cv.seen / Math.max(1, cv.need));
       return rule.listen ? c * 0.85 + (st.listened ? 0.15 : 0) : c;
@@ -177,6 +186,15 @@ function ruleEvent(rule, st, type, p, inst, ctx) {
       if (rule.check && !ACTION_CHECKS[rule.check]?.(p, ctx)) return false;   // the action's outcome (an order that is enough)
       st.met = true; st.payload = slim(p); return true;
     case 'each':
+      // Water 2 (SKILLS.md §3.1): a sight-tube read at the water supply counts each line whose column is in band as tested
+      if (rule.tubes && type === EV.ACTION && p.id === 'water.columns') {
+        let changed = false;
+        for (const c of p.result?.lines || []) {
+          if (!c || !c.inBand || !rule.values.includes(c.line) || String(c.line) in st.seen) continue;
+          st.seen[String(c.line)] = { columnCm: c.cm, markCm: c.markCm, tube: true }; changed = true;
+        }
+        return changed;
+      }
       if (type !== EV.ACTION || p.id !== rule.id || !matchPayload(p, rule.match)) return false;
       if (rule.has && p[rule.has] === undefined) return false;   // e.g. a feeder height change, not a run / flood toggle
       if (!rule.values.some((v) => v === p[rule.key])) return false;
@@ -186,6 +204,17 @@ function ruleEvent(rule, st, type, p, inst, ctx) {
       const x = Number(p.x), z = Number(p.z);
       const ok = Number.isFinite(x) && Number.isFinite(z);
       st.list.push({ x: ok ? x : null, z: ok ? z : null, s: ok ? sectorOf(rule, x, z, ctx.env) : -1, near: ok && nearDrinkerLine(z), r: p.result ?? null });
+      return true;
+    }
+    case 'seen': {
+      // Biosecurity 3 (SKILLS.md §3.10): a bird seen walking as he passes (EV.BIRD_SEEN), or checked in the hand (rule.action)
+      let idx = null;
+      if (type === EV.BIRD_SEEN && p.look === rule.look) idx = p.index ?? null;
+      else if (rule.action && type === EV.ACTION && p.id === rule.action.id && matchPayload(p, rule.action.match)) idx = p.index ?? p.result?.index ?? null;
+      else return false;
+      if (idx != null && st.list.some((r) => r.i === idx)) return false;   // each bird once
+      const x = Number(p.x), z = Number(p.z), ok = Number.isFinite(x) && Number.isFinite(z);
+      st.list.push({ i: idx, x: ok ? x : null, z: ok ? z : null, s: ok ? sectorOf(rule, x, z, ctx.env) : -1, near: false, r: type === EV.BIRD_SEEN ? { seen: true } : p.result ?? null });
       return true;
     }
     case 'coverage': {
@@ -245,6 +274,11 @@ function refreshLive(rule, st, ctx, inst) {
       const v = !!stateTest(r.test, st.parts[i], ctx, inst, r);
       st.met[i] = v; st.parts[i].met = v;
       if (v) st.parts[i].value = stateSnapshot(r.test, ctx);
+    } else if ((r.type === 'all' || r.type === 'any') && hasLive(r)) {
+      // Skills update: a composite part with a live part inside (the glance, a manual part under it) holds only while its
+      // live parts hold (no Phase 2-5 rule nests a live part: their composites latch as before)
+      refreshLive(r, st.parts[i], ctx, inst);
+      st.met[i] = ruleMet(r, st.parts[i], ctx);
     } else refreshLive(r, st.parts[i], ctx, inst);
   });
 }
@@ -277,6 +311,15 @@ export function heldSoFar(test, st, env) {
   return { min: m, of: HELD_MIN[test] };
 }
 const lightOf = (env, farm) => env.lightProgram || farm.light || {};
+/** Skills update (SKILLS.md §3.1): a line's latest reading since `from` — its cup test (lastFlow) or, with the sight tubes
+ *  (rule.tubes), its tube read at the water supply (lastColumn) — whichever came last: { inBand, mlMin?, columnCm?, at } | null. */
+export function lineReading(l, from, env, tubes = false) {
+  const f = l?.lastFlow && l.lastFlow.at >= from - EPS ? l.lastFlow : null;
+  const c = tubes && l?.lastColumn && l.lastColumn.at >= from - EPS ? l.lastColumn : null;
+  const fr = f ? { inBand: Math.abs(f.mlMin - flowToday(env)) <= FLOW_BAND + EPS, mlMin: f.mlMin, at: f.at, by: 'cup' } : null;
+  const cr = c ? { inBand: !!c.inBand, columnCm: c.cm, at: c.at, by: 'tube' } : null;
+  return fr && cr ? (cr.at > fr.at + EPS ? cr : fr) : fr || cr;
+}
 /** The night in the house (PHASE4.md §2.4, re-defined): after 18:00 no more than about a quarter of the birds pant
  *  (HEAT_P4.nightPantMax) and none are chilled (mean felt comfort >= -1.5 °C), or, for big birds (from day
  *  HEAT_P4.padEveningFromAge) while the outside air is at or over HEAT_P4.padEveningAboveC, every working fan runs with the
@@ -357,8 +400,14 @@ function stateTest(test, st, { env, farm, props }, inst, rule = {}) {
     case 'flows-in-band': {
       // every line tested since the job opened, its last reading within ±3 ml/min of age + 20, its nipples at the day's height
       const from = inst?.opensAt ?? -Infinity, want = flowToday(env);
+      // Water 2: a sight tube read in band since the job opened is that line's last flow (the latest reading counts)
+      if (rule.tubes) return farm.water.lines.every((l) => !!lineReading(l, from, env, true)?.inBand && nippleInBand(l.heightCm, env));
       return farm.water.lines.every((l) => l.lastFlow && l.lastFlow.at >= from - EPS && Math.abs(l.lastFlow.mlMin - want) <= FLOW_BAND + EPS && nippleInBand(l.heightCm, env));
     }
+    // ---- Skills update (SKILLS.md §4.3): a handed-over part's reading in its band, r-raise's two parts ----
+    case 'auto-ok': { try { return !!farm.autoCtl?.ok?.(rule.system, inst, rule.part ?? 'whole'); } catch { return false; } }
+    case 'drinkers-raised': return farm.water.lines.every((l) => nippleInBand(l.heightCm, env));
+    case 'pans-raised': return farm.feed.lines.every((l) => rimInBand(l.heightCm, env));
     case 'all-placed': return farm.flock.inBoxes === 0 && farm.flock.placed > 0;
     case 'dead-cleared': return farm.flock.deadOnFloor === 0 && props?.carrying !== 'bucket' && !(props?.bucketDown?.n > 0); // PHASE4.md §15.3: nor one set down
     case 'house-near-target':
@@ -411,7 +460,13 @@ function stateProgress(test, { env, farm, props }, st, rule = {}) {
     case 'vent-in-band': { const v = ventNeed(env, farm); return ventInBand(env, farm) ? 1 : Math.min(0.95, v.share <= 1 ? v.share / VENT_BAND[0] : VENT_BAND[1] / v.share); }
     case 'chick-lights': { const p = lightOf(env, farm), lux = luxOfDimmer(p.dimmer); return ((p.darkHours ?? 1) <= 1 + EPS ? 0.5 : 0) + (lux >= CHICK_LUX[0] - 0.5 && lux <= CHICK_LUX[1] + 0.5 ? 0.5 : 0); }
     case 'catch-ready': return ((lightOf(env, farm).dimmer ?? 1) <= CATCH_DIMMER_MAX + EPS ? 0.5 : 0) + Math.min(0.5, ((env.fansEffective ?? 0) / CATCH_FANS_MIN) * 0.5);
-    case 'flows-in-band': { const want = flowToday(env); return share(farm.water.lines, (l) => l.lastFlow && Math.abs(l.lastFlow.mlMin - want) <= FLOW_BAND + EPS && nippleInBand(l.heightCm, env)); }
+    case 'flows-in-band': {
+      if (rule.tubes) { const from = Math.floor(env.day + EPS); return share(farm.water.lines, (l) => !!lineReading(l, from, env, true)?.inBand && nippleInBand(l.heightCm, env)); }
+      const want = flowToday(env); return share(farm.water.lines, (l) => l.lastFlow && Math.abs(l.lastFlow.mlMin - want) <= FLOW_BAND + EPS && nippleInBand(l.heightCm, env));
+    }
+    case 'auto-ok': return 0;
+    case 'drinkers-raised': return share(farm.water.lines, (l) => nippleInBand(l.heightCm, env));
+    case 'pans-raised': return share(farm.feed.lines, (l) => rimInBand(l.heightCm, env));
     case 'pans-flooded': return farm.feed.lines.reduce((a, l) => a + (l.flood ? 0.2 : 0) + (l.heightCm <= PANS_ON_LITTER_CM + EPS ? 0.2 : 0) + 0.6 * clamp01(l.panFill / 0.95), 0) / farm.feed.lines.length;
     case 'lines-flushed': return farm.water.lines.reduce((a, l) => a + 0.9 * clamp01(l.flushClear) + (l.flushClear >= 0.99 && !l.flushing ? 0.1 : 0), 0) / farm.water.lines.length;
     case 'all-placed': { const d = farm.flock.delivered || LEVEL1.chicksPlaced; return clamp01(farm.flock.placed / d); }
@@ -462,7 +517,10 @@ function stateSnapshot(test, { env, farm }) {
     case 'vent-in-band': { const v = ventNeed(env, farm); return { airM3h: Math.round(v.air), needM3h: Math.round(v.need), birds: v.birds, weightG: Math.round(v.weightG) }; }
     case 'nipples-at': case 'lines-up': return { nipplesCm: farm.water.lines.map((l) => l.heightCm) };
     case 'lines-raised': case 'all-up': return { nipplesCm: farm.water.lines.map((l) => l.heightCm), pansCm: farm.feed.lines.map((l) => l.heightCm) };
-    case 'flows-in-band': return { flowsMlMin: farm.water.lines.map((l) => l.lastFlow?.mlMin ?? null) };
+    case 'flows-in-band': return { flowsMlMin: farm.water.lines.map((l) => l.lastFlow?.mlMin ?? null), ...(farm.water.lines.some((l) => l.lastColumn) ? { columnsCm: farm.water.lines.map((l) => l.lastColumn?.cm ?? null) } : {}) };
+    case 'drinkers-raised': return { nipplesCm: farm.water.lines.map((l) => l.heightCm) };
+    case 'pans-raised': return { pansCm: farm.feed.lines.map((l) => l.heightCm) };
+    case 'auto-ok': return { at: env.day, auto: true };
     case 'chick-lights': case 'catch-ready': { const p = lightOf(env, farm); return { darkHours: p.darkHours ?? null, dimmer: p.dimmer ?? null, fans: env.fansEffective ?? 0 }; }
     case 'night-comfort': return { houseC: +env.houseTemp.toFixed(1), fans: env.fansEffective ?? 0, padOn: !!env.padOn, pantShare: +(farm.comfort?.pantShare ?? 0).toFixed(2), outsideC: +(env.outsideTemp ?? 0).toFixed(1) };
     // Phase 4
@@ -484,7 +542,7 @@ function ruleResult(rule, st, ctx) {
   switch (rule.type) {
     case 'event': case 'action': return st.payload;
     case 'each': return { ...st.seen };
-    case 'count': {
+    case 'count': case 'seen': {
       // the samples themselves are in the notebook: the record keeps how many, where, and the values
       const one = (r) => (r && typeof r === 'object' && Object.keys(r).length === 1 ? Object.values(r)[0] : r);
       return { n: st.list.length, sectors: [...new Set(st.list.map((r) => r.s))], values: st.list.map((r) => one(r.r)) };
@@ -521,7 +579,7 @@ const ACTION_CHECKS = {
 };
 
 // ---------------- the engine ----------------
-export function createJobEngine({ events, env, farm, props, records, jobs = ALL_JOBS, level = LEVEL1 } = {}) {
+export function createJobEngine({ events, env, farm, props, records, jobs = ALL_JOBS, level = LEVEL1, variant = null } = {}) {
   let def = level || LEVEL1;
   /** @type {any[]} */
   let list = [];
@@ -553,9 +611,15 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
   /** The truck: Phase 2's 08:00, or the hour a bad batch's delivery comes (conditionLevel delivery.arrivalHour). */
   const truckAt = () => LEVEL1.arrivalDay + (merged().delivery?.arrivalHour ?? LEVEL1.arrivalHour) * H;
 
-  function make(jd, day, opensAt, closesAt) {
-    const key = `${jd.id}@${day}`;
+  /** Skills update: the job as the payoffs give it when the instance is made (variant: job-variants.js jobVariant). */
+  const variantOf = (jd) => {
+    if (typeof variant !== 'function') return jd;
+    try { return variant(jd) || jd; } catch (err) { console.error(`job variant ${jd.id} failed`, err); return jd; }
+  };
+  function make(jd0, day, opensAt, closesAt) {
+    const key = `${jd0.id}@${day}`;
     if (byKey.has(key)) return byKey.get(key);
+    const jd = variantOf(jd0);
     const inst = { key, id: jd.id, def: jd, day, status: 'waiting', opensAt, closesAt, doneAt: null, progress: 0, result: null, st: initState(jd.done) };
     list.push(inst); byKey.set(key, inst);
     return inst;
@@ -864,13 +928,16 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
       return { v: 2, levelId: def.id, lastDay, anchors: { ...anchors }, currentKey, started,
         list: list.map((i) => {
           // a closed job without rule state is a tuple [key, status, opensAt, closesAt, doneAt]
-          if ((i.status === 'done' || i.status === 'missed') && i.def.done?.type !== 'count') return [i.key, i.status, t(i.opensAt), t(i.closesAt), t(i.doneAt)];
+          const keepsSt = i.def.done?.type === 'count' || i.def.done?.type === 'seen';
+          if ((i.status === 'done' || i.status === 'missed') && !keepsSt && !i.def.variant) return [i.key, i.status, t(i.opensAt), t(i.closesAt), t(i.doneAt)];
           const o = { key: i.key, status: i.status, opensAt: t(i.opensAt), closesAt: t(i.closesAt), doneAt: t(i.doneAt) };
+          // Skills update: the variant it was made with (a resume makes the same rule: rebuildVariant)
+          if (i.def.variant) o.variant = { v: i.def.variant.v, keys: [...i.def.variant.keys], parts: { ...i.def.variant.parts } };
           if (i.heldFrom != null && i.status === 'open') o.heldFrom = t(i.heldFrom);
           // a closed job's result is in records.logJob already; open ones keep their rule state
           // (count jobs keep it closed too: the card shows their tallies)
           if (i.status !== 'done') o.progress = Math.round(i.progress * 1000) / 1000;
-          if (i.status === 'waiting' || i.status === 'open' || i.def.done?.type === 'count') o.st = i.st;
+          if (i.status === 'waiting' || i.status === 'open' || keepsSt) o.st = i.st;
           return o;
         }) };
     },
@@ -889,8 +956,10 @@ export function createJobEngine({ events, env, farm, props, records, jobs = ALL_
       for (const raw of d.list || []) {
         const s = Array.isArray(raw) ? { key: raw[0], status: raw[1], opensAt: raw[2], closesAt: raw[3], doneAt: raw[4] } : raw;
         const at = s.key.lastIndexOf('@'), id = s.id ?? s.key.slice(0, at), day = s.day ?? Number(s.key.slice(at + 1));
-        const jd = jobs.find((j) => j.id === id);
-        if (!jd) continue;
+        const jd0 = jobs.find((j) => j.id === id);
+        if (!jd0) continue;
+        // Skills update: a saved variant gives the same rule again (its keys and parts as saved, whatever the perks are now)
+        const jd = s.variant ? rebuildVariant(jd0, s.variant) : jd0;
         const inst = { ...s, id, day, def: jd, progress: s.progress ?? (s.status === 'done' ? 1 : 0), result: s.result ?? null, st: s.st || initState(jd.done) };
         if ((d.v ?? 1) < 2) mapCells(jd.done, inst.st);
         list.push(inst); byKey.set(inst.key, inst);
