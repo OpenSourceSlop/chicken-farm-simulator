@@ -79,7 +79,7 @@ export const MILESTONES_CYCLE = [
 
   // ---------------- Body Temperature & Comfort (max 16) ----------------
   M('vent-band', 'comfort', 'level1', 'level-end', 'Vent temperatures 39.4–40.5 °C on most chicks',
-    [[1, '>= 4 of the first 5 vent readings in 39.4-40.5 °C']]),
+    [[1, '>= 4 of the first 5 vent readings in 39.4-40.5 °C (with Brooding 2: >= 2 of the first 3)']]),
   M('comfort-w2', 'comfort', 'week2', 'level-end', 'Birds in their comfort band through week 2',
     [[2, 'bird-minutes with zone e in -1.5..hotFrom >= 90 %, days 8-14']]),
   M('no-chill-w2', 'comfort', 'week2', 'level-end', 'No tunnel chill on the young birds in week 2',
@@ -209,8 +209,8 @@ export const MILESTONES_CYCLE = [
   // ---------------- Growth & Performance (max 19) ----------------
   ...per([['week2', 14], ['week3', 21], ['weeks45', 35]], ([lv, day]) => M(`w${day}-weight`, 'growth', lv, 'weighin', `Day ${day} weight: 98 % of the target or more`,
     [[1, `weighed mean >= 98 % of weightAt(${day})`], [3, '>= 103 %']], ['weigh'])),
-  M('weighed-weekly', 'growth', 'finish', 'harvest', 'Weighed 50 birds every week',
-    [[2, '>= 50 sample.weigh on each of days 7, 14, 21, 28, 35 and 40']], ['weigh']),
+  M('weighed-weekly', 'growth', 'finish', 'harvest', 'Weighed 50 birds every week (25 with Growth 2)',
+    [[2, '>= the day\'s sample (50; 25 with Growth 2) sample.weigh on each of days 7, 14, 21, 28, 35 and 40']], ['weigh']),
   M('harvest-fcr', 'growth', 'finish', 'harvest', 'Feed conversion at harvest: 1.75 or under',
     [[2, 'harvest FCR <= 1.75'], [3, '<= 1.65']]),
   M('harvest-uniformity', 'growth', 'finish', 'harvest', 'Uniformity at the last weigh-in',

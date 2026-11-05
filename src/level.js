@@ -73,7 +73,7 @@ import { createFlockWatch } from './flock-watch.js'; // PHASE4.md §15.1: the fl
 // the night fix (after Phase 5): the night check before a skip through the night, the skip's stops, the morning summary
 import { nightCheck, nightHoursIn, createSkipGuard, createNightLog, NIGHT } from './night-check.js';
 // Skills update (SKILLS.md §4.2, §15.2): the jobs as the payoffs make them, the controllers on from the perks, quiet ideal play
-import { jobVariant, baseDoneId } from './job-variants.js';
+import { jobVariant, baseDoneId, sampleOf } from './job-variants.js';
 import { AUTO, AUTO_SYSTEMS, FAULTS } from './config.js';
 import { platformWeighIn } from './farm-auto.js';   // review round: the weigh-in's platform scale reading
 
@@ -207,6 +207,14 @@ export function createLevel(ctx, deps = {}) {
     events.on(EV.FARM_PROBLEM, (p) => { if (p && p.phase === 'symptom' && p.alarm) alarms++; });
     // a pinned condition job that opens (the mains back while the generator carries the house) stops it too (integrator)
     events.on(EV.JOB_OPEN, (p) => { if (p && farm.condition && engine?.byKey?.(p.key)?.def?.pin) pinStops++; });
+    // the farmer's choice after the skills review: a job that takes Growth 2's or Brooding 2's smaller sample keeps its size
+    // on the farm for the milestones (skills-rules-payoff.js sampleNeed: vent-checked, vent-band, weighed-weekly)
+    events.on(EV.JOB_OPEN, (p) => {
+      const inst = p && engine?.byKey?.(p.key), smp = inst && sampleOf(inst.def);
+      if (!smp?.smaller || !farm?.stats) return;
+      const id = baseDoneId(inst.def), S = (farm.stats.samples ||= {});
+      (S[id] ||= {})[inst.day] = { n: smp.n, sectors: smp.sectors };
+    });
     // farm.setCondition on a running farm (a harness, __game.setCondition): the jobs again for the new condition
     events.on(EV.LEVEL, (p) => { if (p && p.phase === 'condition' && level.mode === 'level' && !ended && !free) level.rebuildJobs(); });
     events.on(EV.JOB_DONE, () => { if (inLevel()) scheduleSave(2); });
@@ -420,7 +428,7 @@ export function createLevel(ctx, deps = {}) {
     const floor = records?.timeline?.()?.find?.((e) => e.day === 0)?.floorAtArrivalC ?? null;
     const at = splitDay(env.day), day = atClaim ? failAt.day : at.day, hour = atClaim ? 24 : at.hour;
     return { pass, reason, early: reason === 'mortality', endedAt: `day ${day}, ${atClaim ? '24:00' : hhmm(hour)}`, day, hour, ...(atClaim ? { failDay: failAt.day } : {}),
-      ratio, weightG, weighedByHand: !!wr, ...(plat7?.fouled ? { scaleFouled: true } : {}), chickWeightG: chick, chickSource: measured != null ? 'box' : 'delivery',
+      ratio, weightG, weighedByHand: !!wr, weighedN: wr?.n ?? 0, ...(plat7?.fouled ? { scaleFouled: true } : {}), chickWeightG: chick, chickSource: measured != null ? 'box' : 'delivery',
       deaths, placed, placedReal: (fl.placed || 0) > 0, countedDead: fl.countedDead || 0, deadOnFloor: onFloor, deadInBoxes: inBoxes, culls: fl.culls || 0,
       // uniformity only from a hand weighing of 10 birds or more (the scale gives no spread); FCR only
       // once chicks were placed and are eating

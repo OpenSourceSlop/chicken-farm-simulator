@@ -12,8 +12,9 @@
 //  4. fault    day 17: the controller's timer resets at 07:00 inside a Next job skip (a stepper starts timer-reset): the
 //              skip stops, the flock watch's Equipment row and warning name it; at the controller Fill the timer
 //              (Moisture 2's calculator, one click) fixes it by hand; r-minvent done
-//  5. weigh    day 21 08:24: the weekly weighing with Weigh the frame (Growth 2) in five parts, before the automatic scale
-//              has its 300 birds; w3-weigh done; the week passes
+//  5. weigh    day 21 08:24: the weekly weighing by hand before the automatic scale has its 300 birds: Growth 2's 25 birds
+//              from three parts (the farmer's choice after the skills review), Weigh the frame in each (10, 10, then the 5
+//              still needed); w3-weigh done; the week passes
 import { W, adv, ev, exp, shot, press, click, E, esc, job, START, write, until, nextTo,
   gateToHouse, controllerRead, feederBox, walkFloor, deadPick, houseOut, toBin, binCount, deadSweep, outToHouse,
   atFans, fansAll, birdChecks, nightThenRecord, nightAtController, autoTo, passed, morning, afternoon } from './p3-cycle-steps.mjs';
@@ -170,12 +171,12 @@ export function partFault() {
   ];
 }
 
-// ---------------- 5. the weekly weighing with Weigh the frame ----------------
+// ---------------- 5. the weekly weighing: Growth 2's 25 birds, Weigh the frame ----------------
 export function partWeigh() {
-  const part = (x, z, n) => [W(x, z, 0.4), ev(`window.__wn = __game.ui.L.weighings().n, 'weighed so far ' + __wn`), press('e'), adv(0.2),
+  const part = (x, z, n, k = 10) => [W(x, z, 0.4), ev(`window.__wn = __game.ui.L.weighings().n, 'weighed so far ' + __wn`), press('e'), adv(0.2),
     exp(`__game.ui.openPanelId === 'weigh' && 'the frame set down in part ${n}'`, `the frame set down in part ${n}`),
-    click('Weigh the frame'), adv(1.4), until(`__game.ui.L.weighings().n >= __wn + 10`, 6, 0.25),
-    exp(`__game.ui.L.weighings().n >= __wn + 10 && 'part ${n}: ' + (__game.ui.L.weighings().n - __wn) + ' birds weighed in one press'`, `Weigh the frame in part ${n} (one click)`),
+    click('Weigh the frame'), adv(1.4), until(`__game.ui.L.weighings().n >= __wn + ${k}`, 6, 0.25),
+    exp(`__game.ui.L.weighings().n === __wn + ${k} && 'part ${n}: ' + (__game.ui.L.weighings().n - __wn) + ' birds weighed in one press'`, `Weigh the frame in part ${n} (one click, ${k} birds)`),
     press('Escape'), adv(0.2)];
   return [
     ...autoTo(20, 21), ev(`(__game.level.debug.goto(21, 8.4), 'the clock to ' + __t())`), adv(0.5),
@@ -184,9 +185,10 @@ export function partWeigh() {
     W(-14, 7.4, 0.4), W(-14, 6.9, 0.3), ev(`__timer('frame 21')`),
     W(-6, -1.6, 0.35), ...E('bird-scale', 'E opens the bird scale'), click('Take the scale and frame'), press('Escape'), adv(0.2),
     exp(`__game.props.carrying === 'frame' && 'carrying the frame'`, 'the hand scale and the frame in hand'),
-    ...part(1.0, -2.6, 1), ...part(-6, -3.8, 2), ...part(-6, 2.6, 3), ...part(-18, 2.6, 4), ...part(-18, -2.6, 5),
+    exp(`(() => { const r = __game.level.jobs.byKey('w3-weigh@21').def.done.of[1]; return r.n === 25 && r.sectors === 3 && 'the hand part: ' + r.n + ' birds from ' + r.sectors + ' parts (Growth 2)'; })()`, 'the hand part of w3-weigh: Growth 2\'s 25 birds from 3 parts'),
+    ...part(1.0, -2.6, 1), ...part(-6, -3.8, 2), ...part(-6, 2.6, 3, 5),
     W(-6, -1.6, 0.35), press('e'), adv(0.2), click('Put them back'), press('Escape'), adv(0.2), ev(`__timerEnd('frame 21')`),
-    exp(`(() => { const i = __game.level.jobs.byKey('w3-weigh@21'), w = __game.ui.L.weighings(); return i.status === 'done' && w.n >= 50 && w.sectors >= 5 && 'w3-weigh done: ' + w.n + ' birds from ' + w.sectors + ' parts, ' + __timed['frame 21'].text; })()`, 'w3-weigh done with 50 birds from 5 parts by Weigh the frame'),
+    exp(`(() => { const i = __game.level.jobs.byKey('w3-weigh@21'), w = __game.ui.L.weighings(); return i.status === 'done' && w.n === 25 && w.sectors >= 3 && 'w3-weigh done: ' + w.n + ' birds from ' + w.sectors + ' parts, ' + __timed['frame 21'].text; })()`, 'w3-weigh done with 25 birds from 3 parts by Weigh the frame (Growth 2)'),
     shot('sp-weigh-21'),
     ...autoTo(21, 21), passed('week3'), shot('sp-week3-result'),
     ev(`'faults this level: ' + JSON.stringify(__game.level.result?.faults || []) + '; unlocks: ' + JSON.stringify(__game.level.result?.unlocks || [])`),

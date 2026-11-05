@@ -5,7 +5,7 @@
 // one-press key 1 …) + the real seconds of its farm-time waits at the panel clock (1 farm minute = 2.5 s) + the glance (1 s
 // open) for a handed-over job. The same day three times: no skills, every branch at level 2, every branch at level 3
 // (faults off: the controllers keep every reading in band). Printed per job and per day.
-//   node scripts/skill-time.mjs                 the table for days 8, 16, 25 and 37
+//   node scripts/skill-time.mjs                 the table for days 0, 1, 8, 14, 16, 25 and 37 (and the sample jobs alone)
 //   node scripts/skill-time.mjs --days 8,16 --jobs   with the per-job lines
 //   node scripts/skill-time.mjs --json          the figures as JSON (the integrator writes them in SKILLS.md §14.2)
 //   node scripts/skill-time.mjs --assert        the bands of §14.2 (BANDS below: set from the first measurement)
@@ -20,7 +20,8 @@ import { columnsNow } from '../src/farm-auto.js';
 
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-const DAYS = String(opt('--days', '8,16,25,37')).split(',').map(Number);
+// days 0, 1 and 14 (the vent and crop samples, a weigh day) since the farmer's choice: Growth 2's 25 birds, Brooding 2's 3 chicks
+const DAYS = String(opt('--days', '0,1,8,14,16,25,37')).split(',').map(Number);
 const SHOW_JOBS = args.includes('--jobs'), JSON_OUT = args.includes('--json'), ASSERT = args.includes('--assert');
 
 // ---------------- the model's figures (§14.1) ----------------
@@ -38,7 +39,10 @@ const P3_MIN = { 8: 4.4, 16: 4.7, 25: 4.1, 37: 4.2 };
 // §14.2 bands (% of the no-skill day), set from the first measurement (jobs package, seed 1: day 8 85 / 72 %, day 16 87 /
 // 75 %, day 25 95 / 81 %, day 37 91 / 78 % at level 2 / 3; the no-skill days 4.73 / 5.33 / 4.25 / 4.38 min, +8 / +13 / +4 /
 // +4 % on p3-cycle's) as each measured figure + 5 points; the integrator writes them in SKILLS.md §14.2
-const BANDS = { l2: { 8: 90, 16: 92, 25: 100, 37: 96 }, l3: { 8: 77, 16: 80, 25: 86, 37: 83 } };
+// days 0, 1, 14 (the farmer's choice after the skills review, seed 1: 84 / 82 %, 81 / 79 %, 79 / 58 %) the same way
+const BANDS = { l2: { 0: 89, 1: 86, 8: 90, 14: 84, 16: 92, 25: 100, 37: 96 }, l3: { 0: 87, 1: 84, 8: 77, 14: 63, 16: 80, 25: 86, 37: 83 } };
+/** The sample jobs alone (seconds of play: no skills, level 2, level 3), printed under the table. */
+const SAMPLE_JOBS = { 0: 'd0-vent', 1: 'd1-crop', 14: 'w2-weigh' };
 
 // ---------------- the farm's walls (house.js: the 1.8 m door gap in the south wall stays open) ----------------
 const T = HOUSE.wallThickness, d = HOUSE.door, { xMin, xMax, zMin, zMax } = HOUSE_BOUNDS;
@@ -125,8 +129,41 @@ function deadSteps(h, c) {
 }
 JOB_MODEL['r-dead-am'] = deadSteps; JOB_MODEL['r-dead-pm'] = deadSteps;
 
+// ---------------- the sample jobs (the farmer's choice after the skills review: Growth 2, Brooding 2) ----------------
+// the brooding floor's parts (job-next's names: west / middle / east, north and south) and the frame's parts of the house
+// it reaches from the bird scale (the frame goes down on the brooding floor only), nearest the scale first
+const BROOD_PARTS = [[-19.0, -2.8], [-10.7, 2.8], [-2.5, -2.8], [-19.0, 2.8], [-10.7, -2.8], [-2.5, 2.8]];
+const FRAME_PARTS = [[-5.8, -2.8], [-5.8, 2.8], [1.0, -2.8], [-17.4, -2.8], [-17.4, 2.8]];
+/** Chicks from the parts of the floor (`perPart` chicks a part): each caught with E, its sample taken, put back with Esc; with
+ *  Next chick (Brooding 2) every chick of a part after the first comes into the hand without the panel closing. */
+function chickSteps(perPart, next) {
+  const out = [];
+  perPart.forEach((n, i) => {
+    const [x, z] = BROOD_PARTS[i];
+    for (let k = 0; k < n; k++) {
+      if (k > 0 && next) out.push(visit(floor(x + 0.6 * k, z), 2));                  // Next chick + the sample
+      else out.push(visit(floor(x + 1.2 * k, z), 3));                                 // E, the sample, Esc
+    }
+    if (next && n > 1) out.push(visit(floor(x + 0.6 * n, z), 1));                     // the panel closed after the last
+  });
+  return out;
+}
+/** The hand weighing: the frame taken at the bird scale, set down in each part (E) and the frame's birds weighed (Weigh all
+ *  0.4 s a bird; Weigh the frame 1 s for the frame), then the frame put back. Growth 2: 25 birds from 3 parts (10, 10, 5). */
+function weighSteps(h, c) {
+  if (c.handed('scale')) return [glance('birdScale')];
+  const small = h('frameWeigh'), birds = small ? [10, 10, 5] : [10, 10, 10, 10, 10];
+  const out = [panel('birdScale', 1)];
+  birds.forEach((n, i) => { const [x, z] = FRAME_PARTS[i]; out.push(visit(floor(x, z), 1), panel(floor(x, z), 1, small ? 1 : 0.4 * n)); });
+  out.push(panel('birdScale', 1));
+  return out;
+}
+JOB_MODEL['d0-vent'] = (h) => chickSteps(h('quickSamples') ? [1, 1, 1] : [2, 2, 1], h('quickSamples'));
+JOB_MODEL['d1-crop'] = (h) => chickSteps(h('quickSamples') ? [2, 2, 2] : [4, 3, 3], h('quickSamples'));
+for (const id of ['d7-weigh', 'w2-weigh', 'w3-weigh', 'w45-weigh28', 'w45-weigh35', 'f-weigh']) JOB_MODEL[id] = weighSteps;
+
 /** A default job: one visit to its spot's panel with two presses (a reading, a key), or at its place. */
-const defaultSteps = (inst) => [panel(inst.def.spot && !['dead', 'heater', 'lame'].includes(inst.def.spot) ? inst.def.spot : floor(-12, 0), 2)];
+const defaultSteps = (h, c, inst) => [panel(inst.def.spot && !['dead', 'heater', 'lame'].includes(inst.def.spot) ? inst.def.spot : floor(-12, 0), 2)];
 
 // ---------------- one day, one set of skills ----------------
 function makeRun() {
@@ -195,7 +232,8 @@ if (isMain) {
     const r = [0, 2, 3].map((lvl) => modelDay(day, lvl));
     const [n, l2, l3] = r;
     out.push({ day, none: n.min, l2: l2.min, l3: l3.min, l2Pct: Math.round((l2.sec / n.sec) * 100), l3Pct: Math.round((l3.sec / n.sec) * 100), p3: P3_MIN[day] ?? null,
-      vsP3Pct: P3_MIN[day] ? Math.round(((n.min - P3_MIN[day]) / P3_MIN[day]) * 100) : null, jobs: SHOW_JOBS || JSON_OUT ? r.map((x) => x.jobs) : undefined });
+      vsP3Pct: P3_MIN[day] ? Math.round(((n.min - P3_MIN[day]) / P3_MIN[day]) * 100) : null, jobs: SHOW_JOBS || JSON_OUT ? r.map((x) => x.jobs) : undefined,
+      sample: SAMPLE_JOBS[day] ? r.map((x) => x.jobs.filter((j) => j.id === SAMPLE_JOBS[day]).reduce((a, j) => a + j.sec, 0)) : undefined });
     if (SHOW_JOBS) {
       console.log(`day ${day}:`);
       const ids = [...new Set(r.flatMap((x) => x.jobs.map((j) => j.id)))];
@@ -209,7 +247,12 @@ if (isMain) {
   if (JSON_OUT) console.log(JSON.stringify(out, null, 1));
   else {
     console.log('day | no skills (min) | p3-cycle | level 2 (min, % of none) | level 3 (min, % of none)');
-    for (const o of out) console.log(`${String(o.day).padStart(3)} | ${o.none.toFixed(2).padStart(6)} (${o.vsP3Pct >= 0 ? '+' : ''}${o.vsP3Pct} % vs p3) | ${o.p3 ?? '—'} | ${o.l2.toFixed(2)} (${o.l2Pct} %) | ${o.l3.toFixed(2)} (${o.l3Pct} %)`);
+    for (const o of out) console.log(`${String(o.day).padStart(3)} | ${o.none.toFixed(2).padStart(6)}${o.p3 ? ` (${o.vsP3Pct >= 0 ? '+' : ''}${o.vsP3Pct} % vs p3)` : ''} | ${o.p3 ?? '—'} | ${o.l2.toFixed(2)} (${o.l2Pct} %) | ${o.l3.toFixed(2)} (${o.l3Pct} %)`);
+    for (const o of out) {
+      const id = SAMPLE_JOBS[o.day];
+      if (!id || !o.sample) continue;
+      console.log(`  ${id}: ${o.sample.map((v) => `${v.toFixed(1)} s`).join(' / ')} (no skills / level 2 / level 3)`);
+    }
   }
   let bad = 0;
   if (ASSERT) {

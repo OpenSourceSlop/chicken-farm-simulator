@@ -3,6 +3,7 @@
 // { tier: index into the milestone's tiers | null, detail: the measured value in plain words }.
 // Package "sim", pure logic. Nothing here is shown as a verdict: the detail is a measurement.
 import { flowTargetAt, nippleHeightCmAt } from './config.js';
+import { sampleNeed } from './skills-rules-payoff.js';
 
 const H = 1 / 24;
 const prob = (farm, id) => farm.problems.find((p) => p.id === id) || null;
@@ -30,7 +31,9 @@ export const RULES = {
     if (s.firstTipAt == null) return null;
     const r = s.ventReadings.filter((v) => v.t >= s.firstTipAt + 2 * H - 1e-9 && v.t <= s.firstTipAt + 3.5 * H + 1e-9);
     const sectors = new Set(r.map((v) => v.sector)).size;
-    return { tier: r.length >= 5 && sectors >= 3 ? 0 : null, detail: `${r.length} vent temperatures from ${sectors} parts of the floor` };
+    // the day's sample: 5 chicks from 3 parts, 3 from 3 with Brooding 2's smaller sample (farm.stats.samples)
+    const need = sampleNeed(farm, 'sample.vent', 0);
+    return { tier: r.length >= need.n && sectors >= need.sectors ? 0 : null, detail: `${r.length} vent temperatures from ${sectors} parts of the floor` };
   },
   'crop-fill': (farm) => {
     const c = farm.stats.cropFillTrue;

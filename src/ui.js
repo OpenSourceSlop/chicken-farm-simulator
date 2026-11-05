@@ -273,10 +273,15 @@ export function createUI(ctx, deps) {
       return { n: ok.length, mean: ok.length ? ok.reduce((a, b) => a + b.w, 0) / ok.length : null, sectors: new Set(ok.map((x) => x.s)).size, list: ok };
     },
     sampleTally(purpose) {
-      const id = purpose === 'crop' ? 'd1-crop' : purpose === 'vent' ? 'd0-vent' : null;
-      const inst = id && L.jobs().find((i) => i.id === id);
+      // the open sample job of the purpose (a bad batch's 48-hour crops too), else the day's own
+      const ids = purpose === 'crop' ? ['d1-crop', 'b-crop48'] : purpose === 'vent' ? ['d0-vent'] : [];
+      const all = L.jobs().filter((i) => ids.includes(i.id));
+      const inst = all.find((i) => i.status === 'open') || all.find((i) => i.day === env.dayNumber) || all[0];
       if (!inst) return '';
       const n = inst.st.list.length, s = new Set(inst.st.list.map((x) => x.s)).size;
+      // the farmer's choice after the skills review: Brooding 2's smaller sample (3 vent chicks, 6 crops) out of its own n
+      const r = inst.def.done || {};
+      if (r.smaller) return `${purpose === 'crop' ? 'Crops felt' : 'Vent temperatures'}: ${n} of ${r.n} chicks from ${s} of ${r.sectors} parts of the floor (Brooding 2: an experienced stockman’s smaller sample; the standard is ${r.std?.n ?? ''}).`;
       return `${purpose === 'crop' ? 'Crops felt' : 'Vent temperatures'} so far: ${n} chick${n === 1 ? '' : 's'} from ${s} part${s === 1 ? '' : 's'} of the floor.`;
     },
     skillDetail: (id) => ctx.level?.skillDetail?.(id) || details.get(id) || '',

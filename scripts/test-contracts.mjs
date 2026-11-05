@@ -655,7 +655,12 @@ test('skills update: payoffs, views, systems and faults well formed; every job t
     for (const j of p.jobs) assert(jobById(j), `payoff ${k}: job ${j}`);
     if (p.system) assert(C.AUTO_SYSTEMS[p.system]?.payoff === k && p.step === 'auto', `payoff ${k}: system ${p.system}`);
     if (p.fault) assert(C.FAULTS[p.fault]?.system === p.system, `payoff ${k}: fault ${p.fault}`);
-    assert(!('need' in p), `payoff ${k}: no payoff changes a job's sample size (SKILLS.md §3.5, §3.8)`);
+    // the farmer's choice after the skills review (SKILLS.md §3.5, §3.8, §17 Q2): only Growth 2 and Brooding 2 take a smaller
+    // sample, each smaller than the boards' standard and still from three parts or more
+    if ('need' in p) {
+      assert(k === 'frameWeigh' || k === 'quickSamples', `payoff ${k}: only Growth 2 and Brooding 2 change a sample size`);
+      for (const [id, nd] of Object.entries(p.need)) assert(C.SAMPLE_STANDARD[id] && nd.n < C.SAMPLE_STANDARD[id].n && nd.sectors >= 3 && p.jobs.every((j) => jobById(j)?.done?.id !== id || jobById(j).done.n === C.SAMPLE_STANDARD[id].n), `payoff ${k}: ${id} ${JSON.stringify(nd)}`);
+    }
   }
   // every view unlock says what it gives in plain words (SKILLS.md §6.1, review issue 16)
   for (const k of Object.keys(UNLOCKS)) assert(C.UNLOCK_SHOWS[k] && !VERDICT.test(C.UNLOCK_SHOWS[k]), `UNLOCK_SHOWS.${k}`);
@@ -749,7 +754,7 @@ test('skills update: perks follow the switch, the levels, allow() and the Automa
     skills.debug.force('feed', 3);
     assert(perks.handled('r-raise').map((x) => x.part).join() === 'drinkers-raised,pans-raised', 'r-raise: both parts with Water 3 and Feed 3');
     skills.debug.force('brooding', 2);
-    assert(perks.has('quickSamples') && !('need' in perks), 'Brooding 2 holds; no sample size changes');
+    assert(perks.has('quickSamples') && C.PAYOFFS.quickSamples.need['sample.vent'].n === 3, 'Brooding 2 holds: the smaller chick samples');
     const e = perks.easier('w2-weigh');
     assert(e.length === 2 && e[0].key === 'frameWeigh' && e[0].toGo === 9 && e[1].later === true, `easier: ${JSON.stringify(e)}`);
     settings.set('automation.water', false);

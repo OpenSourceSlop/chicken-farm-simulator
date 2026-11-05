@@ -234,12 +234,15 @@ export const JOB_WHERE_PAYOFF = {
   phoneRecord: each(['r-record', 'prep-record'], 'The phone in your pocket: {key:phone}, then Sign today’s record (Farm Planning 3).'),
   siloOrder: each(ORDER_IDS, 'The silo gauge outside, north of the house: Order to 3 days (Feed 2); or the phone at the office desk.'),
   waterAllLines: { 'r-drinkers': 'Water supply, south-west corner inside: Read the sight tubes (Water 2); then a cup test only at the regulator of a line that reads off.' },
-  frameWeigh: each(WEIGH_IDS, 'Bird scale: take the scale and frame, set the frame down in five parts of the house and Weigh the frame at each (Growth 2); the marker shows a part not weighed yet.'),
+  frameWeigh: each(WEIGH_IDS, 'Bird scale: take the scale and frame, set the frame down in three parts of the house: 25 birds (Growth 2), Weigh the frame weighs each frame in one press; the marker shows a part not weighed yet.'),
+  quickSamples: { 'd0-vent': 'Among the chicks: {key:use} picks one up. Three chicks, one from each of three parts of the floor (Brooding 2); the marker shows a part not sampled yet.',
+    'd1-crop': 'Among the chicks: pick up six from three parts of the floor and feel the crop (Brooding 2; Next chick takes the next one near you); the marker shows a part not sampled yet.',
+    'b-crop48': 'Any chicks on the floor: feel six crops from three parts of the floor (Brooding 2).' },
   tallyBucket: each(['r-dead-am', 'r-dead-pm'], 'Dead birds on the floor: {key:use} picks up every one near you into the tally bucket, counted as they go in (Biosecurity 2); then empty it at the bin outside the south wall.'),
   passCheck: { 'w2-check': 'Among the birds: walk slowly; each bird you see walk counts (Biosecurity 3), and {key:use} picks one up to watch it in the hand. Ten birds from three parts of the floor.' },
 };
 /** The order the where line takes a payoff in (the phone before the silo gauge: anywhere is nearest). */
-const WHERE_ORDER = ['pocketPhone', 'phoneRecord', 'waterAllLines', 'passCheck', 'frameWeigh', 'tallyBucket', 'siloOrder'];
+const WHERE_ORDER = ['pocketPhone', 'phoneRecord', 'waterAllLines', 'passCheck', 'frameWeigh', 'quickSamples', 'tallyBucket', 'siloOrder'];
 /** The card's where line as the payoffs give it now: has(key) -> the payoff holds for this job (the instance's variant or
  *  the perks); the job's own line otherwise. */
 export function jobWhereNow(id, has = () => false) {

@@ -65,7 +65,9 @@ pacing table measured by `node scripts/skill-progress.mjs --compare 4,9,15 --ass
   the night check, it starts in daylight with time to fix it, it is bounded, and a fix by hand always works.
 - **Skill tree:** points come from doing a branch's jobs well in play; a milestone is a result, not a question; each branch
   level unlocks a tool or a view — after this update a **payoff** (§3) beside its view. Existing milestones stay (ids, texts,
-  rules, thresholds); seven are added (§2.3). **No payoff changes a job's sample size**, so no milestone needs a new rule for it.
+  rules, thresholds); seven are added (§2.3). **Only Growth 2 and Brooding 2 change a sample size**, as the farmer chose after
+  the skills review (§3.5, §3.8, §17 Q2): the boards' figures stay the standard with a general-practice line for the smaller
+  sample, and the three milestones that count a sample (`vent-checked`, `vent-band`, `weighed-weekly`) read the day's own.
 - **Days pass in a few minutes of play** with Next job; desktop browser, English, low-poly flat-shaded procedural art, one
   self-contained page (three 0.160.0 from jsDelivr), ARCHITECTURE.md's publishing constraints (no `alert` / `confirm` /
   `prompt`, no `window.open`, no downloads, `localStorage` only inside try/catch, nothing sideways at phone width,
@@ -92,7 +94,8 @@ Farm Planning shows three rows, each with what it gives or saves:
 
 At the brooding week's end **Water 2** arrives (*"Water 2 · Faster: read all four sight tubes at the water supply. Use it at the
 sight-tube board on the water supply panel. Saves the four one-minute flow tests on flow-test mornings: a cup test only on a
-line that reads off."*) and **Chick Arrival & Brooding 2** (*Next chick* and the 2 m reach: it helps on the next arrival day).
+line that reads off."*) and **Chick Arrival & Brooding 2** (the smaller chick samples, 3 vent chicks and 6 crops, with *Next
+chick* and the 2 m reach: it helps on the next arrival day).
 On day 8 the job card's *Check drinker flow and height* reads *Water 2: read the sight tubes at the water supply*; the strip
 shows each line's water column against the drinker plate's mark for day 8; three lines read at the mark and count as tested;
 line 3 reads 2 cm low, so the strip names *line 3: a cup test at its regulator*, and that one flow test finishes the job.
@@ -103,7 +106,7 @@ readout), Moisture 2 (*Fill the timer* in the minimum ventilation calculator, it
 counted as it goes in, emptied at the bin after every round as before, with no count there), Feed 2 (the silo gauge's days of
 feed and its order key) and, by day 21, Farm Planning 2 (the pocket phone) arrive. Heat & Ventilation 2 comes by day 29 (before the heat wave) and
 Growth 2 with the day 28 weigh-in. The job card shows the next payoff of the job in hand: *Weigh sample birds — Growth 2:
-weigh the frame in one press · 3 points to go*. By the end of the first flock a careful player has level 2 in every branch
+weigh 25 birds instead of 50 · 3 points to go*. By the end of the first flock a careful player has level 2 in every branch
 and **no level 3**: level 3 waits for a finished flock (§2.2); the tree says *"13 points: level 3 comes with your next flock"*.
 
 ### 1.2 The second flock (the equipment takes jobs over)
@@ -189,8 +192,9 @@ branch's own jobs, its threshold on the sign the job links (all general practice
 | `w28-weight` (new) | Growth & Performance | weeks45, weighin (day 28) | Day 28 weight: 98 % of the target or more | 1: mean ≥ 98 % of `weightAt(28)` · 3: ≥ 103 % (as w14 / w21 / w35) |
 | `records-w23` (new) | Farm Planning | week3, level-end | The daily record signed every evening of weeks 2 and 3 | 2: `r-record` done on all 14 of days 8–21 |
 
-`weighed-weekly` keeps its text and rule (50 birds on each weigh day) because no payoff changes the sample size; a scale read
-with ≥ 300 weighings counts as the day's weighing for it from Growth 3 (§3.8).
+`weighed-weekly` counts the day's own sample: 50 birds on each weigh day, 25 on a day whose weighing took Growth 2's smaller
+sample (the farmer's choice after the skills review: `farm.stats.samples`, `sampleNeed`; its text *"Weighed 50 birds every week
+(25 with Growth 2)"*); a scale read with ≥ 300 weighings counts as the day's weighing for it from Growth 3 (§3.8).
 
 ### 2.4 The normal profile (a careful farmer in his first flock; `farm-profiles-*.js`, package "model")
 `normal` is the ideal's management with these slips, each one a thing players do, none failing a level (the model package
@@ -272,7 +276,8 @@ earns 11 in flock 2 (with Growth 3 the hand weighings stop; w14, w21 and w35-wei
 ## 3. The payoffs, branch by branch (`config.PAYOFFS`, `config.SKILL_VIEWS`, `config.UNLOCK_SHOWS`)
 Every payoff entry carries `{ branch, level, step: 'faster' | 'auto', name, saves, where, jobs, by }` (+ `system` and `fault`
 for an automated one). `saves` is the tree's plain-words line, `where` the unlock caption's "use it at …", `jobs` the job ids the
-payoff eases (the job card and the strips read it), `by` the package that builds it. No payoff has a `need`: **no sample size
+payoff eases (the job card and the strips read it), `by` the package that builds it. Only Growth 2 and Brooding 2 have a
+`need` (the smaller sample, the farmer's choice after the skills review; `SAMPLE_STANDARD` the boards' own): **no other sample size
 changes**. **Time saved** figures are design estimates of the §14 model (walking at 4 m/s on the route, 2 s per press, the
 panel clock 24 game s per real s); `skill-time.mjs` measures them and the integrator writes the measured figures here. The
 tree's `saves` lines promise no figure.
@@ -411,13 +416,23 @@ Sign line (sign-brooder, general): *"Auto brooders hold the controller's sensor 
 house cold. Compare it with the thermometer beside the controller and check the sensor when the two differ."*
 
 ### 3.5 Chick Arrival & Brooding
-**Level 2 · `quickSamples` — Next chick and a longer reach for the chick samples.** *Saves putting each chick down, stepping
-and catching again for the vent and crop samples.* The samples stay as the boards say (5 vent chicks from 3 parts of the floor,
-10 crops). The catch reach goes from 1.2 m to **2.0 m** (`AUTO.chickReachM`); the chick-in-hand panel gets *Next chick*: the
-chick goes back down and the nearest other chick within 2.5 m (`AUTO.nextChickM`, the same part of the floor) comes into the
-hand without closing the panel (one press instead of Esc, a step and E). Every chick of a part but the first comes by Next chick
-(the vent sample: 2 of 5; the crops: 7 of 10). The vent reading itself is already instant (no thermometer wait to save).
-Time saved (estimate): about 3 s per chick after the first of each part — about 30 s over days 0–1; skill-time measures it.
+**Level 2 · `quickSamples` — Smaller chick samples: 3 vent temperatures and 6 crops** (the farmer's choice after the
+skills review, §17 Q2). *Saves catching 2 of the 5 vent chicks and 4 of the 10 crop chicks; Next chick and a longer reach for
+the rest.* With Brooding 2 the vent sample is **3 chicks, one from each of the three parts of the floor**, and the crop checks
+(`d1-crop`, a bad batch's `b-crop48`) **6 chicks from three parts** (`PAYOFFS.quickSamples.need`; the variant's count rule,
+`job-variants.js smallerRule`, keeps the standard in `std`). The standard stays on the chick arrival sign: 5 vent
+temperatures and 10 crops from three parts of the brooding floor, with its general-practice line *"The standard sample is
+five vent temperatures and ten crops from three parts of the brooding floor; an experienced stockman reads a smaller one:
+three vent temperatures, one from each part, and six crops."* The job card's progress (*1 / 3 · 1 / 3 parts of the floor*),
+its where line and the strip row name the smaller sample with the standard beside it; the chick-in-hand panel's tally reads
+*"Vent temperatures: 1 of 3 chicks from 1 of 3 parts of the floor (Brooding 2: an experienced stockman's smaller sample; the
+standard is 5)"*. The milestones follow the job: `vent-checked` with 3 chicks from 3 parts, `vent-band` all but one of the
+first 3 (2 of 3; 4 of the first 5 without), read from `farm.stats.samples` (level.js keeps the day's sample when such a job
+opens; `skills-rules-payoff.js sampleNeed`). The extras stay: the catch reach goes from 1.2 m to **2.0 m**
+(`AUTO.chickReachM`) and the chick-in-hand panel's *Next chick* puts the chick down and takes the nearest other chick within
+2.5 m (`AUTO.nextChickM`, the same part of the floor) without closing the panel; with one vent chick a part it helps the
+crops (2 a part). Time saved (skill-time, §14.2): the vent sample 40.6 s → 28.5 s of play, the crops 71.6 s → 47.0 s;
+`skills-weigh.json` takes the 3-chick vent sample by real input.
 
 **Level 3 · `boxHelper` — A helper tips the chick boxes with you on arrival day.** *Saves carrying half of the six stacks of
 chick boxes.* On day 0 (a bad batch's late truck too) a farm worker waits by the truck once it stops. The helper **starts after
@@ -471,13 +486,23 @@ stays, and the sudden-deaths problem and `sds-w2` move only on the farmer's own 
 Sign line (light plate, general): *"Dawn and dusk dimming over about 20 minutes keeps the birds calm when the lights change."*
 
 ### 3.8 Growth & Performance
-**Level 2 · `frameWeigh` — The scale with memory weighs the frame's birds in one press.** *Saves a press and the wait for every
-bird at each of the five places, and finding the places still to weigh.* The weigh jobs keep their rule (50 birds from five
-parts of the house, as both bird-scale boards say). The weigh panel's *Weigh the frame* weighs the frame's 10 birds in
-`AUTO.frameWeighSec` (1 s; each bird's weight kept for the uniformity) instead of *Weigh all*'s 0.4 s a bird; the job marker
-then leads to the nearest part of the house not weighed yet (job-next), and the strip lists the parts done. Time saved
-(estimate, small): about 3 s a frame and the search for the parts, about 20 s of play per weigh day; the big weighing payoff is
-Growth 3. skill-time measures it before any figure is shown (open question 2).
+**Level 2 · `frameWeigh` — Hand weighing from 25 birds instead of 50** (the farmer's choice after the skills review, §17
+Q2). *Saves half the birds and two of the five frames on every weigh day: 25 birds from three parts of the house.* With
+Growth 2 every hand weighing (`d7-weigh` … `f-weigh`) needs **25 birds from three parts** of the house (of the brooding floor
+on day 7; `PAYOFFS.frameWeigh.need`, the count rule's `std` keeping 50 from 5). The frame holds about ten, so three frames:
+10, 10 and 5. The standard stays on both bird-scale boards (*"Weigh at least 50 birds from 5 places"*) with the plate's
+general-practice line *"An experienced stockman reads a smaller hand weighing: 25 birds from three parts of the house, the
+frame set down in each; 50 from 5 places stays the standard."* The job card's progress (*20 / 25 · 2 / 3 parts of the
+floor*), its where line, the strip (*"plate: at least 50 birds from 5 places · Growth 2: 25 from 3 parts (general practice:
+an experienced stockman's smaller sample)"*) and the weigh panel (*"Growth 2: 25 birds from 3 parts … · 5 more to weigh: the
+keys weigh 5 of this frame"*) follow it; *Weigh the frame* (the extra: the frame's birds in `AUTO.frameWeighSec`, 1 s, each
+weight kept) and *Weigh all* weigh only the birds the weighing still needs, so the third frame weighs 5 and the panel says
+*"25 weighed today: close the panel to let the frame's birds go"*. The records follow: the day's row and the level result
+take their uniformity from the 25 birds (*"birds within ±10 % of the mean, hand weighing of 25 birds"*; the stratified draw,
+`farm-flock.js weighInBird`, keeps a 25-bird sample within a few points of the flock's own), `weighed-weekly` counts 25 birds
+on a Growth 2 day (`sampleNeed`), the run card's target reads *"Day 14: weigh 25 birds (Growth 2)"*. Time saved (skill-time,
+§14.2): a weigh job 90.2 s → 50.0 s of play; by real input (`skills-weigh.json`) the 25 birds from 3 parts against the 50
+from 5 by *Weigh all* (§16.4).
 Sign line (bird-scale plate, general): *"A hand scale with a memory weighs the birds in the frame one after another and keeps
 every weight for the spread."*
 
@@ -706,7 +731,7 @@ one."*
 
 ### 6.2 The job card and the strips (`ui-jobs.js`, `job-strips*.js`)
 - **Would be easier:** the open job's card shows at most one line under its title for the next payoff that eases it and is not
-  held yet (`perks.easier(jobId)[0]`): *"Growth 2: weigh the frame in one press · 3 points to go"* (points to go = the level's
+  held yet (`perks.easier(jobId)[0]`): *"Growth 2: weigh 25 birds instead of 50 · 3 points to go"* (points to go = the level's
   threshold − the branch's points now; *"with your next flock"* when `later`). Once per job instance, small text, no verdict.
 - **Easier now:** a payoff that holds shows as the job's first strip row at its place: *"Water 2: read the sight tubes here (a
   cup test only on a line that reads off)"*; the card's where line and the marker follow `job-next`'s places for the payoff (the
@@ -757,7 +782,8 @@ EV.SETTINGS → `perks` → EV.PERKS → level.js sets `farm.auto.on`).
   met with their times. No score, no verdict.
 
 ## 9. Pass, fail and the targets
-Unchanged: every level's target, limit, fail rule and early fail. A payoff never changes a pass rule or a sample size; the jobs'
+Unchanged: every level's target, limit, fail rule and early fail. A payoff never changes a pass rule; only Growth 2 and Brooding 2
+take a smaller sample (§3.5, §3.8); the jobs'
 outcomes (`flows-in-band`, `vent-in-band`, `lines-raised` …) are the same whether the hand or the equipment met them. A fault is
 never a fail by itself; a level that fails with a fault open names it on the fail screen (§5.4).
 
@@ -948,7 +974,7 @@ level)`, `__game.config.SKILLS_UPDATE.live = true` (a steps file sets it before 
 | `scripts/skills-water.json` | panels | Water 2 forced, day 10 06:30 standard start: walk to the water supply, *Read the sight tubes* by a real click, four columns in the strip against the mark; line 3 set off band by hook → the strip names the line 3 regulator, walked there, one cup test, − pressed, r-drinkers done **with one regulator visit**; play time measured against the four-test run. |
 | `scripts/skills-minvent.json` | panels | Moisture 2 forced, day 9 06:30: the controller by real input, Ventilation tab, the working line shown, *Fill the timer* (one click), the timer 105–115 % of the vent sign's need, r-minvent done; no *One second more* pressed. |
 | `scripts/skills-feed.json` | panels | Feed 2 forced, day 13 09:00 with the silo at 2.0 days (hook): the caption *about 2 days*, walk to the silo gauge, *Order to 3 days* by real click, `w2-order` done at the gauge (no walk to the office); the order due day 14 09:00. |
-| `scripts/skills-weigh.json` | jobs | Growth 2 forced, day 14 08:30: the frame set down in 5 parts by real input, *Weigh the frame* at each, the marker leading to the next part; w2-weigh done with 50 birds; play time against the *Weigh all* run (the band set from this first measurement). |
+| `scripts/skills-weigh.json` | jobs | the farmer's choice after the skills review, by real input: Growth 2 forced, day 14 08:30, the frame set down in 3 parts, *Weigh the frame* at each (10, 10, then the 5 the weighing still needs), the marker leading to the next part, the weigh panel's Growth 2 line; w2-weigh done with 25 birds from 3 parts and their uniformity; play time against the 50-bird *Weigh all* run of week 3; Brooding 2 forced on day 0: the vent sample of 3 chicks, one from each part (E, *Take vent temperature*), d0-vent done and `farm.stats.samples` kept. |
 | `scripts/skills-phone.json` | jobs | Planning 2 forced, day 37 08:00 inside the house: R by a real key press opens the Phone page; *Book the crew and the trucks* by real click; `f-book` done with the farmer in the house (> 30 m from the desk); Planning 3 forced: *Sign today's record* on the phone at 20:00, `r-record` done. |
 | `scripts/skills-tree.json` | jobs | The tree's three rows per branch, *saves* lines, every view's *shows* words, *points to go*, *comes with your next flock*, *on* / *off in Settings*; the unlock caption on a forced level; Settings → Automation (12 switches) by real clicks; the job card's *would* line and the two *handled* lines of r-raise at 960 × 600 without overlap (the p5-hud checks). |
 | `scripts/skills-auto.json` | model | Every branch at 3 forced, **day 24 18:00** (a standard start): `__game.auto()` all running; the clock runs the night: the feed controller's order at 2.0 days (EV.AUTO, the notebook's *Feed ordered by the controller*), the truck the next day 09:00; day 25 13:00–16:00 at 4×: the stages' table adds fans (`env.fansOn` 2 → 6 as the house warms), the pad from the pad plate's rule, `r-fans-pm` done by the glance at the controller (one E, panel open 2 s). |
@@ -992,6 +1018,13 @@ game advanced plus 2 s per click or key):
 | 25 | 4.25 min (+4 % vs 4.1) | 4.04 (95 %) | 3.43 (81 %) | — |
 | 37 | 4.38 min (+4 % vs 4.2) | 4.01 (91 %) | 3.43 (78 %) | — |
 
+**The sample days** (after the final check, the farmer's choice: Growth 2's 25 birds, Brooding 2's 3 vent chicks and 6 crops;
+`skill-time --assert` bands each figure + 5 points): day 0 4.88 min with no skill, 4.10 at level 2 (84 %), 3.98 at level 3
+(82 %); day 1 5.14, 4.16 (81 %), 4.04 (79 %); day 14 (a weigh day) 5.94, 4.70 (79 %), 3.42 (58 %). The jobs alone: the vent
+sample 40.6 s → 28.5 s, the crops 71.6 s → 47.0 s, a hand weighing 90.2 s → 50.0 s (10.2 s at level 3, the scale's glance).
+By real input (`skills-weigh.json`): the 25 birds from 3 parts 0.82 min of play against 1.42 min for 50 birds from 5 parts by
+*Weigh all* (58 %).
+
 The real day 16 saves less than the model's level 3 (83 % against 75 %): on that day the payoffs felt are the sight tubes (no
 regulator visited), the tally bucket, the fan stages' glance and the record signed on the phone where he stands; the afternoon's
 panting birds are still a problem job the farmer handles at the fan panel (no problem is moved by equipment), the droppings
@@ -1010,7 +1043,8 @@ the game is exactly the Phase 5 game** — every payoff, word and sign line goes
 `__game.config.SKILLS_UPDATE.live = true` before `startRun` and calls `__game.perks.allow(true)`; node tests set the switch and
 restore it in a `finally`). **Every payoff is read through the perks** (`ctx.perks` / `L.perks`: `has`, `auto`, `easier`,
 `handled`), never through `skills.unlocked` alone; a level is forced with `skills.debug.force(branch, level)`; a controller acts
-only through `farm.auto.on` and never while `farm.auto.quietN` > 0; no payoff changes a sample size or a pass rule; every text is
+only through `farm.auto.on` and never while `farm.auto.quietN` > 0; no payoff changes a pass rule (only Growth 2 and Brooding 2
+a sample size, §3.5, §3.8); every text is
 plain English with no verdict word, keys as `{key:id}` tokens, no farming fact outside a sign; facts go on signs with a source
 (all new ones general). Keep passing on the branch: `npm run build`, `npm test`, `node scripts/shoot.mjs --scenario cold-hot
 --size 960x600`, `--scenario p2-hooks`, `--steps scripts/phase1-jobs.json`, `scripts/p2-level1.json`, `scripts/hotfix-steps.json`,
@@ -1156,7 +1190,8 @@ perks rules of §15 hold.
    page alone, kind 'paused', the same keys with `from: 'pocket'`, its job strip; with Planning 3 *Sign today's record* (the same
    `EV.RECORD_CLOSED { signed: true }` as the desk's book).
 6. **Bird in hand and the scale** (`ui-inspect.js`, `ui-cycle-birdcheck.js`): *Next chick* (Brooding 2: `flock.catcher.nextNearest`
-   within `AUTO.nextChickM`); *Weigh the frame* (Growth 2: the frame's birds in `AUTO.frameWeighSec`, each weight kept); the weigh
+   within `AUTO.nextChickM`; the tally of the smaller sample, 3 vent chicks or 6 crops); *Weigh the frame* (Growth 2: the frame's
+   birds in `AUTO.frameWeighSec`, each weight kept, up to the 25 birds the weighing needs, the panel's Growth 2 line); the weigh
    panel's *Records* line (`recordsTargets`); the bird scale's display (Growth 3: count, mean, uniformity; open 1 s sends
    `auto.glance { system: 'scale' }` and `scale.read`), *Clean the platform* (`scale.clean`).
 7. **The dead-bin panel** (`ui-cycle-clean.js`): *Count them into the bin* sends `dead.count` only for `binShare(props.carryOpts)`
@@ -1294,7 +1329,7 @@ Every finding was checked against the code and a node probe or a browser run fir
 | 23 | No test of the automation state through a save | test-auto: a stalled line and a hand hold saved and resumed, equal now and 30 farm hours on |
 | 24 | A 4 Hz status poll nothing read; `afterCutPending` never set | removed |
 
-Not done: **F21** (Growth 2 and Brooding 2 save only seconds): making *Weigh the frame* pen the birds and *Next part* carry the
+Not done in this round (done after the final check, §16.4: the smaller samples the farmer chose): **F21** (Growth 2 and Brooding 2 save only seconds): making *Weigh the frame* pen the birds and *Next part* carry the
 frame, or *Next chick* reach the next part of the floor, changes the sample jobs' play and needs its own design and measurement;
 it stays §17 open question 2. **F4's 2-line clamp**: the caption is narrowed to the free gap instead, because a clamp would cut
 the night fix's floor explanation and the skip stops' causes. **F6's 11:00–15:00 stage trip**: measured, a trip then leaves the
@@ -1312,10 +1347,14 @@ req-night 19, req-watch 13, p5-hud 20; phase1-jobs and the Phase 1 tour clean. S
    has all eleven from the second flock's planning day. Is that the right moment, or should an excellent first flock reach level
    3 in its last week? Comfort 2 (the earlier warning) comes only on day 35 of the first flock: should the brooding week's comfort
    count for it (for example, the chicks spread under the brooders on days 1–7)?
-2. **Level 2 for weighing and chicks is small:** the samples stay as the boards say (5 vent chicks, 10 crops, 50 birds), so
-   Brooding 2 (Next chick, a longer reach) and Growth 2 (the frame weighed in one press, the next part marked) save only seconds;
-   the big weighing payoff is the automatic scale at level 3. Do you want a bigger level 2 there — for example a second catching
-   frame set by a helper — or is this right?
+2. **Level 2 for weighing and chicks** (answered: the farmer chose the smaller samples). Growth 2 is now hand weighing from
+   **25 birds instead of 50** (from three parts of the house: the frame holds about ten, so three frames) and Brooding 2 a vent
+   sample of **3 chicks instead of 5** (one from each part of the floor) with the crops cut in the same proportion (6 instead of
+   10). The boards keep 50 from 5 places and 5 vent chicks / 10 crops as the standard, each with a general-practice line that
+   an experienced stockman can read the smaller sample; *Weigh the frame* and *Next chick* stay as extras. The model measures a
+   weigh job 90 s → 50 s of play, the vent sample 41 s → 29 s, the crops 72 s → 47 s (§14.2); by real input the 25 birds take
+   58 % of the 50-bird weighing's play (§16.4). Is three parts of the house right for the 25 birds, or should they come from
+   all five places (five birds a frame, which saves the weighing but not the walk)?
 3. **Faults:** about one in two normal flocks meets one fault, harder flocks two. Too many, too few? Should a player be able to
    switch faults off (we did not offer it: you asked that automation sometimes fails)?
 4. **No faults for the lights, the helper, the comfort view, the passing check or the phone record.** Any you would add (a lamp

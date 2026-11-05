@@ -12,7 +12,7 @@ import { createSkills } from '../src/skills.js';
 import { createRecords } from '../src/records.js';
 import { createPerks } from '../src/perks.js';
 import { jobById, JOB_WHERE_PAYOFF, jobWhereNow } from '../src/content-jobs.js';
-import { jobVariant, applyVariant, rebuildVariant, variantKeyOf, DEAD_TITLE, RULE_KEYS } from '../src/job-variants.js';
+import { jobVariant, applyVariant, rebuildVariant, variantKeyOf, DEAD_TITLE, RULE_KEYS, smallerRule, sampleOf } from '../src/job-variants.js';
 import { jobPlaces, nextPlace, PHONE_TODO } from '../src/job-next.js';
 import { stripRows, stripsAt, STRIPS } from '../src/job-strips.js';
 import { STRIPS_CYCLE } from '../src/job-strips-cycle.js';
@@ -102,9 +102,12 @@ test('every handed-over whole job: any[ GLANCE(auto-ok live + auto.glance), the 
     assert(any.type === 'any' && any.handled === system && any.of.length === 2, `${jobId}: any rule ${JSON.stringify(any).slice(0, 80)}`);
     const g = any.of[0];
     assert(g.type === 'all' && g.glance === system && g.of[0].test === 'auto-ok' && g.of[0].live && g.of[0].system === system && g.of[1].id === 'auto.glance' && g.of[1].match.system === system, `${jobId}: the glance`);
-    const { label, ...orig } = any.of[1], { label: l0, ...base } = jd.done;
+    // with every branch at 3 Growth 2 holds too: a weigh job's hand part is its smaller sample (25 birds from 3 parts)
+    const hand = v.variant.keys.includes('frameWeigh') ? smallerRule(jd.done, 'frameWeigh') : jd.done;
+    const { label, ...orig } = any.of[1], { label: l0, ...base } = hand;
     void label; void l0;
     assert(JSON.stringify(orig) === JSON.stringify(base), `${jobId}: the job as before under the glance`);
+    if (hand !== jd.done) assert(orig.n === 25 && orig.sectors === 3 && orig.std.n === 50, `${jobId}: the hand part is Growth 2's 25 birds from 3 parts`);
     assert(v.title === jd.title && v.id === jd.id && v.spot === jd.spot, `${jobId}: title, id and spot kept`);
     n++;
   }
@@ -137,6 +140,37 @@ test('a whole job done by the glance (fake ok) or by hand as before: w2-weigh wi
   M.at(14, 8.1);
   for (let i = 0; i < 50; i++) { const [x, z] = HOUSE_PTS[i % 5]; M.act('sample.weigh', { x, z, result: { weightG: 450 } }); }
   assert(M.st(key) === 'done', `fifty birds from five parts by hand: ${M.st(key)}`);
+}));
+
+test('the farmer\'s choice: Growth 2 weighs 25 birds from 3 parts, Brooding 2 takes 3 vent chicks and 6 crops (the boards\' standard without)', () => live(() => {
+  const key = 'w2-weigh@14';
+  // Growth 2: 25 birds from three parts of the house finish the weighing; 25 from two parts do not
+  const G = world(WEEK2, { day: 14, hour: 8.05, levels: { growth: 2 } });
+  G.at(14, 8.1);
+  const r = G.jobs.byKey(key).def.done;
+  assert(r.n === 25 && r.sectors === 3 && r.std.n === 50 && r.std.sectors === 5 && r.smaller === 'frameWeigh' && /25 birds weighed from 3 parts/.test(r.label), `Growth 2's rule: ${JSON.stringify(r)}`);
+  for (let i = 0; i < 24; i++) { const [x, z] = HOUSE_PTS[i % 3]; G.act('sample.weigh', { x, z, result: { weightG: 450 } }); }
+  assert(G.st(key) === 'open', '24 birds: still open');
+  G.act('sample.weigh', { x: HOUSE_PTS[0][0], z: HOUSE_PTS[0][1], result: { weightG: 450 } });
+  assert(G.st(key) === 'done', `25 birds from 3 parts: ${G.st(key)}`);
+  const T = world(WEEK2, { day: 14, hour: 8.05, levels: { growth: 2 } });
+  T.at(14, 8.1);
+  for (let i = 0; i < 30; i++) { const [x, z] = HOUSE_PTS[i % 2]; T.act('sample.weigh', { x, z, result: { weightG: 450 } }); }
+  assert(T.st(key) === 'open', '30 birds from 2 parts: still open (three parts)');
+  // without Growth 2: the plate's 50 from 5 places
+  const N = world(WEEK2, { day: 14, hour: 8.05, levels: { growth: 1 } });
+  N.at(14, 8.1);
+  assert(N.jobs.byKey(key).def.done.n === 50 && N.jobs.byKey(key).def.done.sectors === 5 && !N.jobs.byKey(key).def.done.smaller, 'Growth 1: 50 birds from 5 places');
+  // Brooding 2: the vent sample 3 chicks from 3 parts, the crops 6 (d1-crop, a bad batch's b-crop48)
+  for (const [id, n] of [['d0-vent', 3], ['d1-crop', 6], ['b-crop48', 6]]) {
+    const v = jobVariant(jobById(id), perksWorld({ brooding: 2 }).perks), b = jobVariant(jobById(id), perksWorld({ brooding: 1 }).perks);
+    assert(v.done.n === n && v.done.sectors === 3 && v.done.std && sampleOf(v).smaller === 'quickSamples' && clean(v.done.label, id), `${id} with Brooding 2: ${JSON.stringify(v.done)}`);
+    assert(b.done.n === jobById(id).done.n && !b.done.smaller, `${id} with Brooding 1: the standard`);
+  }
+  // the strips and the where lines name the smaller sample
+  const rows = stripRows(STRIPS_CYCLE['w2-weigh'], { ...G.c(), weighings: () => ({ n: 25, sectors: 3, mean: 450, list: [] }) }, G.jobs.byKey(key));
+  assert(rows.some((x) => /Growth 2: 25 from 3 parts/.test(x.text || x.label || JSON.stringify(x))), `the weigh strip: ${JSON.stringify(rows).slice(0, 300)}`);
+  assert(/25 birds \(Growth 2\)/.test(plain(jobWhereNow('w2-weigh', (k) => k === 'frameWeigh'))) && /Three chicks/.test(plain(jobWhereNow('d0-vent', (k) => k === 'quickSamples'))), 'the where lines');
 }));
 
 test('r-raise with Water 3: the drinker part by the glance, the feeder part by hand; with Water 3 + Feed 3 both by glances', () => live(() => {
@@ -278,7 +312,7 @@ test('the passing check (Biosecurity 3): w2-check by ten birds seen walking from
 }));
 
 test('the job card\'s words: would be easier, with your next flock, handled lines, the fault\'s manual part first', () => live(() => {
-  assert(easierLine([{ key: 'frameWeigh', name: 'x', branch: 'growth', level: 2, has: false, toGo: 3, later: false }]) === 'Growth 2: weigh the frame in one press · 3 points to go', 'the Growth 2 line');
+  assert(easierLine([{ key: 'frameWeigh', name: 'x', branch: 'growth', level: 2, has: false, toGo: 3, later: false }]) === 'Growth 2: weigh 25 birds instead of 50 · 3 points to go', 'the Growth 2 line');
   assert(easierLine([{ key: 'autoScale', branch: 'growth', level: 3, has: false, toGo: 0, later: true }]) === 'Growth 3: read the automatic scale’s day average · with your next flock', 'level 3 in a first flock');
   assert(/2 points to go, then with your next flock$/.test(easierLine([{ key: 'autoWinch', branch: 'water', level: 3, has: false, toGo: 2, later: true }])), 'points, then the next flock');
   assert(easierLine([{ key: 'frameWeigh', branch: 'growth', level: 2, has: true, toGo: 0 }]) === '', 'nothing once held');

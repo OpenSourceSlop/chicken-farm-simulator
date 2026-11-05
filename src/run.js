@@ -439,7 +439,10 @@ export function createRun({ level, save, events, farm, env, records } = {}) {
       return LEVELS.map((def) => {
         const e = levels[def.id];
         const state = !e ? 'not reached' : def.id === levelId && e.state === 'reached' ? 'playing' : e.state === 'passed' ? 'passed' : e.state === 'failed' ? 'not passed' : 'reached';
-        return { id: def.id, n: def.n, title: def.title, short: def.short, days: RUN_CARD.days(def), target: RUN_CARD.target[def.id] || '', state,
+        // the farmer's choice after the skills review: with Growth 2 the weigh-in's hand weighing is 25 birds
+        let target = RUN_CARD.target[def.id] || '';
+        try { if (level.perks?.has?.('frameWeigh')) target = target.replace('weigh 50 birds', 'weigh 25 birds (Growth 2)'); } catch { /* the card as it is */ }
+        return { id: def.id, n: def.n, title: def.title, short: def.short, days: RUN_CARD.days(def), target, state,
           key: e?.key ?? null, keyText: e && e.state !== 'reached' ? keyText(def.id, e.key) : '', starts: e ? [...e.starts] : [], attempts: e?.attempts ?? 0,
           canReplay: !!e,
           // Phase 4: the saved starts replay under the run's condition; a standard start may take another (a new run)

@@ -3,7 +3,7 @@
 // records (notebook, rows, missed jobs) and the checkpoint's ctx, and returns { tier, detail } or null (nothing
 // to measure yet). Package "sim", pure logic. The detail is the measured value in plain words, never a verdict.
 import { PLAN_CONTRACT, HARVEST, HEAT, CLEAN, weightAt, nippleHeightCmAt, flowTargetAt, houseSector, levelById } from './config.js';
-import { weighDayDone } from './skills-rules-payoff.js';
+import { weighDayDone, sampleNeed } from './skills-rules-payoff.js';
 
 const prob = (farm, id) => farm.problems.find((p) => p.id === id) || null;
 const day = (farm, d) => (farm.stats.daily && farm.stats.daily[d]) || {};
@@ -96,7 +96,8 @@ const sameDay = (id) => (farm) => {
 
 const RULES_B = {
   // ---------------- Body Temperature & Comfort ----------------
-  'vent-band': (farm) => { const r = farm.stats.ventReadings.slice(0, 5); if (r.length < 5) return null; const n = r.filter((v) => v.tempC >= 39.4 && v.tempC <= 40.5).length; return { tier: n >= 4 ? 0 : null, detail: `${n} of the first 5 vent temperatures at 39.4–40.5 °C` }; },
+  // all but one of the first sample's vent readings (the first 5; the first 3 with Brooding 2's smaller sample)
+  'vent-band': (farm) => { const N = sampleNeed(farm, 'sample.vent', 0).n, r = farm.stats.ventReadings.slice(0, N); if (r.length < N) return null; const n = r.filter((v) => v.tempC >= 39.4 && v.tempC <= 40.5).length; return { tier: n >= N - 1 ? 0 : null, detail: `${n} of the first ${N} vent temperatures at 39.4–40.5 °C` }; },
   'comfort-w2': comfortIn('week2', 0.9), 'comfort-w3': comfortIn('week3', 0.9), 'comfort-fin': comfortIn('finish', 0.85),
   'no-chill-w2': (farm) => { const h = sum(farm, levelDays('week2'), 'chill'); return { tier: h < 1e-6 ? 0 : null, detail: h < 1e-6 ? 'no tunnel chill on the young birds' : `${(Math.round(h * 10) / 10)} h of tunnel air on chilled birds` }; },
   'panting-short': (farm) => { const h = sum(farm, range(22, 35), 'pant'); return { tier: tierAt(h, [(v) => v <= 60, (v) => v <= 45]), detail: `${Math.round(h)} hours of panting per bird in weeks 4–5` }; },
@@ -174,7 +175,7 @@ const RULES_B = {
   // ---------------- Growth & Performance ----------------
   'w14-weight': weight(14), 'w21-weight': weight(21), 'w35-weight': weight(35),
   // Skills update (SKILLS.md §2.3): a clean scale read with 300 weighings or more counts as the day's weighing (Growth 3)
-  'weighed-weekly': (farm) => { const n = [7, 14, 21, 28, 35, 40].filter((d) => weighDayDone(farm, d)).length; return { tier: n === 6 ? 0 : null, detail: `50 birds weighed on ${n} of the 6 weigh days` }; },
+  'weighed-weekly': (farm) => { const n = [7, 14, 21, 28, 35, 40].filter((d) => weighDayDone(farm, d)).length; return { tier: n === 6 ? 0 : null, detail: `the day's sample birds (50, or 25 with Growth 2) weighed on ${n} of the 6 weigh days` }; },
   'harvest-fcr': (farm) => { const r = farm.harvest.result; if (!r || r.fcr == null) return null; return { tier: tierAt(r.fcr, [(v) => v <= 1.75 + 1e-9, (v) => v <= 1.65 + 1e-9]), detail: `feed conversion ${r.fcr.toFixed(2)}` }; },
   'harvest-uniformity': (farm) => { const r = farm.harvest.result; if (!r || r.uniformityPct == null) return null; return { tier: r.uniformityPct >= 70 ? 0 : null, detail: `uniformity ${Math.round(r.uniformityPct)} % at the day ${r.uniformityDay} weighing` }; },
   'epef': (farm) => { const r = farm.harvest.result; if (!r || r.epef == null) return null; return { tier: tierAt(r.epef, [(v) => v >= 340, (v) => v >= 390]), detail: `production efficiency ${r.epef}` }; },

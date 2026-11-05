@@ -118,7 +118,7 @@ function cardsOf(res, def) {
           res.claimedApart && res.claimed ? `${int(res.claimed)} graded out on day 0, claimed from the hatchery (not counted here)` : null,
           res.claimedApart && !res.claimed && res.gradedOut ? `${int(res.gradedOut)} graded out on day 0 counted as culls: the hatchery was not told that day` : null].filter(Boolean).join(' · ')) : null,
         res.byCause ? h('p', { class: 'big-sub' }, `By cause: ${res.byCause}`) : null),
-      res.uniformityPct != null ? big('Uniformity', `${fmt0(res.uniformityPct)} %`, 'birds within ±10 % of the mean, hand weighing') : null,
+      res.uniformityPct != null ? big('Uniformity', `${fmt0(res.uniformityPct)} %`, `birds within ±10 % of the mean, hand weighing${res.weighedN ? ` of ${int(res.weighedN)} birds` : ''}`) : null,
       res.fcr != null ? big('FCR', two(res.fcr), 'feed ÷ live weight so far') : null);
   }
   if (res.levelId === 'plan') {
@@ -149,7 +149,8 @@ function cardsOf(res, def) {
     res.weightG != null ? big(`Day ${res.targetDay} weight`, `${int(res.weightG)} g`, `${int((res.share ?? 0) * 100)} % of the ${int(res.targetG)} g target · ${res.weighedByHand ? `${int(res.weighedN)} birds weighed` : 'automatic scale, not weighed by hand'}`)
       : big(res.early ? 'Ended early' : `Day ${res.targetDay} weight`, res.early ? `Day ${fmt0(res.day)}, ${endHour(res)}` : 'not weighed', `No day ${res.targetDay} weighing.`),
     deathsCard(res, def),
-    res.uniformityPct != null ? big('Uniformity', `${fmt0(res.uniformityPct)} %`, 'birds within ±10 % of the mean, hand weighing') : null,
+    // the farmer's choice after the skills review: the uniformity of the hand weighing says its birds (25 with Growth 2)
+    res.uniformityPct != null ? big('Uniformity', `${fmt0(res.uniformityPct)} %`, `birds within ±10 % of the mean, hand weighing${res.weighedN ? ` of ${int(res.weighedN)} birds` : ''}`) : null,
     res.fcr != null ? big('FCR', two(res.fcr), 'feed ÷ live weight so far') : null);
 }
 

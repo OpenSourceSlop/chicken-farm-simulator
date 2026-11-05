@@ -16,6 +16,8 @@ import { buildPlate } from './ui-boards.js';
 // Skills update (SKILLS.md §3.5, §3.8, §3.0): Next chick (Brooding 2), Weigh the frame (Growth 2), the Records line (Growth 1)
 import { AUTO, weightAt } from './config.js';
 import { perkHas, live } from './ui-cycle-skills.js';
+// the farmer's choice after the skills review: the open weigh job's own sample (Growth 2: 25 birds from 3 parts)
+import { baseDoneId, sampleOf } from './job-variants.js';
 
 // A chick drawn in 2D (top-left origin 0..60). flip = on its back, cull = gone.
 function chickSvg({ flip = false, size = 1 } = {}) {
@@ -225,7 +227,16 @@ export function buildWeighPanel(L) {
   const allMean = readout('All birds weighed today');
   const nextBtn = button({ class: 'btn btn--machine btn--go' }, 'Weigh next');
   const allBtn = button({ class: 'btn btn--machine' }, 'Weigh all');
-  let frame = null, queue = [], weights = [], auto = false, wait = 0;
+  let frame = null, queue = [], weights = [], auto = false, wait = 0, left = Infinity;
+  /** The open weigh job's sample ({ n, sectors, smaller }) and how many birds it still needs today. */
+  const need = () => {
+    const W = L.jobs().filter((j) => baseDoneId(j.def) === 'sample.weigh' && j.def.kind !== 'problem');
+    const i = W.find((j) => j.status === 'open') || W.find((j) => j.day === L.env.dayNumber && j.status === 'done');
+    const smp = i ? sampleOf(i.def) : null;
+    return smp ? { ...smp, left: Math.max(0, smp.n - L.weighings().n) } : null;
+  };
+  /** A one-press key (Weigh all, Weigh the frame) weighs the birds the weighing still needs, else the whole frame. */
+  const shareNow = () => { const nd = need(); return nd?.smaller && nd.left > 0 ? Math.min(queue.length, nd.left) : queue.length; };
   const weighOne = () => {
     if (!frame || !queue.length) return;
     const b = queue.shift();
@@ -235,17 +246,19 @@ export function buildWeighPanel(L) {
     draw();
   };
   nextBtn.addEventListener('click', () => { shell.foldPlates(); auto = false; wait = 0.4; nextPending = true; });
-  allBtn.addEventListener('click', () => { shell.foldPlates(); auto = true; wait = 0.4; });
+  allBtn.addEventListener('click', () => { shell.foldPlates(); auto = true; wait = 0.4; left = shareNow(); });
   let nextPending = false;
   // Skills update (Growth 2, frameWeigh): the scale with memory weighs every bird in the frame in AUTO.frameWeighSec, each
-  // weight kept (one sample.weigh a bird, as Weigh all sends); the samples stay the boards' 50 birds from five places
+  // weight kept (one sample.weigh a bird, as Weigh all sends), up to the birds the open weigh job still needs
   const frameBtn = button({ class: 'btn btn--machine btn--go', hidden: true, 'data-skill-key': 'frameWeigh', 'aria-label': 'Weigh the frame: every bird in the frame in one press (Growth 2)' }, 'Weigh the frame');
   let frameAll = false;
-  frameBtn.addEventListener('click', () => { if (!queue.length) return; shell.foldPlates(); auto = false; nextPending = false; frameAll = true; wait = AUTO.frameWeighSec; draw(); });
+  frameBtn.addEventListener('click', () => { if (!queue.length) return; shell.foldPlates(); auto = false; nextPending = false; frameAll = true; left = shareNow(); wait = AUTO.frameWeighSec; draw(); });
   // Skills update (Growth 1, recordsTargets): the day's target beside the weighing ("Day 14 target 456 g (records)")
   const target = h('p', { class: 'equip-note', hidden: true });
+  // the job's sample (the plate's 50 from 5 places, or Growth 2's 25 from 3 parts) and what is left of it today
+  const needNote = h('p', { class: 'equip-note weigh-need', hidden: true });
   const spread = h('div', { class: 'cyc-chart cyc-spread', hidden: true });
-  shell.main.append(h('div', { class: 'equip-reads' }, frameMean.el, allMean.el), target, list, h('div', { class: 'equip-btns' }, frameBtn, nextBtn, allBtn), spread,
+  shell.main.append(h('div', { class: 'equip-reads' }, frameMean.el, allMean.el), needNote, target, list, h('div', { class: 'equip-btns' }, frameBtn, nextBtn, allBtn), spread,
     h('p', { class: 'equip-note' }, 'Close the panel to let the birds go; the frame stays in your hands for the next place.'));
   function drawSpread() {
     const on = !!L.skills?.unlocked?.('uniformityChart');
@@ -266,6 +279,13 @@ export function buildWeighPanel(L) {
     frameBtn.hidden = !perkHas(L, 'frameWeigh');
     frameBtn.disabled = !queue.length || frameAll;
     if (frameAll) setText(frameBtn, 'Weighing the frame…'); else setText(frameBtn, 'Weigh the frame');
+    // Growth 2's smaller sample only (the plate's 50 from 5 places needs no line: the panel as in Phase 3)
+    const nd = need();
+    needNote.hidden = !nd?.smaller;
+    if (nd?.smaller) {
+      const head = `Growth 2: ${nd.n} birds from ${nd.sectors} parts (an experienced stockman’s smaller sample; the plate’s standard is ${nd.std?.n ?? 50} from ${nd.std?.sectors ?? 5} places)`;
+      setText(needNote, `${head} · ${nd.left > 0 ? `${nd.left} more to weigh${queue.length ? `: the keys weigh ${Math.min(queue.length, nd.left)} of this frame` : ''}` : `${nd.n} weighed today: close the panel to let the frame’s birds go`}`);
+    }
     const d = L.env.dayNumber, showT = live() && perkHas(L, 'recordsTargets') && d >= 0 && d <= 42;
     target.hidden = !showT;
     if (showT) { const tg = weightAt(d); setText(target, `Day ${d} target ${int(tg)} g (records)${all.n ? ` · your mean today ${int(all.mean)} g = ${int((100 * all.mean) / tg)} % of it` : ''}`); }
@@ -273,18 +293,22 @@ export function buildWeighPanel(L) {
   }
   return {
     el: shell.el,
-    take(f) { frame = f; queue = (f.birds || []).slice(); weights = []; auto = false; nextPending = false; frameAll = false; draw(); },
+    take(f) { frame = f; queue = (f.birds || []).slice(); weights = []; auto = false; nextPending = false; frameAll = false; left = Infinity; draw(); },
     onOpen() { shell.refreshPlates(); },
     onClose() { if (frame) { L.flock?.releaseGroup?.(); frame = null; } },
     update(dt) {
       if (frameAll) {
         wait -= dt;
-        if (wait <= 0 || !queue.length) { while (queue.length) weighOne(); frameAll = false; draw(); }
+        if (wait <= 0 || !queue.length) { while (queue.length && left > 0) { weighOne(); left--; } frameAll = false; left = Infinity; draw(); }
         return;
       }
       if ((auto || nextPending) && queue.length) {
         wait -= dt;
-        if (wait <= 0) { weighOne(); nextPending = false; wait = 0.4; if (!queue.length) auto = false; }
+        if (wait <= 0) {
+          weighOne(); nextPending = false; wait = 0.4;
+          if (auto) left--;
+          if (!queue.length || (auto && left <= 0)) { auto = false; left = Infinity; draw(); }
+        }
       }
     },
   };

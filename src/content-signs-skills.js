@@ -1,13 +1,15 @@
 // The sign and plate lines of the skills update (SKILLS.md §3, §3.12) — contract data of the design round. Owner: package
 // "jobs" (it may reword a line, never move a fact to a guide). Every line is general practice: nothing about controllers,
-// winches, scales, sample sizes or helpers is on the closed guide lists (PHASE2.md §6.1, PHASE3.md §5.1). The lines describe
+// winches, scales, the smaller samples or helpers is on the closed guide lists (PHASE2.md §6.1, PHASE3.md §5.1). The lines describe
 // farm equipment and practice, so they show from the start of a run whatever the farmer's skills; only the build switch
 // SKILLS_UPDATE.live puts them on the boards (content-signs-cycle.js boardsForDay calls mergeBoardsSkills).
 const g = 'general';
 const it = (text, source = g, fromDay) => (fromDay != null ? { text, source, fromDay } : { text, source });
 
 /** board id -> lines added at the end of the board (fromDay: shown from that HUD day). Revised after the review: the sight
- *  tubes instead of test valves, no sample sizes, the bucket emptied after every round, the sensor checked, the stage table. */
+ *  tubes instead of test valves, the bucket emptied after every round, the sensor checked, the stage table; after the
+ *  farmer's choice (SKILLS.md §17 Q2) the smaller samples an experienced stockman reads (Growth 2, Brooding 2), the boards'
+ *  own figures staying the standard. */
 export const SKILL_BOARD_ITEMS = {
   'water-supply': [it('Each line’s sight tube shows its water pressure: a column at the drinker plate’s mark gives about the plate’s flow; cup-test only a line that reads off, at its own regulator. Blocked nipples do not show on a tube: watch the meter.')],
   drinker: [
@@ -29,6 +31,7 @@ export const SKILL_BOARD_ITEMS = {
   ],
   'sign-chicks': [
     it('Two people tipping the boxes get the chicks onto the litter in half the time; weigh the sample box before the first stack is tipped.'),
+    it('The standard sample is five vent temperatures and ten crops from three parts of the brooding floor; an experienced stockman reads a smaller one: three vent temperatures, one from each part, and six crops.'),
   ],
   // (review round: the plate already says when to order and when the truck comes; the skills line adds only the order's
   // confirmation and the slide valves the gauge's days read)
@@ -39,6 +42,7 @@ export const SKILL_BOARD_ITEMS = {
   'controller-lights': [it('Dawn and dusk dimming over about 20 minutes keeps the birds calm when the lights change.', g, 8)],
   'bird-scale': [
     it('A hand scale with a memory weighs the birds in the frame one after another and keeps every weight for the spread.'),
+    it('An experienced stockman reads a smaller hand weighing: 25 birds from three parts of the house, the frame set down in each; 50 from 5 places stays the standard.'),
     it('An automatic platform scale weighs the birds that step on it all day; a fouled platform reads light and counts few birds: clean it and weigh by hand.'),
   ],
   'sign-health': [

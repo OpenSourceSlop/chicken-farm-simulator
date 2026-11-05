@@ -994,9 +994,9 @@ const ORDER_JOBS = ['p-order-feed', 'w2-order', 'w45-order', 'f-order'];
 const RECORD_JOBS = ['r-record', 'prep-record'];
 // Levels 2 and 3 (SKILLS.md §3): { branch, level, step: 'faster' | 'auto', name, saves (the tree's plain words: what it
 // saves), where (the unlock caption's "use it at"), jobs (the jobs it eases: the job card and the strips), by (the package
-// that builds it), system / fault (an automated one: AUTO_SYSTEMS, FAULTS) }. No payoff changes a job's sample size (the
-// boards' 5 vent chicks, 10 crops and 50 birds hold). A text may hold {key:<keys.js action id>} tokens (key-words.js
-// fillKeys when drawn: 'phone' is the jobs package's new R key).
+// that builds it), system / fault (an automated one: AUTO_SYSTEMS, FAULTS), need (Growth 2 and Brooding 2 only: the smaller
+// sample the job's count rule takes, { [action id]: { n, sectors } }; SAMPLE_STANDARD is the boards' own) }. A text may hold
+// {key:<keys.js action id>} tokens (key-words.js fillKeys when drawn: 'phone' is the jobs package's new R key).
 export const PAYOFFS = {
   // Water
   waterAllLines: { branch: 'water', level: 2, step: 'faster', name: 'Read all four sight tubes at the water supply', saves: 'Saves the four one-minute flow tests on flow-test mornings: a cup test only on a line that reads off',
@@ -1019,8 +1019,12 @@ export const PAYOFFS = {
   autoBrooders: { branch: 'heating', level: 3, step: 'auto', system: 'brooders', fault: 'sensor-drift', name: 'The brooders follow the brooder sign\'s curve',
     saves: 'Saves setting the thermostat by the table every morning to day 21 and starting the pre-heat', where: 'the climate controller: compare its sensor with the thermometer beside it', jobs: ['prep-preheat'], by: 'model' },
   // Chick Arrival & Brooding
-  quickSamples: { branch: 'brooding', level: 2, step: 'faster', name: 'Next chick and a longer reach for the chick samples', saves: 'Saves putting each chick down, stepping and catching again for the vent and crop samples',
-    where: 'the chick in your hand: Next chick', jobs: ['d0-vent', 'd1-crop', 'b-crop48'], by: 'panels' },
+  // the farmer's choice after the skills review (SKILLS.md §3.5, §17 Q2): Brooding 2 is the smaller sample an experienced
+  // stockman reads (3 vent chicks, one from each part of the floor, 6 crops; the sign's 5 and 10 stay the standard, its
+  // general-practice line says the smaller one), with Next chick and the 2 m reach as extras
+  quickSamples: { branch: 'brooding', level: 2, step: 'faster', name: 'Smaller chick samples: 3 vent temperatures and 6 crops', saves: 'Saves catching 2 of the 5 vent chicks and 4 of the 10 crop chicks; Next chick and a longer reach for the rest',
+    where: 'the chicks on the brooding floor: one vent chick from each of three parts ({key:use} picks one up; Next chick in the hand)', jobs: ['d0-vent', 'd1-crop', 'b-crop48'], by: 'panels',
+    need: { 'sample.vent': { n: 3, sectors: 3 }, 'sample.crop': { n: 6, sectors: 3 } } },
   boxHelper: { branch: 'brooding', level: 3, step: 'auto', name: 'A helper tips the chick boxes with you on arrival day', saves: 'Saves carrying half of the six stacks of chick boxes',
     where: 'the chick truck on arrival day, once the sample box is weighed: the helper takes the next stack', jobs: ['d0-place'], by: 'scene' },
   // Feed & Digestion
@@ -1034,8 +1038,12 @@ export const PAYOFFS = {
   autoLights: { branch: 'lighting', level: 3, step: 'auto', system: 'lights', name: 'The controller changes the light program with the age and dims at dawn and dusk',
     saves: 'Saves setting the light program at each change of week', where: 'the climate controller\'s Lights tab', jobs: ['prep-lights', 'w2-lights'], by: 'model' },
   // Growth & Performance
-  frameWeigh: { branch: 'growth', level: 2, step: 'faster', name: 'The scale with memory weighs the frame\'s birds in one press', saves: 'Saves a press and the wait for every bird at each of the five places, and finding the places still to weigh',
-    where: 'the catching frame on weigh days: Weigh the frame', jobs: WEIGH_JOBS, by: 'panels' },
+  // the farmer's choice after the skills review (SKILLS.md §3.8, §17 Q2): Growth 2 is the smaller hand weighing (25 birds
+  // from three parts of the house: the frame holds about ten, so three frames; the plate's 50 from 5 places stays the
+  // standard, its general-practice line says the smaller one), with Weigh the frame as the extra
+  frameWeigh: { branch: 'growth', level: 2, step: 'faster', name: 'Hand weighing from 25 birds instead of 50', saves: 'Saves half the birds and two of the five frames on every weigh day: 25 birds from three parts of the house',
+    where: 'the catching frame on weigh days: set it down in three parts of the house (Weigh the frame weighs it in one press)', jobs: WEIGH_JOBS, by: 'panels',
+    need: { 'sample.weigh': { n: 25, sectors: 3 } } },
   autoScale: { branch: 'growth', level: 3, step: 'auto', system: 'scale', fault: 'scale-fouled', name: 'The automatic bird scale gives the day\'s weight',
     saves: 'Saves hand weighing on weigh days: read the scale\'s day average', where: 'the bird scale\'s display', jobs: WEIGH_JOBS, by: 'model' },
   // Body Temperature & Comfort
@@ -1054,6 +1062,12 @@ export const PAYOFFS = {
   phoneRecord: { branch: 'planning', level: 3, step: 'auto', name: 'The daily record on the phone; the next plan starts from this cycle', saves: 'Saves the walk to the office every evening to sign the day\'s record',
     where: 'the phone ({key:phone}): Sign today\'s record', jobs: RECORD_JOBS, by: 'jobs' },
 };
+
+/** The boards' sample sizes (the sign-chicks and bird-scale plates: the standard, shown on the boards); Growth 2 and
+ *  Brooding 2 take PAYOFFS[k].need instead (the boards' general-practice line: an experienced stockman's smaller sample). */
+export const SAMPLE_STANDARD = { 'sample.vent': { n: 5, sectors: 3 }, 'sample.crop': { n: 10, sectors: 3 }, 'sample.weigh': { n: 50, sectors: 5 } };
+/** The payoff whose smaller sample a sample action takes ('frameWeigh' for sample.weigh …), or null. */
+export const smallerSampleKey = (actionId) => Object.keys(PAYOFFS).find((k) => PAYOFFS[k].need?.[actionId]) || null;
 
 // Level 3 automation (SKILLS.md §4): the farm's controllers (farm-auto.js, package "model"). glanceAt: the panels whose
 // opening for AUTO.glanceSec emits auto.glance { system } (the handed-over job's quick look); jobs: { jobId: part } — the

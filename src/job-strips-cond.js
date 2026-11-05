@@ -95,7 +95,9 @@ export const STRIPS_COND = {
         line('Until day 3 at 06:00; then back to the sign’s row.')];
     } },
   'b-crop48': { panels: { 'chick-in-hand': null },
-    rows: (c, inst) => { const L = inst.st?.list || [], s = new Set(L.map((x) => x.s)).size; return [line('Chick sign: at 48 hours the crops of nearly every chick are full and soft.'), step(`${L.length} of 10 chicks felt, ${s} of 3 parts of the floor`, L.length >= 10 && s >= 3)]; } },
+    // the farmer's choice after the skills review: Brooding 2's 6 crops (the rule's own n), the chick sign's 10 the standard
+    rows: (c, inst) => { const L = inst.st?.list || [], s = new Set(L.map((x) => x.s)).size, r = inst.def?.done || {}, n = r.n || 10, k = r.sectors || 3;
+      return [line('Chick sign: at 48 hours the crops of nearly every chick are full and soft.'), step(`${L.length} of ${n} chicks felt, ${s} of ${k} parts of the floor${r.smaller ? ' (Brooding 2: an experienced stockman’s smaller sample; the chick sign’s standard is 10)' : ''}`, L.length >= n && s >= k)]; } },
   // ---------------- a water problem ----------------
   'w-test': { panels: { 'water-supply': null }, title: 'Test the well water',
     rows: (c, inst) => [line('Water supply plate (water problem): iron in well water over about 0.3 mg/L clogs the filter and the nipples.'), step('Water test kit: Test the water (iron, pH, chlorine)', inst.status === 'done')] },

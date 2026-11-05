@@ -3,7 +3,7 @@
 // jobs) and the checkpoint's ctx, and returns { tier, detail } or null (nothing to measure yet). Package "model", pure
 // logic. The detail is the measured value in plain words, never a verdict. Every threshold is on the sign the job links
 // (general practice) or a measured outcome the milestone's text states.
-import { weightAt, AUTO } from './config.js';
+import { weightAt, AUTO, SAMPLE_STANDARD } from './config.js';
 
 const day = (farm, d) => (farm.stats.daily && farm.stats.daily[d]) || {};
 const range = (a, b) => { const o = []; for (let d = a; d <= b; d++) o.push(d); return o; };
@@ -23,9 +23,16 @@ export function dayWeight(farm, d) {
   if (s && !s.fouled && s.n >= AUTO.scaleMinReads && s.meanG != null) return { meanG: s.meanG, n: s.n, by: 'scale' };
   return null;
 }
-/** A weigh day counts for weighed-weekly: 50 birds by hand, or a clean scale read of 300 weighings or more (SKILLS.md §2.3). */
+/** The sample the day's job asked for (the farmer's choice after the skills review: Growth 2's 25 birds, Brooding 2's 3 vent
+ *  chicks and 6 crops; level.js keeps them in farm.stats.samples when such a job opens), else the boards' standard. */
+export function sampleNeed(farm, id, d) {
+  const s = farm?.stats?.samples?.[id]?.[d];
+  return s && s.n > 0 ? s : SAMPLE_STANDARD[id];
+}
+/** A weigh day counts for weighed-weekly: the day's sample by hand (50 birds, 25 with Growth 2), or a clean scale read of
+ *  300 weighings or more (SKILLS.md §2.3). */
 export function weighDayDone(farm, d) {
-  if (farm.stats.weighed.filter((x) => Math.floor(x.t) === d).length >= 50) return true;
+  if (farm.stats.weighed.filter((x) => Math.floor(x.t) === d).length >= sampleNeed(farm, 'sample.weigh', d).n) return true;
   const s = farm.stats.scaleReads && farm.stats.scaleReads[d];
   return !!(s && !s.fouled && s.n >= AUTO.scaleMinReads);
 }

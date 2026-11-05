@@ -1,6 +1,8 @@
 // Job variants: a job as the farmer's payoffs make it (SKILLS.md §3, §4.3, §12.6). Pure logic. Owner: package "jobs".
-// No variant changes a job's sample size (the boards' 5 vent chicks, 10 crops, 50 birds hold) and no variant touches a
-// problem job's rule (a problem job may only get new places: the pocket phone, the silo gauge).
+// Two variants take a smaller sample, as the farmer chose after the skills review (Growth 2: 25 birds from three parts of
+// the house; Brooding 2: 3 vent chicks and 6 crops from three parts of the floor; config PAYOFFS[k].need): the boards' 5,
+// 10 and 50 stay the standard on the signs. No variant touches a problem job's rule (a problem job may only get new places:
+// the pocket phone, the silo gauge).
 //
 //   jobVariant(jd, perks, ctx?) -> jd'   the job definition as the payoffs give it now, made when an instance is made
 //                                        (job-engine.js createJobEngine({ variant }) calls it in make(); restore() uses
@@ -26,18 +28,21 @@
 //         phoneRecord    r-record's / prep-record's place: the phone (Sign today's record)
 //         tallyBucket    r-dead-am / r-dead-pm: title 'Pick up dead birds (the tally counts them) and empty the bucket at
 //                        the bin'; the rule as before (dead-cleared: the bucket emptied at the bin)
-//         frameWeigh     the weigh jobs' rule as before (50 birds from 5 places); the strip names Weigh the frame
+//         frameWeigh     the weigh jobs' count takes Growth 2's smaller sample (25 birds from 3 parts: smallerRule); the
+//                        strip and the weigh panel name it, Weigh the frame weighs a frame in one press
+//         quickSamples   d0-vent's count 3 chicks, d1-crop's and b-crop48's 6 (from 3 parts: smallerRule); Next chick
+//                        and the 2 m reach as before
 //     - jd'.variant = { v: VARIANT_V, keys: [payoff keys applied], parts: { [system]: part } } (saved with the instance: a
 //       resume makes the same rule, whatever the perks are then)
 //   variantKeyOf(jd') -> 'key1+key2' | ''   what the engine saves beside the instance
 //   rebuildVariant(jd, saved, perks) -> jd' the saved instance's rule (its keys and parts as saved, whatever the perks are now)
 // The glance: a panel of AUTO_SYSTEMS[system].glanceAt open AUTO.glanceSec with perks.auto(system) sends ui-only
 // auto.glance { system } once per opening (the bird scale's display sends scale.read too; the variant matches auto.glance).
-import { AUTO_SYSTEMS, PAYOFFS, SKILLS_UPDATE } from './config.js';
+import { AUTO_SYSTEMS, PAYOFFS, SKILLS_UPDATE, SAMPLE_STANDARD } from './config.js';
 
 export const VARIANT_V = 1;
 /** The payoffs that change a job's rule, title or places (the rest only add strip rows and keys at the panels). */
-export const RULE_KEYS = ['waterAllLines', 'passCheck', 'siloOrder', 'pocketPhone', 'phoneRecord', 'tallyBucket', 'frameWeigh'];
+export const RULE_KEYS = ['waterAllLines', 'passCheck', 'siloOrder', 'pocketPhone', 'phoneRecord', 'tallyBucket', 'frameWeigh', 'quickSamples'];
 /** Of those, the ones that only move the places (allowed on a problem job too: its rule never changes). */
 export const PLACE_KEYS = new Set(['siloOrder', 'pocketPhone', 'phoneRecord']);
 /** The words of a handed-over part (the job card's "drinker lines: handled by …"); 'whole' has none. */
@@ -102,6 +107,24 @@ function seenRule(done) {
     label: `${done.n} birds from ${done.sectors} parts of the floor: seen walking as you pass, or watched walking in the hand` };
 }
 
+/** A count rule with a payoff's smaller sample (Growth 2, Brooding 2: PAYOFFS[key].need[rule.id]); `std` keeps the boards'
+ *  standard and `smaller` the payoff, for the strips, the panels and the milestones. Any other rule as it is. */
+export function smallerRule(done, key) {
+  const need = PAYOFFS[key]?.need?.[done?.id];
+  if (!done || done.type !== 'count' || !need) return done;
+  const std = SAMPLE_STANDARD[done.id] || { n: done.n, sectors: done.sectors };
+  return { ...done, n: need.n, sectors: need.sectors, std: { n: std.n, sectors: std.sectors }, smaller: key, label: smallerLabel(done, need, std, key) };
+}
+const SMALLER_WHAT = { 'sample.vent': ['chicks', 'one from each part', 'the chick arrival sign'], 'sample.crop': ['crops felt', 'two from each part', 'the chick arrival sign'],
+  'sample.weigh': ['birds weighed', 'the frame set down in each', 'the bird scale plate'] };
+/** "25 birds weighed from 3 parts of the house, the frame set down in each (Growth 2: an experienced stockman's smaller
+ *  sample; the bird scale plate's standard is 50 from 5 places)". */
+export function smallerLabel(done, need, std, key) {
+  const [what, how, board] = SMALLER_WHAT[done.id] || ['samples', '', 'the sign'];
+  const where = done.sectorsOf === 'house' ? 'parts of the house' : 'parts of the floor';
+  const lvl = `${PAYOFFS[key]?.branch === 'growth' ? 'Growth' : 'Brooding'} ${PAYOFFS[key]?.level ?? 2}`;
+  return `${need.n} ${what} from ${need.sectors} ${where}${how ? `, ${how}` : ''} (${lvl}: an experienced stockman’s smaller sample; ${board}’s standard is ${std.n} from ${std.sectors} ${done.id === 'sample.weigh' ? 'places' : 'parts'})`;
+}
 /** The job with the given payoff keys and handed-over parts applied (the one builder: make and resume). */
 export function applyVariant(jd, { keys = [], parts = {} } = {}) {
   if (!jd || (!keys.length && !Object.keys(parts).length)) return jd;
@@ -111,6 +134,8 @@ export function applyVariant(jd, { keys = [], parts = {} } = {}) {
   if (has('waterAllLines') && jd.id === 'r-drinkers') done = tubesRule(done);
   if (has('passCheck') && jd.id === 'w2-check') done = seenRule(done);
   if (has('tallyBucket') && DEAD_JOBS.has(jd.id)) title = DEAD_TITLE;
+  // the smaller samples (before a hand-over wraps the rule: Growth 3's any[ GLANCE, the 25 birds ])
+  for (const k of ['frameWeigh', 'quickSamples']) if (has(k) && (PAYOFFS[k].jobs || []).includes(jd.id)) done = smallerRule(done, k);
   if (!problem) {
     for (const [system, part] of Object.entries(parts)) {
       if (!AUTO_SYSTEMS[system]) continue;
@@ -152,7 +177,6 @@ export function rebuildVariant(jd, saved, perks) {
   if (!jd || !saved || (saved.v ?? VARIANT_V) > VARIANT_V) return jd;
   return applyVariant(jd, { keys: Array.isArray(saved.keys) ? saved.keys : [], parts: saved.parts && typeof saved.parts === 'object' ? saved.parts : {} });
 }
-/** The system of an instance's handed-over parts: [{ system, part }] (from its variant). */
 /** The job's own rule (and its state) under a whole hand-over any[ GLANCE, the job as before ] (integration): the code
  *  that reads a rule's shape — level.js's weigh-in checkpoint and sample jobs, job-next's frame places — reads this one, so
  *  a weigh job handed to the bird scale (Growth 3) still ends its week on the signing and still leads the frame. */
@@ -167,3 +191,8 @@ export const baseDoneId = baseId;
 export const handedParts = (def) => Object.entries(def?.variant?.parts || {}).map(([system, part]) => ({ system, part }));
 /** The variant applied a payoff key to this job (the rule, title or places of the instance). */
 export const variantHas = (def, key) => !!def?.variant?.keys?.includes(key);
+/** The sample a job's own rule takes now: { n, sectors, std?, smaller? } (std / smaller only for a payoff's smaller sample). */
+export function sampleOf(def) {
+  const r = baseRule(def).rule;
+  return r && r.type === 'count' ? { n: r.n, sectors: r.sectors || 0, std: r.std || null, smaller: r.smaller || null } : null;
+}
