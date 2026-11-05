@@ -628,6 +628,142 @@ test('fix round: no job, strip, Next: line, sign fact or intro card names a farm
   assert(/press T at your feet/.test((await import('../src/content-jobs.js')).jobWhere('d0-floor')), 'the defaults again with no keys object');
 });
 
+// ---------------- Skills update (SKILLS.md §12) ----------------
+test('skills update: payoffs, views, systems and faults well formed; every job they name exists', async () => {
+  const C = await import('../src/config.js');
+  const { jobById } = await import('../src/content-jobs.js');
+  const { KEY_ACTIONS } = await import('../src/keys.js');
+  const { ACTION_IDS, UI_ACTION_IDS_SKILLS, EV: E } = await import('../src/events.js');
+  const BY = ['model', 'jobs', 'panels', 'scene'];
+  assert(Object.keys(C.PAYOFFS).length === 22, `22 payoffs: ${Object.keys(C.PAYOFFS).length}`);
+  for (const b of SKILL_BRANCHES) {
+    const lv = Object.values(C.PAYOFFS).filter((p) => p.branch === b.id).map((p) => `${p.level}:${p.step}`).sort().join(',');
+    assert(lv === '2:faster,3:auto', `${b.id}: payoff levels ${lv}`);
+    const views = Object.values(UNLOCKS).filter((u) => u.branch === b.id);
+    const was = C.SKILLS_UPDATE.live;
+    try { C.SKILLS_UPDATE.live = true; assert(views.map((u) => C.unlockLevel(u)).sort().join(',') === '1,2,3', `${b.id}: view levels while live`); } finally { C.SKILLS_UPDATE.live = was; }
+    const l1 = Object.entries(UNLOCKS).find(([, u]) => u.branch === b.id && u.level === 1);
+    assert(l1 && C.SKILL_VIEWS[l1[0]], `${b.id}: SKILL_VIEWS for its level 1 view`);
+  }
+  for (const [k, p] of Object.entries(C.PAYOFFS)) {
+    assert(BY.includes(p.by) && p.name && p.saves && p.where, `payoff ${k}: by / name / saves / where`);
+    for (const t of [p.name, p.saves, p.where]) assert(!VERDICT.test(t), `payoff ${k}: verdict word in "${t}"`);
+    for (const j of p.jobs) assert(jobById(j), `payoff ${k}: job ${j}`);
+    if (p.system) assert(C.AUTO_SYSTEMS[p.system]?.payoff === k && p.step === 'auto', `payoff ${k}: system ${p.system}`);
+    if (p.fault) assert(C.FAULTS[p.fault]?.system === p.system, `payoff ${k}: fault ${p.fault}`);
+    for (const [j, n] of Object.entries(p.need || {})) assert(jobById(j) && n.n > 0 && n.sectors <= n.n, `payoff ${k}: need of ${j}`);
+  }
+  for (const [k, v] of Object.entries(C.SKILL_VIEWS)) {
+    assert(UNLOCKS[k] && v.shows && v.where && !VERDICT.test(v.shows), `view ${k}`);
+    for (const j of v.jobs) assert(jobById(j), `view ${k}: job ${j}`);
+    if (v.keyId) assert(KEY_ACTIONS.some((a) => a.id === v.keyId), `view ${k}: key ${v.keyId}`);
+  }
+  for (const [id, s] of Object.entries(C.AUTO_SYSTEMS)) {
+    assert(C.PAYOFFS[s.payoff]?.system === id && s.glanceAt.length && !VERDICT.test(s.keeps), `system ${id}`);
+    for (const j of s.jobs) assert(jobById(j), `system ${id}: job ${j}`);
+  }
+  for (const [id, f] of Object.entries(C.FAULTS)) {
+    assert(C.AUTO_SYSTEMS[f.system] && f.fix.length && f.fix.every((a) => ACTION_IDS.includes(a)) && !VERDICT.test(f.what), `fault ${id}`);
+  }
+  for (const [c, plan] of Object.entries(C.FAULT_PLAN)) if (c !== 'window' && c !== 'rngMul') assert(c === 'normal' || CONDITIONS[c], `fault plan ${c}`);
+  for (const a of ['auto.glance', 'auto.reset', 'auto.calibrate', 'scale.read', 'scale.clean']) assert(ACTION_IDS.includes(a), `action ${a}`);
+  assert(UI_ACTION_IDS_SKILLS.includes('auto.glance') && E.PERKS && E.AUTO && E.FAULT && E.BIRD_SEEN, 'events');
+});
+
+test('skills update: the new milestones, the two-flock thresholds, the sign lines (general, verdict-free, on their boards)', async () => {
+  const C = await import('../src/config.js');
+  const { MILESTONES_PAYOFF } = await import('../src/skills-payoff.js');
+  const { SKILL_BOARD_ITEMS } = await import('../src/content-signs-skills.js');
+  const ids = new Set([...ALL_MILESTONES, ...MILESTONES_COND].map((m) => m.id));
+  const levelIds = LEVELS.map((l) => l.id);
+  for (const m of MILESTONES_PAYOFF) {
+    assert(!ids.has(m.id) && SKILL_BRANCHES.some((b) => b.id === m.branch) && levelIds.includes(m.level) && !VERDICT.test(m.text), `milestone ${m.id}`);
+    ids.add(m.id);
+  }
+  const lp = C.SKILLS_UPDATE.levelPoints;
+  assert(lp.length === 3 && lp[0] < lp[1] && lp[1] < lp[2] && C.SKILLS_UPDATE.flocks === 2, 'levelPoints');
+  for (const b of SKILL_BRANCHES) {
+    const max = [...ALL_MILESTONES, ...MILESTONES_PAYOFF].filter((m) => m.branch === b.id).reduce((a, m) => a + Math.max(...m.tiers.map((t) => t.points)), 0);
+    assert(C.SKILLS_UPDATE.flocks * max >= lp[2] + 6, `${b.id}: two flocks give ${2 * max} points (level 3 at ${lp[2]})`);
+  }
+  assert(C.skillLevelPoints() === (C.SKILLS_UPDATE.live ? lp : SKILL_LEVEL_POINTS), 'skillLevelPoints follows live');
+  const was = C.SKILLS_UPDATE.live;
+  try {
+    C.SKILLS_UPDATE.live = true;
+    const b = boardsForDay(20, null);
+    for (const [board, items] of Object.entries(SKILL_BOARD_ITEMS)) {
+      assert(b[board], `board ${board}`);
+      for (const it of items) {
+        assert(it.source === 'general' && !VERDICT.test(it.text) && !/p\.\s*\d/.test(it.text), `${board}: ${it.text}`);
+        assert(it.fromDay != null && it.fromDay > 20 || b[board].items.some((x) => x.text === it.text), `${board} shows "${it.text.slice(0, 40)}…"`);
+      }
+    }
+  } finally { C.SKILLS_UPDATE.live = was; }
+  const off = JSON.stringify(boardsForDay(20, null));
+  assert(!Object.values(SKILL_BOARD_ITEMS).flat().some((it) => off.includes(it.text)), 'no skills line on the boards while live is false');
+});
+
+test('skills update: perks follow the switch, the levels, allow() and the Automation settings', async () => {
+  const C = await import('../src/config.js');
+  const { createSkills } = await import('../src/skills.js');
+  const { createPerks } = await import('../src/perks.js');
+  const { createSettings } = await import('../src/settings.js');
+  const bus = createEvents(), skills = createSkills({ events: bus }), settings = createSettings({ storage: null, events: bus });
+  settings.attachEvents?.(bus);
+  const perks = createPerks({ skills, settings, events: bus, allowed: true });
+  const seen = [];
+  bus.on(EV.PERKS, (p) => seen.push(p));
+  const was = C.SKILLS_UPDATE.live;
+  try {
+    skills.debug.force('water', 3);
+    assert(!perks.has('waterAllLines') && !perks.auto('winch'), 'nothing while live is false');
+    C.SKILLS_UPDATE.live = true; perks.refresh();
+    assert(perks.has('waterAllLines') && perks.auto('winch') && seen.length === 1, 'Water 3 while live');
+    assert(perks.handled('r-raise')?.label === 'handled by the controller (Water 3)', `handled: ${JSON.stringify(perks.handled('r-raise'))}`);
+    assert(perks.need('d0-vent') === null, 'no Brooding 2 yet');
+    skills.debug.force('brooding', 2);
+    assert(perks.need('d0-vent')?.n === 3 && perks.need('d1-crop')?.n === 6, 'Brooding 2 needs');
+    const e = perks.easier('w2-weigh');
+    assert(e.length === 2 && e[0].key === 'weigh25' && e[0].toGo === 9 && e[1].later === true, `easier: ${JSON.stringify(e)}`);
+    settings.set('automation.water', false);
+    assert(perks.has('waterAllLines') && !perks.auto('winch') && !perks.handled('r-raise'), 'Water 3 off in Settings, Water 2 stays');
+    settings.set('automation.water', true); settings.set('automation.all', false);
+    assert(!perks.auto('winch'), 'every level 3 off');
+    settings.set('automation.all', true);
+    perks.allow(false);
+    assert(!perks.has('waterAllLines') && !perks.auto('winch'), 'not allowed (automation)');
+    perks.allow(true);
+    assert(perks.list().length === 22 && perks.list().every((p) => typeof p.has === 'boolean'), 'list');
+    assert(skills.unlocked('autoWinch') && skills.unlocked('quickSamples') && !skills.unlocked('boxHelper'), 'skills.unlocked knows payoff keys while live');
+  } finally { C.SKILLS_UPDATE.live = was; skills.debug.force('water', null); skills.debug.force('brooding', null); }
+});
+
+test('skills update: the farm carries farm.auto (plain data, saved) and its API; the stubs answer in their shapes', async () => {
+  const { createSim } = await import('../src/sim.js');
+  const { createFarm } = await import('../src/farm.js');
+  const env = createSim(), bus = createEvents(), farm = createFarm(env, { events: bus });
+  env.addStepper(farm.step);
+  farm.start(LEVEL1, { seed: 3 });
+  assert(farm.auto && Object.values(farm.auto.on).every((v) => v === false) && typeof farm.autoCtl.status === 'function', 'farm.auto and farm.autoCtl');
+  assert(!Object.values(farm.auto).some((v) => typeof v === 'function'), 'farm.auto holds no function (runCycle snapshots clone it)');
+  structuredClone(farm.auto);
+  const acts = [];
+  bus.on(EV.ACTION, (p) => acts.push(p.id));
+  const r = farm.act('scale.read', { day: 0 });
+  assert(r && 'n' in r && 'meanG' in r && acts.includes('scale.read'), 'scale.read shape and EV.ACTION');
+  for (const [id, keys] of [['auto.reset', ['reset']], ['auto.calibrate', ['offsetC', 'sensorC', 'houseC']], ['scale.clean', ['cleaned']]]) {
+    const res = farm.act(id, { system: 'winch' });
+    assert(keys.every((k) => k in res), `${id} shape`);
+  }
+  const f = farm.debug.fault('winch-stall', { line: 2 });
+  assert(f && f.phase === 'open' && farm.autoCtl.status().faults.length === 1, 'debug.fault');
+  const blob = JSON.parse(JSON.stringify(farm.serialize()));
+  assert(blob.auto && blob.auto.faults.length === 1, 'farm.serialize carries auto');
+  const env2 = createSim(), farm2 = createFarm(env2, { events: createEvents() });
+  farm2.restore(blob);
+  assert(JSON.stringify(farm2.serialize().auto) === JSON.stringify(blob.auto), 'auto round trip');
+});
+
 let failed = 0;
 for (const t of tests) {
   try { await t.fn(); console.log(`ok   ${t.name}`); } catch (e) { failed++; console.log(`FAIL ${t.name}: ${e.message}`); }

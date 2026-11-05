@@ -17,6 +17,9 @@ dead-bird bucket set down, the dead-bird pointer) are PHASE4.md §15; see **"The
 **Phase 5** (polish: the sound for every situation, save slots and backups, the settings menu, the farm overview map,
 the final quality pass) is specified in `PHASE5.md` and integrated on main: see **"Phase 5 (polish) — as integrated"** at the
 end (the design round's contracts are **"Phase 5 — design"** before it).
+The **Skills update** (skills that make playing easier: every branch's level 2 *Faster* and level 3 *The equipment does it*
+payoffs, automation that sometimes fails, two-flock points) is specified in `SKILLS.md`; its contracts are in code behind the
+switch `config.SKILLS_UPDATE.live` (false on main): see **"Skills update — design"** at the end.
 
 ## Decisions already made (from the plan doc)
 
@@ -74,6 +77,7 @@ end (the design round's contracts are **"Phase 5 — design"** before it).
 | `src/saves.js`, `save-slots.js`, `save-codec.js`, `ui-saves.js` (+ `run.js` exportSave / importSave, `save.js`) | saves (Phase 5) | Three slots, Continue, text backups in parts, migrations, the saves panel |
 | `src/settings.js`, `keys.js`, `gfx-quality.js`, `ui-settings*.js`, `ui-guide.js`, `content-guide.js`, `player-controls.js` | settings (Phase 5) | The settings store and menu, key bindings, graphics quality and the governor, camera settings, flock detail, the guide |
 | `src/ui-map*.js`, `map-plan.js`, `ui-intro.js`, `ui-menu.js`, `boot-screen.js`, `motion.js` (+ ui.js, ui-title.js, ui-help.js, level.js) | experience (Phase 5) | The farm map, first play, the game menu, the loading and error card, the HUD and panels' look and accessibility |
+| `src/perks.js`, `farm-auto.js`, `farm-faults.js`, `job-variants.js`, `skills-payoff.js`, `content-signs-skills.js` (+ the files of SKILLS.md §15) | skills update: model · jobs · panels · scene | The payoffs of every branch level, the farm's controllers and their faults, the job variants, the new milestones and sign lines (SKILLS.md) |
 
 Agents edit **only their own files**. If you need something from another module, code against the
 contract below and note the need in your report; do not edit their file.
@@ -1379,3 +1383,30 @@ climate controller".
   17:33 reaches 00:00).
   Results (960 × 600, seed 1, no console or page errors): `npm test` 445 ok; `test-night.mjs` (full) all passed;
   `req-night` 19 PASS; `req-watch` 13; `p2-level1` 58; `hotfix-steps` 21.
+
+## Skills update — design (contracts in code; SKILLS.md §12)
+`SKILLS.md` is the spec (the payoffs §3, the controllers §4, the faults §5, the tree / card / caption §6, the Automation settings
+§7, the contracts §12, tests and harness §13, play time §14, the four packages **model**, **jobs**, **panels**, **scene** §15). In
+code now, every default being the Phase 5 game (`SKILLS_UPDATE.live` false):
+- **config.js** (Skills section at the end): `SKILLS_UPDATE { live, levelPoints [4, 9, 22], flocks 2 }`, `skillLevelPoints()`,
+  `unlockLevel(u)` (Feed's `siloDays` level 2 / `feedGraph` level 3 while live: `levelLive`), `SKILL_STEP_NAMES`, `SKILL_SHORT`,
+  `SKILL_VIEWS` (the 11 level 1 views made easy to find), `PAYOFFS` (22: level 2 and 3 of every branch), `AUTO_SYSTEMS` (7
+  controllers), `AUTO` (model values), `FAULTS` (6), `FAULT_PLAN`, `lightPresetForDay`.
+- **events.js**: `EV.PERKS`, `EV.AUTO`, `EV.FAULT`, `EV.BIRD_SEEN`; actions `auto.glance` (ui-only), `auto.reset`, `auto.calibrate`,
+  `scale.read`, `scale.clean`.
+- **perks.js** (working): `createPerks({ skills, settings, events, allowed })` → `has`, `auto`, `need`, `easier`, `handled`, `list`,
+  `allow`; every payoff is read through it; `allowed` false under `navigator.webdriver` until `__game.perks.allow(true)`.
+  main.js: `ctx.perks`, `deps.perks`, `__game.perks`, `__game.auto()`.
+- **skills.js**: `levelPoints()`, `unlocked()` by `unlockLevel` and for payoff keys while live, EV.SKILL_UNLOCK for payoff keys,
+  `debug.force(branch, level)` (harness; never saved).
+- **farm-auto.js / farm-faults.js** (stubs, wired by `createFarm` → `installAuto`): `farm.auto` (plain data, saved as
+  `farm.serialize().auto`), `farm.autoCtl` (getter API: `quiet`, `ok`, `status`, `sensorC`), `adviseFans`, `preheatHours`, the four
+  farm actions answering their shapes, `farm.debug.fault(id, opts)` / `faults()`; nothing acts yet.
+- **job-variants.js** (stub), **skills-payoff.js** (`MILESTONES_PAYOFF`: four new milestones, merged by "model" while live),
+  **content-signs-skills.js** (`SKILL_BOARD_ITEMS`, all general; `boardsForDay` merges them while live), **settings.js** group
+  `automation` (`hidden`, `liveOnly`: the tab is drawn only while live).
+- **Tests**: test-contracts' four skills cases (payoffs / views / systems / faults well formed and their jobs real; the milestones,
+  thresholds and sign lines; the perks through the switch, levels, `allow` and the settings; `farm.auto` plain data and saved);
+  `scripts/skills-design-stubs.json` (10 PASS); `scripts/skill-progress.mjs` (the progression baseline, not in npm test).
+  Results: `npm test` all passed (449 ok), `cold-hot` and `p5-design-stubs` (20) without errors.
+

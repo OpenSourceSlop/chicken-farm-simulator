@@ -369,8 +369,8 @@ export const UNLOCKS = {
   brooderZones: { branch: 'heating', level: 3, name: 'Brooder heat zones on the floor view', by: 'scene' },
   waterTest: { branch: 'water', level: 3, name: 'Water test kit at the water supply', by: 'panels' },
   droppingsGuide: { branch: 'feed', level: 1, name: 'Droppings guide at the bird check', by: 'panels' },
-  feedGraph: { branch: 'feed', level: 2, name: 'Feed per bird graph against the plate', by: 'run' },
-  siloDays: { branch: 'feed', level: 3, name: 'Days of feed left on the silo gauge', by: 'panels' },
+  feedGraph: { branch: 'feed', level: 2, levelLive: 3, name: 'Feed per bird graph against the plate', by: 'run' },   // levelLive: SKILLS_UPDATE
+  siloDays: { branch: 'feed', level: 3, levelLive: 2, name: 'Days of feed left on the silo gauge', by: 'panels' },
   lightPresets: { branch: 'lighting', level: 1, name: 'Light program presets', by: 'panels' },
   luxMap: { branch: 'lighting', level: 2, name: 'Light map on the floor view', by: 'scene' },
   dimming: { branch: 'lighting', level: 3, name: 'Dawn and dusk dimming in the light program', by: 'panels' },
@@ -917,3 +917,169 @@ export const MAP = {
   standZ: -4.6, standR: 2.5,
   minLabelPx: 12,
 };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Skills update (SKILLS.md): skills that make playing easier. Contract data of the design round; owners per SKILLS.md §15.
+//   live          the build switch (false on main until the last merge, SKILLS.md §16; a steps file may set
+//                 __game.config.SKILLS_UPDATE.live): the new level thresholds and the two-flock points, the payoffs, the
+//                 job card's and the tree's new words, the sign lines and the moved Feed views. false = the Phase 5 game.
+//   levelPoints   points for levels 1, 2, 3 while live (SKILL_LEVEL_POINTS [4, 9, 15] otherwise); level 3 needs points
+//                 from a second flock (the ideal's best single flock is 20, SKILLS.md §2.2)
+//   flocks        a milestone counts once per flock slot, in up to this many flocks (slot 1: cyclesDone 0, slot 2: >= 1)
+export const SKILLS_UPDATE = { live: false, levelPoints: [4, 9, 22], flocks: 2 };
+/** The thresholds in force (skills.js, the perks, the tree and the job card read this, never a constant). */
+export const skillLevelPoints = () => (SKILLS_UPDATE.live ? SKILLS_UPDATE.levelPoints : SKILL_LEVEL_POINTS);
+/** The level a view unlock needs now (Feed's siloDays and feedGraph swap levels while live: SKILLS.md §2.1). */
+export const unlockLevel = (u) => (SKILLS_UPDATE.live && u && u.levelLive != null ? u.levelLive : u ? u.level : Infinity);
+/** The three steps of every branch (the tree's level names). */
+export const SKILL_STEP_NAMES = ['See more', 'Faster', 'The equipment does it'];
+/** Short branch names for the job card's "handled by the controller (Water 3)" and the captions. */
+export const SKILL_SHORT = { planning: 'Farm Planning', biosecurity: 'Biosecurity', brooding: 'Brooding', comfort: 'Comfort', ventilation: 'Ventilation',
+  moisture: 'Moisture', heating: 'Heating', water: 'Water', feed: 'Feed', lighting: 'Lighting', growth: 'Growth' };
+
+// Level 1 · See more (SKILLS.md §3.0): each branch's level 1 view, what it shows, where it is used, its key (keys.js action
+// id) and the jobs whose strip names it ("Your Brooding 1 view: F shows the floor's warmth" / "Brooding 1 would show …").
+export const SKILL_VIEWS = {
+  planningCalc: { shows: 'works the sums on the planning sheet', where: 'the planning sheet at the office desk', jobs: ['pl-sheet'] },
+  symptomCheck: { shows: 'a quick look at the bird you hold: its symptoms in plain words', where: 'the bird check', jobs: ['w2-check', 'p-lame', 'p-hunched'] },
+  floorOverlay: { shows: 'the floor\'s warmth under and between the brooders', where: 'anywhere in the house', keyId: 'floorView', jobs: ['d0-floor', 'prep-preheat', 'prep-litter'] },
+  comfortOverlay: { shows: 'each bird in the colour of what it feels', where: 'anywhere in the house', keyId: 'comfortView', jobs: ['r-walk', 'r-walk-pm', 'p-warm', 'p-heat3', 'r-vent-night'] },
+  windChill: { shows: 'how much cooler the moving air makes the birds feel', where: 'the fan panel', jobs: ['r-fans-pm', 'p-heat3', 'p-panting', 'p-humid'] },
+  moistureOverlay: { shows: 'the litter\'s wetness over the floor', where: 'anywhere in the house', keyId: 'moistureView', jobs: ['r-litter', 'w3-topup', 'p-leak', 'p-damp', 'p-pad-wet'] },
+  heatLoss: { shows: 'where the house\'s heat goes, degrees an hour', where: 'the climate controller\'s Temperature tab', jobs: ['prep-preheat', 'p-cold-night'] },
+  waterTrend: { shows: '14 days of water per 1,000 birds and water : feed', where: 'the Trend key beside the meter at the water supply', jobs: ['r-meter'] },
+  droppingsGuide: { shows: 'the droppings sign\'s pictures beside the bird you hold', where: 'the bird check', jobs: ['w3-droppings', 'p-blood', 'p-hunched'] },
+  lightPresets: { shows: 'the light sign\'s programs to pick from', where: 'the climate controller\'s Lights tab', jobs: ['prep-lights', 'w2-lights', 'p-sds'] },
+  recordsTargets: { shows: 'the target beside each day\'s weight and intake', where: 'the record book and the weigh panel', jobs: ['d7-weigh', 'w2-weigh', 'w3-weigh', 'w45-weigh28', 'w45-weigh35', 'f-weigh'] },
+};
+
+const WEIGH_JOBS = ['d7-weigh', 'w2-weigh', 'w3-weigh', 'w45-weigh28', 'w45-weigh35', 'f-weigh'];
+const PHONE_JOBS = ['p-order-feed', 'w2-order', 'w45-order', 'f-order', 'f-book', 'p-report', 'p-blood', 'p-hunched', 'c-book', 'p-weak-batch'];
+const ORDER_JOBS = ['p-order-feed', 'w2-order', 'w45-order', 'f-order'];
+// Levels 2 and 3 (SKILLS.md §3): { branch, level, step: 'faster' | 'auto', name, saves (the tree's plain words), where (the
+// unlock caption's "use it at"), jobs (the jobs it eases: the job card and the strips), by (the package that builds it),
+// system / fault (an automated one: AUTO_SYSTEMS, FAULTS), need (a sampling job's numbers with the payoff) }. A text may
+// hold {key:<keys.js action id>} tokens (key-words.js fillKeys when drawn: 'phone' is the jobs package's new R key).
+export const PAYOFFS = {
+  // Water
+  waterAllLines: { branch: 'water', level: 2, step: 'faster', name: 'Flow-test all four lines from the water supply', saves: 'Saves the walk to 4 regulators on flow-test mornings',
+    where: 'the water supply panel, south-west corner inside, on flow-test mornings', jobs: ['r-drinkers'], by: 'panels' },
+  autoWinch: { branch: 'water', level: 3, step: 'auto', system: 'winch', fault: 'winch-stall', name: 'The drinker winches follow the flock\'s age',
+    saves: 'Saves winching four drinker lines by hand every three or four days', where: 'the winch motors at the drinker lines\' west ends: look at the heights at the water supply', jobs: ['prep-drinkers', 'r-raise', 'r-drinkers'], by: 'model' },
+  // Moisture & Minimum Ventilation
+  ventFill: { branch: 'moisture', level: 2, step: 'faster', name: 'The minimum ventilation calculator fills the timer', saves: 'Saves working the timer seconds out of the vent sign\'s table',
+    where: 'the climate controller\'s Ventilation tab: Fill the timer', jobs: ['prep-vent', 'r-minvent', 'p-damp'], by: 'panels' },
+  autoTimer: { branch: 'moisture', level: 3, step: 'auto', system: 'timer', fault: 'timer-reset', name: 'The minimum ventilation timer steps up with the flock',
+    saves: 'Saves stepping the timer up by the table every other morning', where: 'the climate controller: it shows what the timer did since your last read', jobs: ['prep-vent', 'r-minvent'], by: 'model' },
+  // Heat & Ventilation
+  fanAdvice: { branch: 'ventilation', level: 2, step: 'faster', name: 'The fan panel suggests the fans and the pad for now', saves: 'Saves working the fans and the pad out of the heat sign every hot afternoon',
+    where: 'the fan panel and the controller\'s Tunnel fans row: Set as suggested', jobs: ['r-fans-pm', 'r-vent-night', 'p-heat3', 'p-panting', 'p-panting-fin', 'p-humid'], by: 'panels' },
+  autoStages: { branch: 'ventilation', level: 3, step: 'auto', system: 'stages', fault: 'stage-trip', name: 'The controller adds tunnel fans as the house warms',
+    saves: 'Saves walking to the fan panel to step the fans through every hot afternoon and evening', where: 'the fan stages: look at them when you read the controller', jobs: ['r-fans-pm', 'r-vent-night', 'p-heat3', 'p-panting', 'p-panting-fin', 'p-humid'], by: 'model' },
+  // Heating
+  brooderRow: { branch: 'heating', level: 2, step: 'faster', name: 'One press sets the thermostat to the brooder sign\'s row', saves: 'Saves reading the brooder table and stepping the thermostat; tells you when to start the pre-heat',
+    where: 'the climate controller\'s Temperature tab: Set to the sign\'s row', jobs: ['prep-preheat', 'p-cold-night', 'b-warm'], by: 'panels' },
+  autoBrooders: { branch: 'heating', level: 3, step: 'auto', system: 'brooders', fault: 'sensor-drift', name: 'The brooders follow the brooder sign\'s curve',
+    saves: 'Saves setting the thermostat by the table every morning and on the prep day', where: 'the climate controller: compare its sensor with the thermometer beside it', jobs: ['prep-preheat'], by: 'model' },
+  // Chick Arrival & Brooding
+  quickSamples: { branch: 'brooding', level: 2, step: 'faster', name: 'Three chicks for the vent check, six for the crops, and Next chick', saves: 'Saves catching 2 vent chicks and 4 crop chicks, and the walk back after each one',
+    where: 'the chick in your hand: Next chick', jobs: ['d0-vent', 'd1-crop', 'b-crop48'], by: 'panels',
+    need: { 'd0-vent': { n: 3, sectors: 3 }, 'd1-crop': { n: 6, sectors: 3 }, 'b-crop48': { n: 6, sectors: 3 } } },
+  boxHelper: { branch: 'brooding', level: 3, step: 'auto', name: 'A helper tips the chick boxes with you on arrival day', saves: 'Saves carrying half of the six stacks of chick boxes',
+    where: 'the chick truck on arrival day: the helper takes the next stack', jobs: ['d0-place'], by: 'scene' },
+  // Feed & Digestion
+  siloOrder: { branch: 'feed', level: 2, step: 'faster', name: 'The silo gauge shows days of feed, warns at 2 days and orders', saves: 'Saves the walk to the office to order, and the sums from kilos to days',
+    where: 'the silo gauge outside the north wall: Order to 3 days', jobs: ORDER_JOBS, by: 'panels' },
+  autoFeed: { branch: 'feed', level: 3, step: 'auto', system: 'feed', fault: 'order-lost', name: 'Feed orders itself and the feeder lines rise with the flock',
+    saves: 'Saves the feed orders and raising three feeder lines by hand', where: 'the silo gauge and the feeder box: look for the order\'s confirmation', jobs: ['p-order-feed', 'w2-order', 'w45-order', 'r-raise', 'r-feeders'], by: 'model' },
+  // Lighting
+  weekLights: { branch: 'lighting', level: 2, step: 'faster', name: 'One press sets the light program for the flock\'s age', saves: 'Saves picking the dark hours and the dimmer from the light sign',
+    where: 'the climate controller\'s Lights tab: Program for the day', jobs: ['prep-lights', 'w2-lights', 'p-sds'], by: 'panels' },
+  autoLights: { branch: 'lighting', level: 3, step: 'auto', system: 'lights', name: 'The controller changes the light program and dims at dawn and dusk',
+    saves: 'Saves setting the light program at each change of week', where: 'the climate controller\'s Lights tab', jobs: ['prep-lights', 'w2-lights'], by: 'model' },
+  // Growth & Performance
+  weigh25: { branch: 'growth', level: 2, step: 'faster', name: 'Hand weighing needs 25 birds instead of 50', saves: 'Saves weighing 25 birds on every weigh day',
+    where: 'the bird scale and frame on weigh days', jobs: WEIGH_JOBS, by: 'jobs', need: Object.fromEntries(WEIGH_JOBS.map((j) => [j, { n: 25, sectors: 5 }])) },
+  autoScale: { branch: 'growth', level: 3, step: 'auto', system: 'scale', fault: 'scale-fouled', name: 'The automatic bird scale gives the day\'s weight',
+    saves: 'Saves hand weighing on weigh days: read the scale\'s day average', where: 'the bird scale\'s display', jobs: WEIGH_JOBS, by: 'model' },
+  // Body Temperature & Comfort
+  earlyWarning: { branch: 'comfort', level: 2, step: 'faster', name: 'The flock watch warns two farm hours earlier and names the fix', saves: 'Saves hours of cold or hot birds before you hear of it',
+    where: 'the flock watch card: Show me', jobs: ['r-walk', 'r-walk-pm', 'p-warm', 'p-heat3', 'p-panting'], by: 'model' },
+  comfortAlways: { branch: 'comfort', level: 3, step: 'auto', name: 'The comfort colours show whenever you are in the house', saves: 'Saves pressing {key:comfortView} at every visit, and shows a cold or hot corner as you pass',
+    where: 'inside the house ({key:comfortView} turns them off for the visit)', jobs: ['r-walk', 'r-walk-pm'], by: 'scene' },
+  // Biosecurity & Health
+  tallyBucket: { branch: 'biosecurity', level: 2, step: 'faster', name: 'The bucket picks up every dead bird within 2.5 m and counts them', saves: 'Saves the walk to the bin after the morning round, and stooping for each bird',
+    where: 'the dead-bird bucket: empty it at the bin after the afternoon round', jobs: ['r-dead-am', 'r-dead-pm'], by: 'scene' },
+  passCheck: { branch: 'biosecurity', level: 3, step: 'auto', name: 'Birds you walk past show a quick symptom tag', saves: 'Saves catching birds to find the sick and lame ones',
+    where: 'walking slowly through the house', jobs: ['w2-check', 'p-lame'], by: 'scene' },
+  // Farm Planning
+  pocketPhone: { branch: 'planning', level: 2, step: 'faster', name: 'A phone in your pocket', saves: 'Saves the walk to the office for every order, vet call and booking',
+    where: 'anywhere in a level: {key:phone}', jobs: PHONE_JOBS, by: 'jobs' },
+  planReady: { branch: 'planning', level: 3, step: 'auto', name: 'The next plan is filled in from this cycle', saves: 'Saves working the next plan by hand: check it and send',
+    where: 'the planning sheet on the next planning day', jobs: ['pl-sheet'], by: 'panels' },
+};
+
+// Level 3 automation (SKILLS.md §4): the farm's controllers (farm-auto.js, package "model"). glanceAt: the panels whose
+// opening for AUTO.glanceSec emits auto.glance { system } (the handed-over job's quick look); jobs: the jobs made with the
+// glance variant while the system is on (job-variants.js, package "jobs"); keeps: the job card's words for the live part.
+const DRINKER_PANELS = DRINKER_LINES_Z.map((_, i) => `drinker-${i}`);
+export const AUTO_SYSTEMS = {
+  winch: { branch: 'water', payoff: 'autoWinch', label: 'Winches', glanceAt: ['water-supply', ...DRINKER_PANELS], reading: 'the four line heights',
+    keeps: 'The winches keep every line at the drinker plate\'s height', jobs: ['prep-drinkers', 'r-raise', 'r-drinkers'] },
+  timer: { branch: 'moisture', payoff: 'autoTimer', label: 'Timer', glanceAt: ['controller'], reading: 'the timer against the vent sign',
+    keeps: 'The controller keeps the timer at about 110 % of the vent sign\'s table', jobs: ['prep-vent', 'r-minvent'] },
+  stages: { branch: 'ventilation', payoff: 'autoStages', label: 'Fan stages', glanceAt: ['controller', 'fan-panel'], reading: 'the fan stages and the house',
+    keeps: 'The fan stages keep the birds near their comfort', jobs: ['r-fans-pm', 'r-vent-night', 'p-heat3', 'p-panting', 'p-panting-fin', 'p-humid'] },
+  brooders: { branch: 'heating', payoff: 'autoBrooders', label: 'Brooders', glanceAt: ['controller'], reading: 'the thermostat against the brooder sign',
+    keeps: 'The controller holds the thermostat at the brooder sign\'s row', jobs: ['prep-preheat'] },
+  feed: { branch: 'feed', payoff: 'autoFeed', label: 'Feed', glanceAt: ['silo', 'feeder-box'], reading: 'the silo days and the order',
+    keeps: 'The feed controller keeps an order on the way and the rims at the plate', jobs: ['p-order-feed', 'w2-order', 'w45-order', 'r-raise', 'r-feeders'] },
+  lights: { branch: 'lighting', payoff: 'autoLights', label: 'Lights', glanceAt: ['controller'], reading: 'the light program',
+    keeps: 'The controller keeps the light program of the age', jobs: ['prep-lights', 'w2-lights'] },
+  scale: { branch: 'growth', payoff: 'autoScale', label: 'Bird scale', glanceAt: ['bird-scale'], reading: 'the scale\'s day average',
+    keeps: 'The automatic scale has weighed 300 birds or more today', jobs: ['d7-weigh', 'w2-weigh', 'w3-weigh', 'w45-weigh28', 'w45-weigh35', 'f-weigh'] },
+};
+/** Model values of the controllers and the level 2 payoffs (SKILLS.md §3, §4; none is a sign fact unless the sign says it). */
+export const AUTO = {
+  glanceSec: 1,                       // a panel open this long gives the glance (the controller read takes 2 s anyway)
+  morningHour: 6,                     // the daily steps (timer, brooders, lights) and the end of the farmer's own winch / thermostat setting
+  winchCmPerH: 2, rimCmPerH: 2, rimFromDay: 4,
+  ventShare: 1.1, ventRecountPct: 2,  // the timer at 110 % of the vent sign's need; again when his count changes 2 %
+  stagesFromDay: 15, padFromDay: 21,
+  orderAtDays: 2, orderToDays: 3, lastAutoOrderDay: 35,
+  lightDays: [-1, 8, 36], rampMin: 20, rampFromDay: 8,
+  scalePerDay: 600, scaleMinReads: 300, scaleNoisePct: 0.5,
+  // the farmer's own setting holds: until the next morning (winch, brooders), until 18:00 (timer), for 2 farm hours (stages)
+  handHold: { winch: { untilHour: 6 }, brooders: { untilHour: 6 }, timer: { untilHour: 18 }, stages: { hours: 2 }, feed: { untilHour: 6 }, lights: { untilHour: 6 } },
+  // the level 2 / 3 hands-on payoffs (scene, panels)
+  deadReachM: 2.5, bucketMax: 30, chickReachM: 2.0, nextChickM: 2.5, tagM: 2.0, tagSec: 3, tagMax: 6, helperRate: 2,
+  earlyComfortH: 2,                   // Comfort 2: the watch warns at 2 cold / hot hours of 8 (WATCH.comfortAmber) instead of 4
+  showMeH: 2,                         // Comfort 2: the job marker points to the fix's place this long
+};
+
+// Faults (SKILLS.md §5; farm-faults.js, package "model"). selfKnown: the controller knows at once (the Equipment row red at
+// the start); else a cross-check finds it (amber / red bands). spot: where to look (a SPOTS key; 'drinkers.N' = the line's
+// regulator). fix: the actions that fix it by hand. All model values; the sign lines that name them are general practice.
+export const FAULTS = {
+  'winch-stall': { system: 'winch', selfKnown: true, spot: 'drinkers.N', plate: 'drinker', fix: ['water.height', 'auto.reset'], what: 'Winch motor stalled' },
+  'timer-reset': { system: 'timer', selfKnown: true, spot: 'controller', plate: 'sign-vent', fix: ['vent.timer'], retryH: 24,
+    firstSetting: { fans: 1, onSec: 8, cycleSec: 300 }, what: 'Controller restarted on its first timer setting' },
+  'stage-trip': { system: 'stages', selfKnown: true, spot: 'fanPanel', plate: 'fan-panel', fix: ['auto.reset'], hours: [[7, 10], [17, 19]], what: 'Fan stages off' },
+  'sensor-drift': { system: 'brooders', selfKnown: false, spot: 'controller', plate: 'sign-brooder', fix: ['auto.calibrate'], driftPerH: 0.5, driftMaxC: 2.5, amberC: 1, redC: 2,
+    days: [0, 21], what: 'Temperature sensor reading high' },
+  'order-lost': { system: 'feed', selfKnown: true, spot: 'silo', plate: 'silo', fix: ['feed.order'], redAfterH: 6, minDays: 1.8, what: 'Feed order not confirmed by the mill' },
+  'scale-fouled': { system: 'scale', selfKnown: false, spot: 'birdScale', plate: 'bird-scale', fix: ['scale.clean'], readLowPct: 6, countShare: 0.25, what: 'Bird scale platform fouled' },
+};
+// How often (SKILLS.md §5.2): per flock (drawn at farm.start of the brooding week from createRng(seed x rngMul + flock), never
+// the model's own farm.rng); at each drawn time a fault of a system that is on then (weights), else none.
+export const FAULT_PLAN = {
+  normal: { max: 1, chance: 0.6, weights: {} },
+  hot: { max: 2, chance: 1, weights: { 'stage-trip': 2, 'sensor-drift': 2 } },
+  rainy: { max: 2, chance: 1, weights: { 'timer-reset': 2 }, afterCut: 'stage-trip' },
+  badChicks: { max: 2, chance: 1, weights: { 'sensor-drift': 2, 'scale-fouled': 2 } },
+  water: { max: 2, chance: 1, weights: { 'winch-stall': 2 } },
+  window: { fromDay: 1, toDay: 40, afterLevelStartH: 12, beforeLevelEndH: 24, hours: [7, 19] },
+  rngMul: 31,
+};
+/** The light sign's program for a day (Lighting 2's one press, Lighting 3's controller): config LIGHT_PRESETS by age. */
+export const lightPresetForDay = (day) => (day <= 7 ? 'brooding' : day <= 35 ? 'growing' : 'finishing');

@@ -64,6 +64,22 @@ export const SETTINGS_SCHEMA = {
   keys: { label: 'Keys', by: 'settings', items: {
     bindings: { type: 'map', def: {}, label: 'Key bindings', hidden: true },   // { [action id]: KeyboardEvent.code } (keys.js)
   } },
+  // Skills update (SKILLS.md §7): the level 3 payoffs switched off for every branch or one at a time. Hidden: package "jobs"
+  // draws its tab only while config SKILLS_UPDATE.live (so the six Phase 5 tabs stay); every default true (an earned level 3 acts).
+  automation: { label: 'Automation', by: 'jobs', hidden: true, liveOnly: true, items: {
+    all: { type: 'bool', def: true, label: 'Let the farm’s equipment do the jobs my level 3 skills hand to it' },
+    water: { type: 'bool', def: true, label: 'Water 3: the drinker winches follow the flock’s age' },
+    moisture: { type: 'bool', def: true, label: 'Moisture 3: the minimum ventilation timer steps up by itself' },
+    ventilation: { type: 'bool', def: true, label: 'Ventilation 3: the fan stages add tunnel fans as the house warms' },
+    heating: { type: 'bool', def: true, label: 'Heating 3: the brooders follow the brooder sign’s curve' },
+    feed: { type: 'bool', def: true, label: 'Feed 3: feed orders itself and the feeder lines rise' },
+    lighting: { type: 'bool', def: true, label: 'Lighting 3: the light program changes with the age and dims at dawn and dusk' },
+    growth: { type: 'bool', def: true, label: 'Growth 3: the automatic bird scale gives the weigh-in' },
+    comfort: { type: 'bool', def: true, label: 'Comfort 3: the comfort colours show whenever I am in the house' },
+    biosecurity: { type: 'bool', def: true, label: 'Biosecurity 3: birds I walk past show a symptom tag' },
+    brooding: { type: 'bool', def: true, label: 'Brooding 3: a helper tips the chick boxes on arrival day' },
+    planning: { type: 'bool', def: true, label: 'Farm Planning 3: the next plan is filled in from this cycle' },
+  } },
   intro: { label: 'First play', by: 'experience', hidden: true, items: {
     done: { type: 'bool', def: false, label: 'Introduction finished' },
     seen: { type: 'list', def: [], label: 'Pointers already shown' },

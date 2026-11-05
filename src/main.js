@@ -16,6 +16,7 @@ import { buildCondScene } from './props-cond.js'; // Phase 4 (package "scene"; P
 import { createFarm } from './farm.js';
 import { createRecords } from './records.js';
 import { createSkills } from './skills.js';
+import { createPerks } from './perks.js';   // Skills update (SKILLS.md §12.3): what the skills give now
 import { createSaveStore } from './save.js';
 import { buildProps } from './props.js';
 import { createLevel } from './level.js';
@@ -95,6 +96,9 @@ async function start(saved = {}) {
   const save = createSaveStore();
   ctx.records = records;
   ctx.skills = skills;
+  // the payoffs (SKILLS.md §3, §4): off under automation until a steps file calls __game.perks.allow(true)
+  const perks = createPerks({ skills, settings, events });
+  ctx.perks = perks;
 
   await bootScreen.step('Building the farm');
   const world = buildWorld(ctx);
@@ -118,7 +122,7 @@ async function start(saved = {}) {
   quality = createQuality({ THREE, renderer, scene, world, perf, settings, flock, onResize: () => resize() });
   ctx.quality = quality;
   const interactables = interact.list;
-  const deps = { farm, records, skills, save, player, flock, props, interact, events };
+  const deps = { farm, records, skills, save, player, flock, props, interact, events, perks };
   const ui = createUI(ctx, { ...deps, house, world, interactables });
   ctx.ui = ui;                       // Phase 5: the hubs (createUI sets it too; the packages read ctx.ui, PHASE5.md §8.9)
   const level = createLevel(ctx, { ...deps, ui });
@@ -206,6 +210,10 @@ async function start(saved = {}) {
     // Phase 5 (PHASE5.md §9.2): the settings store, the key bindings, the graphics quality, the saves; renderInfo() for the
     // graphics budgets (draw calls, triangles, programs of one rendered frame)
     settings, keys, quality, saves,
+    // Skills update (SKILLS.md §13.2): perks (allow(true) under automation), the farm's controllers (farm.autoCtl) and faults
+    // (farm.debug.fault(id, opts)), skills.debug.force(branch, level); config.SKILLS_UPDATE.live is the build switch
+    perks,
+    auto() { return farm.autoCtl?.status?.() ?? null; },
     get perf() { return perf; },
     renderInfo() {
       player.update(0); quality.sync(); renderer.render(scene, camera);

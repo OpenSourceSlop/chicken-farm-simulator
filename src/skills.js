@@ -14,7 +14,7 @@
 //   (a replay that lifts day7-weight from tier 0 to tier 1 emits +2, not +3), and EV.SKILL_UNLOCK
 //   when a branch level is reached. A milestone is kept per profile; a replay can only raise it.
 //   Milestone texts are what the player sees: results in plain words, never praise or verdicts.
-import { SKILL_BRANCHES, SKILL_LEVEL_POINTS, UNLOCKS, conditionLevel, levelById } from './config.js';
+import { SKILL_BRANCHES, UNLOCKS, conditionLevel, levelById, skillLevelPoints, unlockLevel, PAYOFFS, SKILLS_UPDATE } from './config.js';
 import { EV } from './events.js';
 import { RULES } from './skills-rules.js';
 import { RULES_CYCLE } from './skills-rules-cycle.js';
@@ -112,12 +112,22 @@ export function createSkills({ events, records, farm } = {}) {
     }
     return p;
   };
-  const levelOf = (branch) => SKILL_LEVEL_POINTS.filter((need) => pointsOf(branch) >= need).length;
+  // Skills update (SKILLS.md §2.2, §13.2): the thresholds in force (config skillLevelPoints: [4, 9, 22] while
+  // SKILLS_UPDATE.live, else Phase 2's [4, 9, 15]); a harness's forced level (skills.debug.force: never saved) wins
+  const forced = new Map();
+  const levelOf = (branch) => (forced.has(branch) ? forced.get(branch) : skillLevelPoints().filter((need) => pointsOf(branch) >= need).length);
+  /** The view unlocks (config UNLOCKS, level by unlockLevel) and, while live, the payoffs (config PAYOFFS) a branch level gives. */
+  const keysAt = (branch, from, to) => [
+    ...Object.entries(UNLOCKS).filter(([, u]) => u.branch === branch && unlockLevel(u) > from && unlockLevel(u) <= to).map(([key]) => ({ key })),
+    ...(SKILLS_UPDATE.live ? Object.entries(PAYOFFS).filter(([, u]) => u.branch === branch && u.level > from && u.level <= to).map(([key]) => ({ key, payoff: true })) : []),
+  ];
 
   const skills = {
     branches() {
-      return SKILL_BRANCHES.map((b) => ({ ...b, points: pointsOf(b.id), level: levelOf(b.id), needs: SKILL_LEVEL_POINTS }));
+      return SKILL_BRANCHES.map((b) => ({ ...b, points: pointsOf(b.id), level: levelOf(b.id), needs: skillLevelPoints() }));
     },
+    /** The points for levels 1, 2, 3 in force (SKILLS.md §2.2). */
+    levelPoints: () => skillLevelPoints(),
     points: pointsOf,
     level: levelOf,
     /** Milestones of a branch with what was earned: [{ ...milestone, tier: index|null, points }] */
@@ -128,7 +138,13 @@ export function createSkills({ events, records, farm } = {}) {
       });
     },
     /** @param {keyof typeof UNLOCKS} key */
-    unlocked(key) { const u = UNLOCKS[key]; return !!u && levelOf(u.branch) >= u.level; },
+    unlocked(key) {
+      const u = UNLOCKS[key];
+      if (u) return levelOf(u.branch) >= unlockLevel(u);
+      // a payoff key (SKILLS.md §3): the branch level only — whether it acts is the perks' (perks.js: live, allowed, settings)
+      const p = PAYOFFS[key];
+      return !!p && SKILLS_UPDATE.live && levelOf(p.branch) >= p.level;
+    },
     /**
      * Award the milestones of this checkpoint (PHASE3.md §9): only those of the checkpoint's level (ctx.level,
      * else the level last announced); at a level-end every milestone of the level. The cycle milestones of
@@ -168,10 +184,23 @@ export function createSkills({ events, records, farm } = {}) {
       earned.set(id, tier);
       const total = pointsOf(m.branch), level = levelOf(m.branch);
       events && events.emit(EV.SKILL_POINTS, { branch: m.branch, milestone: id, tier, points: m.tiers[tier].points - had, total, level, detail });
-      if (level > before) for (const [key, u] of Object.entries(UNLOCKS)) if (u.branch === m.branch && u.level > before && u.level <= level) events && events.emit(EV.SKILL_UNLOCK, { key });
+      if (level > before) for (const k of keysAt(m.branch, before, level)) events && events.emit(EV.SKILL_UNLOCK, k);
       return true;
     },
     reset() { earned.clear(); },
+    /** Harness and node tests only (SKILLS.md §13.2): force a branch's level (null clears it); never saved. Emits
+     *  EV.SKILL_UNLOCK for the keys it passes and EV.SKILL_POINTS-free: the perks listen to EV.SKILL_UNLOCK. */
+    debug: {
+      force(branch, level = null) {
+        const before = levelOf(branch);
+        if (level == null) forced.delete(branch); else forced.set(branch, Math.max(0, Math.min(3, Math.round(level))));
+        const after = levelOf(branch);
+        if (after > before) for (const k of keysAt(branch, before, after)) events && events.emit(EV.SKILL_UNLOCK, { ...k, forced: true });
+        else if (after !== before) events && events.emit(EV.SKILL_UNLOCK, { key: null, branch, forced: true, level: after });
+        return after;
+      },
+      forced() { return Object.fromEntries(forced); },
+    },
     /** Phase 4: the profile's cycles (the gate of the harder flocks) — { cyclesDone, conditionsDone: { [id]: n } }: the live
      *  object (level.js keeps its counters in it and saves it; a harness may set __game.skills.profile.cyclesDone). */
     get profile() { return profile; },

@@ -24,7 +24,7 @@
 // restore), the symptom decision (EV.FARM_PROBLEM phase 'symptom' from an action it sees, an
 // EV.NEAR from props, or 'radio.listen'), and farm.stats (what skills.js needs, computed in node).
 import { LEVEL1, EQUIP, flockAgeAt, PLAN_LEVEL } from './config.js';
-import { EV, UI_ACTION_IDS_CYCLE, UI_ACTION_IDS_COND } from './events.js';
+import { EV, UI_ACTION_IDS_CYCLE, UI_ACTION_IDS_COND, UI_ACTION_IDS_SKILLS } from './events.js';
 import { createRng } from './farm-rng.js';
 import { roundDeep } from './round.js';
 import { createWater, updateAccess, drink, stepLines, recordMeter, waterPerKg } from './farm-water.js';
@@ -45,6 +45,8 @@ import { cyclePre, cycleComfort, cycleFactors, cyclePost } from './farm-cycle-st
 import { stepAugersCycle } from './farm-silos.js';
 import { onBus } from './farm-cycle-act.js';
 import { tickCycleProblems, cycleSymptoms, cycleZones, cycleNear, cycleForecast, cycleObserve, onLabLetter } from './farm-cycle-problems.js';
+// Skills update (SKILLS.md §4, §5): the level 3 controllers and their faults (installAuto wraps step / act / start / serialize / restore)
+import { installAuto } from './farm-auto.js';
 
 /**
  * @typedef {{ heightCm: number, pressureCm: number, flowMlMin: number, access: number,
@@ -71,7 +73,7 @@ import { tickCycleProblems, cycleSymptoms, cycleZones, cycleNear, cycleForecast,
  */
 
 // ui-only actions the farm listens to (symptoms): the ui emits them with result undefined
-const UI_ACTIONS = new Set(['radio.listen', 'controller.read', 'phone.report', 'heat.setpoint', 'vent.fans', 'vent.pad', 'grade.submit', 'sign.read', ...UI_ACTION_IDS_CYCLE, ...UI_ACTION_IDS_COND]);
+const UI_ACTIONS = new Set(['radio.listen', 'controller.read', 'phone.report', 'heat.setpoint', 'vent.fans', 'vent.pad', 'grade.submit', 'sign.read', ...UI_ACTION_IDS_CYCLE, ...UI_ACTION_IDS_COND, ...UI_ACTION_IDS_SKILLS]);
 const freshStats = () => ({ truckAt: null, firstTipAt: null, lastTipAt: null, boxWeighedAt: null, floorShareAtFirstTip: null,
   heightsAtFirstTip: null, flushDoneAt: null, ventReadings: [], cropFillTrue: null,
   comfortMinutes: 0, levelMinutes: 0, comfortShareByDay: [], comfortByDay: [], chickWeightMeasuredG: null,
@@ -192,6 +194,7 @@ export function createFarm(env, { events } = {}) {
   farm.flock.weightQuantile = makeQuantile(farm.flock);
   installCycle(farm, env);
   installConditions(farm, env);
+  installAuto(farm, env);
   farm.onLabLetter = () => onLabLetter(farm, env);
 
   if (events) {

@@ -71,6 +71,13 @@ export const EV = {
   SOUND_CAPTION: 'sound:caption',   // { key, text, x?, z? } a meaningful sound started (audio-captions.js; emitted while muted
                                     //   too; ui shows "[text]" when settings interface.soundCaptions is on)
   MENU: 'menu',                     // { open: bool, from: 'esc'|'gear'|'title'|'hook' } the game menu opened / closed (ui-menu.js)
+  // Skills update (SKILLS.md §12.2)
+  PERKS: 'skills:perks',            // { version, keys: [payoff keys that changed] } a payoff came or went (perks.js: a level, a setting, allow)
+  AUTO: 'farm:auto',                // { system, did, text, args, day, hour } a controller changed something (farm-auto.js; records: kind 'auto')
+  FAULT: 'farm:fault',              // { id, system, phase: 'start'|'found'|'fixed'|'dropped', text, cause, sign, place, spot, line?, day, hour }
+                                    //   (farm-faults.js; the flock watch's Equipment row and warning, records kind 'fault', the scene's lamps)
+  BIRD_SEEN: 'bird:seen',           // { index, look: 'gait'|'sick'|'lame'|'gasp', x, z } a bird within AUTO.tagM of the farmer showed a
+                                    //   symptom tag or walked by him (Biosecurity 3; flock package; w2-check counts 'gait')
 };
 
 /**
@@ -94,11 +101,16 @@ export const ACTION_IDS = [
   // Phase 4 (PHASE4.md §10.3)
   'gen.start', 'gen.stop', 'gen.switch', 'gen.test', 'gen.fuel', 'inlets.storm', 'water.tank', 'pump.fix', 'chicks.grade',
   'brood.trays', 'phone.hatchery',
+  // Skills update (SKILLS.md §12.2): the glance at a controller's reading (ui), resetting a stalled or tripped system, the
+  // sensor checked against the thermometer, the automatic scale's day figures, its platform cleaned
+  'auto.glance', 'auto.reset', 'auto.calibrate', 'scale.read', 'scale.clean',
 ];
 /** Phase 3 action ids that are ui-only (EV.ACTION with result undefined; the farm sees them on the bus). */
 export const UI_ACTION_IDS_CYCLE = ['plan.letter', 'plan.reply', 'fans.read', 'phone.vet', 'swab.read', 'light.preset', 'sign.read'];
 /** Phase 4 action ids that are ui-only (the office phone's call to the hatchery about a bad batch). */
 export const UI_ACTION_IDS_COND = ['phone.hatchery'];
+/** Skills update: ui-only (the panel that shows a controller's reading emits it after AUTO.glanceSec; result undefined). */
+export const UI_ACTION_IDS_SKILLS = ['auto.glance'];
 
 /**
  * Does `payload` contain `pattern`? Every key of the pattern must be equal in the payload; a

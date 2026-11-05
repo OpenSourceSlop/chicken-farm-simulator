@@ -13,7 +13,8 @@
 import { BOARDS } from './content-signs.js';
 import { keyWordProps } from './key-words.js'; // fix round: a fact's {key:id} token filled when read
 import { mergeBoardsP4 } from './content-signs-cond.js';   // Phase 4: the one merge (PHASE4.md §3.2)
-import { PHASE4 } from './config.js';
+import { PHASE4, SKILLS_UPDATE } from './config.js';
+import { mergeBoardsSkills } from './content-signs-skills.js';   // Skills update (SKILLS.md §3.12): only while SKILLS_UPDATE.live
 
 const g = 'general';
 const it = (text, source = g, pic) => (pic ? { text, source, pic } : { text, source });
@@ -236,7 +237,8 @@ export function boardsForDay(day, condition = null) {
     const extra = (BOARD_EXTRA_ITEMS[id] || []).filter((x) => day >= x.fromDay).map(({ text, source }) => ({ text, source }));
     out[id] = extra.length ? { ...b, items: [...b.items, ...extra] } : b;
   }
-  return condition || PHASE4.tunedSigns ? mergeBoardsP4(out, day, condition, { tuned: PHASE4.tunedSigns }) : out;
+  const merged = condition || PHASE4.tunedSigns ? mergeBoardsP4(out, day, condition, { tuned: PHASE4.tunedSigns }) : out;
+  return SKILLS_UPDATE.live ? mergeBoardsSkills(merged, day) : merged;
 }
 
 export const BOARD_IDS_CYCLE = Object.keys(BOARDS_CYCLE);
