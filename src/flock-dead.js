@@ -192,23 +192,37 @@ export function createDeadBirds(ctx, S, uniforms, pop) {
       return out.sort((a, b) => a.dist - b.dist).map(({ dist, ...d }) => d); // eslint-disable-line no-unused-vars
     },
     /** Pick up every drawn dead bird within r of (x, z) into the bucket: { n, causes }. Emits
-     *  EV.DEAD_PICK (the farm subtracts n from deadOnFloor) and props.startCarry('bucket'). */
-    pickUp(x, z, r = 1.5) {
+     *  EV.DEAD_PICK (the farm subtracts n from deadOnFloor) and props.startCarry('bucket').
+     *  Skills update (SKILLS.md §3.10, Biosecurity 2's tally bucket): opts.maxN takes the nearest birds only, up to the
+     *  bucket's room (props.bucketRoom, 15 kg); opts.tally counts them as they go in (props.startCarry sends dead.count
+     *  { at: 'pickup' }); left: the birds within r still on the floor (the bucket was full). Without opts: as Phase 4. */
+    pickUp(x, z, r = 1.5, opts = null) {
       const causes = {};
-      let n = 0;
-      for (let k = list.length - 1; k >= 0; k--) {
-        const d = list[k];
-        if (Math.hypot(d.x - x, d.z - z) > r) continue;
-        causes[d.cause] = (causes[d.cause] || 0) + 1; n++;
-        list.splice(k, 1);
+      let n = 0, left = 0;
+      if (opts && Number.isFinite(opts.maxN)) {
+        const inReach = list.map((d, k) => ({ k, dd: Math.hypot(d.x - x, d.z - z) })).filter((e) => e.dd <= r).sort((a, b) => a.dd - b.dd);
+        const take = inReach.slice(0, Math.max(0, Math.floor(opts.maxN)));
+        left = inReach.length - take.length;
+        for (const e of take.sort((a, b) => b.k - a.k)) {
+          const d = list[e.k];
+          causes[d.cause] = (causes[d.cause] || 0) + 1; n++;
+          list.splice(e.k, 1);
+        }
+      } else {
+        for (let k = list.length - 1; k >= 0; k--) {
+          const d = list[k];
+          if (Math.hypot(d.x - x, d.z - z) > r) continue;
+          causes[d.cause] = (causes[d.cause] || 0) + 1; n++;
+          list.splice(k, 1);
+        }
       }
-      if (!n) return { n: 0, causes };
+      if (!n) return opts ? { n: 0, causes, left } : { n: 0, causes };
       dirty = true;
       refill();
-      ctx.props?.startCarry?.('bucket', { n, causes });
+      ctx.props?.startCarry?.('bucket', opts && opts.tally ? { n, causes, tally: true } : { n, causes });
       const carried = ctx.props?.carrying === 'bucket' ? ctx.props.carryOpts?.n ?? n : n;
       ctx.events?.emit(EV.DEAD_PICK, { n, causes: { ...causes }, carried });
-      return { n, causes };
+      return opts ? { n, causes, left } : { n, causes };
     },
   };
 

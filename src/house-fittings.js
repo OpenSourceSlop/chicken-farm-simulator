@@ -62,14 +62,14 @@ function lcdCanvas() {
   return { c, g: c.getContext('2d'), t };
 }
 
-function drawLcd(lcd, env, dark = false) {
+function drawLcd(lcd, env, dark = false, tempC = env.houseTemp) {
   const { g, c } = lcd;
   // Phase 4: no power, a blank screen (the alarm lamp above it blinks on its battery)
   if (dark) { g.fillStyle = '#0b100c'; g.fillRect(0, 0, c.width, c.height); lcd.t.needsUpdate = true; return; }
   g.fillStyle = '#0e2412'; g.fillRect(0, 0, c.width, c.height);
   g.fillStyle = '#b9e27a';
   g.font = `700 54px ${FONT}`; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-  g.fillText(`${env.houseTemp.toFixed(1)}°C`, 14, 60);
+  g.fillText(`${tempC.toFixed(1)}°C`, 14, 60);
   g.font = `600 22px ${FONT}`;
   g.fillText(`SET ${env.heaterSetpoint.toFixed(1)}   RH ${Math.round(env.houseRH)}%`, 14, 92);
   g.fillText(`FAN ${env.fansOn}  ${env.padOn ? 'PAD ON' : 'PAD --'}  ${env.heatersOn ? 'HEAT' : ''}`, 14, 118);
@@ -183,8 +183,11 @@ export function buildFittings(kit) {
       lcdTimer -= dt;
       if (lcdTimer <= 0 || dark !== (lcdText === 'dark')) {
         lcdTimer = 0.25;
-        const key = dark ? 'dark' : `${env.houseTemp.toFixed(1)}|${env.heaterSetpoint}|${Math.round(env.houseRH)}|${env.fansOn}|${env.padOn}|${env.heatersOn}`;
-        if (key !== lcdText) { lcdText = key; drawLcd(lcd, env, dark); }
+        // Skills update (SKILLS.md §10, Heating 3): the LCD shows what the controller's sensor reads (kit.lcdTempC: the house
+        // temperature, plus a drifted sensor's offset), so a drift shows beside the dial thermometer's own reading
+        const tempC = kit.lcdTempC ? kit.lcdTempC(env) : env.houseTemp;
+        const key = dark ? 'dark' : `${tempC.toFixed(1)}|${env.heaterSetpoint}|${Math.round(env.houseRH)}|${env.fansOn}|${env.padOn}|${env.heatersOn}`;
+        if (key !== lcdText) { lcdText = key; drawLcd(lcd, env, dark, tempC); }
       }
       blink = dark ? (blink + dt) % 1 : 0;
       alarm.visible = dark && (reducedMotion() || blink < 0.55);

@@ -10,7 +10,7 @@
 // Events: listens to farm:death (lay dead birds) and farm:placed (placeBatch); emits bird:pick,
 // bird:release, dead:pick. Providers: 'chick' and 'sick-bird' (5), 'dead-bird' (6).
 import { EV } from './events.js';
-import { DRINKER_LINES_Z } from './config.js';
+import { DRINKER_LINES_Z, AUTO } from './config.js';
 import { ACT, COLD, HOT, makeRand } from './flock-state.js';
 import { ST } from './flock-pop.js';
 import { createAccess, refreshAccess, thinkSick, updateSick } from './flock-sick.js';
@@ -19,6 +19,8 @@ import { createCatcher } from './flock-catch.js';
 // Phase 3 (package "scene"): the growing flock over the whole cycle and the catch
 import { cycleOn, zones, heatBand, updateLame, thinkLame, water, breathing, LAME } from './flock-cycle.js';
 import { createCatchFlock } from './flock-harvest.js';
+// Skills update (package "scene", SKILLS.md §3.10): the symptom tags of the birds he walks past (Biosecurity 3)
+import { createTags } from './flock-tags.js';
 
 export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
   const lv = createAccess();
@@ -26,6 +28,8 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
   const dead = createDeadBirds(ctx, S, uniforms, pop);
   const catcher = createCatcher(ctx, S, pop, isLevel);
   const catchFlock = createCatchFlock(S, pop);
+  const tags = createTags(ctx, S, pop);
+  catcher.tags = tags;
   const farmer = () => ctx.player?.position || null;
   S.levelMode = false;
   S.lv = null;
@@ -38,6 +42,7 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
     catcher.clear();
     dead.clear();
     catchFlock.clear();
+    tags.clear();
     cyc = false; heatBand(S, null, null, false);
     if (on) {
       S.lv = lv;
@@ -80,23 +85,37 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
     if (!isLevel() || !inside || !dead.list.length) return null;
     const c = ctx.props?.carrying;
     if (c && c !== 'bucket') return null;
-    let best = null, bd = 2.25, k = 0;
+    // Skills update (SKILLS.md §3.10): with Biosecurity 2's tally bucket E takes every dead bird within AUTO.deadReachM
+    // (2.5 m) while the bucket holds under AUTO.bucketMaxKg, counting them as they go in; else Phase 4's 1.5 m
+    const tally = !!ctx.props?.tallyOn?.();
+    const reach = tally ? AUTO.deadReachM : 1.5, r2 = reach * reach;
+    let best = null, bd = r2, k = 0;
     for (const d of dead.list) {
       const dd = (d.x - p.x) ** 2 + (d.z - p.z) ** 2;
-      if (dd <= 2.25) k++;
+      if (dd <= r2) k++;
       if (dd < bd) { bd = dd; best = d; }
     }
     if (!best) return null;
-    return { id: 'dead-bird', label: k > 1 ? `${k} dead birds` : 'dead bird', verb: 'Pick up', x: best.x, z: best.z,
+    const room = tally ? ctx.props.bucketRoom() : null;
+    const label = room && room.n <= 0 ? `dead bird${k > 1 ? 's' : ''} (the bucket is full)` : k > 1 ? `${k} dead birds` : 'dead bird';
+    return { id: 'dead-bird', label, verb: 'Pick up', x: best.x, z: best.z,
       // a bird right at his feet (0.8 m) beats the board or machine whose 2 m reach he stands in
-      radius: 1.5, inside: true, priority: 6, nearRadius: 0.8, nearPriority: 15, use: () => { const f = farmer() || p; dead.api.pickUp(f.x, f.z, 1.5); } };
+      radius: reach, inside: true, priority: 6, nearRadius: 0.8, nearPriority: 15,
+      use: () => {
+        const f = farmer() || p;
+        if (!tally) { dead.api.pickUp(f.x, f.z, 1.5); return; }
+        const rm = ctx.props.bucketRoom();
+        if (rm.n <= 0) { ctx.ui?.caption?.(`The bucket is full (about ${Math.round(rm.maxKg)} kg of birds): empty it at the dead-bird bin first.`, 4.5); return; }
+        const got = dead.api.pickUp(f.x, f.z, reach, { maxN: rm.n, tally: true });
+        if (got.left > 0) ctx.ui?.caption?.(`The bucket is full now (about ${Math.round(rm.maxKg)} kg): ${got.left} more lie here. Empty it at the dead-bird bin first.`, 5);
+      } };
   });
 
   const heldSick = () => { let k = 0; for (const h of catcher.held.values()) if (h.sick && h.sick !== LAME) k++; return k; };
   const heldLame = () => { let k = 0; for (const h of catcher.held.values()) if (h.sick === LAME) k++; return k; };
 
   const lvl = {
-    dead, catcher, lv,
+    dead, catcher, lv, tags,
     /** every frame before the flock moves; returns true in level mode */
     update(dt, env, farmerPos) {
       sync();
@@ -116,6 +135,7 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
       wantSick = updateSick(S, farm, heldSick(), env);
       wantLame = updateLame(S, farm, heldLame());
       dead.update(dt, farm);
+      tags.update(dt, farmerPos);
       return true;
     },
     /** comfort per 6 m strip for the comfort field (Phase 3, day 8 on) or null */
@@ -147,7 +167,7 @@ export function createLevelFlock(ctx, { S, pop, uniforms, render, reset }) {
     resetLevel() {
       reseed();
       if (isLevel()) { S.levelMode = false; switchMode(true); return; }
-      catcher.clear(); dead.clear();
+      catcher.clear(); dead.clear(); tags.clear();
     },
     serialize() {
       return { v: 1, ...dead.serialize(), ahead: +pop.aheadOfCount.toFixed(3), batch: pop.batchBirds,

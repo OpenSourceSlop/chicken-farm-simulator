@@ -2,7 +2,7 @@
 // Builds the shell, pad, fans, feed and water lines, brooders and fittings from helper modules
 // (src/house-*.js), merges static parts into a few vertex-coloured meshes and animates the rest.
 import * as THREE from 'three';
-import { HOUSE, HOUSE_BOUNDS, SPOTS, FEEDER_LINES_Z, DRINKER_LINES_Z } from './config.js';
+import { HOUSE, HOUSE_BOUNDS, SPOTS, FEEDER_LINES_Z, DRINKER_LINES_Z, SKILLS_UPDATE } from './config.js';
 import { Batch, makeMaterials, smooth, clamp01 } from './house-kit.js';
 import { buildFloor, buildWalls, buildFrame, H, T } from './house-shell.js';
 import { buildRoof, withDither, withChordFade } from './house-roof.js';
@@ -30,7 +30,15 @@ export function buildHouse(ctx) {
   const rafters = new Batch();   // rafters, webs, ridge: shown with the roof only
   const porch = new Batch();     // door portal, leaves and canopy: fade while the farmer is at the door
   // ctx.farm (Phase 2): in level mode the lines, pans and brooders follow the farm model
-  const kit = { group, mats, stat, statDS, farm: ctx.farm };
+  const kit = { group, mats, stat, statDS, farm: ctx.farm,
+    // Skills update (SKILLS.md §10): the controller's LCD reads its own sensor (farm.autoCtl.sensorC(): the house
+    // temperature plus a drift); with SKILLS_UPDATE.live false, or outside a level, the house temperature as before
+    lcdTempC: (env) => {
+      const f = ctx.farm;
+      if (!SKILLS_UPDATE.live || !f || f.mode !== 'level' || !f.autoCtl?.sensorC) return env.houseTemp;
+      const c = f.autoCtl.sensorC();
+      return Number.isFinite(c) ? c : env.houseTemp;
+    } };
 
   const floor = buildFloor();
   group.add(floor);

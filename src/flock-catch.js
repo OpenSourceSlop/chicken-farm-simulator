@@ -14,7 +14,7 @@
 // releaseGroup()  the frame is lifted: the birds walk off.
 // providers(): registers 'chick' (ctx.level.sampling set, hands empty, priority 5) and 'sick-bird'
 //   (level mode, hands empty, nearest sick bird within 1.2 m, priority 5) on ctx.interact.
-import { BIRDS_PER_INSTANCE } from './config.js';
+import { BIRDS_PER_INSTANCE, AUTO } from './config.js';
 import { EV } from './events.js';
 import { ACT, releaseRes } from './flock-state.js';
 import { ST } from './flock-pop.js';
@@ -59,6 +59,30 @@ export function createCatcher(ctx, S, pop, isLevel) {
       ctx.events?.emit(EV.BIRD_PICK, { ...out, purpose: p });
       return out;
     },
+    /**
+     * Skills update (SKILLS.md §3.5, Brooding 2 `quickSamples`): Next chick. The chick in the hand goes back down at his
+     * feet and the nearest other bird within maxDist (AUTO.nextChickM, the same part of the floor; for a sick or lame
+     * purpose the nearest such bird) comes into the hand without closing the panel: EV.BIRD_RELEASE { index, culled: false,
+     * next: true }, then EV.BIRD_PICK { index, x, z, purpose, next: true }, then props.startCarry('chick') (after the pick:
+     * a panel the ui opens again for the pick has emptied the hands). Returns { index, x, z, purpose } or null (none near:
+     * the chick stays in the hand).
+     */
+    nextNearest(index, maxDist = AUTO.nextChickM) {
+      const h = held.get(index);
+      if (!h || !isLevel()) return null;
+      const f = farmer() || { x: 0, z: 0 };
+      const i = nearest(f.x, f.z, maxDist, h.purpose === 'sick' || h.purpose === 'lame', h.purpose === 'lame');
+      if (i < 0) return null;
+      const id = S.id[i], bx = S.px[i], bz = S.pz[i], sick = S.sick[i];
+      putDown(index, h, f);
+      ctx.events?.emit(EV.BIRD_RELEASE, { index, culled: false, next: true });
+      held.set(id, { purpose: h.purpose, sick });
+      pop.deactivate(i, ST.HELD);
+      const out = { index: id, x: +bx.toFixed(2), z: +bz.toFixed(2) };
+      ctx.events?.emit(EV.BIRD_PICK, { ...out, purpose: h.purpose, next: true });
+      ctx.props?.startCarry?.('chick', { index: id });
+      return { ...out, purpose: h.purpose };
+    },
     releaseBird(index, culled = false) {
       const h = held.get(index);
       if (!h) return false;
@@ -67,19 +91,7 @@ export function createCatcher(ctx, S, pop, isLevel) {
         pop.status[index] = ST.CULLED;
         // one real bird culled, one drawn bird (3.33 real) gone: keep the drawn count honest
         pop.aheadOfCount += 1 - 1 / BIRDS_PER_INSTANCE;
-      } else {
-        const f = farmer() || { x: S.px[S.slotOf[index]], z: S.pz[S.slotOf[index]] };
-        const a = S.rand() * 6.283, b = S.bounds;
-        const x = Math.min(b.xMax, Math.max(b.xMin, f.x + Math.cos(a) * 0.35));
-        const z = Math.min(b.zMax, Math.max(b.zMin, f.z + Math.sin(a) * 0.35));
-        const i = pop.activate(index, x, z);
-        S.sick[i] = h.sick;
-        // set down, it scuttles a couple of metres away from him
-        S.act[i] = ACT.WANDER; S.actT[i] = 3; S.scare[i] = 0.8;
-        S.tx[i] = Math.min(b.xMax, Math.max(b.xMin, x + Math.cos(a) * 1.8));
-        S.tz[i] = Math.min(b.zMax, Math.max(b.zMin, z + Math.sin(a) * 1.8));
-        S.arrived[i] = 0; S.spawnT[i] = 0.15;
-      }
+      } else putDown(index, h, farmer() || { x: S.px[S.slotOf[index]], z: S.pz[S.slotOf[index]] });
       if (ctx.props?.carrying === 'chick') ctx.props.drop();
       ctx.events?.emit(EV.BIRD_RELEASE, { index, culled: !!culled });
       return true;
@@ -160,10 +172,12 @@ export function createCatcher(ctx, S, pop, isLevel) {
       reg.addProvider('chick', (p, inside) => {
         const sampling = ctx.level?.sampling;
         if (!isLevel() || !sampling || !inside || !handsEmpty()) return null;
-        const i = nearest(p.x, p.z, 1.2, false);
+        // Skills update (SKILLS.md §3.5): Brooding 2's longer reach for the chick samples (AUTO.chickReachM, was 1.2 m)
+        const reach = ctx.perks?.has?.('quickSamples') ? AUTO.chickReachM : 1.2;
+        const i = nearest(p.x, p.z, reach, false);
         if (i < 0) return null;
-        return { id: 'chick', label: 'chick', verb: 'Pick up a', x: S.px[i], z: S.pz[i], radius: 1.2, inside: true, priority: 5,
-          use: () => { const f = farmer() || p; catcher.catchNearest(f.x, f.z, 1.3, sampling); } };
+        return { id: 'chick', label: 'chick', verb: 'Pick up a', x: S.px[i], z: S.pz[i], radius: reach, inside: true, priority: 5,
+          use: () => { const f = farmer() || p; catcher.catchNearest(f.x, f.z, reach + 0.1, sampling); } };
       });
       reg.addProvider('sick-bird', (p, inside) => {
         if (!isLevel() || !inside || !handsEmpty()) return null;
@@ -171,13 +185,43 @@ export function createCatcher(ctx, S, pop, isLevel) {
         if (i < 0) return null;
         // Phase 3: a lame bird (it cannot walk well) is caught with purpose 'lame'
         const lame = S.sick[i] === 3;
+        // Skills update (SKILLS.md §3.10, Biosecurity 3 `passCheck`): E at a lame bird whose tag shows culls it at once
+        if (lame && catcher.tags?.lameTagged?.(S.id[i]) && ctx.perks?.has?.('passCheck')) {
+          return { id: 'sick-bird', label: 'lame bird (limps)', verb: 'Cull the', x: S.px[i], z: S.pz[i], radius: 1.2, inside: true, priority: 5,
+            use: () => { const f = farmer() || p; catcher.cullTagged(f.x, f.z); } };
+        }
         return { id: 'sick-bird', label: lame ? 'bird that cannot walk well' : 'bird sitting apart', verb: 'Pick up the', x: S.px[i], z: S.pz[i], radius: 1.2, inside: true, priority: 5,
           use: () => { const f = farmer() || p; catcher.catchNearest(f.x, f.z, 1.3, lame ? 'lame' : 'sick'); } };
       });
     },
+    /** Biosecurity 3: the tagged lame bird nearest (x, z) is culled in one press. It is caught first (EV.BIRD_PICK with
+     *  purpose 'lame': the farm finds the lame birds as when he picks one up), then culled (chicks.cull { reason: 'lame' },
+     *  the same action as the bird check's Cull) and the bird check the pick opened is closed again. */
+    cullTagged(x, z) {
+      const got = catcher.catchNearest(x, z, 1.3, 'lame');
+      if (!got) return null;
+      ctx.farm?.act?.('chicks.cull', { n: 1, reason: 'lame', index: got.index });
+      catcher.releaseBird(got.index, true);
+      ctx.ui?.closePanel?.();
+      ctx.ui?.caption?.('Lame bird culled: it limped as you passed.', 4);
+      return got;
+    },
     /** level reset / sandbox: whatever is held goes */
     clear() { held.clear(); frame.on = false; frame.ids = []; },
   };
+
+  /** A held bird set down at the farmer's feet: it scuttles a couple of metres away from him. */
+  function putDown(index, h, f) {
+    const a = S.rand() * 6.283, b = S.bounds;
+    const x = Math.min(b.xMax, Math.max(b.xMin, f.x + Math.cos(a) * 0.35));
+    const z = Math.min(b.zMax, Math.max(b.zMin, f.z + Math.sin(a) * 0.35));
+    const i = pop.activate(index, x, z);
+    S.sick[i] = h.sick;
+    S.act[i] = ACT.WANDER; S.actT[i] = 3; S.scare[i] = 0.8;
+    S.tx[i] = Math.min(b.xMax, Math.max(b.xMin, x + Math.cos(a) * 1.8));
+    S.tz[i] = Math.min(b.zMax, Math.max(b.zMin, z + Math.sin(a) * 1.8));
+    S.arrived[i] = 0; S.spawnT[i] = 0.15;
+  }
 
   function penTarget(i) {
     const h = PEN_HALF - 0.08;

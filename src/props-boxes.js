@@ -12,7 +12,8 @@ const N_PILE = LEVEL1.boxes;
 const N_TIP = PER;
 export const PILE = { x: -16.6, z: 7.95 };
 
-// stack state: 'truck' (in the truck) | 'ground' | 'carried' | 'tipped'
+// stack state: 'truck' (in the truck) | 'ground' | 'carried' | 'tipped' | 'reserved' (Skills update: the arrival-day helper is
+// walking to it, props-helper.js; drawn on the ground, not for the farmer's hand truck)
 export function buildBoxes(material, group) {
   const n = N_STACK * PER + N_PILE + N_TIP;
   const mesh = instancedParts(chickBoxGeometry(), material, n, { cast: true, color: true });
@@ -51,7 +52,7 @@ export function buildBoxes(material, group) {
           truckLocal.set(-3.2 + Math.floor(st.i / 2) * 0.65, 1.04 + k * BOX.h, (st.i % 2 ? 0.35 : -0.35));
           truckLocal.applyMatrix4(tr.matrixWorld);
           put(i, truckLocal.x, truckLocal.y, truckLocal.z, tr.rotation.y + Math.PI / 2);
-        } else if (st.state === 'ground') {
+        } else if (st.state === 'ground' || st.state === 'reserved') {   // reserved: the helper is on his way to it (Skills update)
           st.drop = Math.min(1, st.drop + dt * 2.2);
           const lift = (1 - st.drop) * 0.4;
           put(i, st.x, 0.03 + k * BOX.h + lift, st.z, Math.PI / 2 + ((k * 7 + st.i) % 3 - 1) * 0.03);
