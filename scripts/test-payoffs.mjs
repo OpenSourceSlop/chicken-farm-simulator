@@ -14,7 +14,7 @@ import { createPerks } from '../src/perks.js';
 import { jobById, JOB_WHERE_PAYOFF, jobWhereNow } from '../src/content-jobs.js';
 import { jobVariant, applyVariant, rebuildVariant, variantKeyOf, DEAD_TITLE, RULE_KEYS, smallerRule, sampleOf } from '../src/job-variants.js';
 import { jobPlaces, nextPlace, PHONE_TODO } from '../src/job-next.js';
-import { stripRows, stripsAt, STRIPS } from '../src/job-strips.js';
+import { stripRows, stripsAt, thenRows, STRIPS } from '../src/job-strips.js';
 import { STRIPS_CYCLE } from '../src/job-strips-cycle.js';
 import { easierLine, handledLines, unlockCaption, unlockShort, UNLOCK_USE, gateCaption, nextLevelLine, PAYOFF_CARD, PAYOFF_NOW, FAULT_MANUAL, viewLine, groupUnlocks } from '../src/job-words.js';
 import { fillKeys } from '../src/key-words.js';
@@ -178,8 +178,11 @@ test('Ventilation 2 reads the fans at the controller too (final check 5): r-fans
   W.at(15, 13.2);
   const key = 'r-fans-pm@15', inst = W.jobs.byKey(key);
   assert(inst && inst.status === 'open', `r-fans-pm open: ${inst && inst.status}`);
+  // either place finishes it: the Next line takes the nearer one, and a strip at one sends the farmer nowhere else
   const ids = (jobPlaces(inst, W.c()) || []).map((p) => p.id);
-  assert(ids[0] === 'controller' && ids.includes('fanPanel'), `places: ${JSON.stringify(ids)}`);
+  assert(ids.join() === 'controller,fanPanel', `places: ${JSON.stringify(ids)}`);
+  assert(nextPlace(inst, W.c()).id === 'controller' && nextPlace(inst, W.c(), { from: { x: 20, z: -4, inside: true } }).id === 'fanPanel', 'the nearer place');
+  for (const pid of ['fan-panel', 'controller']) assert(thenRows({ ...W.c(), from: { x: 0, z: 0, inside: true } }, inst, pid).length === 0, `no "then walk" row at the ${pid}`);
   assert(stripsAt(W.jobs, 'controller', 'vent', STRIPS_CYCLE, W.perks).some((x) => x.inst === inst), 'its strip at the controller');
   assert(/Ventilation tab/.test(plain(jobWhereNow('r-fans-pm', (k) => k === 'fanAdvice'))), 'the where line names the controller\'s Ventilation tab');
   W.act('fans.read', { fans: 2, at: 'controller' });

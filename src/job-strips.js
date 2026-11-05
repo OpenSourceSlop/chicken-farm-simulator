@@ -332,6 +332,7 @@ export function thenRows(c, inst, panelId) {
   if (inst.status !== 'open') return [];
   const skip = panelPlace(panelId), all = jobPlaces(inst, c);
   if (!all || !all.length) return [];
+  if (skip && all.some((p) => p.alt && p.id === skip)) return [];   // places that are alternatives: this one does it
   const np = nextPlace(inst, c, { from: c.from, skip });
   if (!np) return [];
   if (np.phone) return [{ ...step(`Next: ${np.text}`), next: true }];   // the pocket phone: anywhere

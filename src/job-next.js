@@ -351,7 +351,11 @@ function payoffPlaces(inst, c) {
   const id = inst.id;
   if (RECORD_IDS.has(id) && placeKey(inst, c, 'phoneRecord')) return [phone('Sign today’s record')];
   // the final check: Ventilation 2 reads the fans at the controller's Ventilation tab too (r-fans-pm's fans.read)
-  if (id === 'r-fans-pm' && inst.status !== 'done' && placeKey(inst, c, 'fanAdvice')) return [place('controller', 'the Ventilation tab: the fans and the pad for now (Ventilation 2), keep it open a moment'), place('fanPanel', 'keep it open a moment to read it')];
+  // (either place finishes it, `alt`: the marker and the Next line take the nearer one, and a strip at one never sends the
+  // farmer on to the other: job-strips thenRows)
+  if (id === 'r-fans-pm' && inst.status !== 'done' && placeKey(inst, c, 'fanAdvice')) {
+    return [{ ...place('controller', 'the Ventilation tab: the fans and the pad for now (Ventilation 2), keep it open a moment'), alt: true }, { ...place('fanPanel', 'keep it open a moment to read it'), alt: true }];
+  }
   if (id in PHONE_TODO) {
     if (placeKey(inst, c, 'pocketPhone')) return [phone(PHONE_TODO[id])];
     if (ORDER_IDS.has(id) && placeKey(inst, c, 'siloOrder')) return [place('silo', 'Order to 3 days at the gauge (Feed 2)'), place('officeDesk', `the phone: ${PHONE_TODO[id]}`)];
