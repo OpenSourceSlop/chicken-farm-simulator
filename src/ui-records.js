@@ -25,7 +25,7 @@ import { createJobStrip } from './ui-jobstrip.js';
 import { needTime } from './ui-farmtime.js';
 // Skills update (SKILLS.md §3.11): the pocket phone (Farm Planning 2) and the record signed on it (Farm Planning 3)
 import { feedDays } from './farm-silos.js';
-import { perkHas, skillBox, workLine, oneKey, row as skRow, ensureSkillsStyle } from './ui-cycle-skills.js';
+import { perkHas, skillBox, workLine, row as skRow, ensureSkillsStyle } from './ui-cycle-skills.js';
 
 // What "Today" lists, in job order: [note kind(s), label]
 const TODAY_LINES = [
@@ -175,8 +175,8 @@ export function buildRecordsPanel(L, { pocket = false } = {}) {
     ensureSkillsStyle();
     const d = env.dayNumber, row = records.row?.(d), wait = signWait();
     const work = workLine();
-    const key = oneKey('Sign today’s record', () => { records.sign(env.dayNumber); pocketSaid = `Today’s record signed on the phone at ${env.timeLabel}.`; render(); });
-    key.classList.add('btn--paper');
+    const key = button({ class: 'btn btn--paper btn--ink' }, 'Sign today’s record');
+    key.addEventListener('click', () => { records.sign(env.dayNumber); pocketSaid = `Today’s record signed on the phone at ${env.timeLabel}.`; render(); });
     key.disabled = !!row?.signed || wait;
     work.set(row?.signed ? pocketSaid || 'Today’s record is signed.' : wait ? 'The day’s record is signed in the evening, from 16:00.' : 'The record book fills itself from your readings and the farm’s meters; signing closes today’s row.');
     const box = skillBox('phoneRecord', 'Today’s record', skRow(key, work.el));
